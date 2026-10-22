@@ -79,7 +79,12 @@ CapCut (thumbnail grid, "+", drag to the timeline).
 - drag-and-drop to the timeline (harder in iced);
 - sounds to their own lanes (gap 3); LUTs from `09_luts`;
 - footage-agent's ratings, notes and tags from `report/notes.json`;
-- preview inside the app's own viewer instead of an ffplay window.
+- **preview inside the app's own viewer instead of an ffplay window** — the
+  user noticed the separate window (2026-10-22) and expects it in Omnix's
+  viewer, like a source monitor in Kdenlive / Resolve. Idea: a preview mode
+  that plays the bin's file in the main view (loaded into the library, not
+  added to the edit), with its own in/out marks later (add only a part);
+  Esc or another click returns to the edit at the playhead.
 
 ### 3a. Cleaned voice in place of a clip's sound — NEXT (user, 2026-10-22)
 

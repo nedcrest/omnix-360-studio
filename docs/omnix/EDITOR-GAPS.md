@@ -87,18 +87,19 @@ CapCut (thumbnail grid, "+", drag to the timeline).
   added to the edit), with its own in/out marks later (add only a part);
   Esc or another click returns to the edit at the playhead.
 
-### 3a. Cleaned voice in place of a clip's sound — NEXT (user, 2026-10-22)
+### 3a. Cleaned voice in place of a clip's sound — done, in test
 
-The user's next ask: the cleaned voice chosen in the contact sheet
-(`notes.json` → `clips["<day>/<file>"].audio = "<recipe>"`, file at
-`voice/<day>/<clip stem>/<recipe>.flac`, same timing as the clip) should play
-**instead of the clip's own sound**, and Omnix must read that from what
-footage-agent exports. Plan: optional `Cut.sound: Option<PathBuf>` (a file
-timed like the clip, replacing its sound; old projects unchanged);
-playback (`audio.rs`) and export (ffmpeg graph) take it when set;
-footage-agent's `export/omnix.py` writes it from `notes.json` (the Kdenlive
-path already does this via `chosen_voices` in `cut.py`); the bin's Cleaned
-voice gets "use for this cut". Then 3 (more lanes) for sfx and voice-over.
+User's ask (2026-10-22). **Done** (`b9f1fc5` here, footage-agent `export/omnix.py`):
+optional `Cut.audio`, a file timed like the clip, heard instead of its sound
+in the player and the export; label "♪ <name>", Info row "Sound"; a missing
+file falls back to the clip's sound with a warning. footage-agent writes it
+from the contact sheet's choice (`notes.json` clips[].audio). Export now pads
+each cut's sound to its frames' length (cleaned voice is ~30 ms short, camera
+audio ~8 ms): measured, no drift between cuts. The bin leaves cleaned voice
+out (user: it belongs to its clip).
+
+Not yet: switching a cut's audio file inside Omnix (Info panel: "use the
+clip's own" / pick a recipe). Wait for the user to ask.
 
 ### 3. More sound lanes — medium-large, format change
 

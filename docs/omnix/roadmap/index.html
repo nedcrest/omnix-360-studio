@@ -35,6 +35,7 @@ h2 u{text-decoration:none;font-weight:400}
 .card.fresh{box-shadow:0 0 0 4px var(--glow);border-color:var(--accent)}
 .card h3{margin:0 0 4px;font-size:.96rem;line-height:1.35}
 .card p{margin:6px 0 0;font-size:.85rem;color:var(--muted)}
+.card p code{font-family:ui-monospace,Menlo,monospace;font-size:.92em;color:var(--fg)}
 .meta{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
 .chip{font-size:.72rem;border:1px solid var(--line);border-radius:20px;padding:1px 8px;color:var(--muted)}
 .chip.st{border-color:currentColor}
@@ -102,6 +103,17 @@ function el(tag, cls, text) {
   return e;
 }
 
+// Опис картки: `код` моноширинним, решта — звичайним текстом (через
+// textContent, тож розмітка з файлу ніколи не стає HTML).
+function inline(text) {
+  var p = el('p');
+  text.split(/(`[^`]+`)/).forEach(function (part) {
+    if (/^`[^`]+`$/.test(part)) p.appendChild(el('code', null, part.slice(1, -1)));
+    else if (part) p.appendChild(document.createTextNode(part));
+  });
+  return p;
+}
+
 function chip(text, cls) { return el('span', 'chip' + (cls ? ' ' + cls : ''), text); }
 
 function cardEl(c, col) {
@@ -113,7 +125,7 @@ function cardEl(c, col) {
   if (c.meta['пункт']) meta.appendChild(chip('пункт ' + c.meta['пункт']));
   if (c.meta['коміт']) meta.appendChild(chip(c.meta['коміт'], 'code'));
   if (meta.childNodes.length) d.appendChild(meta);
-  if (c.body) d.appendChild(el('p', null, c.body));
+  if (c.body) d.appendChild(inline(c.body));
   if (before && before[c.key] !== c.sig) d.classList.add('fresh');
   return d;
 }

@@ -41,6 +41,28 @@ mirrored GPU/CPU, is already solved. Transitions generalise the blend.
 The zone's shape tells which: an overlap is one zone across both cuts; edge
 zones sit on each side of the cut point.
 
+## Video transitions (stingers) — a separate group
+
+User, 2026-10-22: plain cuts sometimes annoy; a cut can instead be a short
+**video transition** — a clip with its own sound placed on the cut: a meme
+insert with a sound, white noise + white-noise screen, film burn, etc.
+
+- Its own group in the preset panel; zones drawn **yellow** (not orange).
+- **Fixed length**, picked from options per instance: 0.2 / 0.5 / 1 s (the
+  stinger clip is trimmed or time-fitted to it).
+- Per instance: **sound level** (dB, like volume points), maybe its own
+  fade.
+- Stingers come from a library — the project's (`06_external/`, `07_sfx/` in
+  the user's footage-agent layout, e.g. `vfx-white-noise.mp4`,
+  `transition-film-burn-vfx.mp4`) — and a configured one saves as a project
+  template like any transition.
+- Two ways to place one (open question which, or both):
+  - **insert**: plays between the two cuts, the edit gets longer by its length;
+  - **cover**: plays over the cut point (blended: screen/add/alpha, e.g. film
+    burn), the edit keeps its length.
+- Builds on the overlay track (pictures/video over the main picture) and the
+  music/sound mix that already exist upstream.
+
 ## Looks
 
 Our own, built from good examples. 360 footage is a unique source of
@@ -72,6 +94,8 @@ edge, zoom blur, light leak, film burn (the user already uses
   later a user-wide library like the LUT library.
 
 ## Open questions
+
+- Stinger: insert (adds time) or cover the cut (keeps time) — or both as an option?
 
 - Snap step: always 0.25 s, or 0.25 s by default with Shift for frames?
 - Does T toggle a mode, or just add a default transition at the cut nearest

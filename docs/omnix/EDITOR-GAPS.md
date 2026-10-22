@@ -93,9 +93,17 @@ User: would split into video tracks and sound tracks.
 - **Step A (small-medium):** draw a "Clip sound" lane under the cuts, with each
   cut's waveform and its volume line there (same data, `Cut.volume`), instead
   of over the thumbnails. Still moves with its cut.
-- **Step B (large, later):** unlink sound from picture (J/L cuts: sound starts
-  before the picture), and let a cleaned voice replace a cut's sound. Data model
-  change; decide after A and 3 are in use.
+- **Step B (large): group / ungroup a cut's picture and sound** (user,
+  2026-10-22). Ungrouped, each moves and trims on its own. The user's case:
+  someone talks; keep their sound running and lay **B-roll picture over it**
+  (a cutaway), then move the pieces separately. Also J/L cuts (sound starts
+  before the picture) and a cleaned voice replacing a cut's sound. Data model
+  change: a cut's sound becomes an item of its own on a sound lane, linked to
+  its picture by a group id; regrouping links them again.
+  A cheaper route to the cutaway alone: **video on the overlay lane** (today
+  overlays are pictures and text only) — a B-roll clip over the talking cut,
+  muted, the talk's sound untouched. Worth weighing first: smaller, no
+  unlinking. Raised in priority by this ask.
 
 ### 5. Markers — small-medium, format change
 

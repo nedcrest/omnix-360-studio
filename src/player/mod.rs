@@ -7,6 +7,7 @@ mod edit;
 mod export;
 mod gpu;
 mod audio_panel;
+mod bin;
 mod export_panel;
 mod handles;
 mod info;
@@ -440,6 +441,12 @@ enum Message {
     MoveCut(usize, usize),
     /// Split the cut at the playhead.
     Split,
+    /// Open or close the bin (the project folder's media) at the left.
+    BinPanel,
+    /// Read the project's folder again.
+    BinRefresh,
+    /// Add a file from the bin where its kind goes.
+    BinAdd(PathBuf, bin::Kind),
     /// Cut `i`'s crossfade from the cut before dragged to this many seconds.
     Crossfade(usize, f64),
     /// Give the selected (or playing) cut a 1 s crossfade, or take its away.
@@ -607,6 +614,10 @@ struct App {
     split_kept: f32,
     /// The Settings panel is open (at the left).
     settings_open: bool,
+    /// The bin is open (at the left), and what it read of the project's
+    /// folder: its sections and the folder; `None` with no saved project.
+    bin_open: bool,
+    bin: Option<(Vec<bin::Section>, PathBuf)>,
     /// 10-bit tracks decode at 10 bits (`source::deep`).
     ten_bit: bool,
     /// The library LUT new D-Log M cuts get, and the library's LUTs.
@@ -712,6 +723,8 @@ impl App {
             modifiers: keyboard::Modifiers::default(),
             scrubbing: None,
             settings_open: false,
+            bin_open: false,
+            bin: None,
             fullscreen: false,
             volume: saved.volume,
             muted: saved.muted,
@@ -1431,6 +1444,7 @@ impl App {
                 self.saved_version = self.edit.version;
                 self.saved_aspect = self.aspect;
                 self.project = None;
+                self.rescan_bin();
                 self.clip = None;
                 self.held = None;
                 self.current = 0;
@@ -1536,6 +1550,7 @@ impl App {
                 self.saved_version = if complete { self.edit.version } else { 0 };
                 self.saved_aspect = self.aspect;
                 self.project = Some(path);
+                self.rescan_bin();
                 self.selected_music = None;
                 self.selected_volume = None;
                 self.selected_sound = None;
@@ -1614,7 +1629,32 @@ impl App {
                 self.settings_open = !self.settings_open;
                 if self.settings_open {
                     self.info = None;
+                    self.bin_open = false;
                 }
+            }
+            Message::BinPanel => {
+                self.bin_open = !self.bin_open;
+                if self.bin_open {
+                    self.info = None;
+                    self.settings_open = false;
+                    self.rescan_bin();
+                }
+            }
+            Message::BinRefresh => self.rescan_bin(),
+            Message::BinAdd(path, bin::Kind::Clip) => return self.update(Message::Picked(vec![path])),
+            Message::BinAdd(path, bin::Kind::Picture) => return self.update(Message::OverlayPicked(vec![path])),
+            Message::BinAdd(path, bin::Kind::Sound) => {
+                // At the playhead, where it fits: one sound lane holds music,
+                // effects and voice alike until there are lanes of their own.
+                let duration = ffmpeg::duration(&path).unwrap_or(60.0);
+                self.edit.checkpoint();
+                let at = self.position();
+                self.edit.music.clips.push(crate::project::MusicClip { input: path.clone(), at, start: 0.0, end: duration, fade_in: 0.0, fade_out: 0.0 });
+                let i = self.edit.music.clips.len() - 1;
+                self.edit.music.clips[i].at = self.edit.music.place(i, at);
+                self.selected_music = Some(i);
+                self.selected = None;
+                return self.load_waveform(&path);
             }
             Message::AutoKey(on) => self.auto_key = on,
             Message::SplitDrag(dy) => self.split = (self.split_kept - dy / timeline::SCALABLE).clamp(*timeline::SCALES.start(), *timeline::SCALES.end()),
@@ -1770,6 +1810,7 @@ impl App {
                     // mark going is enough.
                     self.save_status = None;
                     self.project = Some(path);
+                    self.rescan_bin();
                     if let Some(then) = self.after_save.take() {
                         return self.proceed(then);
                     }
@@ -3072,6 +3113,7 @@ impl App {
                 "e" | "E" if mods.command() => return self.update(Message::ExportPanel),
                 "," if mods.command() => return self.update(Message::SettingsPanel),
                 "c" | "C" => return self.update(Message::Split),
+                "b" | "B" if !mods.command() => return self.update(Message::BinPanel),
                 "q" | "Q" => self.free_look().roll -= step,
                 "e" | "E" => self.free_look().roll += step,
                 "=" | "+" if mods.command() => return self.update(Message::TimelineZoom(1.5, None)),
@@ -3248,6 +3290,7 @@ impl App {
                 tooltip::Position::Bottom,
             ),
             tip(icon_button(NEW_PROJECT, Some(Message::NewProject)), text("Start a new, empty project (Ctrl+N)"), tooltip::Position::Bottom),
+            tip(icon_button(BIN, Some(Message::BinPanel)), text(if self.bin_open { "Close the bin (B)" } else { "The bin: the project folder's media (B)" }), tooltip::Position::Bottom),
             tip(icon_button(ADD_CLIP, Some(Message::Open)), text(open_hint), tooltip::Position::Bottom),
             tip(
                 icon_button(ADD_MUSIC, Some(Message::AddMusic)),
@@ -3350,7 +3393,7 @@ impl App {
         // A text item's words and look, at the left while it's selected.
         // The Info and Settings panels win the left side over the Text panel
         // while open.
-        let view: Element<'_, Message> = match self.info_panel().or_else(|| self.settings_panel()).or_else(|| self.text_panel()) {
+        let view: Element<'_, Message> = match self.info_panel().or_else(|| self.settings_panel()).or_else(|| self.bin_panel()).or_else(|| self.text_panel()) {
             Some(panel) => row![panel, view].into(),
             None => view,
         };
@@ -3573,6 +3616,8 @@ const NEW_PROJECT: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="
 const ADD_OVERLAY: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="14" height="14" rx="2"/><circle cx="8" cy="8" r="1.5"/><path d="M17 12l-4-4-8 8"/><path d="M20 15v6M17 18h6"/></svg>"#;
 const ADD_TEXT: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7V4h12v3M10 4v16M7 20h6"/><path d="M19 13v8M15 17h8"/></svg>"#;
 const ADD_CLIP: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="14" height="18" rx="2"/><path d="M6 3v18M12 3v18M2 8h4M2 16h4M12 8h4M12 16h4M20 9v6M17 12h6"/></svg>"#;
+/// The bin: a box of files.
+const BIN: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9"/><path d="M10 13h4"/></svg>"#;
 const OPEN_PROJECT: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg>"#;
 const SAVE: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7M7 3v4a1 1 0 0 0 1 1h7"/></svg>"#;
 const SAVE_AS: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h10.2a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V10"/><path d="M7 3v4a1 1 0 0 0 1 1h7M7 21v-7a1 1 0 0 1 1-1h4"/><path d="M21.4 15.6a1.98 1.98 0 0 0-2.8-2.8L14 17.4V20.2h2.8z"/></svg>"#;

@@ -2815,20 +2815,28 @@ impl App {
     /// play. Made then rather than at the first move, which would keep only
     /// the start of a drag. `before` is the free look of each kind (360,
     /// flat) as it was.
+    ///
+    /// A cut with a single keyframe shows one view throughout, so it is
+    /// framed the same way: looking around updates that keyframe. Without
+    /// this only the first framing stuck, and every later one snapped back
+    /// at the next play or seek. A following keyframe, or two and more (a
+    /// camera move), are left alone.
     fn keep_hand_view(&mut self, before: (View, View)) {
         if !self.follow {
             return;
         }
         let Some((i, input)) = self.hand_cut.take() else { return };
-        let Some(cut) = self.edit.cuts.get(i).filter(|c| c.input == input && c.keyframes.is_empty()) else { return };
+        let Some(cut) = self.edit.cuts.get(i).filter(|c| c.input == input) else { return };
         let look = if cut.flat { before.1 } else { before.0 };
-        if look == View::home(Projection::Perspective) && cut.flat {
-            return;
-        }
+        let keys: Vec<_> = cut.keyframes.iter().collect();
+        let at = match keys.as_slice() {
+            [] if look == View::home(Projection::Perspective) && cut.flat => return,
+            [] => cut.start,
+            [k] if k.follow.is_none() && k.view != look => k.t,
+            _ => return,
+        };
         self.edit.checkpoint();
-        let cut = &mut self.edit.cuts[i];
-        let start = cut.start;
-        cut.keyframes.set(start, look, 0.0, &|_, _| None);
+        self.edit.cuts[i].keyframes.set(at, look, 0.0, &|_, _| None);
     }
 
     /// Keys the view shown at the playhead on the playing cut, or updates

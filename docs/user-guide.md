@@ -232,7 +232,7 @@ More:
 - **Keyframe as you look**: with **Auto keyframe** on (see [Settings](#16-settings)), looking around while paused sets or updates the keyframe at the playhead by itself, without pressing K. Each look-around is one undo step.
 - **Delete a keyframe**: go to it and press **Delete**, or the crossed-diamond icon.
 
-**Following and looking.** After you play, seek or change a keyframe, the view follows the keyframes. As soon as you look around by hand, you take over from the view they showed, until the next play or seek. So you can always look around freely without changing anything; only K saves a view (unless Auto keyframe is on).
+**Following and looking.** After you play, seek or change a keyframe, the view follows the keyframes. As soon as you look around by hand, you take over from the view they showed, until the next play or seek. So you can always look around freely without changing anything; only K saves a view (unless Auto keyframe is on). A cut with no keyframes, or just one, shows a single view throughout, so there the view you looked at is kept: it becomes, or updates, that keyframe.
 
 **Cuts without keyframes** hold the view the edit had last: the view at the end of the nearest cut before them that has keyframes, as after a split. The export frames them the same way.
 

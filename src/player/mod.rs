@@ -447,6 +447,15 @@ enum Message {
     BinRefresh,
     /// Add a file from the bin where its kind goes.
     BinAdd(PathBuf, bin::Kind),
+    /// Pin the bin open, or unpin it.
+    BinPin,
+    /// Preview a file in the bin: see a clip's frames, hear a sound.
+    BinPreview(PathBuf, bin::Kind),
+    BinStop,
+    /// Lengths and pictures of the bin's files, read.
+    BinMeta(Vec<(PathBuf, bin::Meta)>),
+    /// The previewed clip's frames, read.
+    BinFrames(PathBuf, Vec<image::Handle>),
     /// Cut `i`'s crossfade from the cut before dragged to this many seconds.
     Crossfade(usize, f64),
     /// Give the selected (or playing) cut a 1 s crossfade, or take its away.
@@ -614,10 +623,8 @@ struct App {
     split_kept: f32,
     /// The Settings panel is open (at the left).
     settings_open: bool,
-    /// The bin is open (at the left), and what it read of the project's
-    /// folder: its sections and the folder; `None` with no saved project.
-    bin_open: bool,
-    bin: Option<(Vec<bin::Section>, PathBuf)>,
+    /// The bin, at the far left (`bin.rs`).
+    bin: bin::Bin,
     /// 10-bit tracks decode at 10 bits (`source::deep`).
     ten_bit: bool,
     /// The library LUT new D-Log M cuts get, and the library's LUTs.
@@ -723,8 +730,7 @@ impl App {
             modifiers: keyboard::Modifiers::default(),
             scrubbing: None,
             settings_open: false,
-            bin_open: false,
-            bin: None,
+            bin: bin::Bin { open: saved.bin_pinned, pinned: saved.bin_pinned, ..Default::default() },
             fullscreen: false,
             volume: saved.volume,
             muted: saved.muted,
@@ -761,6 +767,7 @@ impl App {
             theme: self.theme.to_string(),
             ten_bit: self.ten_bit,
             dlog_m_lut: self.dlog_m_lut.clone(),
+            bin_pinned: self.bin.pinned,
             timeline_scale: self.split_kept,
             view_angles: self.angles_shown,
         }
@@ -794,6 +801,7 @@ impl App {
         self.settle_text();
         self.follow_crossfade();
         self.follow_music();
+        let task = Task::batch([task, self.follow_bin()]);
         let now = self.settings();
         if now != self.saved_settings {
             now.save();
@@ -958,6 +966,16 @@ impl App {
     }
 
     /// Reads `path`'s waveform for the music lane, unless it has it.
+    /// Reads the bin again when the project's folder changed: another
+    /// project opened, or this one saved somewhere else.
+    fn follow_bin(&mut self) -> Task<Message> {
+        let want = self.project.as_deref().and_then(bin::root);
+        if want.as_ref() == self.bin.read.as_ref().map(|(_, r)| r) {
+            return Task::none();
+        }
+        self.rescan_bin()
+    }
+
     fn load_waveform(&self, path: &Path) -> Task<Message> {
         if self.waveforms.contains_key(path) {
             return Task::none();
@@ -1312,7 +1330,10 @@ impl App {
     /// Does what waited on the edit being saved or let go.
     fn proceed(&mut self, then: Then) -> Task<Message> {
         match then {
-            Then::Close => iced::exit(),
+            Then::Close => {
+                self.stop_preview();
+                iced::exit()
+            }
             Then::OpenProject => self.update(Message::OpenProject),
             Then::NewProject => self.update(Message::NewProject),
         }
@@ -1444,7 +1465,6 @@ impl App {
                 self.saved_version = self.edit.version;
                 self.saved_aspect = self.aspect;
                 self.project = None;
-                self.rescan_bin();
                 self.clip = None;
                 self.held = None;
                 self.current = 0;
@@ -1468,7 +1488,10 @@ impl App {
                 }
             }
             Message::CloseRequested if self.unsaved() => return self.confirm(Then::Close),
-            Message::CloseRequested => return iced::exit(),
+            Message::CloseRequested => {
+                self.stop_preview();
+                return iced::exit();
+            }
             Message::Confirmed(then, choice) => match choice {
                 Choice::Save => {
                     self.after_save = Some(then);
@@ -1550,7 +1573,6 @@ impl App {
                 self.saved_version = if complete { self.edit.version } else { 0 };
                 self.saved_aspect = self.aspect;
                 self.project = Some(path);
-                self.rescan_bin();
                 self.selected_music = None;
                 self.selected_volume = None;
                 self.selected_sound = None;
@@ -1629,18 +1651,24 @@ impl App {
                 self.settings_open = !self.settings_open;
                 if self.settings_open {
                     self.info = None;
-                    self.bin_open = false;
                 }
             }
-            Message::BinPanel => {
-                self.bin_open = !self.bin_open;
-                if self.bin_open {
-                    self.info = None;
-                    self.settings_open = false;
-                    self.rescan_bin();
+            // Pinned, it stays open.
+            Message::BinPanel if self.bin.open && self.bin.pinned => {}
+            Message::BinPanel => self.bin.open = !self.bin.open,
+            Message::BinPin => {
+                self.bin.pinned = !self.bin.pinned;
+                self.bin.open |= self.bin.pinned;
+            }
+            Message::BinRefresh => return self.rescan_bin(),
+            Message::BinPreview(path, kind) => return self.bin_preview(path, kind),
+            Message::BinStop => self.stop_preview(),
+            Message::BinMeta(read) => self.bin.meta.extend(read),
+            Message::BinFrames(path, frames) => {
+                if let Some(p) = self.bin.preview.as_mut().filter(|p| p.path == path) {
+                    p.frames = frames;
                 }
             }
-            Message::BinRefresh => self.rescan_bin(),
             Message::BinAdd(path, bin::Kind::Clip) => return self.update(Message::Picked(vec![path])),
             Message::BinAdd(path, bin::Kind::Picture) => return self.update(Message::OverlayPicked(vec![path])),
             Message::BinAdd(path, bin::Kind::Sound) => {
@@ -1810,7 +1838,6 @@ impl App {
                     // mark going is enough.
                     self.save_status = None;
                     self.project = Some(path);
-                    self.rescan_bin();
                     if let Some(then) = self.after_save.take() {
                         return self.proceed(then);
                     }
@@ -3290,7 +3317,6 @@ impl App {
                 tooltip::Position::Bottom,
             ),
             tip(icon_button(NEW_PROJECT, Some(Message::NewProject)), text("Start a new, empty project (Ctrl+N)"), tooltip::Position::Bottom),
-            tip(icon_button(BIN, Some(Message::BinPanel)), text(if self.bin_open { "Close the bin (B)" } else { "The bin: the project folder's media (B)" }), tooltip::Position::Bottom),
             tip(icon_button(ADD_CLIP, Some(Message::Open)), text(open_hint), tooltip::Position::Bottom),
             tip(
                 icon_button(ADD_MUSIC, Some(Message::AddMusic)),
@@ -3393,10 +3419,12 @@ impl App {
         // A text item's words and look, at the left while it's selected.
         // The Info and Settings panels win the left side over the Text panel
         // while open.
-        let view: Element<'_, Message> = match self.info_panel().or_else(|| self.settings_panel()).or_else(|| self.bin_panel()).or_else(|| self.text_panel()) {
+        let view: Element<'_, Message> = match self.info_panel().or_else(|| self.settings_panel()).or_else(|| self.text_panel()) {
             Some(panel) => row![panel, view].into(),
             None => view,
         };
+        // The bin, a panel of its own at the far left, beside whichever.
+        let view: Element<'_, Message> = row![self.bin_panel(), view].into();
 
         let current = self.current_key();
         let aiming = current.map(|k| Aiming::of(&self.edit.cuts[self.current].keyframes[k].follow));
@@ -3617,7 +3645,7 @@ const ADD_OVERLAY: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="
 const ADD_TEXT: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7V4h12v3M10 4v16M7 20h6"/><path d="M19 13v8M15 17h8"/></svg>"#;
 const ADD_CLIP: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="14" height="18" rx="2"/><path d="M6 3v18M12 3v18M2 8h4M2 16h4M12 8h4M12 16h4M20 9v6M17 12h6"/></svg>"#;
 /// The bin: a box of files.
-const BIN: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9"/><path d="M10 13h4"/></svg>"#;
+pub(super) const BIN: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9"/><path d="M10 13h4"/></svg>"#;
 const OPEN_PROJECT: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg>"#;
 const SAVE: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7M7 3v4a1 1 0 0 0 1 1h7"/></svg>"#;
 const SAVE_AS: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h10.2a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V10"/><path d="M7 3v4a1 1 0 0 0 1 1h7M7 21v-7a1 1 0 0 1 1-1h4"/><path d="M21.4 15.6a1.98 1.98 0 0 0-2.8-2.8L14 17.4V20.2h2.8z"/></svg>"#;
@@ -3652,7 +3680,12 @@ fn tip<'a>(content: impl Into<Element<'a, Message>>, hint: iced::widget::Text<'a
 }
 
 fn icon_button<'a>(icon: &'static [u8], on_press: Option<Message>) -> Element<'a, Message> {
-    button(svg(svg::Handle::from_memory(icon)).width(20).height(20)).padding(5).on_press_maybe(on_press).into()
+    button(svg_icon(icon)).padding(5).on_press_maybe(on_press).into()
+}
+
+/// An icon as the buttons show it.
+fn svg_icon(icon: &'static [u8]) -> svg::Svg<'static> {
+    svg(svg::Handle::from_memory(icon)).width(20).height(20)
 }
 
 /// A mix level for its slider: the bottom of the range is silence.

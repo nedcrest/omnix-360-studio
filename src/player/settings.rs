@@ -33,6 +33,8 @@ pub struct Settings {
     pub ten_bit: bool,
     /// The library LUT D-Log M clips get when they're added.
     pub dlog_m_lut: Option<String>,
+    /// The bin is pinned open (`bin.rs`).
+    pub bin_pinned: bool,
     /// How tall the timeline's lanes are, as the divider above the
     /// transport row left them (`timeline::Rows`).
     pub timeline_scale: f32,
@@ -58,6 +60,7 @@ impl Default for Settings {
             theme: iced::Theme::KanagawaDragon.to_string(),
             ten_bit: false,
             dlog_m_lut: None,
+            bin_pinned: false,
             timeline_scale: 1.0,
             view_angles: true,
         }

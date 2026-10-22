@@ -1,8 +1,14 @@
 # Omnix 360 Studio
 
 A Linux-native studio for 360° video — the equivalent of Insta360 Studio and
-DJI Studio, which their vendors do not ship for Linux. Supports both camera
-families: Insta360 (`.insv`, target: X6) and DJI (`.osv`, target: Osmo 360 II).
+DJI Studio, which their vendors do not ship for Linux. **DJI only** (decided
+2026-10-22: the user's gear is DJI — Action 2, Neo 2, Osmo Mobile 7P — and the
+360 camera will be an Osmo 360 / Osmo 360 II). Insta360 is out of scope.
+
+Built as a local fork of [rOsmo360](https://github.com/ravelund/rOsmo360),
+which already covers the Osmo 360 (stitching, gyro stabilisation, reframing,
+timeline). Also meant as a simple home-video editor: 360 is one kind of clip
+beside ordinary phone / Action 2 / Neo 2 footage.
 
 ## Why
 
@@ -28,8 +34,8 @@ direction).
 ## Scope
 
 ### Stage 1 — parity with the vendor studios
-- Ingest raw `.insv` / `.osv` and pre-stitched equirectangular `.mp4`
-- Own dual-fisheye stitcher for both vendors (no vendor SDKs — see Principles)
+- Osmo 360 II `.osv` support (resolution, calibration, 8K50)
+- Gyro stabilisation for ordinary DJI clips (Action 2, Neo 2) — telemetry-parser reads them
 - Gyro-based stabilization and horizon lock (via Gyroflow's `telemetry-parser`)
 - Reframing with keyframes and curves; projections: rectilinear, tiny planet, fisheye
 - Real-time GPU preview; proxies for 8K
@@ -58,7 +64,7 @@ direction).
 | UI | Qt/QML | proven by Gyroflow, native to KDE |
 | AI | Python sidecar over local API | the model ecosystem lives there |
 
-Licence: GPL-3.0 (follows Gyroflow's crates).
+Licence: MIT OR Apache-2.0, as upstream (ffmpeg is called as a separate program).
 
 ## Target machine
 
@@ -70,15 +76,13 @@ NVIDIA RTX 3060 12 GB (driver 580). Note: Ampere has no AV1 *encoder*.
    with the mouse; read gyro from a sample `.insv` / `.osv`.
 1. **MVP** — virtual cameras with keyframes, horizon lock, stabilization, LUT,
    proxies, export.
-2. **Raw** — own dual-fisheye stitching for both vendors:
-   per-lens calibration read from file metadata → fisheye-to-sphere mapping on
-   GPU → seam blending (feather, then multi-band) → later optical-flow seams.
+2. **Osmo 360 II** — once sample files exist: check calibration and decode
+   speed at 8K50.
 3. **Local AI** — tracking, speaker-follow, transcript.
 4. **AI editing** — flat clips, cloud models, Kdenlive bridge.
 
 ## Open questions
 
-- Where exactly does each vendor store per-lens calibration (centre, radius,
-  rotation, distortion) in `.insv` / `.osv`? Needs reverse engineering.
+- Does telemetry-parser read Osmo 360 II calibration, or does it need adding?
 - Can the RTX 3060 decode 8K50 HEVC 10-bit in real time, or are proxies mandatory?
-- No camera for ~4 months: sample raw files must come from public sources.
+- No 360 camera for ~4 months: samples from public sources (Osmo 360 sample from the Bennetts review works).

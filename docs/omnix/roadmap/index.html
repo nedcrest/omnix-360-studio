@@ -1,0 +1,208 @@
+<!doctype html><html lang="uk"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Omnix — дорожня карта</title>
+<style>
+:root{--bg:#fbfaf8;--fg:#1c1b19;--muted:#6b6862;--line:#e3e0da;--card:#fff;
+ --accent:#8a5a2b;--ok:#3d7a4e;--warn:#a8631c;--wait:#2f6f9a;--glow:rgba(138,90,43,.18)}
+@media(prefers-color-scheme:dark){:root{--bg:#17161a;--fg:#e9e6e1;--muted:#9a958d;
+ --line:#2e2c31;--card:#1f1e23;--accent:#d29a5e;--ok:#7bbf8c;--warn:#e0a55e;--wait:#7fb6dc;
+ --glow:rgba(210,154,94,.22)}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);padding:0 18px 60px;
+ font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:1240px;margin:0 auto}
+header{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;padding:30px 0 6px}
+h1{margin:0;font-size:1.6rem;letter-spacing:-.02em}
+.live{font-size:.8rem;color:var(--muted);display:flex;align-items:center;gap:6px}
+.live i{width:8px;height:8px;border-radius:50%;background:var(--muted)}
+.live.on i{background:var(--ok)}
+.sub{color:var(--muted);margin:0 0 18px;font-size:.88rem}
+h2{font-size:.82rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);
+ margin:0 0 10px;display:flex;gap:8px;align-items:baseline}
+h2 u{text-decoration:none;font-weight:400}
+/* Чекає перевірки — найважливіше для людини, тому окремою смугою вгорі. */
+.wait{border:1px solid var(--wait);border-radius:12px;padding:14px 16px 6px;margin:0 0 22px;
+ background:color-mix(in srgb,var(--wait) 8%,transparent)}
+.wait h2{color:var(--wait)}
+.wait .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px}
+.board{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;align-items:start}
+@media(max-width:980px){.board{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:560px){.board{grid-template-columns:1fr}}
+.col{min-width:0}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:11px 13px;
+ margin:0 0 10px;transition:box-shadow .6s,border-color .6s}
+.card.now{border-left:3px solid var(--accent)}
+.card.fresh{box-shadow:0 0 0 4px var(--glow);border-color:var(--accent)}
+.card h3{margin:0 0 4px;font-size:.96rem;line-height:1.35}
+.card p{margin:6px 0 0;font-size:.85rem;color:var(--muted)}
+.meta{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
+.chip{font-size:.72rem;border:1px solid var(--line);border-radius:20px;padding:1px 8px;color:var(--muted)}
+.chip.st{border-color:currentColor}
+.chip.st.doing{color:var(--accent)} .chip.st.waiting{color:var(--wait)}
+.chip.code{font-family:ui-monospace,Menlo,monospace}
+.empty{color:var(--muted);font-size:.85rem;font-style:italic}
+/* Зроблене — стрічкою за датами, свіже вгорі. */
+.done{margin:30px 0 0;display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:24px}
+@media(max-width:860px){.done{grid-template-columns:1fr}}
+.tl{border-left:2px solid var(--line);margin-left:6px;padding-left:18px}
+.day{margin:0 0 14px}
+.day b{display:block;font-size:.8rem;color:var(--muted);margin:0 0 6px;position:relative}
+.day b:before{content:'';position:absolute;left:-25px;top:4px;width:10px;height:10px;
+ border-radius:50%;background:var(--ok)}
+.day div{font-size:.9rem;margin:0 0 4px;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.day div span{color:var(--muted);font-size:.75rem}
+.commits h3{font-size:.82rem;margin:0 0 6px;color:var(--muted)}
+.commits ol{list-style:none;margin:0 0 16px;padding:0}
+.commits li{font-size:.8rem;margin:0 0 4px;display:flex;gap:8px}
+.commits code{color:var(--accent);font-family:ui-monospace,Menlo,monospace;flex:0 0 auto}
+.commits li span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.err{color:var(--warn);font-size:.85rem}
+</style></head><body><div class="wrap">
+<header><h1>Omnix — дорожня карта</h1>
+  <span class="live" id="live"><i></i><span id="when">з'єднуюсь…</span></span></header>
+<p class="sub">Оновлюється сама, щойно змінюється <code>docs/omnix/ROADMAP.md</code>.
+Свіжі зміни на мить підсвічуються.</p>
+<div id="wait"></div>
+<div class="board" id="board"></div>
+<div class="done"><div><h2>Зроблено</h2><div class="tl" id="done"></div></div>
+  <div class="commits" id="commits"></div></div>
+</div>
+<script>
+'use strict';
+/* Формат ROADMAP.md (правила — .claude/skills/roadmap/SKILL.md):
+   ## Колонка            → Зараз | Далі | Потім | Ідеї | Зроблено
+   ### Назва картки
+   - ключ: значення     → статус, де, з, коли, коміт, пункт
+   (порожній рядок)
+   Вільний текст        → опис картки                                   */
+var COLS = ['Зараз', 'Далі', 'Потім', 'Ідеї'];
+var before = null;   // картки попереднього малювання: що змінилось — підсвітити
+
+function parse(md) {
+  var cols = {}, col = null, card = null;
+  md.split('\n').forEach(function (raw) {
+    var line = raw.replace(/\s+$/, '');
+    var m;
+    if ((m = line.match(/^## (.+)/))) { col = m[1].trim(); cols[col] = cols[col] || []; card = null; return; }
+    if ((m = line.match(/^### (.+)/)) && col) { card = {title: m[1].trim(), meta: {}, text: []}; cols[col].push(card); return; }
+    if (!card) return;
+    if ((m = line.match(/^- ([^:]+):\s*(.*)$/)) && !card.text.length) { card.meta[m[1].trim()] = m[2].trim(); return; }
+    if (line) card.text.push(line);
+  });
+  Object.keys(cols).forEach(function (k) {
+    cols[k].forEach(function (c) { c.body = c.text.join(' '); c.key = c.title; c.sig = JSON.stringify([c.meta, c.body, k]); });
+  });
+  return cols;
+}
+
+function el(tag, cls, text) {
+  var e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text != null) e.textContent = text;
+  return e;
+}
+
+function chip(text, cls) { return el('span', 'chip' + (cls ? ' ' + cls : ''), text); }
+
+function cardEl(c, col) {
+  var d = el('div', 'card' + (col === 'Зараз' ? ' now' : ''));
+  d.appendChild(el('h3', null, c.title));
+  var meta = el('div', 'meta'), st = c.meta['статус'];
+  if (st) meta.appendChild(chip(st, 'st ' + (st === 'чекає перевірки' ? 'waiting' : 'doing')));
+  if (c.meta['де']) c.meta['де'].split(',').forEach(function (w) { meta.appendChild(chip(w.trim())); });
+  if (c.meta['пункт']) meta.appendChild(chip('пункт ' + c.meta['пункт']));
+  if (c.meta['коміт']) meta.appendChild(chip(c.meta['коміт'], 'code'));
+  if (meta.childNodes.length) d.appendChild(meta);
+  if (c.body) d.appendChild(el('p', null, c.body));
+  if (before && before[c.key] !== c.sig) d.classList.add('fresh');
+  return d;
+}
+
+function render(md) {
+  var cols = parse(md), now = {};
+  Object.keys(cols).forEach(function (k) { cols[k].forEach(function (c) { now[c.key] = c.sig; }); });
+
+  // Чекає перевірки: зі «Зараз», окремою смугою.
+  var current = cols['Зараз'] || [];
+  var waiting = current.filter(function (c) { return c.meta['статус'] === 'чекає перевірки'; });
+  var w = document.getElementById('wait'); w.textContent = '';
+  if (waiting.length) {
+    var box = el('div', 'wait'), h = el('h2', null, 'Чекає твоєї перевірки ');
+    h.appendChild(el('u', null, String(waiting.length)));
+    box.appendChild(h);
+    var cards = el('div', 'cards');
+    waiting.forEach(function (c) { cards.appendChild(cardEl(c, 'Зараз')); });
+    box.appendChild(cards); w.appendChild(box);
+  }
+
+  var board = document.getElementById('board'); board.textContent = '';
+  COLS.forEach(function (name) {
+    var list = (cols[name] || []).filter(function (c) { return !(name === 'Зараз' && waiting.indexOf(c) >= 0); });
+    var col = el('div', 'col'), h = el('h2', null, name + ' ');
+    h.appendChild(el('u', null, String(list.length)));
+    col.appendChild(h);
+    if (!list.length) col.appendChild(el('div', 'empty', name === 'Зараз' ? 'нічого в роботі' : 'порожньо'));
+    list.forEach(function (c) { col.appendChild(cardEl(c, name)); });
+    board.appendChild(col);
+  });
+
+  // Зроблене за датами, свіже вгорі.
+  var byDay = {};
+  (cols['Зроблено'] || []).forEach(function (c) { var d = c.meta['коли'] || 'без дати'; (byDay[d] = byDay[d] || []).push(c); });
+  var tl = document.getElementById('done'); tl.textContent = '';
+  Object.keys(byDay).sort().reverse().forEach(function (d) {
+    var day = el('div', 'day'); day.appendChild(el('b', null, d));
+    byDay[d].forEach(function (c) {
+      var row = el('div', null, c.title);
+      if (c.meta['де']) row.appendChild(el('span', null, c.meta['де']));
+      day.appendChild(row);
+    });
+    tl.appendChild(day);
+  });
+  if (!tl.childNodes.length) tl.appendChild(el('div', 'empty', 'ще нічого'));
+
+  before = now;
+  setTimeout(function () { document.querySelectorAll('.fresh').forEach(function (e) { e.classList.remove('fresh'); }); }, 2500);
+}
+
+function stamp() {
+  var t = new Date();
+  document.getElementById('when').textContent = 'оновлено ' + t.toLocaleTimeString('uk-UA');
+}
+
+function load() {
+  return fetch('/roadmap.md', {cache: 'no-store'}).then(function (r) { return r.text(); })
+    .then(function (md) { render(md); stamp(); })
+    .catch(function () { document.getElementById('board').innerHTML = '<p class="err">Не можу прочитати ROADMAP.md</p>'; });
+}
+
+function loadCommits() {
+  fetch('/commits', {cache: 'no-store'}).then(function (r) { return r.json(); }).then(function (all) {
+    var host = document.getElementById('commits'); host.textContent = '';
+    host.appendChild(el('h2', null, 'Останні коміти'));
+    Object.keys(all).forEach(function (repo) {
+      host.appendChild(el('h3', null, repo));
+      var ol = el('ol');
+      all[repo].forEach(function (c) {
+        var li = el('li'); li.appendChild(el('code', null, c.hash));
+        var s = el('span', null, c.subject); s.title = c.date + ' · ' + c.subject; li.appendChild(s);
+        ol.appendChild(li);
+      });
+      host.appendChild(ol);
+    });
+  }).catch(function () {});
+}
+
+// Живе оновлення: сервер шле «changed», коли файл змінився. Обірвалось —
+// EventSource сам перепідключається; крапка показує, чи зв'язок є.
+function listen() {
+  var live = document.getElementById('live'), es = new EventSource('/events');
+  es.onopen = function () { live.classList.add('on'); load(); };
+  es.onmessage = function () { load(); loadCommits(); };
+  es.onerror = function () { live.classList.remove('on'); document.getElementById('when').textContent = 'зв’язку немає — сервер зупинено?'; };
+}
+
+load(); loadCommits(); listen();
+setInterval(loadCommits, 60000);   // коміти бувають і без зміни карти
+</script>
+</body></html>

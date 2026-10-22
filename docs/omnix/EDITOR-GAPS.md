@@ -53,8 +53,11 @@ User: wants a bin, maybe with better UI, with "our extra sound tracks" in it.
   (`voice/<day>/<clip>/<recipe>.flac`), Sound effects, Graphics, then the
   clips already loaded (Kos footage lives in the archive). Needs a saved
   project. Re-read on Refresh or when the project's folder changes.
-- Each file: a small frame (clips, pictures), its length, "+" to add (clip →
-  cut at the end, sound → music lane at the playhead, picture → overlay).
+- Each file: a small frame (clips, pictures), its length, and add buttons:
+  clips and sounds have three — at the end, at the playhead (the cut there is
+  split around the new one: `Edit::insert_at`), at the join nearest the
+  playhead (`Edit::nearest_join`); pictures one, at the playhead. This also
+  covers gap 1 for the bin.
 - Click previews: sound via `ffplay -nodisp`; clip in a small ffplay window
   plus four frames in the bin's preview box. Same file again or ■ stops;
   quitting stops it.
@@ -77,6 +80,19 @@ CapCut (thumbnail grid, "+", drag to the timeline).
 - sounds to their own lanes (gap 3); LUTs from `09_luts`;
 - footage-agent's ratings, notes and tags from `report/notes.json`;
 - preview inside the app's own viewer instead of an ffplay window.
+
+### 3a. Cleaned voice in place of a clip's sound — NEXT (user, 2026-10-22)
+
+The user's next ask: the cleaned voice chosen in the contact sheet
+(`notes.json` → `clips["<day>/<file>"].audio = "<recipe>"`, file at
+`voice/<day>/<clip stem>/<recipe>.flac`, same timing as the clip) should play
+**instead of the clip's own sound**, and Omnix must read that from what
+footage-agent exports. Plan: optional `Cut.sound: Option<PathBuf>` (a file
+timed like the clip, replacing its sound; old projects unchanged);
+playback (`audio.rs`) and export (ffmpeg graph) take it when set;
+footage-agent's `export/omnix.py` writes it from `notes.json` (the Kdenlive
+path already does this via `chosen_voices` in `cut.py`); the bin's Cleaned
+voice gets "use for this cut". Then 3 (more lanes) for sfx and voice-over.
 
 ### 3. More sound lanes — medium-large, format change
 

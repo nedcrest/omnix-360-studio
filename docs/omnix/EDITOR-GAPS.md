@@ -40,21 +40,43 @@ drag it back. Fix: an **insert at the playhead**: if the playhead is inside a
 cut, split it there and put the new cut between the halves; on a boundary,
 just put it there. Used by the bin (item 2) and by Ctrl+O. No format change.
 
-### 2. A bin (project library panel), like Kdenlive's — v1 done
+### 2. A bin (project library panel), like Kdenlive's — v2 done, in test
 
 User: wants a bin, maybe with better UI, with "our extra sound tracks" in it.
-**v1 (`src/player/bin.rs`, commit `241f28d`)**: B or the box icon in the top
-bar opens it at the left. It lists the project's folder (above `04_project`,
-footage-agent's `layout.py`): Footage, External video, Music, Voice-over,
-Cleaned voice (`voice/<day>/<clip>/<recipe>.flac`), Sound effects, Graphics,
-then the clips already loaded. A click adds: clip → cut at the end, sound →
-the music lane at the playhead, picture → overlay at the playhead. Needs a
-saved project (no folder otherwise).
 
-Next for it, after the user tries v1: clip → at the playhead (item 1);
-sounds → their own lanes (item 3); thumbnails / lengths; drag-and-drop
-(harder in iced); footage-agent's ratings and notes from `report/notes.json`;
-LUTs from `09_luts`.
+**Now (`src/player/bin.rs`, v1 `241f28d`, v2 `e33f65e`):**
+- A panel of its own at the far left, beside whichever left panel (Info,
+  Settings, Text) is open; folds to a narrow strip (B toggles).
+- Pin (🔒) keeps it open, and open at the next start (`Settings.bin_pinned`).
+- Lists the project's folder (above `04_project`, footage-agent's
+  `layout.py`): Footage, External video, Music, Voice-over, Cleaned voice
+  (`voice/<day>/<clip>/<recipe>.flac`), Sound effects, Graphics, then the
+  clips already loaded (Kos footage lives in the archive). Needs a saved
+  project. Re-read on Refresh or when the project's folder changes.
+- Each file: a small frame (clips, pictures), its length, "+" to add (clip →
+  cut at the end, sound → music lane at the playhead, picture → overlay).
+- Click previews: sound via `ffplay -nodisp`; clip in a small ffplay window
+  plus four frames in the bin's preview box. Same file again or ■ stops;
+  quitting stops it.
+
+User's asks on v1 (2026-10-22), all in v2: pin/lock so it doesn't close;
+preview and pre-listen on click; pictures ("хоча б картинками без гіфу");
+a panel of its own that folds to the side, not a stand-in for another.
+
+**UI research** (user asked to look at the best): Final Cut Pro's browser
+*skimmer* (move the pointer over a filmstrip to scrub, no click; E appends,
+W inserts at the playhead without dragging), DaVinci Resolve's media pool
+(thumbnail / list views, icon size, hover scrub shown in the viewer),
+CapCut (thumbnail grid, "+", drag to the timeline).
+
+**Next for the bin:**
+- hover-scrub a clip's picture (Final Cut's skimmer) — a canvas per row;
+- E / W from the bin: append / insert at the playhead (needs gap 1);
+- grid view with bigger pictures, and a size slider;
+- drag-and-drop to the timeline (harder in iced);
+- sounds to their own lanes (gap 3); LUTs from `09_luts`;
+- footage-agent's ratings, notes and tags from `report/notes.json`;
+- preview inside the app's own viewer instead of an ffplay window.
 
 ### 3. More sound lanes — medium-large, format change
 

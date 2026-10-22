@@ -60,14 +60,13 @@ const ADD_HERE: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0
 const ADD_JOIN: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="11" width="8" height="10" rx="1"/><rect x="14" y="11" width="8" height="10" rx="1"/><path d="M12 2v7M9 6l3 3 3-3"/></svg>"#;
 
 /// A heading and the folders under the project's folder it gathers.
-/// Cleaned voice is two levels deeper (`voice/<day>/<clip>/<recipe>.flac`),
-/// so its folder is walked down.
-const SECTIONS: [(&str, Kind, &[&str]); 7] = [
+/// Cleaned voice (`voice/`) isn't listed: it belongs to its clip, and comes
+/// in with the project footage-agent writes, not by hand.
+const SECTIONS: [(&str, Kind, &[&str]); 6] = [
     ("Footage", Kind::Clip, &["01_footage"]),
     ("External video", Kind::Clip, &["06_external"]),
     ("Music", Kind::Sound, &["02_audio/music"]),
     ("Voice-over", Kind::Sound, &["02_audio/voiceover"]),
-    ("Cleaned voice", Kind::Sound, &["voice"]),
     ("Sound effects", Kind::Sound, &["07_sfx"]),
     ("Graphics", Kind::Picture, &["08_graphics"]),
 ];
@@ -152,19 +151,13 @@ pub fn kind_of(path: &Path) -> Option<Kind> {
     }
 }
 
-/// The files under `dir` of `kind`, down `depth` more folders, by path.
-fn files(dir: &Path, kind: Kind, depth: usize, out: &mut Vec<PathBuf>) {
+/// The files in `dir` of `kind`, by path.
+fn files(dir: &Path, kind: Kind, out: &mut Vec<PathBuf>) {
     let Ok(entries) = std::fs::read_dir(dir) else { return };
     for entry in entries.flatten() {
         let path = entry.path();
-        if path.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.starts_with('.') || n.starts_with('_')) {
-            continue;
-        }
-        if path.is_dir() {
-            if depth > 0 {
-                files(&path, kind, depth - 1, out);
-            }
-        } else if kind_of(&path) == Some(kind) {
+        let hidden = path.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.starts_with('.') || n.starts_with('_'));
+        if !hidden && path.is_file() && kind_of(&path) == Some(kind) {
             out.push(path);
         }
     }
@@ -179,8 +172,7 @@ pub fn scan(root: &Path) -> Vec<Section> {
         .filter_map(|&(title, kind, dirs)| {
             let mut found = Vec::new();
             for dir in dirs {
-                let depth = if *dir == "voice" { 2 } else { 0 };
-                files(&root.join(dir), kind, depth, &mut found);
+                files(&root.join(dir), kind, &mut found);
             }
             found.sort();
             (!found.is_empty()).then_some(Section { title, kind, files: found })
@@ -188,16 +180,9 @@ pub fn scan(root: &Path) -> Vec<Section> {
         .collect()
 }
 
-/// A file's name as the bin lists it: cleaned voice by its clip and recipe
-/// (`DJI_0001 · dnn6`), as its own name is only the recipe.
-fn label(title: &str, path: &Path) -> String {
-    let name = path.file_stem().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-    if title == "Cleaned voice"
-        && let Some(clip) = path.parent().and_then(Path::file_name)
-    {
-        return format!("{} · {name}", clip.to_string_lossy());
-    }
-    path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or(name)
+/// A file's name as the bin lists it.
+fn label(path: &Path) -> String {
+    path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()
 }
 
 fn clock(seconds: f64) -> String {
@@ -327,7 +312,7 @@ impl App {
                 for section in sections {
                     body = body.push(rule::horizontal(1)).push(text(section.title).size(15));
                     for path in &section.files {
-                        body = body.push(self.item(label(section.title, path), path, section.kind));
+                        body = body.push(self.item(label(path), path, section.kind));
                     }
                 }
             }
@@ -335,7 +320,7 @@ impl App {
         if !loaded.is_empty() {
             body = body.push(rule::horizontal(1)).push(text("Loaded clips").size(15));
             for path in &loaded {
-                body = body.push(self.item(label("", path), path, Kind::Clip));
+                body = body.push(self.item(label(path), path, Kind::Clip));
             }
         }
         container(scrollable(body.padding(10))).width(WIDTH).height(Length::Fill).into()
@@ -433,9 +418,9 @@ mod tests {
         make("_trash/old.mp3");
         let s = scan(&dir);
         let titles: Vec<_> = s.iter().map(|s| s.title).collect();
-        assert_eq!(titles, ["Footage", "Music", "Cleaned voice", "Sound effects", "Graphics"]);
+        // Cleaned voice belongs to its clip: not listed.
+        assert_eq!(titles, ["Footage", "Music", "Sound effects", "Graphics"]);
         assert_eq!(s[0].files, [dir.join("01_footage/DJI_0001.MP4")]);
-        assert_eq!(label(s[2].title, &s[2].files[0]), "DJI_0001 · dnn6");
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

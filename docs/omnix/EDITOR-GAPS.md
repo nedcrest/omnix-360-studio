@@ -49,8 +49,9 @@ User: wants a bin, maybe with better UI, with "our extra sound tracks" in it.
   Settings, Text) is open; folds to a narrow strip (B toggles).
 - Pin (🔒) keeps it open, and open at the next start (`Settings.bin_pinned`).
 - Lists the project's folder (above `04_project`, footage-agent's
-  `layout.py`): Footage, External video, Music, Voice-over, Cleaned voice
-  (`voice/<day>/<clip>/<recipe>.flac`), Sound effects, Graphics, then the
+  `layout.py`): Footage, External video, Music, Voice-over, Sound effects,
+  Graphics (cleaned voice left out at the user's word: it belongs to its clip
+  and comes in through the export, gap 3a), then the
   clips already loaded (Kos footage lives in the archive). Needs a saved
   project. Re-read on Refresh or when the project's folder changes.
 - Each file: a small frame (clips, pictures), its length, and add buttons:

@@ -56,7 +56,7 @@ insert with a sound, white noise + white-noise screen, film burn, etc.
   the user's footage-agent layout, e.g. `vfx-white-noise.mp4`,
   `transition-film-burn-vfx.mp4`) — and a configured one saves as a project
   template like any transition.
-- Two ways to place one (open question which, or both):
+- Two ways to place one, **both offered as an option per instance** (user, 2026-10-22):
   - **insert**: plays between the two cuts, the edit gets longer by its length;
   - **cover**: plays over the cut point (blended: screen/add/alpha, e.g. film
     burn), the edit keeps its length.
@@ -76,6 +76,11 @@ Flat ones: dissolve with a curve, dip to colour, directional wipe with soft
 edge, zoom blur, light leak, film burn (the user already uses
 `transition-film-burn-vfx.mp4` overlays), glitch, luma fade.
 
+## Approach
+
+Trial and error (user, 2026-10-22): build the smallest version, try it on real
+footage (the Kos project), adjust. Don't design every detail up front.
+
 ## Implementation notes
 
 - Per upstream `AGENTS.md`, every transition exists twice: a WGSL function in
@@ -94,8 +99,6 @@ edge, zoom blur, light leak, film burn (the user already uses
   later a user-wide library like the LUT library.
 
 ## Open questions
-
-- Stinger: insert (adds time) or cover the cut (keeps time) — or both as an option?
 
 - Snap step: always 0.25 s, or 0.25 s by default with Shift for frames?
 - Does T toggle a mode, or just add a default transition at the cut nearest

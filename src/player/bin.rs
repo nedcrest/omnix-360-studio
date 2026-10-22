@@ -22,7 +22,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 
-const WIDTH: f32 = 320.0;
+const WIDTH: f32 = 360.0;
 /// The folded bin: a strip with the button that opens it.
 const FOLDED: f32 = 34.0;
 const THUMB_W: u32 = 96;
@@ -36,6 +36,28 @@ pub enum Kind {
     Sound,
     Picture,
 }
+
+/// Which of the bin's add buttons: at the end, at the playhead (splitting
+/// the cut there), or at the join of cuts nearest the playhead.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Place {
+    End,
+    Playhead,
+    Join,
+}
+
+/// A `Place` made definite: the playhead's edit time when it was pressed.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Spot {
+    End,
+    At(f64),
+    Join(f64),
+}
+
+/// The add buttons' icons.
+const ADD_END: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h13M11 7l5 5-5 5M20 5v14"/></svg>"#;
+const ADD_HERE: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v13"/><path d="M7 3h10l-5 6z" fill="white"/></svg>"#;
+const ADD_JOIN: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="11" width="8" height="10" rx="1"/><rect x="14" y="11" width="8" height="10" rx="1"/><path d="M12 2v7M9 6l3 3 3-3"/></svg>"#;
 
 /// A heading and the folders under the project's folder it gathers.
 /// Cleaned voice is two levels deeper (`voice/<day>/<clip>/<recipe>.flac`),
@@ -357,13 +379,28 @@ impl App {
             .padding([3, 4])
             .style(if selected { button::secondary } else { button::text })
             .on_press(Message::BinPreview(path.to_owned(), kind));
-        let hint = match kind {
-            Kind::Clip => "Add at the end of the edit",
-            Kind::Sound => "Add on the music lane at the playhead",
-            Kind::Picture => "Add over the picture at the playhead",
+        let add = |icon: &'static [u8], place: Place, hint: &'static str| -> Element<'a, Message> {
+            let icon = iced::widget::svg(iced::widget::svg::Handle::from_memory(icon)).width(16).height(16);
+            tip(button(icon).padding(4).on_press(Message::BinAdd(path.to_owned(), kind, place)), text(hint), tooltip::Position::Left)
         };
-        let add = tip(button(text("+").size(16)).padding([2, 9]).on_press(Message::BinAdd(path.to_owned(), kind)), text(hint), tooltip::Position::Left);
-        row![body, add].spacing(4).align_y(Alignment::Center).into()
+        let buttons: Element<'a, Message> = match kind {
+            Kind::Clip => row![
+                add(ADD_END, Place::End, "Add at the end of the edit"),
+                add(ADD_HERE, Place::Playhead, "Add at the playhead: the cut there is split around it"),
+                add(ADD_JOIN, Place::Join, "Add at the join of cuts nearest the playhead"),
+            ]
+            .spacing(2)
+            .into(),
+            Kind::Sound => row![
+                add(ADD_END, Place::End, "Add on the music lane after the last song"),
+                add(ADD_HERE, Place::Playhead, "Add on the music lane at the playhead"),
+                add(ADD_JOIN, Place::Join, "Add on the music lane at the join of cuts nearest the playhead"),
+            ]
+            .spacing(2)
+            .into(),
+            Kind::Picture => add(ADD_HERE, Place::Playhead, "Add over the picture at the playhead"),
+        };
+        row![body, buttons].spacing(4).align_y(Alignment::Center).into()
     }
 }
 

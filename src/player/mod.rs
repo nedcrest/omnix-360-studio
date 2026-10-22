@@ -446,7 +446,7 @@ enum Message {
     /// Read the project's folder again.
     BinRefresh,
     /// Add a file from the bin where its kind goes.
-    BinAdd(PathBuf, bin::Kind),
+    BinAdd(PathBuf, bin::Kind, bin::Place),
     /// Pin the bin open, or unpin it.
     BinPin,
     /// Preview a file in the bin: see a clip's frames, hear a sound.
@@ -547,6 +547,9 @@ struct App {
     /// Clips waiting to be loaded, in order, and whether each is added as a
     /// cut (opened) or only loaded for a project's cuts.
     queue: std::collections::VecDeque<(PathBuf, bool)>,
+    /// Where a clip added from the bin goes once it's loaded, by its file:
+    /// at the end if it has no entry.
+    placing: std::collections::HashMap<PathBuf, bin::Spot>,
     /// Whether the clip loading now is added as a cut.
     loading_adds: bool,
     /// The next cut's playback, primed in the last `PREROLL` seconds of the
@@ -696,6 +699,7 @@ impl App {
             timeline_zoom: 1.0,
             timeline_start: 0.0,
             queue: Default::default(),
+            placing: Default::default(),
             loading_adds: true,
             loaded: 0,
             loading_part: Arc::default(),
@@ -1669,14 +1673,24 @@ impl App {
                     p.frames = frames;
                 }
             }
-            Message::BinAdd(path, bin::Kind::Clip) => return self.update(Message::Picked(vec![path])),
-            Message::BinAdd(path, bin::Kind::Picture) => return self.update(Message::OverlayPicked(vec![path])),
-            Message::BinAdd(path, bin::Kind::Sound) => {
-                // At the playhead, where it fits: one sound lane holds music,
+            Message::BinAdd(path, bin::Kind::Clip, place) => {
+                // Where it goes is decided now, from the playhead now: the
+                // clip may take a while to load.
+                let spot = self.spot(place);
+                self.placing.insert(path.clone(), spot);
+                return self.update(Message::Picked(vec![path]));
+            }
+            Message::BinAdd(path, bin::Kind::Picture, _) => return self.update(Message::OverlayPicked(vec![path])),
+            Message::BinAdd(path, bin::Kind::Sound, place) => {
+                // Where it fits nearest the spot: one sound lane holds music,
                 // effects and voice alike until there are lanes of their own.
                 let duration = ffmpeg::duration(&path).unwrap_or(60.0);
+                let at = match self.spot(place) {
+                    bin::Spot::End => self.edit.music.end(),
+                    bin::Spot::At(t) => t,
+                    bin::Spot::Join(t) => crate::project::offsets(&self.edit.cuts).into_iter().chain([self.edit.duration()]).nth(self.edit.nearest_join(t)).unwrap_or(t),
+                };
                 self.edit.checkpoint();
-                let at = self.position();
                 self.edit.music.clips.push(crate::project::MusicClip { input: path.clone(), at, start: 0.0, end: duration, fade_in: 0.0, fade_out: 0.0 });
                 let i = self.edit.music.clips.len() - 1;
                 self.edit.music.clips[i].at = self.edit.music.place(i, at);
@@ -2714,19 +2728,41 @@ impl App {
     /// Adds the whole clip as a cut at the end of the edit and selects it.
     /// The first clip starts playing, as opening a clip always did; later
     /// ones leave playback where it is.
+    /// A bin button's place as a spot on the edit, from the playhead now.
+    fn spot(&self, place: bin::Place) -> bin::Spot {
+        match place {
+            bin::Place::End => bin::Spot::End,
+            bin::Place::Playhead => bin::Spot::At(self.position()),
+            bin::Place::Join => bin::Spot::Join(self.position()),
+        }
+    }
+
     fn add_cut(&mut self, input: PathBuf, duration: f64) {
         self.edit.checkpoint();
         // A picture has no length of its own: a few seconds, trimmed at will.
         let picture = self.library.iter().find(|m| m.input == input).and_then(|m| m.flat).is_some_and(|f| f.picture);
         let end = if picture { ffmpeg::PICTURE_SECONDS } else { duration };
         let lut = self.auto_lut(&input);
-        self.edit.cuts.push(Cut { input, start: 0.0, end, keyframes: Default::default(), stabilize: Some(self.opts.stabilize), note: None, volume: Vec::new(), crossfade: 0.0, effects: Vec::new(), lut, old_lut_strength: None, flat: false, lut_applied: None });
+        let spot = self.placing.remove(&input).unwrap_or(bin::Spot::End);
+        let cut = Cut { input, start: 0.0, end, keyframes: Default::default(), stabilize: Some(self.opts.stabilize), note: None, volume: Vec::new(), crossfade: 0.0, effects: Vec::new(), lut, old_lut_strength: None, flat: false, lut_applied: None };
+        let i = match spot {
+            bin::Spot::End => self.edit.insert_cut(usize::MAX, cut),
+            bin::Spot::At(t) => self.edit.insert_at(t, cut),
+            bin::Spot::Join(t) => {
+                let at = self.edit.nearest_join(t);
+                self.edit.insert_cut(at, cut)
+            }
+        };
         self.mark_flat();
-        let i = self.edit.cuts.len() - 1;
         self.selected = Some(i);
         if self.clip.is_none() {
             self.follow = true;
             self.goto(i, 0.0, true);
+        } else if spot != bin::Spot::End {
+            // Put in among the cuts, it shifts the ones after it: show it,
+            // paused at its start, so the playhead stays on what's shown.
+            self.follow = true;
+            self.goto(i, 0.0, false);
         }
     }
 

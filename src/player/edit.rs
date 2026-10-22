@@ -205,6 +205,36 @@ impl Edit {
         crate::project::settle_crossfades(&mut self.cuts);
     }
 
+    /// The join of two cuts nearest edit time `t`, as the position a cut
+    /// put there gets: 0 before the first cut, `cuts.len()` after the last.
+    pub fn nearest_join(&self, t: f64) -> usize {
+        let offsets = crate::project::offsets(&self.cuts);
+        let mut joins: Vec<f64> = offsets.clone();
+        joins.push(self.duration());
+        (0..joins.len()).min_by(|&a, &b| (joins[a] - t).abs().total_cmp(&(joins[b] - t).abs())).unwrap_or(0)
+    }
+
+    /// Puts `cut` at position `at`; returns where it went.
+    pub fn insert_cut(&mut self, at: usize, cut: Cut) -> usize {
+        let at = at.min(self.cuts.len());
+        self.cuts.insert(at, cut);
+        crate::project::settle_crossfades(&mut self.cuts);
+        at
+    }
+
+    /// Puts `cut` in at edit time `t`: the cut playing there is split and
+    /// `cut` goes between the halves; within `MIN_CUT` of a join, it goes at
+    /// that join. Returns where it went.
+    pub fn insert_at(&mut self, t: f64, cut: Cut) -> usize {
+        if let Some((i, clip_t)) = self.locate(t)
+            && self.split(i, clip_t)
+        {
+            return self.insert_cut(i + 1, cut);
+        }
+        let at = self.nearest_join(t);
+        self.insert_cut(at, cut)
+    }
+
     /// Moves cut `from` so it plays at position `to` (counted before the move).
     pub fn move_cut(&mut self, from: usize, to: usize) {
         let cut = self.cuts.remove(from);
@@ -225,6 +255,31 @@ mod tests {
 
     fn edit() -> Edit {
         Edit { cuts: vec![cut("a", 10.0, 14.0), cut("b", 2.0, 5.0)], ..Default::default() }
+    }
+
+    #[test]
+    fn inserts_at_the_playhead_splitting_the_cut_there() {
+        let mut e = edit();
+        // a: 0..4 on the edit (clip 10..14), b: 4..7 (clip 2..5)
+        assert_eq!(e.insert_at(1.5, cut("x", 0.0, 2.0)), 1);
+        let got: Vec<_> = e.cuts.iter().map(|c| (c.input.to_string_lossy().into_owned(), c.start, c.end)).collect();
+        assert_eq!(got, [("a".into(), 10.0, 11.5), ("x".into(), 0.0, 2.0), ("a".into(), 11.5, 14.0), ("b".into(), 2.0, 5.0)]);
+    }
+
+    #[test]
+    fn inserts_at_a_join_when_the_playhead_is_on_one() {
+        let mut e = edit();
+        assert_eq!(e.insert_at(4.0, cut("x", 0.0, 2.0)), 1);
+        assert_eq!(e.cuts.len(), 3);
+        assert_eq!(e.cuts[2].input, PathBuf::from("b"));
+    }
+
+    #[test]
+    fn nearest_join_counts_both_ends() {
+        let e = edit();
+        assert_eq!(e.nearest_join(1.0), 0);
+        assert_eq!(e.nearest_join(3.0), 1);
+        assert_eq!(e.nearest_join(6.9), 2);
     }
 
     #[test]

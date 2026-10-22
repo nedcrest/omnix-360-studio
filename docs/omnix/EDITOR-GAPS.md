@@ -85,6 +85,21 @@ on the seek bar; M adds one at the playhead, click jumps. footage-agent then
 exports its flags («що знайти») and point marks into them
 (`footage_agent/export/omnix.py`).
 
+### 6. Vignette shapes — idea (user, 2026-10-22)
+
+Today there is one vignette: `Grade.vignette` (0..1, "Darker corners"),
+round, by distance from the centre (`grade.rs` ~136, mirrored in
+`grade.wgsl`). The user wants **types**, e.g. on a sunny day with a deep
+blue sky, darken only the **top edge** of the frame — a graduated filter
+like an ND grad on a lens.
+
+Possible shapes: round (today), top, bottom, left/right, and maybe an
+angle. Parameters: amount (exists), shape, softness, how far in it reaches.
+Keyframed like every effect, so a top grad can follow a tilt. Format: new
+optional fields on the effect key; CPU (`grade.rs`) and GPU (`grade.wgsl`)
+together with a GPU-vs-CPU test, as upstream `AGENTS.md` requires.
+Small-medium; independent of the rest.
+
 ## Format rule for all of these
 
 New fields only, each `#[serde(default, skip_serializing_if = …)]`, so every

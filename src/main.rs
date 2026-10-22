@@ -961,13 +961,23 @@ fn export(project: &project::Project, opts: &StitchOpts, out: &ExportOpts, progr
     let total = plan.iter().map(|p| p.2).sum();
     let mut done = 0;
     let mut written = Vec::with_capacity(files.len());
+    // A cut's own audio file plays in place of its clip's sound (in a file
+    // per cut too: it's the sound chosen for it); one that's gone leaves the
+    // clip's, as the player does.
+    let heard: Vec<Option<&Path>> = project.cuts.iter().map(|c| c.audio.as_deref().filter(|a| a.exists())).collect();
+    for (c, h) in project.cuts.iter().zip(&heard) {
+        if let (Some(audio), None) = (&c.audio, h) {
+            eprintln!("{} is missing: its cut gets its clip's own sound", audio.display());
+        }
+    }
     for (path, cuts) in files {
         let sound: Vec<_> = cuts
             .clone()
             .zip(&plan[cuts.clone()])
             .map(|(n, &(i, start, frames))| {
                 let crossfade = if n > cuts.start { overlap[n] as f64 / fps } else { 0.0 };
-                ffmpeg::Sound { input: &pipelines[i].input, start, duration: Some(frames as f64 / fps), volume: &project.cuts[n].volume, crossfade }
+                let input = heard[n].unwrap_or(&pipelines[i].input);
+                ffmpeg::Sound { input, start, duration: Some(frames as f64 / fps), volume: &project.cuts[n].volume, crossfade }
             })
             .collect();
         // The whole edit gets its mix; a file per cut is for another editor,
@@ -1194,7 +1204,7 @@ fn run() -> Result<()> {
                 // One clip is a project of one cut.
                 let reframe = framing.reframe()?.unwrap_or_else(|| Reframe::fixed(View::home(Projection::Perspective)));
                 let (start, end) = span(&input, start, duration, Some(&reframe))?;
-                project::Project { aspect: reframe.aspect, cuts: vec![project::Cut { input, start, end, keyframes: reframe.keyframes, stabilize: None, note: None, volume: Vec::new(), crossfade: 0.0, effects: Vec::new(), lut: None, old_lut_strength: None, flat: false, lut_applied: None }], ..Default::default() }
+                project::Project { aspect: reframe.aspect, cuts: vec![project::Cut { input, start, end, keyframes: reframe.keyframes, stabilize: None, note: None, audio: None, volume: Vec::new(), crossfade: 0.0, effects: Vec::new(), lut: None, old_lut_strength: None, flat: false, lut_applied: None }], ..Default::default() }
             };
             let aspect = aspect.or(project.aspect).unwrap_or(view::Aspect(16, 9));
             let [w, h] = size.unwrap_or_else(|| aspect.size(resolution.short_side())).map(|v| v as usize);

@@ -132,7 +132,7 @@ impl Playback {
         p.start_stream(t);
         p.playing = false;
         if p.media.has_audio {
-            p.ready = Audio::prepare(&p.media.input, t, volume).inspect_err(|e| eprintln!("no sound ready: {e:#}")).ok().map(|a| (t, a));
+            p.ready = Audio::prepare(p.media.heard(), t, volume).inspect_err(|e| eprintln!("no sound ready: {e:#}")).ok().map(|a| (t, a));
         }
         p
     }
@@ -219,7 +219,7 @@ impl Playback {
             self.audio = Some(ready);
             return;
         }
-        match Audio::start(&self.media.input, t, self.volume) {
+        match Audio::start(self.media.heard(), t, self.volume) {
             Ok(a) => self.audio = Some(a),
             Err(e) => {
                 eprintln!("no sound: {e:#}");

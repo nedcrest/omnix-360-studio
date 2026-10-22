@@ -52,6 +52,9 @@ pub struct Media {
     pub osv_full: u32,
     pub hw: Hwaccel,
     pub has_audio: bool,
+    /// A sound file heard in place of the clip's own (`Cut::audio`), set on
+    /// the copy a cut plays; the library's copy has none.
+    pub audio: Option<PathBuf>,
     pub rig: Arc<Rig>,
     pub stab: Stabilizer,
     pub readout_ms: f64,
@@ -61,6 +64,28 @@ pub struct Media {
     pub flat: Option<ffmpeg::Flat>,
     /// The colour profile it was filmed in: D-Log M gets its LUT.
     pub color_mode: crate::dji::ColorMode,
+}
+
+impl Media {
+    /// The file whose sound plays: the cut's own audio file, else the clip.
+    pub fn heard(&self) -> &Path {
+        self.audio.as_deref().unwrap_or(&self.input)
+    }
+
+    /// This clip as cut `cut` plays it: with the cut's audio file, if any.
+    fn for_cut(&self, cut: &Cut) -> Media {
+        let mut media = self.clone();
+        media.audio = heard_audio(cut);
+        media.has_audio |= media.audio.is_some();
+        media
+    }
+}
+
+/// The audio file cut `cut` plays in place of its clip's sound: its own, if
+/// it has one that's there; a missing one leaves the clip's sound playing
+/// (the project's opening says which are missing).
+fn heard_audio(cut: &Cut) -> Option<PathBuf> {
+    cut.audio.clone().filter(|a| a.exists())
 }
 
 impl fmt::Debug for Media {
@@ -128,6 +153,7 @@ impl Media {
                 None => ffmpeg::dimensions(&input, p.tracks[0])?.0 as u32,
             },
             has_audio: ffmpeg::has_audio(&input)?,
+            audio: None,
             proxy,
             osv_size: opts.osv_size,
             hw,
@@ -881,7 +907,7 @@ impl App {
             return;
         };
         match &mut self.partner {
-            Some((j, inc)) if *j == i && inc.playback.media.input == input => {
+            Some((j, inc)) if *j == i && inc.playback.media.input == input && inc.playback.media.audio == heard_audio(&self.edit.cuts[i]) => {
                 let p = &mut inc.playback;
                 // Primed to catch up: started as the edit gets there.
                 if let Some(at) = p.go_at {
@@ -930,7 +956,7 @@ impl App {
             }
             _ => {
                 let Some(media) = self.library.iter().find(|m| m.input == input) else { return };
-                let mut media = media.clone();
+                let mut media = media.for_cut(&self.edit.cuts[i]);
                 media.osv_size = self.opts.osv_size;
                 media.stab.set_mode(self.edit.cuts[i].stabilize.unwrap_or(self.opts.stabilize));
                 // Playing, primed ahead to start as the edit gets there, as
@@ -1542,6 +1568,14 @@ impl App {
                     let names: Vec<_> = missing.iter().map(|c| c.input.display().to_string()).collect();
                     format!("Left out cuts of missing clips: {}", names.join(", "))
                 });
+                // A cut's audio file that's gone: its clip's own sound plays,
+                // and the file stays named, so it comes back once found.
+                let mut deaf: Vec<String> = cuts.iter().filter_map(|c| c.audio.as_ref()).filter(|a| !a.exists()).map(|a| a.display().to_string()).collect();
+                deaf.dedup();
+                if !deaf.is_empty() {
+                    let said = self.error.take().map_or(String::new(), |e| e + ". ");
+                    self.error = Some(format!("{said}Missing sound files, playing the clips' own: {}", deaf.join(", ")));
+                }
                 self.aspect = project.aspect.map_or(Aspect::Free, |a| Aspect::Ratio(a.0 as u16, a.1 as u16));
                 self.clip = None;
                 self.current = 0;
@@ -2744,7 +2778,7 @@ impl App {
         let end = if picture { ffmpeg::PICTURE_SECONDS } else { duration };
         let lut = self.auto_lut(&input);
         let spot = self.placing.remove(&input).unwrap_or(bin::Spot::End);
-        let cut = Cut { input, start: 0.0, end, keyframes: Default::default(), stabilize: Some(self.opts.stabilize), note: None, volume: Vec::new(), crossfade: 0.0, effects: Vec::new(), lut, old_lut_strength: None, flat: false, lut_applied: None };
+        let cut = Cut { input, start: 0.0, end, keyframes: Default::default(), stabilize: Some(self.opts.stabilize), note: None, audio: None, volume: Vec::new(), crossfade: 0.0, effects: Vec::new(), lut, old_lut_strength: None, flat: false, lut_applied: None };
         let i = match spot {
             bin::Spot::End => self.edit.insert_cut(usize::MAX, cut),
             bin::Spot::At(t) => self.edit.insert_at(t, cut),
@@ -2772,7 +2806,8 @@ impl App {
     fn goto(&mut self, i: usize, t: f64, play: bool) {
         let Some(cut) = self.edit.cuts.get(i) else { return };
         let t = t.clamp(cut.start, cut.end);
-        let other_clip = self.clip.as_ref().is_none_or(|c| c.playback.media.input != cut.input);
+        // Another clip, or the same clip heard through another audio file.
+        let other_clip = self.clip.as_ref().is_none_or(|c| c.playback.media.input != cut.input || c.playback.media.audio != heard_audio(cut));
         if (i != self.current || other_clip) && self.held.is_none() {
             self.held = self.sphere();
         }
@@ -2780,7 +2815,7 @@ impl App {
             Some(c) if !other_clip => c.playback.jump(t, play),
             _ => {
                 let Some(media) = self.library.iter().find(|m| m.input == cut.input) else { return };
-                let mut media = media.clone();
+                let mut media = media.for_cut(cut);
                 media.osv_size = self.opts.osv_size;
                 let mut playback = Playback::new(media, self.clip_volume(), self.full_on_pause);
                 playback.jump(t, play);
@@ -3017,7 +3052,7 @@ impl App {
         let loaded = |input: &PathBuf| self.library.iter().find(|m| &m.input == input);
         // A next cut that starts where this one ends in the same clip (after
         // a split) just plays on: no seek, nothing to prime.
-        let carries_on = next_cut.is_some_and(|n| n.input == cut.input && (n.start - cut.end).abs() < 1.5 / p.media.fps && n.crossfade == 0.0);
+        let carries_on = next_cut.is_some_and(|n| n.input == cut.input && n.audio == cut.audio && (n.start - cut.end).abs() < 1.5 / p.media.fps && n.crossfade == 0.0);
         // Where the next cut comes in: this one's end, or before it by the
         // crossfade.
         let change = self.edit.crossfade_from(self.current).unwrap_or(cut.end);
@@ -3030,7 +3065,7 @@ impl App {
             && self.preroll.as_ref().is_none_or(|(i, input, start, _)| (*i, input, *start) != (next, &n.input, n.start))
             && let Some(media) = loaded(&n.input)
         {
-            let mut media = media.clone();
+            let mut media = media.for_cut(n);
             media.osv_size = self.opts.osv_size;
             media.stab.set_mode(n.stabilize.unwrap_or(self.opts.stabilize));
             let primed = Playback::primed(media, n.start, volume, self.full_on_pause);
@@ -3820,6 +3855,10 @@ impl std::fmt::Display for Aiming {
 /// (the usual), and note.
 fn cut_labels(c: &Cut, default: Mode) -> Vec<String> {
     let mut label = format!("{} · {:.1} s", clip_name(&c.input), c.end - c.start);
+    // Its sound from a file of its own: say which, by its name.
+    if let Some(audio) = &c.audio {
+        label += &format!(" · ♪ {}", audio.file_stem().map_or_else(String::new, |n| n.to_string_lossy().into_owned()));
+    }
     match c.stabilize.unwrap_or(default) {
         Mode::Horizon => {}
         Mode::Off => label += " · unstabilised",

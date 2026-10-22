@@ -240,6 +240,10 @@ impl App {
                 rows.push(("Cut", format!("{} of {}", i + 1, self.edit.cuts.len())));
                 rows.push(("On the edit", span(at, at + cut.end - cut.start)));
                 rows.push(("From the file", span(cut.start, cut.end)));
+                if let Some(audio) = &cut.audio {
+                    let name = audio.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+                    rows.push(("Sound", if audio.exists() { format!("{name}, in place of the clip's") } else { format!("{name} is missing: the clip's own plays") }));
+                }
                 let uses = self.edit.cuts.iter().filter(|c| c.input == info.path).count();
                 if uses > 1 {
                     rows.push(("Used", format!("in {uses} cuts")));

@@ -291,6 +291,12 @@ pub struct Cut {
     /// assembled the edit, such as an automatic highlight pass.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub note: Option<String>,
+    /// A sound file heard in place of the clip's own, timed like the clip
+    /// (its second 0 is the clip's): the clip's voice cleaned of noise, say.
+    /// The cut's volume points and the clips' level apply to it as they
+    /// would to the clip's sound.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub audio: Option<PathBuf>,
     /// Its sound's volume points, clip time, in dB on top of the project's
     /// `sound` level. Pinned to the footage like the keyframes, so a shout
     /// keeps its level wherever the cut goes.
@@ -398,6 +404,9 @@ impl Project {
                 bail!("cut {} ends ({} s) before it starts ({} s)", n + 1, cut.end, cut.start);
             }
             cut.input = dir.join(&cut.input);
+            if let Some(audio) = cut.audio.as_mut() {
+                *audio = dir.join(&*audio);
+            }
             for track in cut.keyframes.tracks_mut() {
                 *track = dir.join(&*track);
             }
@@ -466,6 +475,11 @@ impl Project {
         for cut in &mut project.cuts {
             if let Ok(rel) = cut.input.strip_prefix(dir) {
                 cut.input = rel.to_owned();
+            }
+            if let Some(audio) = cut.audio.as_mut()
+                && let Ok(rel) = audio.strip_prefix(dir)
+            {
+                *audio = rel.to_owned();
             }
             for track in cut.keyframes.tracks_mut() {
                 if let Ok(rel) = track.strip_prefix(dir) {
@@ -567,6 +581,31 @@ mod tests {
 
     /// A project saved while the LUT's strength was the cut's own opens,
     /// the strength moved into its effects; it isn't written back.
+    #[test]
+    fn a_cut_s_own_audio_file_loads_and_saves_like_its_clip() {
+        let dir = std::env::temp_dir().join(format!("rosmo360-audio-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("edit.json");
+        std::fs::write(
+            &path,
+            r#"{"cuts": [{"input": "a.MP4", "in": 0, "out": 4, "audio": "voice/a/dnn6.flac"},
+                         {"input": "b.MP4", "in": 0, "out": 2, "audio": "/elsewhere/b.flac"},
+                         {"input": "c.MP4", "in": 0, "out": 2}]}"#,
+        )
+        .unwrap();
+        let p = Project::load(&path).unwrap();
+        assert_eq!(p.cuts[0].audio, Some(dir.join("voice/a/dnn6.flac")));
+        assert_eq!(p.cuts[1].audio, Some(PathBuf::from("/elsewhere/b.flac")));
+        assert_eq!(p.cuts[2].audio, None);
+        p.save(&path).unwrap();
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert!(text.contains(r#""audio": "voice/a/dnn6.flac""#) && text.contains(r#""audio": "/elsewhere/b.flac""#));
+        // A cut without one writes none: old projects read and write as before.
+        assert_eq!(text.matches(r#""audio""#).count(), 2);
+        assert_eq!(Project::load(&path).unwrap(), p);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
     #[test]
     fn old_lut_strength_becomes_an_effect() {
         let dir = std::env::temp_dir().join(format!("rosmo360-lut-{}", std::process::id()));

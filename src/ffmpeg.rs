@@ -885,7 +885,7 @@ impl Encoder {
             cmd.args(["-map", "1:a:0?"]);
         } else if audio.iter().all(Sound::sounds) {
             // Same camera, but resample anyway: concat needs matching formats.
-            let parts: String = (1..=audio.len()).map(|i| format!("[{i}:a:0]aresample=48000,aformat=channel_layouts=stereo[a{i}];")).collect();
+            let parts: String = (1..).zip(audio).map(|(i, s)| format!("[{i}:a:0]aresample=48000,aformat=channel_layouts=stereo{}[a{i}];", pad(s))).collect();
             let inputs: String = (1..=audio.len()).map(|i| format!("[a{i}]")).collect();
             cmd.args(["-filter_complex", &format!("{parts}{inputs}concat=n={}:v=0:a=1[a]", audio.len()), "-map", "[a]"]);
         } else if !audio.is_empty() {
@@ -925,6 +925,15 @@ impl Encoder {
     }
 }
 
+/// Pads a stretch with silence to its frames' length, as a filter to append
+/// (`,apad=…`), when that length is known. A sound shorter than its picture
+/// would otherwise pull every later cut's sound early: a camera's own track
+/// ends a few ms before its video (8 ms on an Action 2), a voice cleaned of
+/// noise some 30 ms before its clip.
+fn pad(sound: &Sound<'_>) -> String {
+    sound.duration.map_or_else(String::new, |d| format!(",apad=whole_dur={d}"))
+}
+
 /// `base` dB and the line through volume points `keys` as a `volume`
 /// filter, the same line the player follows (straight in dB between
 /// points), worked out per audio frame (~20 ms). `t` is the expression
@@ -956,7 +965,7 @@ fn mixed(cmd: &mut Command, audio: &[Sound<'_>], mix: &Mix<'_>) -> Result<String
         for (i, sound) in (1..).zip(audio) {
             // Its volume points, in clip time: the stretch's time starts at 0.
             let level = if sound.volume.is_empty() { String::new() } else { format!(",{}", level_filter(0.0, sound.volume, &format!("(t+{})", sound.start))) };
-            graph += &format!("[{i}:a:0]{stereo}{level}[c{i}];");
+            graph += &format!("[{i}:a:0]{stereo}{}{level}[c{i}];", pad(sound));
         }
         // Joined in turn: a crossfade overlaps a stretch's end with the
         // next's start (equal power, as the music's), else end to end.

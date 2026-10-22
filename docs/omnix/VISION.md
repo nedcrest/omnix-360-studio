@@ -42,6 +42,11 @@ direction).
 - Colour: Log profiles (I-Log, D-Log M), `.cube` LUTs, basic grading
 - Hardware-encoded export (NVENC)
 
+### Transitions
+- Preset transitions with previews, parameters and project templates; T key,
+  orange zones, overlap vs edge (out/in) detected automatically; 360-only
+  looks (whip pan, little-planet zoom). Spec: [TRANSITIONS.md](TRANSITIONS.md).
+
 ### Stage 2+ — AI assisted editing
 - Speaker-follow: spatial audio direction of arrival + active speaker detection
 - Click/text tracking ("follow the dog") — SAM 2 + detector

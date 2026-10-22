@@ -40,23 +40,21 @@ drag it back. Fix: an **insert at the playhead**: if the playhead is inside a
 cut, split it there and put the new cut between the halves; on a boundary,
 just put it there. Used by the bin (item 2) and by Ctrl+O. No format change.
 
-### 2. A bin (project library panel), like Kdenlive's — medium
+### 2. A bin (project library panel), like Kdenlive's — v1 done
 
 User: wants a bin, maybe with better UI, with "our extra sound tracks" in it.
-A left panel (beside Settings / Info / Text) listing the **project folder**
-— the parent of `04_project`, layout from footage-agent's
-`footage_agent/layout.py`:
+**v1 (`src/player/bin.rs`, commit `241f28d`)**: B or the box icon in the top
+bar opens it at the left. It lists the project's folder (above `04_project`,
+footage-agent's `layout.py`): Footage, External video, Music, Voice-over,
+Cleaned voice (`voice/<day>/<clip>/<recipe>.flac`), Sound effects, Graphics,
+then the clips already loaded. A click adds: clip → cut at the end, sound →
+the music lane at the playhead, picture → overlay at the playhead. Needs a
+saved project (no folder otherwise).
 
-- Footage (`01_footage`, or the clips already in the edit / archive),
-- Music (`02_audio/music`), Voice-over (`02_audio/voiceover`),
-- Cleaned voice (`voice/<day>/<clip>/<recipe>.flac`, from the contact sheet),
-- SFX (`07_sfx`), External video (`06_external`), Graphics (`08_graphics`),
-  LUTs (`09_luts`).
-
-Click (or Enter) adds at the playhead into the right place: video → cut
-(item 1), music → music lane, sfx / voice → a sound lane (item 3), picture →
-overlay lane. Drag-and-drop later (harder in iced). Later still: show
-footage-agent's ratings and notes from `report/notes.json`.
+Next for it, after the user tries v1: clip → at the playhead (item 1);
+sounds → their own lanes (item 3); thumbnails / lengths; drag-and-drop
+(harder in iced); footage-agent's ratings and notes from `report/notes.json`;
+LUTs from `09_luts`.
 
 ### 3. More sound lanes — medium-large, format change
 
@@ -100,6 +98,20 @@ optional fields on the effect key; CPU (`grade.rs`) and GPU (`grade.wgsl`)
 together with a GPU-vs-CPU test, as upstream `AGENTS.md` requires.
 Small-medium; independent of the rest.
 
+### 7. A wider selection frame — small (user, 2026-10-22)
+
+The selected cut's frame on the timeline is hard to see. Make it thicker
+and in the accent colour (`timeline.rs`, where the cut blocks are drawn).
+
+### 8. Select several cuts, act on them together — medium (user, 2026-10-22)
+
+Today one cut is selected (`App::selected: Option<usize>`). Wanted:
+Shift/Ctrl+click to select several, then act on all — delete, move, set
+effects, and **join** them (e.g. merge cuts of one clip back into one, or
+group them so they move together). Needs a selection set instead of one
+index, and a choice of what "join" means: merging neighbours from the same
+clip is clear; a group of different clips is a format change (a group id).
+
 ## Format rule for all of these
 
 New fields only, each `#[serde(default, skip_serializing_if = …)]`, so every
@@ -109,5 +121,6 @@ we only run our own build.
 
 ## Proposed order
 
-1 → 2 → 3 → 5 → 4A; 4B when the rest is in use. 1 is a few hours and helps at
+Taken by the user: 2 first (v1 done). Then 1 → 3 → 5 → 4A → 7 → 8; 6 any
+time; 4B when the rest is in use. 1 is a few hours and helps at
 once; 2 is the user's main ask and is where 3 and 5 plug in.

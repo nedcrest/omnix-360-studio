@@ -33,7 +33,7 @@ use anyhow::{Context, Result};
 use gpu::{Rig, Shown};
 use iced::keyboard::{self, Key, key::Named};
 use iced::mouse;
-use iced::widget::{button, canvas, center, column, progress_bar, container, image, pick_list, responsive, row, shader, slider, space, stack, svg, text, toggler, tooltip};
+use iced::widget::{button, canvas, center, column, progress_bar, container, image, pick_list, responsive, row, rule, shader, slider, space, stack, svg, text, toggler, tooltip};
 use iced::window;
 use iced::{Alignment, Element, Length, Point, Rectangle, Size, Subscription, Task, Theme};
 use playback::Playback;
@@ -383,9 +383,14 @@ enum Message {
     ExportCancel,
     /// Starts (or stops) drawing a box over a subject to track its colour.
     PickColour,
-    /// Pick a song for the music track.
-    AddMusic,
-    MusicPicked(Option<PathBuf>),
+    /// Pick a file for a sound track: a song for the music, or a sound
+    /// effect.
+    AddSound(SoundTrack),
+    SoundPicked(SoundTrack, Option<PathBuf>),
+    /// The «Framing» switch: the view's keyframes, angles and (for a 360
+    /// cut) stabilisation and projection, shown and active; off, the bars
+    /// hold editing only and the view can't be turned by accident.
+    Framing(bool),
     /// A song's waveform, read off the UI thread.
     Waveform(PathBuf, Result<Arc<music::Waveform>, String>),
     /// The waveform of what a cut plays, if it has sound.
@@ -570,6 +575,8 @@ struct App {
 
     /// The overlay or text item selected, in the lane shown of its track.
     selected_overlay: Option<crate::overlay::ItemRef>,
+    /// The «Framing» switch: off (editing) by default, each start.
+    framing: bool,
     /// The clip selected on a sound track.
     selected_music: Option<(SoundTrack, usize)>,
     /// A sound track's volume point selected, and the cut sound point:
@@ -730,6 +737,7 @@ impl App {
             text_of: None,
 
             selected_overlay: None,
+            framing: false,
             selected_music: None,
             selected_volume: None,
             cut_waves_asked: Default::default(),
@@ -824,6 +832,11 @@ impl App {
 
     /// Handles `message`, then saves the settings if it changed any.
     fn update(&mut self, message: Message) -> Task<Message> {
+        // Editing: what turns or keys the view does nothing (its controls
+        // are hidden too; the mouse on the picture and the keys still send).
+        if !self.framing && framing_only(&message) {
+            return Task::none();
+        }
         let before = if self.look_flat { (self.other_look, self.look) } else { (self.look, self.other_look) };
         // What may look around (a key may turn the view); a let-go drag or
         // anything else done ends a look-around's undo step. Frames and
@@ -2099,33 +2112,48 @@ impl App {
                     self.scrub_to(i, t);
                 }
             }
-            Message::AddMusic => {
+            Message::AddSound(which) => {
                 let dir = self.project.as_ref().and_then(|p| p.parent().map(Path::to_owned));
+                let (title, filter) = match which {
+                    SoundTrack::Music => ("Add music", "Music"),
+                    SoundTrack::Sfx => ("Add a sound effect", "Sounds"),
+                };
                 return Task::perform(
                     async move {
-                        let mut dialog = rfd::AsyncFileDialog::new()
-                            .set_title("Add music")
-                            .add_filter("Music", &["mp3", "MP3", "flac", "wav", "m4a", "aac", "ogg", "opus", "wma"]);
+                        let mut dialog = rfd::AsyncFileDialog::new().set_title(title).add_filter(filter, &["mp3", "MP3", "flac", "wav", "WAV", "m4a", "aac", "ogg", "opus", "wma"]);
                         if let Some(dir) = dir {
                             dialog = dialog.set_directory(dir);
                         }
                         dialog.pick_file().await.map(|f| f.path().to_owned())
                     },
-                    Message::MusicPicked,
+                    move |picked| Message::SoundPicked(which, picked),
                 );
             }
-            Message::MusicPicked(None) => {}
-            Message::MusicPicked(Some(path)) => {
+            Message::SoundPicked(_, None) => {}
+            Message::SoundPicked(which, Some(path)) => {
                 // Its length comes with the waveform; until then a stand-in
                 // that the waveform corrects.
                 let duration = ffmpeg::duration(&path).unwrap_or(60.0);
                 self.edit.checkpoint();
-                // After the music already there, whole.
-                let at = self.edit.music.end();
-                self.edit.music.clips.push(crate::project::MusicClip { input: path.clone(), at, start: 0.0, end: duration, fade_in: 0.0, fade_out: 0.0 });
-                self.selected_music = Some((SoundTrack::Music, self.edit.music.clips.len() - 1));
+                // A song after the music already there, whole; a sound
+                // effect at the playhead, where it's wanted.
+                let at = match which {
+                    SoundTrack::Music => self.edit.music.end(),
+                    SoundTrack::Sfx => self.position(),
+                };
+                let track = self.edit.track_mut(which);
+                track.clips.push(crate::project::MusicClip { input: path.clone(), at, start: 0.0, end: duration, fade_in: 0.0, fade_out: 0.0 });
+                let i = track.clips.len() - 1;
+                track.clips[i].at = track.place(i, at);
+                self.selected_music = Some((which, i));
                 self.selected = None;
                 return self.load_waveform(&path);
+            }
+            Message::Framing(on) => {
+                self.framing = on;
+                if !on {
+                    self.picking = None;
+                }
             }
             Message::OverlayPicture(key, Ok((picture, missing))) => {
                 static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
@@ -3237,6 +3265,12 @@ impl App {
 
     fn key(&mut self, key: Key, mods: keyboard::Modifiers) -> Task<Message> {
         let step = 5.0;
+        // Editing: the keys that turn, frame or key the view do nothing. K
+        // still adds a volume point to a selected sound.
+        let sound = self.selected_music.is_some() || self.selected_volume.is_some() || self.selected_sound.is_some();
+        if !self.framing && framing_key(&key, mods, sound) {
+            return Task::none();
+        }
         match key.as_ref() {
             Key::Named(Named::Escape) if self.picking.is_some() => return self.update(Message::PickColour),
             Key::Named(Named::Escape) if self.fullscreen => return self.update(Message::Fullscreen),
@@ -3261,6 +3295,8 @@ impl App {
             Key::Named(Named::Delete | Named::Backspace) if mods.shift() || self.selected_music.is_some() || self.selected_volume.is_some() || self.selected_sound.is_some() || self.selected_overlay.is_some() => {
                 return self.update(Message::DeleteCut);
             }
+            // Editing: Del takes the selected cut (framing, the keyframe).
+            Key::Named(Named::Delete | Named::Backspace) if !self.framing => return self.update(Message::DeleteCut),
             Key::Named(Named::Delete | Named::Backspace) => return self.update(Message::KeyDelete),
             Key::Character(c) => match c {
                 "o" | "O" if mods.command() && mods.shift() => return self.update(Message::OpenProject),
@@ -3398,7 +3434,7 @@ impl App {
             let buttons = row![
                 labelled_button(ADD_CLIP, "Open clips…", idle.then_some(Message::Open)),
                 labelled_button(OPEN_PROJECT, "Open project…", idle.then_some(Message::OpenProject)),
-                labelled_button(ADD_MUSIC, "Add music…", idle.then_some(Message::AddMusic)),
+                labelled_button(ADD_MUSIC, "Add music…", idle.then_some(Message::AddSound(SoundTrack::Music))),
             ]
             .spacing(12);
             let start = center(column![self.logo(), status, buttons].push(error).spacing(16).align_x(Alignment::Center));
@@ -3429,7 +3465,8 @@ impl App {
         let message = self.save_status.as_ref().map(|s| text(s.clone()).style(text::secondary).wrapping(text::Wrapping::None));
         let status: Element<'_, Message> = match &self.loading {
             Some(_) => self.loading_bar(140.0),
-            None => row![].push(message).push(showing).push(decode).spacing(10).align_y(Alignment::Center).into(),
+            // What decodes and shows matters for 360 footage: shown while framing.
+            None => row![].push(message).push(self.framing.then_some(showing)).push(self.framing.then_some(decode)).spacing(10).align_y(Alignment::Center).into(),
         };
         let shown_view = self.shown_view();
         let (lo, hi) = shown_view.fov_range();
@@ -3444,21 +3481,16 @@ impl App {
             (None, Some(_)) => Source::Proxy,
             (size, _) => Source::Osv(size.unwrap_or(1920)),
         };
+        // Groups: settings | the project file | what to add | the export;
+        // then, while framing a 360 cut, how it is steadied and drawn.
         let top = row![
             tip(
                 icon_button(SETTINGS, Some(Message::SettingsPanel)),
                 text(if self.settings_open { "Close the Settings panel (Ctrl+,)" } else { "Settings (Ctrl+,)" }),
                 tooltip::Position::Bottom,
             ),
+            separator(),
             tip(icon_button(NEW_PROJECT, Some(Message::NewProject)), text("Start a new, empty project (Ctrl+N)"), tooltip::Position::Bottom),
-            tip(icon_button(ADD_CLIP, Some(Message::Open)), text(open_hint), tooltip::Position::Bottom),
-            tip(
-                icon_button(ADD_MUSIC, Some(Message::AddMusic)),
-                text(if self.edit.music.clips.is_empty() { "Add music under the edit" } else { "Add more music, after the last song" }),
-                tooltip::Position::Bottom,
-            ),
-            tip(icon_button(ADD_OVERLAY, Some(Message::AddOverlay)), text("Add pictures over the picture, at the playhead (PNG transparency shows through)"), tooltip::Position::Bottom),
-            tip(icon_button(ADD_TEXT, Some(Message::AddText)), text("Add text over the picture, at the playhead (typed in the Text panel at the left)"), tooltip::Position::Bottom),
             tip(icon_button(OPEN_PROJECT, Some(Message::OpenProject)), text("Open a saved edit (Ctrl+Shift+O)"), tooltip::Position::Bottom),
             tip(
                 icon_button(SAVE, self.unsaved().then_some(Message::SaveProject(false))),
@@ -3470,13 +3502,24 @@ impl App {
                 text("Save the edit as a new project file (Ctrl+Shift+S)"),
                 tooltip::Position::Bottom,
             ),
+            separator(),
+            tip(icon_button(ADD_CLIP, Some(Message::Open)), text(open_hint), tooltip::Position::Bottom),
+            tip(
+                icon_button(ADD_MUSIC, Some(Message::AddSound(SoundTrack::Music))),
+                text(if self.edit.music.clips.is_empty() { "Add music under the edit" } else { "Add more music, after the last song" }),
+                tooltip::Position::Bottom,
+            ),
+            tip(icon_button(ADD_SFX, Some(Message::AddSound(SoundTrack::Sfx))), text("Add a sound effect at the playhead, on the SFX lane"), tooltip::Position::Bottom),
+            tip(icon_button(ADD_OVERLAY, Some(Message::AddOverlay)), text("Add pictures over the picture, at the playhead (PNG transparency shows through)"), tooltip::Position::Bottom),
+            tip(icon_button(ADD_TEXT, Some(Message::AddText)), text("Add text over the picture, at the playhead (typed in the Text panel at the left)"), tooltip::Position::Bottom),
+            separator(),
             self.export_controls(),
         ]
-        // How a 360 clip is steadied and drawn; an ordinary video or a
-        // picture has neither, so nothing shows.
-        .push(media.flat.is_none().then(|| labelled("Stabilisation", pick_list(&Mode::ALL[..], Some(media.stab.mode()), Message::Stab))))
-        .push(media.flat.is_none().then(|| labelled("Projection", pick_list(&Projection::ALL[..], Some(shown_view.projection), Message::Projection))))
-        .push(media.flat.is_none().then(|| {
+        // How a 360 clip is steadied and drawn: only while framing one; an
+        // ordinary video or a picture has neither.
+        .push((self.framing && media.flat.is_none()).then(|| labelled("Stabilisation", pick_list(&Mode::ALL[..], Some(media.stab.mode()), Message::Stab))))
+        .push((self.framing && media.flat.is_none()).then(|| labelled("Projection", pick_list(&Projection::ALL[..], Some(shown_view.projection), Message::Projection))))
+        .push((self.framing && media.flat.is_none()).then(|| {
             row![
                 tip(labelled("Source", pick_list(sources, Some(source), Message::Source)), text("Playback source: the proxy is quick, the OSV sharper"), tooltip::Position::Bottom),
                 tip(
@@ -3616,7 +3659,7 @@ impl App {
             overlays: self.overlay_blocks(crate::overlay::Track::Overlay),
             texts: self.overlay_blocks(crate::overlay::Track::Text),
             selected_overlay: self.selected_overlay,
-            rows: timeline::Rows::new(self.split),
+            rows: timeline::Rows::new(self.split, self.framing),
         }
         .view();
         // With a song selected, C splits that instead.
@@ -3628,52 +3671,72 @@ impl App {
             Some(c) => self.position() > c.at + edit::MIN_CUT && self.position() < c.ends() - edit::MIN_CUT,
             None => self.edit.cuts.get(self.current).is_some_and(|c| p.target() > c.start + edit::MIN_CUT && p.target() < c.end - edit::MIN_CUT),
         };
+        // Groups: play | cutting | undo | effects | the framing switch, and
+        // while it's on the view's keyframes and angles (for a 360 cut also
+        // following and colour tracking); then the timeline's zoom, the mix.
+        let flat = self.on_flat();
+        let framing_tools = self.framing.then(|| {
+            row![
+                tip(
+                    icon_button(KEY_ADD, Some(Message::KeyAdd)),
+                    text(if current.is_some() { "Update this keyframe with the view (K)" } else { "Add a keyframe with this view (K)" }),
+                    tooltip::Position::Top,
+                ),
+                tip(icon_button(KEY_DELETE, current.map(|_| Message::KeyDelete)), text("Delete this keyframe (Del)"), tooltip::Position::Top),
+                tip(
+                    pick_list(&Ease::ALL[..], current.map(|k| self.edit.cuts[self.current].keyframes[k].ease), Message::KeyEase).placeholder("Ease").width(96),
+                    text("How this keyframe moves on to the next (J cycles)"),
+                    // Below: the list opens upwards and the hint would cover it.
+                    tooltip::Position::Bottom,
+                ),
+                tip(labelled("FOV", slider(lo..=hi, shown_view.fov, Message::Fov).width(110)), text("Field of view: how wide the view is (scroll on the view)"), tooltip::Position::Top),
+                tip(icon_button(RESET_VIEW, Some(Message::ResetView)), text("Reset the view: straight ahead, level (0)"), tooltip::Position::Top),
+            ]
+            .push((!flat).then(|| {
+                tip(
+                    pick_list(&Aiming::ALL[..], aiming, Message::KeyFollow).placeholder("Follow").width(140),
+                    text("What this keyframe looks at: fixed angles, the selfie stick (whoever holds it), or a colour track (pick a new one by drawing a box over the subject)"),
+                    tooltip::Position::Bottom,
+                )
+            }))
+            .push((!flat).then(|| {
+                tip(
+                    icon_button(PICK, (self.clip.is_some() && self.tracking.is_none()).then_some(Message::PickColour)),
+                    text("Track a colour: draw a box over a subject (a jacket, a tent); the keyframe here then follows it"),
+                    tooltip::Position::Top,
+                )
+            }))
+            .push((!flat).then(|| tip(icon_button(SAVE_SPHERE, (!p.playing).then_some(Message::Save(Saving::Sphere))), text("Save the whole sphere as an equirect PNG (pause first)"), tooltip::Position::Top)))
+            .spacing(12)
+            .align_y(Alignment::Center)
+        });
         let transport = row![
             tip(
                 icon_button(if p.playing { PAUSE } else { PLAY }, Some(Message::Toggle)),
                 text(if p.playing { "Pause (Space)" } else { "Play (Space)" }),
                 tooltip::Position::Top,
             ),
-            tip(
-                icon_button(SAVE_VIEW, (!p.playing).then_some(Message::Save(Saving::View))),
-                text("Save what you see as a PNG (pause first)"),
-                tooltip::Position::Top,
-            ),
-            tip(
-                icon_button(SAVE_SPHERE, (!p.playing).then_some(Message::Save(Saving::Sphere))),
-                text("Save the whole sphere as an equirect PNG (pause first)"),
-                tooltip::Position::Top,
-            ),
             // A fixed width: the digits' widths differ in most fonts (macOS's
             // system font especially), and the row after it jittered as it ran.
             text(format!("{} / {}", clock(self.position()), clock(self.edit.duration()))).width(170).center(),
             tip(
-                icon_button(KEY_ADD, Some(Message::KeyAdd)),
-                text(if current.is_some() { "Update this keyframe with the view (K)" } else { "Add a keyframe with this view (K)" }),
+                icon_button(SAVE_VIEW, (!p.playing).then_some(Message::Save(Saving::View))),
+                text("Save this frame as a PNG (pause first)"),
                 tooltip::Position::Top,
             ),
-            tip(icon_button(KEY_DELETE, current.map(|_| Message::KeyDelete)), text("Delete this keyframe (Del)"), tooltip::Position::Top),
+            separator(),
+            tip(icon_button(SPLIT, can_split.then_some(Message::Split)), text(if music.is_some() { "Split the selected sound at the playhead (C)" } else { "Split the cut at the playhead (C)" }), tooltip::Position::Top),
             tip(
-                pick_list(&Ease::ALL[..], current.map(|k| self.edit.cuts[self.current].keyframes[k].ease), Message::KeyEase).placeholder("Ease").width(96),
-                text("How this keyframe moves on to the next (J cycles)"),
-                // Below: the list opens upwards and the hint would cover it.
-                tooltip::Position::Bottom,
-            ),
-            tip(
-                pick_list(&Aiming::ALL[..], aiming.filter(|_| !self.on_flat()), Message::KeyFollow).placeholder(if self.on_flat() { "—" } else { "Follow" }).width(140),
-                text("What this keyframe looks at: fixed angles, the selfie stick (whoever holds it), or a colour track (pick a new one by drawing a box over the subject)"),
-                tooltip::Position::Bottom,
-            ),
-            tip(
-                icon_button(PICK, (self.clip.is_some() && self.tracking.is_none() && !self.on_flat()).then_some(Message::PickColour)),
-                text("Track a colour: draw a box over a subject (a jacket, a tent); the keyframe here then follows it"),
-                tooltip::Position::Top,
-            ),
-            tip(labelled("FOV", slider(lo..=hi, shown_view.fov, Message::Fov).width(110)), text("Field of view: how wide the view is (scroll on the view)"), tooltip::Position::Top),
-            tip(icon_button(RESET_VIEW, Some(Message::ResetView)), text("Reset the view: straight ahead, level (0)"), tooltip::Position::Top),
-            tip(
-                icon_button(EFFECTS, Some(Message::Effect(effects::EffectMsg::Toggle))),
-                text(if self.side == Some(Side::Effects) { "Close the Effects panel (G)" } else { "Effects: exposure, colour and tone of the cut, keyframed; fades for the edit (G)" }),
+                icon_button(DELETE_CUT, (self.selected.is_some() || music.is_some() || point || self.selected_overlay.is_some()).then_some(Message::DeleteCut)),
+                text(if point {
+                    "Delete the selected volume point (Del)"
+                } else if music.is_some() {
+                    "Delete the selected sound (Del)"
+                } else if self.framing {
+                    "Delete the selected cut (Shift+Del)"
+                } else {
+                    "Delete the selected cut (Del)"
+                }),
                 tooltip::Position::Top,
             ),
             tip(
@@ -3684,35 +3747,38 @@ impl App {
                 }),
                 tooltip::Position::Top,
             ),
-            tip(icon_button(SPLIT, can_split.then_some(Message::Split)), text(if music.is_some() { "Split the selected sound at the playhead (C)" } else { "Split the cut at the playhead (C)" }), tooltip::Position::Top),
-            tip(
-                icon_button(DELETE_CUT, (self.selected.is_some() || music.is_some() || point || self.selected_overlay.is_some()).then_some(Message::DeleteCut)),
-                text(if point {
-                    "Delete the selected volume point (Del)"
-                } else if music.is_some() {
-                    "Delete the selected sound (Del)"
-                } else {
-                    "Delete the selected cut (Shift+Del)"
-                }),
-                tooltip::Position::Top,
-            ),
+            separator(),
             tip(icon_button(UNDO, Some(Message::Undo)), text("Undo (Ctrl+Z)"), tooltip::Position::Top),
             tip(icon_button(REDO, Some(Message::Redo)), text("Redo (Ctrl+Shift+Z)"), tooltip::Position::Top),
-            tip(icon_button(ZOOM_OUT, Some(Message::TimelineZoom(1.0 / 1.5, None))), text("Zoom the timeline out (Ctrl+−, or scroll on it)"), tooltip::Position::Top),
+            separator(),
             tip(
-                slider(0.0..=1.0, self.timeline_zoom.ln() / self.timeline_most_zoom().ln().max(1e-9), Message::TimelineZoomTo).step(0.001).width(90),
-                text("Timeline zoom"),
+                icon_button(EFFECTS, Some(Message::Effect(effects::EffectMsg::Toggle))),
+                text(if self.side == Some(Side::Effects) { "Close the Effects panel (G)" } else { "Effects: exposure, colour and tone of the cut, keyframed; fades for the edit (G)" }),
                 tooltip::Position::Top,
             ),
-            tip(icon_button(ZOOM_IN, Some(Message::TimelineZoom(1.5, None))), text("Zoom the timeline in (Ctrl+=, or scroll on it)"), tooltip::Position::Top),
-            tip(icon_button(ZOOM_FIT, Some(Message::TimelineZoomTo(0.0))), text("Show the whole edit (Ctrl+0)"), tooltip::Position::Top),
-            space().width(Length::Fill),
+            separator(),
             tip(
-                icon_button(if self.muted { SPEAKER_MUTED } else { SPEAKER }, Some(Message::AudioPanel)),
-                text(if self.side == Some(Side::Audio) { "Close the Audio panel" } else { "Audio: listening volume and the mix levels (M mutes)" }),
+                toggler(self.framing).label("Framing").on_toggle(Message::Framing),
+                text("Framing: the view's keyframes, field of view and angles; for a 360 clip also stabilisation, projection and tracking. Off: editing only, and the view can't be turned by accident."),
                 tooltip::Position::Top,
             ),
         ]
+        .push(framing_tools)
+        .push(space().width(Length::Fill))
+        .push(tip(icon_button(ZOOM_OUT, Some(Message::TimelineZoom(1.0 / 1.5, None))), text("Zoom the timeline out (Ctrl+−, or scroll on it)"), tooltip::Position::Top))
+        .push(tip(
+            slider(0.0..=1.0, self.timeline_zoom.ln() / self.timeline_most_zoom().ln().max(1e-9), Message::TimelineZoomTo).step(0.001).width(90),
+            text("Timeline zoom"),
+            tooltip::Position::Top,
+        ))
+        .push(tip(icon_button(ZOOM_IN, Some(Message::TimelineZoom(1.5, None))), text("Zoom the timeline in (Ctrl+=, or scroll on it)"), tooltip::Position::Top))
+        .push(tip(icon_button(ZOOM_FIT, Some(Message::TimelineZoomTo(0.0))), text("Show the whole edit (Ctrl+0)"), tooltip::Position::Top))
+        .push(separator())
+        .push(tip(
+            icon_button(if self.muted { SPEAKER_MUTED } else { SPEAKER }, Some(Message::AudioPanel)),
+            text(if self.side == Some(Side::Audio) { "Close the Audio panel" } else { "Audio: listening volume and the mix levels (M mutes)" }),
+            tooltip::Position::Top,
+        ))
         .spacing(12)
         .padding([4, 10])
         .align_y(Alignment::Center);
@@ -3723,7 +3789,7 @@ impl App {
             text("Drag to give the timeline or the picture more room (double-click: as it was)"),
             tooltip::Position::Top,
         );
-        column![top, view, divider, transport].push(self.angles_strip()).push(timeline).push(error.map(|e| container(e).padding([0, 10]))).push(credit()).into()
+        column![top, view, divider, transport].push(self.angles_strip().filter(|_| self.framing)).push(timeline).push(error.map(|e| container(e).padding([0, 10]))).push(credit()).into()
     }
 }
 
@@ -3781,6 +3847,8 @@ const KEY_DELETE: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0
 /// File icons: a page with a plus (new project), a film strip with a plus
 /// (open or add clips), a note with a plus (add music), an open folder (open
 /// a project), a diskette (save) and one with a pencil (save as).
+/// A speaker with a spark and a plus: add a sound effect.
+const ADD_SFX: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9v6h4l5 4V5L7 9z"/><path d="M15 9l2-2M16 12h2"/><path d="M19 15v6M16 18h6"/></svg>"#;
 const ADD_MUSIC: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l10-2v9"/><circle cx="6" cy="18" r="3"/><path d="M19 15v6M16 18h6"/></svg>"#;
 const NEW_PROJECT: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v4a2 2 0 0 0 2 2h4M9 15h6M12 18v-6"/></svg>"#;
 const ADD_OVERLAY: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="14" height="14" rx="2"/><circle cx="8" cy="8" r="1.5"/><path d="M17 12l-4-4-8 8"/><path d="M20 15v6M17 18h6"/></svg>"#;
@@ -3856,6 +3924,11 @@ fn labelled_button<'a>(icon: &'static [u8], label: &'a str, on_press: Option<Mes
 const SPEAKER: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z" fill="white"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a10 10 0 0 1 0 14"/></svg>"#;
 const SPEAKER_MUTED: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z" fill="white"/><path d="m22 9-6 6"/><path d="m16 9 6 6"/></svg>"#;
 
+
+/// A thin upright line between groups of buttons in a bar.
+fn separator<'a>() -> Element<'a, Message> {
+    container(rule::vertical(1)).height(22).into()
+}
 
 fn labelled<'a>(label: &'a str, widget: impl Into<Element<'a, Message>>) -> Element<'a, Message> {
     row![text(label), widget.into()].spacing(6).align_y(Alignment::Center).into()
@@ -3967,6 +4040,47 @@ fn overlay_thumb(picture: &crate::overlay::Picture) -> iced::widget::image::Hand
 
 /// Runs `f` on its own thread so blocking work (parsing, ffprobe) stays off
 /// the executor.
+/// Messages that only framing does: turning, zooming or keying the view,
+/// its angles, stabilisation, projection, colour tracking.
+fn framing_only(message: &Message) -> bool {
+    matches!(
+        message,
+        Message::Look { .. }
+            | Message::Zoom(_)
+            | Message::Fov(_)
+            | Message::ResetView
+            | Message::KeyAdd
+            | Message::KeyDelete
+            | Message::KeyEase(_)
+            | Message::KeyFollow(_)
+            | Message::PickColour
+            | Message::Stab(_)
+            | Message::Projection(_)
+            | Message::AngleInput(..)
+            | Message::AngleNudge(..)
+            | Message::AngleArrow(..)
+            | Message::AngleScrubStart(_)
+            | Message::AngleScrub(..)
+    )
+}
+
+/// Keys that only framing uses: looking around (Shift+←/→, ↑/↓, Q/E,
+/// Home, 0, + and −), keyframes (K, J, [ and ]), stabilisation (S),
+/// projection (P), rolling shutter (R). K with a sound selected (`sound`)
+/// adds a volume point, which editing keeps.
+fn framing_key(key: &Key, mods: keyboard::Modifiers, sound: bool) -> bool {
+    match key.as_ref() {
+        Key::Named(Named::ArrowLeft | Named::ArrowRight) => mods.shift(),
+        Key::Named(Named::ArrowUp | Named::ArrowDown | Named::Home) => true,
+        Key::Character(c) if !mods.command() => match c {
+            "k" | "K" => !sound,
+            "q" | "Q" | "e" | "E" | "0" | "+" | "=" | "-" | "j" | "J" | "[" | "]" | "s" | "S" | "p" | "P" | "r" | "R" => true,
+            _ => false,
+        },
+        _ => false,
+    }
+}
+
 fn blocking<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> impl Future<Output = T> {
     let (tx, rx) = iced::futures::channel::oneshot::channel();
     std::thread::spawn(move || {
@@ -4102,5 +4216,30 @@ impl shader::Program<Message> for Sphere {
         } else {
             mouse::Interaction::default()
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn editing_keeps_the_editing_keys() {
+        let none = keyboard::Modifiers::empty();
+        let ch = |c: &str| Key::Character(c.into());
+        let named = |n| Key::Named(n);
+        // Seeking, playing, cutting and the file keys stay.
+        for key in [named(Named::ArrowLeft), named(Named::ArrowRight), named(Named::Space), ch("c"), ch("m"), ch("g"), ch("b"), ch("f")] {
+            assert!(!framing_key(&key, none, false), "{key:?}");
+        }
+        assert!(!framing_key(&ch("0"), keyboard::Modifiers::CTRL, false), "Ctrl+0 fits the timeline");
+        assert!(!framing_key(&ch("s"), keyboard::Modifiers::CTRL, false), "Ctrl+S saves");
+        // Turning, framing and keying the view go.
+        for key in [named(Named::ArrowUp), named(Named::Home), ch("q"), ch("e"), ch("0"), ch("k"), ch("j"), ch("["), ch("s"), ch("p"), ch("r")] {
+            assert!(framing_key(&key, none, false), "{key:?}");
+        }
+        assert!(framing_key(&named(Named::ArrowLeft), keyboard::Modifiers::SHIFT, false), "Shift+← turns the view");
+        // K on a selected sound adds a volume point, which editing keeps.
+        assert!(!framing_key(&ch("k"), none, true));
     }
 }

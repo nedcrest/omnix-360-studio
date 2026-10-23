@@ -65,6 +65,8 @@ pub struct Rows {
     /// The clip sound lane's height; it starts where the cuts end.
     clip_sound: f32,
     effects_top: f32,
+    /// The View key row's height: 0 while editing.
+    keys: f32,
     keys_top: f32,
     seek_top: f32,
     /// A sound lane's height, and where the first starts.
@@ -75,15 +77,18 @@ pub struct Rows {
 }
 
 impl Rows {
-    pub fn new(scale: f32) -> Self {
+    /// `framing`: the View key row shows (it holds the view's keyframes);
+    /// editing, it's left out and the lanes below move up.
+    pub fn new(scale: f32, framing: bool) -> Self {
         let scale = scale.clamp(*SCALES.start(), *SCALES.end());
         let (cuts, music) = ((CUTS * scale).round(), (MUSIC * scale).round());
         let clip_sound = (CLIP_SOUND * scale).round();
         let effects_top = cuts + clip_sound;
-        let seek_top = effects_top + EFFECTS + KEYS;
+        let keys = if framing { KEYS } else { 0.0 };
+        let seek_top = effects_top + EFFECTS + keys;
         let sounds_top = seek_top + SEEK;
         let height = sounds_top + SOUND_LANES as f32 * music + SCROLL;
-        Rows { cuts, clip_sound, effects_top, keys_top: effects_top + EFFECTS, seek_top, music, sounds_top, height, overlay: (OVERLAY * scale).round() }
+        Rows { cuts, clip_sound, effects_top, keys_top: effects_top + EFFECTS, keys, seek_top, music, sounds_top, height, overlay: (OVERLAY * scale).round() }
     }
 
     /// Where sound lane `i` starts.
@@ -813,7 +818,7 @@ impl canvas::Program<Message> for OverlayLane {
             }
         }
         if !self.blocks().is_empty() {
-            draw_rows(&mut frame, theme, t, bounds, self.0.rows.overlay, "Motion");
+            draw_rows(&mut frame, theme, t, bounds, self.0.rows.overlay, Some("Motion"));
             let inside = |o: &OverlayBlock, k: f64| k >= o.start && k <= o.start + o.len;
             for o in self.blocks() {
                 for &k in o.effects.iter().filter(|&&k| inside(o, k)) {
@@ -961,10 +966,11 @@ fn draw_line(frame: &mut Frame, b: Rectangle, lane: Lane, colour: iced::Color, e
 /// names at the left, effects above, `keys` (view or motion) below.
 /// The keyframe rows' bands under a track, over the edit's length (`t`)
 /// like the lanes and the seek bar, not the widget's whole width.
-fn draw_rows(frame: &mut Frame, theme: &Theme, t: &Timeline, b: Rectangle, top: f32, keys: &str) {
+fn draw_rows(frame: &mut Frame, theme: &Theme, t: &Timeline, b: Rectangle, top: f32, keys: Option<&str>) {
     let palette = theme.extended_palette();
     let (l, r) = (t.x(0.0, b).max(0.0), t.x(t.duration, b).min(b.width));
-    for (y, h, name) in [(top, EFFECTS, "Effects"), (top + EFFECTS, KEYS, keys)] {
+    let rows = [Some((top, EFFECTS, "Effects")), keys.map(|k| (top + EFFECTS, KEYS, k))];
+    for (y, h, name) in rows.into_iter().flatten() {
         frame.fill(&Path::rectangle(Point::new(l, y + 1.0), Size::new((r - l).max(0.0), h - 2.0)), palette.background.weak.color.scale_alpha(0.25));
         frame.fill_text(Text {
             content: name.to_owned(),
@@ -1182,7 +1188,7 @@ impl canvas::Program<Message> for Marks {
         let drag = &state.drag;
         let palette = theme.extended_palette();
         let mut frame = Frame::new(renderer, bounds.size());
-        draw_rows(&mut frame, theme, self, bounds, self.rows.effects_top, "View");
+        draw_rows(&mut frame, theme, self, bounds, self.rows.effects_top, (self.rows.keys > 0.0).then_some("View"));
         for (i, c) in self.blocks.iter().enumerate() {
             let (l, r) = self.block_x(c, bounds);
             let block = Path::rounded_rectangle(Point::new(l, 0.0), Size::new((r - l).max(1.0), self.rows.cuts), 4.0.into());
@@ -1250,7 +1256,8 @@ impl canvas::Program<Message> for Marks {
             let x = self.x(c.from, bounds);
             frame.fill(&Path::rectangle(Point::new(x - 1.0, mid - BAR), Size::new(2.0, 2.0 * BAR)), palette.background.base.color);
         }
-        for (ci, c) in self.blocks.iter().enumerate() {
+        // The view's keyframes, while framing (their row is gone otherwise).
+        for (ci, c) in self.blocks.iter().enumerate().filter(|_| self.rows.keys > 0.0) {
             for &(ki, t, ease, follows) in &c.keys {
                 let (x, mid) = (self.x(c.from + t - c.start, bounds), keys_mid);
                 // Smooth is a diamond, linear a circle, hold a square.

@@ -1589,7 +1589,7 @@ impl App {
                 let dir = self.project.as_ref().and_then(|p| p.parent().map(Path::to_owned));
                 return Task::perform(
                     async move {
-                        let mut dialog = rfd::AsyncFileDialog::new().set_title("Open project").add_filter("rOsmo360 project", &["json"]);
+                        let mut dialog = rfd::AsyncFileDialog::new().set_title("Open project").add_filter("Omnix project", &["json"]);
                         if let Some(dir) = dir {
                             dialog = dialog.set_directory(dir);
                         }
@@ -1687,7 +1687,7 @@ impl App {
                 );
                 return Task::perform(
                     async move {
-                        let mut dialog = rfd::AsyncFileDialog::new().set_title("Save project").add_filter("rOsmo360 project", &["json"]).set_file_name(name);
+                        let mut dialog = rfd::AsyncFileDialog::new().set_title("Save project").add_filter("Omnix project", &["json"]).set_file_name(name);
                         if let Some(dir) = dir {
                             dialog = dialog.set_directory(dir);
                         }
@@ -3727,15 +3727,18 @@ impl App {
     }
 }
 
-/// The tool's name: Osmo 360, with an r for its Rust core.
-pub const NAME: &str = "rOsmo360";
+/// The name people see: Omnix, this fork of rOsmo360 (whose name was Osmo
+/// 360 with an r for its Rust core). The binary, the config and cache
+/// folders keep rOsmo360's names: scripts, footage-agent and the clip cache
+/// find them there, and merges from upstream stay simple.
+pub const NAME: &str = "Omnix";
 
 const LOGO: &[u8] = include_bytes!("../../vibewithravelund-lowres-corrected.jpg");
 
-/// Who made it, and how: credit to the author and to the AI-assisted way it
-/// was built.
+/// Who made it, and how: credit to rOsmo360's author, whose work this is
+/// built on, and to the AI-assisted way it was made.
 fn credit<'a>() -> Element<'a, Message> {
-    container(text(concat!("rOsmo360 ", env!("CARGO_PKG_VERSION"), " · Made by Vibing with Ravelund · 2026")).size(12).style(text::secondary)).width(Length::Fill).align_x(Alignment::Center).padding([2, 10]).into()
+    container(text(concat!("Omnix · built on rOsmo360 ", env!("CARGO_PKG_VERSION"), " · Made by Vibing with Ravelund · 2026")).size(12).style(text::secondary)).width(Length::Fill).align_x(Alignment::Center).padding([2, 10]).into()
 }
 
 /// Edit icons: scissors (split), a bin (delete cut), arrows (undo, redo).

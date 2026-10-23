@@ -31,7 +31,7 @@ use view::{Projection, Reframe, View};
 use telemetry_parser::rig::{RigPicture, geometry::ProjectionKind};
 
 #[derive(Parser)]
-#[command(name = player::NAME, version, about = "rOsmo360: play and stitch DJI Osmo 360 .OSV files")]
+#[command(name = player::NAME, version, about = "Omnix (built on rOsmo360): edit home video and DJI Osmo 360 .OSV files")]
 struct Cli {
     #[command(subcommand)]
     cmd: Cmd,
@@ -1132,7 +1132,7 @@ fn main() -> Result<()> {
     match run() {
         Err(e) if e.chain().any(|c| c.downcast_ref::<std::io::Error>().is_some_and(|e| e.kind() == std::io::ErrorKind::BrokenPipe)) => Ok(()),
         Err(e) if from_explorer() => {
-            rfd::MessageDialog::new().set_level(rfd::MessageLevel::Error).set_title("rOsmo360").set_description(format!("{e:#}")).show();
+            rfd::MessageDialog::new().set_level(rfd::MessageLevel::Error).set_title(player::NAME).set_description(format!("{e:#}")).show();
             Err(e)
         }
         r => r,

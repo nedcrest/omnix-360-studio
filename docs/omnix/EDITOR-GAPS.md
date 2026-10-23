@@ -42,7 +42,7 @@ drag it back. Fix: an **insert at the playhead**: if the playhead is inside a
 cut, split it there and put the new cut between the halves; on a boundary,
 just put it there. Used by the bin (item 2) and by Ctrl+O. No format change.
 
-### 2. A bin (project library panel), like Kdenlive's — v2 done, in test
+### 2. A bin (project library panel), like Kdenlive's — v2 done; add buttons user-tested 2026-10-23
 
 User: wants a bin, maybe with better UI, with "our extra sound tracks" in it.
 
@@ -89,7 +89,7 @@ CapCut (thumbnail grid, "+", drag to the timeline).
   added to the edit), with its own in/out marks later (add only a part);
   Esc or another click returns to the edit at the playhead.
 
-### 3a. Cleaned voice in place of a clip's sound — done, in test
+### 3a. Cleaned voice in place of a clip's sound — done, user-tested 2026-10-23
 
 User's ask (2026-10-22). **Done** (`b9f1fc5` here, footage-agent `export/omnix.py`):
 optional `Cut.audio`, a file timed like the clip, heard instead of its sound
@@ -103,7 +103,31 @@ out (user: it belongs to its clip).
 Not yet: switching a cut's audio file inside Omnix (Info panel: "use the
 clip's own" / pick a recipe). Wait for the user to ask.
 
-### 3. More sound lanes — medium-large, format change
+### 3. More sound lanes — medium-large, format change — IN PROGRESS (2026-10-23)
+
+**User, 2026-10-23, after testing the bin and cleaned voice:** the music
+lane has no name saying it is a sound lane for music. They want an **SFX
+lane** for dropping in a sound effect, and the **clip's own sound as a lane
+under the video**: "it'll be handier that way" (= 4A, now done together).
+
+**Plan, decided defaults (tell the user, change if they disagree):**
+- **Data.** `Project.sfx: Music`, the same type as the music track (level,
+  clips placed at edit time, volume points, fades, crossfade on overlap),
+  `#[serde(default, skip_serializing_if = "Music::is_empty")]`. Old projects
+  load unchanged. A voice-over lane later is one more field of the same type.
+- **Code.** The music code becomes per-track: `SoundTrack { Music, Sfx }`,
+  like `overlay::Track` (messages, selection, drags and drawing take the
+  track). Playback runs one `music::Player` per track. The export mixes each
+  track like the music. Clips export writes `- sfx 001.wav` beside
+  `- music 001.wav`.
+- **Lanes, top to bottom:** cuts → **Clip sound** (new, the cuts' waveforms
+  and their cyan volume line, moved off the thumbnails) → Effects / View
+  key rows → seek bar → **Music** → **SFX** → scrollbar. Each lane is named
+  faintly at its left, as the overlay lanes are.
+- **Bin.** «Sound effects» (`07_sfx`) adds to the SFX lane; «Music» and
+  «Voice-over» to the music lane, as now.
+- One sound at a time per lane, as music: two effects at once would need
+  a second SFX lane later.
 
 Needed for sfx, voice-over and stinger sounds (`TRANSITIONS.md`).
 `Project` gets a new optional field, e.g. `sounds: Vec<SoundLane>` (each a

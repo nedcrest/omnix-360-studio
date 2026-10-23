@@ -103,7 +103,17 @@ out (user: it belongs to its clip).
 Not yet: switching a cut's audio file inside Omnix (Info panel: "use the
 clip's own" / pick a recipe). Wait for the user to ask.
 
-### 3. Sound lanes — built 2026-10-23, waiting for the user's test (with 4A)
+### 3. Sound lanes — built and user-tested 2026-10-23 (with 4A)
+
+**User's test, 2026-10-23:**
+- the clip sound lane is there;
+- music goes onto Music from its button;
+- the bin's sound effects land on SFX and sound when the playhead
+  reaches them, together with the video and the music;
+- volume lines work on every lane.
+
+Export not tried yet on a real project (big). The synthetic export was
+measured, see below.
 
 **User, 2026-10-23, after testing the bin and cleaned voice:** the music
 lane has no name saying it is a sound lane for music. They want an **SFX
@@ -154,6 +164,33 @@ User: would split into video tracks and sound tracks.
   overlays are pictures and text only) — a B-roll clip over the talking cut,
   muted, the talk's sound untouched. Worth weighing first: smaller, no
   unlinking. Raised in priority by this ask.
+- **User, more precisely (2026-10-23):** "ungroup" means that a cut's
+  picture and its own sound can be trimmed to different lengths:
+  - shorten the video and keep the sound longer;
+  - or shorten the sound and keep the video longer.
+
+  This leaves room to add music or a voice-over at the right spot, or to put
+  a picture on the overlay lane while the talk goes on. Their example: "we
+  were by the castle but didn't go in; I hope I don't forget to show you the
+  photo", with the photo or a GIF on the overlay lane meanwhile. The overlay
+  lane already does the photo part.
+- **Design note: a split edit first, inside the magnetic edit.** This is
+  Final Cut's "expand audio" / J- and L-cuts, and it is cheaper than a full
+  ungroup:
+  - Each cut gets optional sound extensions, seconds before its in point and
+    after its out point (new optional fields, so old projects are
+    unchanged).
+  - On the Clip sound lane, the cut's sound block is drawn wider or narrower
+    than its picture. Dragging its edge there trims only the sound.
+  - Because the edit is magnetic, the next cut still starts where this
+    picture ends. A sound running longer plays on under the next cut's start
+    (an L-cut); the two sounds overlap, each at its level. A sound shorter
+    than its picture leaves silence for music or voice-over.
+  - Export: each cut's sound stretch is cut by its own in/out and placed at
+    its edit time in the mix, instead of joined end to end. The player
+    needs the next cut's sound primed early (it already pre-rolls 3 s).
+  - The full ungroup (independent items, group ids) can come later, if this
+    falls short.
 - **Connected clips** (from `TIMELINE-UX.md`, FCP / CapCut track linkage):
   overlays and voice-over attached to a cut, moving with it. Same data
   model as step B (a link between items), so it is designed with it and
@@ -423,6 +460,18 @@ To work out before building:
   show lanes per automated value (exposure, speed, volume) that fold open,
   instead of one row of marks. A UI question, together with gap 9's action
   bar and the effects panel.
+
+### 32. A blank stretch on the main lane — idea (user, 2026-10-23)
+
+A button that puts a blank (black) cut of a chosen length at the playhead
+or at a join: room for an overlay, a title or a sound with a custom stinger
+over it. The user notes it can be done today by adding a picture or a GIF as
+a cut. Cheapest build: a generated black picture (pictures already work as
+cuts, 5 s by default), named "Blank" on the timeline, and maybe a colour
+choice. Keeps the edit magnetic: the blank is a cut like any other.
+
+The user also confirmed (2026-10-23): **the magnetic edit is handy.** Keep
+it the default; gaps happen only as blank cuts.
 
 ## Format rule for all of these
 

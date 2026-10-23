@@ -17,7 +17,9 @@ app, not from any source.
 
 ## What Omnix already does right (code facts)
 
-- **Magnetic main lane.** Cuts sit end to end with no gaps (`Project.cuts`).
+- **Magnetic main lane** (user, 2026-10-23: "magnetism is handy after all";
+  keep it, a gap only as a blank cut, gap 32). Cuts sit end to end with no
+  gaps (`Project.cuts`).
   Moving one reorders the list (`Drag::Move`). Deleting one closes the hole.
   This is FCP's primary storyline and CapCut's main track; good editors make
   it the default.

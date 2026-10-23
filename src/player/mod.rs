@@ -1123,12 +1123,13 @@ impl App {
         };
         let (music, sfx) = (ordered(&self.edit.music), ordered(&self.edit.sfx));
         let mut cuts = self.edit.cuts.clone();
-        // Cuts with no keyframes of their own nor any before them show the
-        // free look; the file alone would frame them straight ahead (and an
-        // ordinary video whole). Each kind's look is held as a keyframe at
-        // the in point of its first such cut, so the export, the CLI and the
-        // next open frame them as seen (later 360 cuts carry it on, ordinary
-        // videos don't carry keyframes, so each of those gets one).
+        // 360 cuts with no keyframes of their own nor any before them show
+        // the free look; the file alone would frame them straight ahead. The
+        // look is held as a keyframe at the in point of the first such cut,
+        // so the export, the CLI and the next open frame them as seen (later
+        // 360 cuts carry it on). An ordinary video without keyframes shows
+        // its whole picture, as the file frames it, except the one being
+        // framed by hand right now: only that one gets the look.
         let (look_360, look_flat) = if self.look_flat { (self.other_look, self.look) } else { (self.look, self.other_look) };
         let hold = |cut: &mut Cut, look: View| {
             if cut.keyframes.is_empty() && look != View::home(Projection::Perspective) {
@@ -1138,7 +1139,9 @@ impl App {
         if let Some(cut) = cuts.iter_mut().find(|c| !c.flat) {
             hold(cut, look_360);
         }
-        for cut in cuts.iter_mut().filter(|c| c.flat) {
+        if !self.follow
+            && let Some(cut) = cuts.get_mut(self.current).filter(|c| c.flat)
+        {
             hold(cut, look_flat);
         }
         Project { aspect, cuts, sound: self.edit.sound, music, sfx, fades: self.edit.fades, overlays: self.edit.overlays.clone(), text: self.edit.texts.clone() }
@@ -2663,16 +2666,26 @@ impl App {
     /// The view on screen, as angles.
     fn shown_view(&self) -> View {
         match self.playing_cut() {
-            Some((_, t)) if self.follow => self.keyframed(t).and_then(|(k, at)| k.view_at(at, &crate::project::held(&|f, t| self.aim(f, t), at == t, t))).unwrap_or(self.look),
+            Some((_, t)) if self.follow => self.keyframed(t).and_then(|(k, at)| k.view_at(at, &crate::project::held(&|f, t| self.aim(f, t), at == t, t))).unwrap_or_else(|| self.unkeyed_view()),
             _ => self.look,
         }
+    }
+
+    /// What a cut without keyframes to follow shows: an ordinary video or a
+    /// picture its whole picture, as the export frames it
+    /// (`project::keyframed`); a 360 cut the free look. The free look is
+    /// shared by every cut of a kind, so showing it on ordinary videos
+    /// shifted all of them when one was framed by hand (the user,
+    /// 2026-10-24), while the export showed them whole.
+    fn unkeyed_view(&self) -> View {
+        if self.edit.cuts.get(self.current).is_some_and(|c| c.flat) { View::home(Projection::Perspective) } else { self.look }
     }
 
     /// The view on screen, ready to draw: mid-morph between perspective and
     /// little planet when following keyframes.
     fn camera(&self) -> Camera {
         let camera = match self.playing_cut() {
-            Some((_, t)) if self.follow => self.keyframed(t).and_then(|(k, at)| k.camera_at(at, &crate::project::held(&|f, t| self.aim(f, t), at == t, t))).unwrap_or_else(|| self.look.camera()),
+            Some((_, t)) if self.follow => self.keyframed(t).and_then(|(k, at)| k.camera_at(at, &crate::project::held(&|f, t| self.aim(f, t), at == t, t))).unwrap_or_else(|| self.unkeyed_view().camera()),
             _ => self.look.camera(),
         };
         let grade = self.playing_cut().map(|(_, t)| self.grade(self.current, t)).unwrap_or_default();

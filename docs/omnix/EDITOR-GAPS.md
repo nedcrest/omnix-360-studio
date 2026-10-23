@@ -103,51 +103,41 @@ out (user: it belongs to its clip).
 Not yet: switching a cut's audio file inside Omnix (Info panel: "use the
 clip's own" / pick a recipe). Wait for the user to ask.
 
-### 3. More sound lanes — medium-large, format change — IN PROGRESS (2026-10-23)
+### 3. Sound lanes — built 2026-10-23, waiting for the user's test (with 4A)
 
 **User, 2026-10-23, after testing the bin and cleaned voice:** the music
 lane has no name saying it is a sound lane for music. They want an **SFX
 lane** for dropping in a sound effect, and the **clip's own sound as a lane
-under the video**: "it'll be handier that way" (= 4A, now done together).
+under the video**: "it'll be handier that way".
 
-**Plan, decided defaults (tell the user, change if they disagree):**
-- **Data.** `Project.sfx: Music`, the same type as the music track (level,
-  clips placed at edit time, volume points, fades, crossfade on overlap),
-  `#[serde(default, skip_serializing_if = "Music::is_empty")]`. Old projects
-  load unchanged. A voice-over lane later is one more field of the same type.
-- **Code.** The music code becomes per-track: `SoundTrack { Music, Sfx }`,
-  like `overlay::Track` (messages, selection, drags and drawing take the
-  track). Playback runs one `music::Player` per track. The export mixes each
-  track like the music. Clips export writes `- sfx 001.wav` beside
-  `- music 001.wav`.
-- **Lanes, top to bottom:** cuts → **Clip sound** (new, the cuts' waveforms
-  and their cyan volume line, moved off the thumbnails) → Effects / View
-  key rows → seek bar → **Music** → **SFX** → scrollbar. Each lane is named
-  faintly at its left, as the overlay lanes are.
-- **Bin.** «Sound effects» (`07_sfx`) adds to the SFX lane; «Music» and
-  «Voice-over» to the music lane, as now.
-- One sound at a time per lane, as music: two effects at once would need
-  a second SFX lane later.
+**Principle (user, 2026-10-23):** a fixed set of named lanes that is
+simply enough, not tracks the user adds and groups at will. That set is
+handier, easy to automate (each lane has a stable name in the project),
+and easy to work in. A free-form mode can come later if ever needed.
 
-Needed for sfx, voice-over and stinger sounds (`TRANSITIONS.md`).
-`Project` gets a new optional field, e.g. `sounds: Vec<SoundLane>` (each a
-name, level, clips like `MusicClip` placed at edit time, volume points). Old
-projects load unchanged (`#[serde(default)]`). Export mixes them in the ffmpeg
-graph beside music; playback mixes them in `audio.rs`. The music lane's
-drawing and dragging code is the model to reuse.
+**Built:**
+- **Data and export** (`a5041b1`): `Project.sfx: Music`, `SoundTrack
+  {Music, Sfx}`; the export mixes every track; Clips export writes
+  `- sfx 001.wav`. Measured: SFX beeps land at 2.0002 s and 4.2502 s, at
+  −11.97 dB against −12 expected.
+- **Lanes** (`00e56ef`): top to bottom Text, Overlay, cuts, Clip sound, key
+  rows, seek bar, Music, SFX. Every lane has a name tag pinned at the left
+  edge with a dot of its colour. SFX clips are purple, the music green. All
+  music interactions work on SFX: move, trim, Shift crossfade, Ctrl+click
+  and K volume points, C split, Del, right-click Info. Edges snap across
+  sound lanes. The Audio panel has an SFX level. Bin «Sound effects» goes to
+  SFX; «Music» and «Voice-over» go to Music.
+- **Clip sound lane** (`4db0023`), which is 4A: each cut's waveform (its
+  cleaned voice, else the clip's sound from the `.LRF`) and its volume line,
+  moved off the thumbnails. Read two files at a time, cached.
 
-Design together with 4A (the clip's sound as a lane): both decide how the
-timeline stacks lanes under the picture, so doing them apart means laying
-the timeline out twice.
+**Not yet:**
+- a voice-over lane (one more `SoundTrack`);
+- two sound effects at once (a second SFX lane);
+- auto-duck;
+- fade handles on a sound clip's corners.
 
-**Auto-duck** belongs here (user's Kos TODO: "music −12…−15 dB under speech,
-four points per dip", done by hand in Kdenlive). One toggle and one "how
-much" on the music lane. Speech comes from the cleaned voice where a cut has
-one (footage-agent knows where it speaks), else the clip sound's level. It
-writes ordinary music volume points the user can edit (Rush and Premiere do
-it that way), so the export needs nothing new.
-
-### 4. The clip's sound as its own lane — two steps (4A with 3; 4B its own milestone)
+### 4. The clip's sound as its own lane — 4A built with 3; 4B its own milestone
 
 User: would split into video tracks and sound tracks.
 - **Step A (small-medium):** draw a "Clip sound" lane under the cuts, with each

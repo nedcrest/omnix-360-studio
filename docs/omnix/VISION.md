@@ -21,6 +21,15 @@ Insta360 is out of scope.
   2026-08 film, whose open problems (`den1-TODO.md` there) drive the order of
   work.
 - A personal project first; a polished version on GitHub maybe later.
+- The user, 2026-10-23: "we almost repeat any editor, but Kdenlive I don't
+  want to start and do things in, and Omnix I do. And I don't want to
+  dual-boot into Windows every day for DaVinci. It really makes me want to
+  do things with video and sound." That is the measure for every feature:
+  it should be pleasant to use, not merely present.
+- **Lanes are a fixed, named set that is enough** (user, 2026-10-23):
+  - Text, Overlay, the cuts, Clip sound, Music, SFX, later Voice;
+  - not tracks added and grouped at will;
+  - easy to work in and easy to automate.
 
 ## Core ideas
 

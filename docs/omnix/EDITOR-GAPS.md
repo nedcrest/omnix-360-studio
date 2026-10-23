@@ -447,7 +447,7 @@ The user throws ideas in as they come; they are sorted here and regrouped
 whenever a better grouping shows. `ROADMAP.md` shows the same as cards (field
 `віха`) with each milestone's progress.
 
-1. **Звук для Косу** (sound): 3a cleaned voice (in test) → 3 + 4A sound
+1. **Звук для Косу** (sound): 3a cleaned voice (done) → 3 + 4A sound
    lanes, designed together → 11 per-clip −16 LUFS → auto-duck (in 3) →
    12 true-peak limit. First, because the Kos film's worst problem is sound,
    and its TODO puts sound right after the cuts.
@@ -455,7 +455,7 @@ whenever a better grouping shows. `ROADMAP.md` shows the same as cards (field
    two modes → 9 pack 1 (with 7) → 5 markers → 9 click routes → 9 snapping
    → 9 skimmer (needs 10 for S) → 9 action bar → 9 typed time and UI scale
    → 27 overview strip, centred playhead option.
-3. **Матеріал і бін** (material in): 1 + 2 bin buttons (in test) → bin
+3. **Матеріал і бін** (material in): 1 + 2 bin buttons (done) → bin
    preview in Omnix's viewer (designed with 10: the viewer gets three
    states) → bin grid, ratings from `notes.json`, LUTs, E/W → «new project
    with folders» in Omnix.
@@ -471,17 +471,17 @@ whenever a better grouping shows. `ROADMAP.md` shows the same as cards (field
    already has stinger clips (film burn, white noise).
 7. **Колір і текст**: 14 levels → 15 bars → 26 glow/blur → 6 vignette shapes →
    16 subtitles (needs 29) → text-based editing (needs 29).
-8. **Якість 360** (from `OPENOSV.md`, mostly needs 360 footage: one public
-   sample now, the user's camera ~2027-02): 17 easing presets and 18 bundled
-   LUT any time (small, useful now) → 24 file facts → 19 lens protectors →
-   20 mask release → 21 tilt diagnostic → 22 sky seam field (patents first)
-   → 23 DJI presets → Osmo 360 II.
-8b. **Швидкість і автоматизація** (gap 31): constant speed per cut with
+8. **Швидкість і автоматизація** (gap 31): constant speed per cut with
    its sound following (atempo), measured for drift → speed ramps →
    automation lanes per value (the user's FL Studio idea). Large and
    careful; after B-roll and groups, since it touches the same time
    mapping.
-9. **ШІ-монтаж** (gap 28, `AUTO-EDIT.md`): the user's main wish, but put
+9. **Якість 360** (from `OPENOSV.md`, mostly needs 360 footage: one public
+   sample now, the user's camera ~2027-02): 17 easing presets and 18 bundled
+   LUT any time (small, useful now) → 24 file facts → 19 lens protectors →
+   20 mask release → 21 tilt diagnostic → 22 sky seam field (patents first)
+   → 23 DJI presets → Osmo 360 II.
+10. **ШІ-монтаж** (gap 28, `AUTO-EDIT.md`): the user's main wish, but put
    last on purpose (user, 2026-10-23: "I wouldn't do AI functions yet:
    Omnix doesn't have its full working functionality"). The design stays
    ready. The pieces it needs arrive with the milestones above.

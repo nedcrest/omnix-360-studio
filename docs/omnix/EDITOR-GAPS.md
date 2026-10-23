@@ -312,6 +312,16 @@ one condition per group.
   push-in over a photo (Ken Burns) is the same pan/zoom keyframes. Built
   as proposed, not yet confirmed by the user: yes, with the 360-only parts
   hidden.
+- **User's test, 2026-10-24:**
+  - The groups are clear (the tooltips explain the rest).
+  - Editing can't shift the view.
+  - «+SFX» opens a file dialog and adds the sound at the playhead on SFX.
+  - 360 is untested: no 360 clip in the project yet.
+  - **Found:** framing one video shifted all the others. The shared free
+    look showed on every ordinary video without keyframes, and a save
+    wrote it into all of them. Fixed in a separate commit: unkeyed ordinary
+    videos show their whole picture as the export does; only the cut being
+    framed gets the look on save. None of the Kos saves had been affected.
 - **As built:** `App::framing` (off each start), `framing_only(message)`
   and `framing_key(key)` drop what turns or keys the view while editing.
   K on a selected sound still adds a volume point; Del deletes the selected

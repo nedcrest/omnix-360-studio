@@ -4,6 +4,7 @@
 
 use super::{App, Message, SPEAKER, SPEAKER_MUTED, db_label, icon_button, tip};
 use iced::widget::{column, container, row, rule, scrollable, slider, text, tooltip};
+use crate::project::SoundTrack;
 use iced::{Alignment, Element, Length};
 
 const WIDTH: f32 = 300.0;
@@ -40,8 +41,9 @@ impl App {
             rule::horizontal(1),
             text("Mix").size(16),
             level("Clip sound", self.edit.sound.volume, Message::SoundLevel, "The clips' own sound, in playback and the export."),
-            level("Music", self.edit.music.volume, Message::MusicLevel, "The music track, in playback and the export."),
-            note("To change the level within a cut or a song, Ctrl+click its line on the timeline for a volume point."),
+            level("Music", self.edit.music.volume, |db| Message::TrackLevel(SoundTrack::Music, db), "The music track, in playback and the export."),
+            level("SFX", self.edit.sfx.volume, |db| Message::TrackLevel(SoundTrack::Sfx, db), "The sound effects track, in playback and the export."),
+            note("To change the level within a cut or a track, Ctrl+click its lane on the timeline for a volume point."),
         ]
         .spacing(14)
         .padding(12);

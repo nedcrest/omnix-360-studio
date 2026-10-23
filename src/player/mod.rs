@@ -26,7 +26,7 @@ mod angles;
 
 use crate::ffmpeg::{self, Hwaccel};
 use crate::stab::{ImuAxes, Mode, Stabilizer};
-use crate::project::{Cut, Project};
+use crate::project::{Cut, Project, SoundTrack};
 use crate::stitch::M3;
 use crate::view::{Camera, Ease, Follow, Keyframes, Projection, View};
 use anyhow::{Context, Result};
@@ -399,26 +399,27 @@ enum Message {
     /// An overlay's effect keyframe (`true`) or motion keyframe dragged to
     /// another time in the item's own.
     OverlayKeyMove(crate::overlay::ItemRef, bool, usize, f64),
-    SelectMusic(usize),
-    /// Music clip `i` dragged to start at this edit time; with Shift held
-    /// (`true`) it may overlap a neighbour, crossfading.
-    MusicMove(usize, f64, bool),
-    /// Music clip `i`'s in (`true`) or out edge dragged to this song time,
+    /// A clip on a sound track (the music, the sound effects) selected.
+    SelectMusic(SoundTrack, usize),
+    /// Clip `i` of a sound track dragged to start at this edit time; with
+    /// Shift held (`true`) it may overlap a neighbour, crossfading.
+    MusicMove(SoundTrack, usize, f64, bool),
+    /// Clip `i`'s in (`true`) or out edge dragged to this time in its file,
     /// with Shift held or not.
-    MusicTrim(usize, bool, f64, bool),
-    /// A music volume point added at this edit time and level (dB).
-    VolumeAdd(f64, f64),
-    VolumeSelect(usize),
-    /// Music volume point `i` dragged to this edit time and level.
-    VolumeMove(usize, f64, f64),
+    MusicTrim(SoundTrack, usize, bool, f64, bool),
+    /// A track's volume point added at this edit time and level (dB).
+    VolumeAdd(SoundTrack, f64, f64),
+    VolumeSelect(SoundTrack, usize),
+    /// A track's volume point `i` dragged to this edit time and level.
+    VolumeMove(SoundTrack, usize, f64, f64),
     /// A sound point on cut `cut` at this clip time and level (dB).
     SoundKeyAdd(usize, f64, f64),
     SoundKeySelect(usize, usize),
     /// Cut `cut`'s sound point dragged to this clip time and level.
     SoundKeyMove(usize, usize, f64, f64),
-    /// The mix: the clips' sound and the music track, in dB.
+    /// The mix: the clips' sound and each sound track, in dB.
     SoundLevel(f64),
-    MusicLevel(f64),
+    TrackLevel(SoundTrack, f64),
     /// A level slider let go.
     LevelDone,
     /// Start an empty edit (asking first if there are unsaved changes).
@@ -555,12 +556,14 @@ struct App {
 
     /// The overlay or text item selected, in the lane shown of its track.
     selected_overlay: Option<crate::overlay::ItemRef>,
-    selected_music: Option<usize>,
-    /// The music volume point selected, and the cut sound point: (cut,
-    /// point).
-    selected_volume: Option<usize>,
+    /// The clip selected on a sound track.
+    selected_music: Option<(SoundTrack, usize)>,
+    /// A sound track's volume point selected, and the cut sound point:
+    /// (cut, point).
+    selected_volume: Option<(SoundTrack, usize)>,
     selected_sound: Option<(usize, usize)>,
-    music: music::Player,
+    /// Each sound track's streams, in `SoundTrack::ALL`'s order.
+    music: [music::Player; 2],
     /// Through a crossfade, the other cut of it alongside: its index and
     /// clip. Usually the next one, coming in over the playing cut; while
     /// paused with the incoming cut selected for editing, that one is the
@@ -850,7 +853,9 @@ impl App {
             Some(c) if self.current < self.edit.cuts.len() => (c.playback.running(), self.edit.edit_time(self.current, c.playback.now())),
             _ => (false, 0.0),
         };
-        self.music.follow(&self.edit.music, t, self.edit.duration(), playing);
+        for (player, which) in self.music.iter_mut().zip(SoundTrack::ALL) {
+            player.follow(self.edit.track(which), t, self.edit.duration(), playing);
+        }
         self.meter.follow(playing);
         // The cut's own volume points move its level as it plays, and
         // through a crossfade the two cuts trade places, equal power.
@@ -1657,7 +1662,7 @@ impl App {
             Message::Info(of) => {
                 let path = match of {
                     info::Of::Cut(i) => self.edit.cuts.get(i).map(|c| c.input.clone()),
-                    info::Of::Music(i) => self.edit.music.clips.get(i).map(|m| m.input.clone()),
+                    info::Of::Music(which, i) => self.edit.track(which).clips.get(i).map(|m| m.input.clone()),
                     info::Of::Overlay(r) => self.edit.item(r).filter(|it| it.text.is_none()).map(|it| it.input.clone()),
                 };
                 let Some(path) = path else { return Task::none() };
@@ -1667,7 +1672,7 @@ impl App {
                 let read = file.is_none();
                 self.info = Some(info::Info { of, path: path.clone(), file });
                 if read {
-                    let song = matches!(of, info::Of::Music(_));
+                    let song = matches!(of, info::Of::Music(..));
                     let p = path.clone();
                     return Task::perform(blocking(move || info::read(&p, song).map(Arc::new).map_err(|e| format!("{e:#}"))), move |r| Message::InfoRead(path.clone(), r));
                 }
@@ -1723,20 +1728,20 @@ impl App {
                 return self.update(Message::Picked(vec![path]));
             }
             Message::BinAdd(path, bin::Kind::Picture, _) => return self.update(Message::OverlayPicked(vec![path])),
-            Message::BinAdd(path, bin::Kind::Sound, place) => {
-                // Where it fits nearest the spot: one sound lane holds music,
-                // effects and voice alike until there are lanes of their own.
+            Message::BinAdd(path, bin::Kind::Sound(which), place) => {
+                // Onto its section's track, where it fits nearest the spot.
                 let duration = ffmpeg::duration(&path).unwrap_or(60.0);
                 let at = match self.spot(place) {
-                    bin::Spot::End => self.edit.music.end(),
+                    bin::Spot::End => self.edit.track(which).end(),
                     bin::Spot::At(t) => t,
                     bin::Spot::Join(t) => crate::project::offsets(&self.edit.cuts).into_iter().chain([self.edit.duration()]).nth(self.edit.nearest_join(t)).unwrap_or(t),
                 };
                 self.edit.checkpoint();
-                self.edit.music.clips.push(crate::project::MusicClip { input: path.clone(), at, start: 0.0, end: duration, fade_in: 0.0, fade_out: 0.0 });
-                let i = self.edit.music.clips.len() - 1;
-                self.edit.music.clips[i].at = self.edit.music.place(i, at);
-                self.selected_music = Some(i);
+                let track = self.edit.track_mut(which);
+                track.clips.push(crate::project::MusicClip { input: path.clone(), at, start: 0.0, end: duration, fade_in: 0.0, fade_out: 0.0 });
+                let i = track.clips.len() - 1;
+                track.clips[i].at = track.place(i, at);
+                self.selected_music = Some((which, i));
                 self.selected = None;
                 return self.load_waveform(&path);
             }
@@ -2077,7 +2082,7 @@ impl App {
                 // After the music already there, whole.
                 let at = self.edit.music.end();
                 self.edit.music.clips.push(crate::project::MusicClip { input: path.clone(), at, start: 0.0, end: duration, fade_in: 0.0, fade_out: 0.0 });
-                self.selected_music = Some(self.edit.music.clips.len() - 1);
+                self.selected_music = Some((SoundTrack::Music, self.edit.music.clips.len() - 1));
                 self.selected = None;
                 return self.load_waveform(&path);
             }
@@ -2110,21 +2115,21 @@ impl App {
                 self.waveforms.insert(path, wave);
             }
             Message::Waveform(path, Err(e)) => self.error = Some(format!("Can't read {}: {e}", path.display())),
-            Message::SelectMusic(i) => {
-                self.selected_music = Some(i);
+            Message::SelectMusic(which, i) => {
+                self.selected_music = Some((which, i));
                 self.selected_overlay = None;
                 self.selected = None;
                 self.selected_volume = None;
                 self.selected_sound = None;
             }
-            Message::VolumeAdd(t, db) => {
+            Message::VolumeAdd(which, t, db) => {
                 self.begin_drag();
-                let keys = &mut self.edit.music.keyframes;
+                let keys = &mut self.edit.track_mut(which).keyframes;
                 let i = keys.partition_point(|k| k.t <= t);
                 keys.insert(i, crate::project::VolumeKey { t, volume: db });
-                self.select_volume(i);
+                self.select_volume(which, i);
             }
-            Message::VolumeSelect(i) => self.select_volume(i),
+            Message::VolumeSelect(which, i) => self.select_volume(which, i),
             Message::SoundKeyAdd(cut, t, db) => {
                 let Some(c) = self.edit.cuts.get(cut) else { return Task::none() };
                 let t = t.clamp(c.start, c.end);
@@ -2147,9 +2152,9 @@ impl App {
                     *k = crate::project::VolumeKey { t: t.clamp(lo, hi.max(lo)), volume: db };
                 }
             }
-            Message::VolumeMove(i, t, db) => {
+            Message::VolumeMove(which, i, t, db) => {
                 self.begin_drag();
-                let keys = &mut self.edit.music.keyframes;
+                let keys = &mut self.edit.track_mut(which).keyframes;
                 // Between its neighbours: points keep their order.
                 let lo = i.checked_sub(1).map_or(0.0, |j| keys[j].t + 0.01);
                 let hi = keys.get(i + 1).map_or(f64::INFINITY, |k| k.t - 0.01);
@@ -2157,10 +2162,10 @@ impl App {
                     *k = crate::project::VolumeKey { t: t.clamp(lo, hi.max(lo)), volume: db };
                 }
             }
-            Message::MusicMove(i, want, overlap) => {
+            Message::MusicMove(which, i, want, overlap) => {
                 self.begin_drag();
-                if i < self.edit.music.clips.len() {
-                    let m = &self.edit.music;
+                if i < self.edit.track(which).clips.len() {
+                    let m = self.edit.track(which);
                     let c = &m.clips[i];
                     let len = c.end - c.start;
                     // A plain drag never overlaps: it stops edge to edge, or
@@ -2170,16 +2175,16 @@ impl App {
                     } else {
                         m.place(i, want)
                     };
-                    self.edit.music.clips[i].at = at;
+                    self.edit.track_mut(which).clips[i].at = at;
                 }
             }
-            Message::MusicTrim(i, in_edge, t, overlap) => {
+            Message::MusicTrim(which, i, in_edge, t, overlap) => {
                 self.begin_drag();
-                if i >= self.edit.music.clips.len() {
+                if i >= self.edit.track(which).clips.len() {
                     return Task::none();
                 }
-                let song = self.waveforms.get(&self.edit.music.clips[i].input).map_or(f64::INFINITY, |w| w.duration);
-                let m = &self.edit.music;
+                let song = self.waveforms.get(&self.edit.track(which).clips[i].input).map_or(f64::INFINITY, |w| w.duration);
+                let m = self.edit.track(which);
                 let c = &m.clips[i];
                 // Song time to edit time on this clip: the song stays put on
                 // the edit, so trimming its start moves where the clip
@@ -2190,13 +2195,13 @@ impl App {
                 if in_edge {
                     let want = t.max(start - c.at).max(0.0).min(end - edit::MIN_CUT);
                     let start = crate::project::Music::reach(start, want, |s| m.fits(i, s + to_edit, end - s, overlap));
-                    let c = &mut self.edit.music.clips[i];
+                    let c = &mut self.edit.track_mut(which).clips[i];
                     c.at = start + to_edit;
                     c.start = start;
                 } else {
                     let want = t.min(song).max(start + edit::MIN_CUT);
                     let end = crate::project::Music::reach(end, want, |e| m.fits(i, c.at, e - start, overlap));
-                    self.edit.music.clips[i].end = end;
+                    self.edit.track_mut(which).clips[i].end = end;
                 }
             }
             Message::SoundLevel(db) => {
@@ -2205,9 +2210,9 @@ impl App {
                 let v = self.clip_volume();
                 self.with_playback(|p| p.set_volume(v));
             }
-            Message::MusicLevel(db) => {
+            Message::TrackLevel(which, db) => {
                 self.begin_drag();
-                self.edit.music.volume = db;
+                self.edit.track_mut(which).volume = db;
             }
             Message::LevelDone => self.dragging = false,
             Message::Trim(i, start, t) => {
@@ -2251,10 +2256,11 @@ impl App {
                 self.edit.set_crossfade(i, to);
             }
             Message::Split if self.selected_music.is_some() => {
-                let i = self.selected_music.unwrap();
+                let (which, i) = self.selected_music.unwrap();
+                let at = self.position();
                 self.edit.checkpoint();
-                if self.edit.music.split(i, self.position(), edit::MIN_CUT) {
-                    self.selected_music = Some(i + 1);
+                if self.edit.track_mut(which).split(i, at, edit::MIN_CUT) {
+                    self.selected_music = Some((which, i + 1));
                 } else {
                     self.edit.undo();
                 }
@@ -2286,19 +2292,20 @@ impl App {
                 }
             }
             Message::DeleteCut if self.selected_volume.is_some() => {
-                let i = self.selected_volume.take().unwrap();
-                if i < self.edit.music.keyframes.len() {
+                let (which, i) = self.selected_volume.take().unwrap();
+                if i < self.edit.track(which).keyframes.len() {
                     self.edit.checkpoint();
-                    self.edit.music.keyframes.remove(i);
+                    self.edit.track_mut(which).keyframes.remove(i);
                 }
             }
-            // With a song selected, delete that, not the cut under the
-            // playhead (Shift+Del used to, being the key for cuts).
+            // With a song or sound effect selected, delete that, not the
+            // cut under the playhead (Shift+Del used to, being the key for
+            // cuts).
             Message::DeleteCut if self.selected_music.is_some() => {
-                let i = self.selected_music.take().unwrap();
-                if i < self.edit.music.clips.len() {
+                let (which, i) = self.selected_music.take().unwrap();
+                if i < self.edit.track(which).clips.len() {
                     self.edit.checkpoint();
-                    self.edit.music.clips.remove(i);
+                    self.edit.track_mut(which).clips.remove(i);
                 }
             }
             Message::DeleteCut => {
@@ -2900,9 +2907,9 @@ impl App {
     }
 
     /// Saves the edit for undo once per drag.
-    /// Selects music volume point `i`, and nothing else.
-    fn select_volume(&mut self, i: usize) {
-        self.selected_volume = Some(i);
+    /// Selects a sound track's volume point `i`, and nothing else.
+    fn select_volume(&mut self, which: SoundTrack, i: usize) {
+        self.selected_volume = Some((which, i));
         self.selected_music = None;
         self.selected = None;
         self.selected_sound = None;
@@ -3226,18 +3233,19 @@ impl App {
                 "-" if mods.command() => return self.update(Message::TimelineZoom(1.0 / 1.5, None)),
                 "0" if mods.command() => return self.update(Message::TimelineZoomTo(0.0)),
                 "0" => self.free_look().reset(),
-                // On the music: a volume point at the playhead, on the line.
+                // On a sound track: a volume point at the playhead, on its line.
                 "k" | "K" if self.selected_music.is_some() || self.selected_volume.is_some() => {
+                    let which = self.selected_music.or(self.selected_volume).unwrap().0;
                     let t = self.position();
-                    let db = crate::project::volume_at(&self.edit.music.keyframes, t);
+                    let db = crate::project::volume_at(&self.edit.track(which).keyframes, t);
                     self.edit.checkpoint();
-                    let keys = &mut self.edit.music.keyframes;
+                    let keys = &mut self.edit.track_mut(which).keyframes;
                     match keys.iter().position(|k| (k.t - t).abs() < 0.01) {
-                        Some(i) => self.select_volume(i),
+                        Some(i) => self.select_volume(which, i),
                         None => {
                             let i = keys.partition_point(|k| k.t <= t);
                             keys.insert(i, crate::project::VolumeKey { t, volume: db });
-                            self.select_volume(i);
+                            self.select_volume(which, i);
                         }
                     }
                 }
@@ -3526,24 +3534,28 @@ impl App {
             })
             .collect();
         let (timeline_start, timeline_span) = self.timeline_window();
-        let music = self
-            .edit
-            .music
-            .clips
-            .iter()
-            .map(|c| timeline::MusicBlock {
-                label: c.input.file_stem().map_or_else(String::new, |s| s.to_string_lossy().into_owned()),
-                from: c.at,
-                start: c.start,
-                len: c.end - c.start,
-                wave: self.waveforms.get(&c.input).cloned(),
+        let sounds = SoundTrack::ALL
+            .map(|which| {
+                let track = self.edit.track(which);
+                let blocks = track
+                    .clips
+                    .iter()
+                    .map(|c| timeline::MusicBlock {
+                        label: c.input.file_stem().map_or_else(String::new, |s| s.to_string_lossy().into_owned()),
+                        from: c.at,
+                        start: c.start,
+                        len: c.end - c.start,
+                        wave: self.waveforms.get(&c.input).cloned(),
+                    })
+                    .collect();
+                timeline::SoundLane { which, blocks, volume: track.keyframes.clone() }
             })
+            .into_iter()
             .collect();
         let timeline = timeline::Timeline {
             blocks,
-            music,
+            sounds,
             selected_music: self.selected_music,
-            volume: self.edit.music.keyframes.clone(),
             selected_volume: self.selected_volume,
             selected_sound: self.selected_sound,
             video: self.edit.duration(),
@@ -3560,7 +3572,7 @@ impl App {
         }
         .view();
         // With a song selected, C splits that instead.
-        let music = self.selected_music.and_then(|i| self.edit.music.clips.get(i));
+        let music = self.selected_music.and_then(|(which, i)| self.edit.track(which).clips.get(i));
         let point = self.selected_volume.is_some() || self.selected_sound.is_some();
         // Any cut but the first can crossfade in from the one before.
         let crossfade_cut = Some(self.selected.unwrap_or(self.current)).filter(|&i| i > 0).and_then(|i| self.edit.cuts.get(i));
@@ -3624,13 +3636,13 @@ impl App {
                 }),
                 tooltip::Position::Top,
             ),
-            tip(icon_button(SPLIT, can_split.then_some(Message::Split)), text(if music.is_some() { "Split the selected music at the playhead (C)" } else { "Split the cut at the playhead (C)" }), tooltip::Position::Top),
+            tip(icon_button(SPLIT, can_split.then_some(Message::Split)), text(if music.is_some() { "Split the selected sound at the playhead (C)" } else { "Split the cut at the playhead (C)" }), tooltip::Position::Top),
             tip(
                 icon_button(DELETE_CUT, (self.selected.is_some() || music.is_some() || point || self.selected_overlay.is_some()).then_some(Message::DeleteCut)),
                 text(if point {
                     "Delete the selected volume point (Del)"
                 } else if music.is_some() {
-                    "Delete the selected music (Del)"
+                    "Delete the selected sound (Del)"
                 } else {
                     "Delete the selected cut (Shift+Del)"
                 }),

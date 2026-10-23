@@ -18,7 +18,8 @@ const WIDTH: f32 = 300.0;
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Of {
     Cut(usize),
-    Music(usize),
+    /// A clip on a sound track: the music or the sound effects.
+    Music(crate::project::SoundTrack, usize),
     Overlay(ItemRef),
 }
 
@@ -249,8 +250,9 @@ impl App {
                     rows.push(("Used", format!("in {uses} cuts")));
                 }
             }
-            Of::Music(i) => {
-                let Some(m) = self.edit.music.clips.get(i).filter(|m| m.input == info.path) else { return rows };
+            Of::Music(which, i) => {
+                let Some(m) = self.edit.track(which).clips.get(i).filter(|m| m.input == info.path) else { return rows };
+                rows.push(("Track", which.name().to_owned()));
                 rows.push(("On the edit", span(m.at, m.at + m.end - m.start)));
                 rows.push(("From the file", span(m.start, m.end)));
             }

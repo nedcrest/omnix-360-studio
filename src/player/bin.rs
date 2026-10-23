@@ -16,6 +16,7 @@
 //! window of its own.
 
 use super::{App, Message, blocking, tip};
+use crate::project::SoundTrack;
 use iced::widget::{button, column, container, image, row, rule, scrollable, text, tooltip};
 use iced::{Alignment, Element, Length, Task};
 use std::collections::HashMap;
@@ -29,12 +30,20 @@ const THUMB_W: u32 = 96;
 /// Frames in the preview strip of a clip.
 const PREVIEW_FRAMES: usize = 4;
 
-/// What a file is for, and so where "+" puts it.
+/// What a file is for, and so where "+" puts it: a sound goes onto its
+/// section's sound track.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Kind {
     Clip,
-    Sound,
+    Sound(SoundTrack),
     Picture,
+}
+
+impl Kind {
+    /// The same kind of file, whichever track a sound is for.
+    fn alike(self, other: Kind) -> bool {
+        std::mem::discriminant(&self) == std::mem::discriminant(&other)
+    }
 }
 
 /// Which of the bin's add buttons: at the end, at the playhead (splitting
@@ -65,9 +74,10 @@ const ADD_JOIN: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0
 const SECTIONS: [(&str, Kind, &[&str]); 6] = [
     ("Footage", Kind::Clip, &["01_footage"]),
     ("External video", Kind::Clip, &["06_external"]),
-    ("Music", Kind::Sound, &["02_audio/music"]),
-    ("Voice-over", Kind::Sound, &["02_audio/voiceover"]),
-    ("Sound effects", Kind::Sound, &["07_sfx"]),
+    ("Music", Kind::Sound(SoundTrack::Music), &["02_audio/music"]),
+    // On the music lane until voice-over has a lane of its own.
+    ("Voice-over", Kind::Sound(SoundTrack::Music), &["02_audio/voiceover"]),
+    ("Sound effects", Kind::Sound(SoundTrack::Sfx), &["07_sfx"]),
     ("Graphics", Kind::Picture, &["08_graphics"]),
 ];
 
@@ -143,7 +153,7 @@ pub fn kind_of(path: &Path) -> Option<Kind> {
     if is(CLIP_EXT) {
         Some(Kind::Clip)
     } else if is(SOUND_EXT) {
-        Some(Kind::Sound)
+        Some(Kind::Sound(SoundTrack::Music))
     } else if is(PICTURE_EXT) {
         Some(Kind::Picture)
     } else {
@@ -157,7 +167,7 @@ fn files(dir: &Path, kind: Kind, out: &mut Vec<PathBuf>) {
     for entry in entries.flatten() {
         let path = entry.path();
         let hidden = path.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.starts_with('.') || n.starts_with('_'));
-        if !hidden && path.is_file() && kind_of(&path) == Some(kind) {
+        if !hidden && path.is_file() && kind_of(&path).is_some_and(|k| k.alike(kind)) {
             out.push(path);
         }
     }
@@ -207,7 +217,7 @@ fn frame(path: &Path, t: f64, width: u32) -> Option<image::Handle> {
 fn read_meta(path: &Path, kind: Kind) -> Meta {
     let duration = (kind != Kind::Picture).then(|| crate::ffmpeg::duration(path).ok()).flatten();
     let thumb = match kind {
-        Kind::Sound => None,
+        Kind::Sound(_) => None,
         Kind::Picture => frame(path, 0.0, THUMB_W),
         // A third in: past a clip's often shaky start.
         Kind::Clip => frame(path, duration.unwrap_or(3.0) * 0.3, THUMB_W),
@@ -344,7 +354,7 @@ impl App {
                     col = col.push(image(h).width(Length::Fill));
                 }
             }
-            Kind::Sound => col = col.push(text("♪ playing").size(12).style(text::secondary)),
+            Kind::Sound(_) => col = col.push(text("♪ playing").size(12).style(text::secondary)),
         }
         container(col).padding(6).style(container::rounded_box).into()
     }
@@ -354,7 +364,7 @@ impl App {
         let meta = self.bin.meta.get(path);
         let picture: Element<'a, Message> = match meta.and_then(|m| m.thumb.clone()) {
             Some(h) => image(h).width(64).height(36).into(),
-            None => container(text(if kind == Kind::Sound { "♪" } else { "…" }).size(16)).width(64).height(36).center_x(64).center_y(36).into(),
+            None => container(text(if matches!(kind, Kind::Sound(_)) { "♪" } else { "…" }).size(16)).width(64).height(36).center_x(64).center_y(36).into(),
         };
         let length = meta.and_then(|m| m.duration).map(clock).unwrap_or_default();
         let selected = self.bin.preview.as_ref().is_some_and(|p| p.path == path);
@@ -376,7 +386,7 @@ impl App {
             ]
             .spacing(2)
             .into(),
-            Kind::Sound => row![
+            Kind::Sound(_) => row![
                 add(ADD_END, Place::End, "Add on the music lane after the last song"),
                 add(ADD_HERE, Place::Playhead, "Add on the music lane at the playhead"),
                 add(ADD_JOIN, Place::Join, "Add on the music lane at the join of cuts nearest the playhead"),

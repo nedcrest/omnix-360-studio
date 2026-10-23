@@ -276,6 +276,29 @@ per phrase, timed, to be fixed by hand. Recognition belongs in footage-agent
 `export/omnix.py` as `text` lane items (existing format) or imports an `.srt`
 (new). The same transcript later feeds text-based editing (9).
 
+### 17–24. From OpenOSV — research done (user, 2026-10-23)
+
+The user asked what OpenOSV (Apache-2.0, a C++/CUDA OSV plug-in for
+Premiere/Resolve) offers us. Full findings, sources and the licence notes are
+in `OPENOSV.md`. Short list:
+- **17. Seven easing presets** (DJI Studio's names): small, works for every
+  keyframe now. Format: new `Ease` variants, old projects unchanged.
+- **18. Bundled D-Log M → Rec.709 LUT** (their generated, DJI-free `.cube`,
+  resampled to 33³, NOTICE attribution): small.
+- **19. Lens-protector correction** from `StreamMeta.7 extri_lens_mode`: small–medium.
+- **20. Release the mount mask where both lenses agree** (their Hide Mount
+  Auto): aimed at the 0025 cap brim. CPU prototype first.
+- **21. Per-clip lens tilt.** Diagnostic first (fit tilt to our seam-shift
+  medians); port the rotation fit only if a residual shows.
+- **22. Sky seam field** from trusted pixels plus a usable-rim measure; check
+  for a sun-side ring. ⚠ GoPro flare patents: check first.
+- **23. DJI framing presets** (Crystal Ball, Asteroid, Wide, Ultra Wide,
+  Dewarping) and DJI's coupled zoom (FOV and correction together).
+- **24. File facts:**
+  - LRF timing on clips with dropped frames;
+  - the 6K scale (0.794492) and the 1920 px scale check;
+  - ISO, shutter, WB and readout time into the Info panel.
+
 ## Format rule for all of these
 
 New fields only, each `#[serde(default, skip_serializing_if = …)]`, so every
@@ -305,4 +328,9 @@ whenever a better grouping shows. `ROADMAP.md` shows the same as cards (field
    designed as one.
 5. **Ритм і переходи**: 13 beats → transitions (`TRANSITIONS.md`).
 6. **Колір і ШІ**: 14 levels → 15 bars → 6 vignette shapes → 16 subtitles
-   → text-based editing → Osmo 360 II (when the camera exists).
+   → text-based editing.
+7. **Якість 360** (from `OPENOSV.md`, mostly needs 360 footage: one public
+   sample now, the user's camera ~2027-02): 17 easing presets and 18 bundled
+   LUT any time (small, useful now) → 24 file facts → 19 lens protectors →
+   20 mask release → 21 tilt diagnostic → 22 sky seam field (patents first)
+   → 23 DJI presets → Osmo 360 II.

@@ -80,7 +80,10 @@ and `EDITOR-GAPS.md` (detail):
    clips, multi-select.
 5. **Ритм і переходи.** Cuts on the beat, and transitions (`TRANSITIONS.md`).
 6. **Колір і ШІ.** Levels, cinematic bars, vignette shapes, subtitles from
-   speech, text-based editing, Osmo 360 II.
+   speech, text-based editing.
+7. **Якість 360.** Ideas from OpenOSV (`OPENOSV.md`): easing presets, a
+   bundled D-Log M LUT, lens protectors, a better seam beside the stick,
+   Osmo 360 II.
 
 Further out, no milestone yet:
 - speaker-follow (direction of arrival plus active speaker);

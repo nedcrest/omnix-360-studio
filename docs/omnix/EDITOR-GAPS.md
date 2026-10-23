@@ -327,6 +327,14 @@ How to build it so the player and the export sound the same:
   DJI_0001 against the plain gain, by ear, before deciding the preset.
 - The music is levelled separately (its own target under speech, then
   auto-duck). This is about the clips' own sound only.
+- **A dialog with progress** (user, 2026-10-23). The button opens a modal
+  window: what it will do, the scope (all cuts or the selected one), a
+  «Start» button. After «Start» a progress bar runs ("cut 12 of 39"), with
+  Cancel. When it's done it says what changed (e.g. "39 cuts, +9 to +17
+  dB") and closes. Today long work (export, colour tracking) shows its
+  progress and Cancel in the top bar. A modal is new in Omnix: iced draws it
+  as a `stack` layer over the window with the rest dimmed. Built once, for
+  any long job later (transcripts, waveforms of a whole project).
 
 ### 12. True-peak limit on export — small (Kos TODO, 2026-10-23)
 

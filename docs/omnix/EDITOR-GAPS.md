@@ -396,6 +396,44 @@ bin (filter by person) and Info.
 - Also check Immich's API for reading faces (read-only, the user's own
   server).
 
+### 31. Speed: slow motion and fast forward, with automation — large (user, 2026-10-23)
+
+User: "Missing: slowing video down (and speeding it up). I don't know yet how
+best to do it. I have FL Studio experience with automating synth and
+instrument parameters, and I see we have an «Effects» row: maybe group video
+effects and sound effects (but for a specific track). For speed, the clip's
+native sound has to slow down or speed up with it, so the timeline doesn't
+drift: a big, careful layer of work."
+
+What the code already gives:
+- Frames are picked by time, not by count (0.7.1's mixed-frame-rate fix),
+  so a cut that reads its clip slower is natural. A 100 fps Osmo clip at
+  0.3× is real slow motion; 30 fps at 0.5× repeats frames, or blends them
+  later.
+- Effect keyframes already ease values over a cut's time, which is FL's
+  automation idea. A speed curve would be one more automated value.
+
+To work out before building:
+- **Constant speed per cut first** (`Cut.speed`, 0.25–4×, new optional
+  field). Then a cut's length on the edit = (out − in) / speed. Every place
+  that maps edit time ↔ clip time must use it:
+  - `project::offsets`, `Edit::locate`;
+  - keyframes, effects and volume points (all stored in clip time, so they
+    stay on their footage);
+  - crossfades, thumbnails, the player clock, both exports and `check`.
+- **Sound follows the speed.** ffmpeg `atempo` keeps the pitch (chained for
+  < 0.5×) and is constant only; `asetrate` shifts the pitch like tape. The
+  player needs the same: decode through the same filter, so the playback
+  clock matches. Pad to the frames' length as now (`pad`), so later cuts
+  don't drift. Measure the sync by cross-correlation as for cleaned voice.
+- **Speed ramps** (automation over time) second. Time becomes the integral
+  of the speed curve. Sound must be done in pieces of constant tempo, or
+  with a time-stretcher (`rubberband`, rarely in ffmpeg builds).
+- **Grouped effects per track** (the FL idea): a cut's effects row could
+  show lanes per automated value (exposure, speed, volume) that fold open,
+  instead of one row of marks. A UI question, together with gap 9's action
+  bar and the effects panel.
+
 ## Format rule for all of these
 
 New fields only, each `#[serde(default, skip_serializing_if = …)]`, so every
@@ -438,6 +476,11 @@ whenever a better grouping shows. `ROADMAP.md` shows the same as cards (field
    LUT any time (small, useful now) → 24 file facts → 19 lens protectors →
    20 mask release → 21 tilt diagnostic → 22 sky seam field (patents first)
    → 23 DJI presets → Osmo 360 II.
+8b. **Швидкість і автоматизація** (gap 31): constant speed per cut with
+   its sound following (atempo), measured for drift → speed ramps →
+   automation lanes per value (the user's FL Studio idea). Large and
+   careful; after B-roll and groups, since it touches the same time
+   mapping.
 9. **ШІ-монтаж** (gap 28, `AUTO-EDIT.md`): the user's main wish, but put
    last on purpose (user, 2026-10-23: "I wouldn't do AI functions yet:
    Omnix doesn't have its full working functionality"). The design stays

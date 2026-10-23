@@ -241,7 +241,7 @@ eight packs are in `TIMELINE-UX.md`. Item 7 (selection frame) is now part of
 its pack 1, and the bin's skimmer is shared with the timeline's. Keys that
 clash with the 360 view (J/K/L, ↑/↓, E/Q, S) wait for the user's choice.
 
-### 10. Two modes: Edit and 360 framing — idea (user, 2026-10-23)
+### 10. Two modes: Edit and Framing — built 2026-10-24 (`562dad6`), waiting for the user's test
 
 The user's answer to the key clashes in `TIMELINE-UX.md`: Omnix is a video
 editor first. By default it is in **Edit** mode, where keys and the mouse
@@ -308,9 +308,16 @@ one condition per group.
 - Keyframes already in a project keep playing and exporting in Edit mode.
   Only editing them needs Framing mode. Dragging the picture in Edit mode
   does nothing.
-- Open question for the user: should the switch also light up for ordinary
-  videos and pictures? A push-in over a photo (Ken Burns) is the same
-  pan/zoom keyframes; proposal: yes, with the 360-only parts hidden.
+- Should the switch also light up for ordinary videos and pictures? A
+  push-in over a photo (Ken Burns) is the same pan/zoom keyframes. Built
+  as proposed, not yet confirmed by the user: yes, with the 360-only parts
+  hidden.
+- **As built:** `App::framing` (off each start), `framing_only(message)`
+  and `framing_key(key)` drop what turns or keys the view while editing.
+  K on a selected sound still adds a volume point; Del deletes the selected
+  cut. `Rows::new(scale, framing)` leaves out the View row. The bars are
+  grouped with `separator()`. New: «+SFX» (`AddSound(Sfx)`), a sound effect
+  at the playhead.
 - Separate, later: the window title and the credit line say «rOsmo360».
   Branding the fork as Omnix is its own small decision.
 

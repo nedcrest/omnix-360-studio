@@ -21,6 +21,12 @@ nothing be lost after a forced compact.
 - The user throws in an idea → a card in `## Ідеї` (or `## Далі` / `## Потім`
   if they gave it an order), and the full idea in `EDITOR-GAPS.md`.
 - Order changes → move cards between columns. Keep `## Зараз` short.
+- Every new card gets a `віха` (milestone). The milestones and their order
+  are the numbered list before `## Зараз` (`1. Name — why`): the page reads
+  it for the order of its progress strip. A new milestone goes into that
+  list too, and into `EDITOR-GAPS.md`'s "Milestones" section. Regroup
+  freely when a better grouping shows (user, 2026-10-23: ideas come
+  unsorted; sorting them is our job).
 
 ## Format (the page's parser is strict)
 

@@ -86,10 +86,12 @@ var COLS = ['Зараз', 'Далі', 'Потім', 'Ідеї'];
 var before = null;   // картки попереднього малювання: що змінилось — підсвітити
 
 function parse(md) {
-  var cols = {}, col = null, card = null;
+  var cols = {}, col = null, card = null, order = [];
   md.split('\n').forEach(function (raw) {
     var line = raw.replace(/\s+$/, '');
     var m;
+    // Вступ до першої колонки: нумерований список віх задає їхній порядок.
+    if (!col && (m = line.match(/^\d+\.\s+(.+?)\s+—/))) { order.push(m[1].trim()); return; }
     if ((m = line.match(/^## (.+)/))) { col = m[1].trim(); cols[col] = cols[col] || []; card = null; return; }
     if ((m = line.match(/^### (.+)/)) && col) { card = {title: m[1].trim(), meta: {}, text: []}; cols[col].push(card); return; }
     if (!card) return;
@@ -99,6 +101,7 @@ function parse(md) {
   Object.keys(cols).forEach(function (k) {
     cols[k].forEach(function (c) { c.body = c.text.join(' '); c.key = c.title; c.sig = JSON.stringify([c.meta, c.body, k]); });
   });
+  Object.defineProperty(cols, 'order', {value: order});   // не колонка
   return cols;
 }
 
@@ -141,6 +144,7 @@ function cardEl(c, col) {
 // уже в «Зроблено».
 function miles(cols) {
   var m = {}, order = [];
+  (cols.order || []).forEach(function (v) { m[v] = { done: 0, all: 0 }; order.push(v); });
   Object.keys(cols).forEach(function (k) {
     cols[k].forEach(function (c) {
       var v = c.meta['віха']; if (!v) return;
@@ -150,6 +154,7 @@ function miles(cols) {
   });
   var box = document.getElementById('miles'); box.textContent = '';
   order.forEach(function (v) {
+    if (!m[v].all) return;
     var d = el('div', 'mile'); d.appendChild(el('b', null, '◆ ' + v));
     d.appendChild(document.createTextNode(' · ' + m[v].done + ' з ' + m[v].all));
     var bar = el('div', 'bar'), i = el('i'); i.style.width = (100 * m[v].done / m[v].all) + '%';

@@ -3,7 +3,9 @@
 The user's first test, 2026-10-22: the Kos 22.08 project made by
 footage-agent's «→ Omnix» button opened, its clips are in order and play.
 What they missed while editing, what the code already has, and how to fix
-each. Not started; order below is the proposal.
+each. Since then every new idea lands here too, numbered in arrival order.
+The numbers are identities, not priorities; the order of work is the
+milestones at the bottom (and `ROADMAP.md`'s `віха` field).
 
 ## What the timeline has today (code facts)
 
@@ -110,7 +112,18 @@ projects load unchanged (`#[serde(default)]`). Export mixes them in the ffmpeg
 graph beside music; playback mixes them in `audio.rs`. The music lane's
 drawing and dragging code is the model to reuse.
 
-### 4. The clip's sound as its own lane — two steps
+Design together with 4A (the clip's sound as a lane): both decide how the
+timeline stacks lanes under the picture, so doing them apart means laying
+the timeline out twice.
+
+**Auto-duck** belongs here (user's Kos TODO: "music −12…−15 dB under speech,
+four points per dip", done by hand in Kdenlive). One toggle and one "how
+much" on the music lane. Speech comes from the cleaned voice where a cut has
+one (footage-agent knows where it speaks), else the clip sound's level. It
+writes ordinary music volume points the user can edit (Rush and Premiere do
+it that way), so the export needs nothing new.
+
+### 4. The clip's sound as its own lane — two steps (4A with 3; 4B its own milestone)
 
 User: would split into video tracks and sound tracks.
 - **Step A (small-medium):** draw a "Clip sound" lane under the cuts, with each
@@ -127,6 +140,10 @@ User: would split into video tracks and sound tracks.
   overlays are pictures and text only) — a B-roll clip over the talking cut,
   muted, the talk's sound untouched. Worth weighing first: smaller, no
   unlinking. Raised in priority by this ask.
+- **Connected clips** (from `TIMELINE-UX.md`, FCP / CapCut track linkage):
+  overlays and voice-over attached to a cut, moving with it. Same data
+  model as step B (a link between items), so it is designed with it and
+  with 8 (multi-select), as one format change.
 
 ### 5. Markers — small-medium, format change
 
@@ -203,6 +220,62 @@ To settle when designing it:
 - **Cost.** Key handling in `mod.rs` splits by mode, which makes merges from
   upstream harder there.
 
+### 11. Bring a speech clip up to −16 LUFS — small-medium (Kos TODO, 2026-10-23)
+
+From `den1-TODO.md` (measured on the Kos day-1 master, made in Kdenlive):
+integrated −24.4 LUFS, LRA 17.3 LU, true peak 0.0 dBFS. The film is 8 dB
+quieter than the web's ~−16, and lifting the whole mix would clip. The
+TODO's fix is to normalise **each speech clip on its own**. A button on a
+cut (Audio panel or Info) measures its sound (`ffmpeg ebur128`, on the
+cleaned voice if set) and sets a gain to −16 LUFS, stored as a new optional
+cut level (format change) or as volume points (none). Measure both on Kos.
+`speechnorm`, the TODO's extra lift for a far-away voice, is the
+footage-agent cleaner's job, not Omnix's.
+
+### 12. True-peak limit on export — small (Kos TODO, 2026-10-23)
+
+The export's mix ends in `amix` followed only by the edit's fades (`ffmpeg.rs` ~1027). Add a limiter for
+−1 dBTP (`alimiter` or `loudnorm` with TP=-1 in the final stage). Check with
+`ebur128=peak=true` on an export that clips today. No format change; maybe
+a setting later.
+
+### 13. Cuts on the beat — medium (Kos TODO, 2026-10-23)
+
+The TODO: "a cut doesn't land on the beat", found by ear. Find the music's
+beats (onset or beat tracking: ffmpeg has no beat tracker, so a small Rust
+onset detector or footage-agent's Python with librosa or aubio), list the
+cuts more than N ms off a beat (`rosmo360 check` gains a `beat` rule), and
+draw the beats as marks on the music lane that cuts snap to (needs 5 and
+the snapping pack of 9).
+
+### 14. Black and white levels — small (Kos TODO, 2026-10-23)
+
+The Kos master's darkest pixel is 14 of 255 (median over 1968 frames):
+nothing is black, so it looks flat. The TODO's fix is levels: black input
+≈ 0.055, white ≈ 0.95, then a little saturation. `Grade` has exposure,
+contrast and highlights/shadows, but no black and white points. Add `black_in`
+and `white_in` to the effect key, mirrored in `grade.rs` and `grade.wgsl`
+with a GPU-vs-CPU test. "To all cuts" already applies a look to the whole
+film. The name `black` is taken by the fades, so pick another.
+
+### 15. Cinematic bars — small (Kos TODO, 2026-10-23)
+
+The TODO's plan: on 30 s of forest B-roll, black bars slide in from top and
+bottom (2.39:1, 194 px each at 2688×1512), a colour shift and a vignette,
+then back. Possible today by hand: two black PNGs on the overlay lane with
+motion keys. Proper: an effect value "bars" (0 = none, 1 = 2.39:1), keyframed,
+so it eases in and out per cut. Small with 14's plumbing.
+
+### 16. Subtitles from speech — medium (Kos TODO, 2026-10-23)
+
+Mar'yana can't be heard even cleaned (action-cam mic, distance). Run
+Whisper only on the cuts where someone speaks (the TODO warns CPU Whisper is
+slow), on the cleaned voice. Put the draft as items on the text lane, one
+per phrase, timed, to be fixed by hand. Recognition belongs in footage-agent
+(Python, it already has the voices). Omnix gets the result through
+`export/omnix.py` as `text` lane items (existing format) or imports an `.srt`
+(new). The same transcript later feeds text-based editing (9).
+
 ## Format rule for all of these
 
 New fields only, each `#[serde(default, skip_serializing_if = …)]`, so every
@@ -210,9 +283,26 @@ old project still opens (public format, upstream `AGENTS.md`). Note: an *older*
 Omnix will refuse a project with the new fields (`deny_unknown_fields`) — fine,
 we only run our own build.
 
-## Proposed order
+## Milestones — the order of work (agreed with the user, 2026-10-23)
 
-Taken by the user: 2 first (v1 done). Then 1 → 3 → 5 → 4A → 7 → 8; 6 any
-time; 4B when the rest is in use. Where 9's packs go in this order is the
-user's call (proposal: pack 1, which includes 7, right after 3). 1 is a few hours and helps at
-once; 2 is the user's main ask and is where 3 and 5 plug in.
+The user throws ideas in as they come; they are sorted here and regrouped
+whenever a better grouping shows. `ROADMAP.md` shows the same as cards (field
+`віха`) with each milestone's progress.
+
+1. **Звук для Косу** (sound): 3a cleaned voice (in test) → 3 + 4A sound
+   lanes, designed together → 11 per-clip −16 LUFS → auto-duck (in 3) →
+   12 true-peak limit. First, because the Kos film's worst problem is sound,
+   and its TODO puts sound right after the cuts.
+2. **Зручний таймлайн** (timeline ease, runs beside 1 in small packs): 10
+   two modes → 9 pack 1 (with 7) → 5 markers → 9 click routes → 9 snapping
+   → 9 skimmer (needs 10 for S) → 9 action bar → 9 typed time and UI scale.
+3. **Матеріал і бін** (material in): 1 + 2 bin buttons (in test) → bin
+   preview in Omnix's viewer (designed with 10: the viewer gets three
+   states) → bin grid, ratings from `notes.json`, LUTs, E/W → «new project
+   with folders» in Omnix.
+4. **B-roll і групи**: video on the overlay lane (cheap cutaway) → 4B
+   group/ungroup + connected clips + 8 multi-select, one format change,
+   designed as one.
+5. **Ритм і переходи**: 13 beats → transitions (`TRANSITIONS.md`).
+6. **Колір і ШІ**: 14 levels → 15 bars → 6 vignette shapes → 16 subtitles
+   → text-based editing → Osmo 360 II (when the camera exists).

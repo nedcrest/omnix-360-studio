@@ -303,6 +303,31 @@ for the build:
   `speechnorm` in footage-agent's cleaner) would even it out. Decide after
   hearing the plain gain plus limiter.
 
+**The user's design (2026-10-23): «Normalize video sound»**, "so I don't
+have to fiddle with levels myself":
+- Scope: **all cuts** or **the selected cut**.
+- Fixed, built-in settings: bring the average up to a target, **lift the
+  quiet parts and tame the loud ones**. No knobs to learn.
+
+How to build it so the player and the export sound the same:
+- **Step 1, a measured gain per cut.** Measure the stretch the cut plays
+  (`ebur128` on its own in–out, on the cleaned voice where chosen) and
+  store the gain to −16 LUFS as a new optional cut field (shown in Info,
+  undoable, one step for "all"). The player and the export apply the same
+  number, and the volume line still works on top. «All cuts» measures each
+  cut on a thread with progress; a file is decoded once per cut stretch
+  (seconds each).
+- **Step 1 ships with gap 12's limiter** at the end of the export mix
+  (−1 dBTP). Without it a +15 dB gain clips.
+- **Step 2, «lift quiet, tame loud».** A fixed, gentle speech leveler per
+  cut (ffmpeg `speechnorm` or `dynaudnorm` with preset values, chosen by ear
+  on Kos). It sits in the player's audio decode and in the export's stretch
+  chain, the same filter in both. After a seek mid-cut its first second can
+  differ slightly from the export, which starts at the in point. Tried on
+  DJI_0001 against the plain gain, by ear, before deciding the preset.
+- The music is levelled separately (its own target under speech, then
+  auto-duck). This is about the clips' own sound only.
+
 ### 12. True-peak limit on export — small (Kos TODO, 2026-10-23)
 
 The export's mix ends in `amix` followed only by the edit's fades (`ffmpeg.rs` ~1027). Add a limiter for

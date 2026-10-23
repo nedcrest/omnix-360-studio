@@ -30,6 +30,23 @@ mirrored GPU/CPU, is already solved. Transitions generalise the blend.
   template into the project folder (e.g. `<project>/transitions/<name>.json`)
   and picked for any other zone, ready as is.
 
+## Quick ways to add one (user, 2026-10-23)
+
+Dragging zones in a mode is the precise way. Most of the time it should be
+one action, with the default transition (or the last template used):
+- **At the playhead:** with the playhead on or near a join, the T key or a
+  button puts a transition on the nearest join (`Edit::nearest_join`, which
+  the bin's «на склейку» already uses).
+- **Between two selected clips:** select two neighbouring cuts (needs
+  multi-select, gap 8; until then: the selected cut and the one after it),
+  then «Додати перехід».
+- **On every join** of the selection or of the whole edit, with a chosen
+  template («автоматичні склейки»). One undo step. Joins too short for it
+  are skipped and named.
+The same three work for stingers («перебивки»), placed in their insert or
+cover mode. This answers the open question about T below: T adds; the zone
+handles are there for fine-tuning.
+
 ## Two kinds, detected automatically
 
 1. **Overlap transition** — the two cuts overlap in time; both pictures are
@@ -101,6 +118,4 @@ footage (the Kos project), adjust. Don't design every detail up front.
 ## Open questions
 
 - Snap step: always 0.25 s, or 0.25 s by default with Shift for frames?
-- Does T toggle a mode, or just add a default transition at the cut nearest
-  the playhead (and the handles are always there)?
 - Where do edge zones go when a cut is trimmed shorter than the zone?

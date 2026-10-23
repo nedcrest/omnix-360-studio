@@ -299,6 +299,36 @@ in `OPENOSV.md`. Short list:
   - the 6K scale (0.794492) and the 1920 px scale check;
   - ISO, shutter, WB and readout time into the Info panel.
 
+### 25. Transitions and stingers — spec in `TRANSITIONS.md` (user, 2026-10-22/23)
+
+Split into steps so each can be tried on Kos on its own:
+- **25a. Basic transitions and quick placement:** dissolve with a curve,
+  dip to colour, wipe, zoom blur. Three ways to add one, in
+  `TRANSITIONS.md` → "Quick ways": T at the playhead, between two selected
+  clips, or on every join. Builds on the existing crossfade.
+- **25b. Edge transitions** (out on one cut, in on the next, no overlap).
+- **25c. Templates:** a configured transition saved into the project and
+  picked for any join.
+- **25d. Stingers («перебивки», video transitions)**, their own yellow
+  group: a short clip with its own sound on a cut, insert or cover, from the
+  project's `06_external` / `07_sfx`. Needs the overlay lane to take video
+  (milestone 4's first card) and sound lanes (milestone 1).
+- **25e. 360 looks:** whip pan, little-planet zoom, sphere roll.
+
+### 26. Glow and blur — small-medium (Kos TODO, 2026-10-23)
+
+The Kos TODO's «Міст» shot wants Kdenlive's "Blur of the glow" (blur 0.2,
+brightness 0.1) to soften hard edges. A keyframed effect value: a blur
+radius plus a glow (the blurred highlights added back). CPU and GPU with a
+parity test. Blur is a multi-tap pass, so it costs more than a per-pixel
+effect.
+
+### 27. Overview strip and centred playhead — later (`TIMELINE-UX.md` pack 8)
+
+A thin strip of the whole edit above the lanes while zoomed in (Resolve's
+dual timeline, cheaply), and a centred playhead as an option (CapCut,
+iMovie). Both are nice to have, not urgent.
+
 ## Format rule for all of these
 
 New fields only, each `#[serde(default, skip_serializing_if = …)]`, so every
@@ -318,7 +348,8 @@ whenever a better grouping shows. `ROADMAP.md` shows the same as cards (field
    and its TODO puts sound right after the cuts.
 2. **Зручний таймлайн** (timeline ease, runs beside 1 in small packs): 10
    two modes → 9 pack 1 (with 7) → 5 markers → 9 click routes → 9 snapping
-   → 9 skimmer (needs 10 for S) → 9 action bar → 9 typed time and UI scale.
+   → 9 skimmer (needs 10 for S) → 9 action bar → 9 typed time and UI scale
+   → 27 overview strip, centred playhead option.
 3. **Матеріал і бін** (material in): 1 + 2 bin buttons (in test) → bin
    preview in Omnix's viewer (designed with 10: the viewer gets three
    states) → bin grid, ratings from `notes.json`, LUTs, E/W → «new project
@@ -326,8 +357,11 @@ whenever a better grouping shows. `ROADMAP.md` shows the same as cards (field
 4. **B-roll і групи**: video on the overlay lane (cheap cutaway) → 4B
    group/ungroup + connected clips + 8 multi-select, one format change,
    designed as one.
-5. **Ритм і переходи**: 13 beats → transitions (`TRANSITIONS.md`).
-6. **Колір і ШІ**: 14 levels → 15 bars → 6 vignette shapes → 16 subtitles
+5. **Ритм і переходи**: 13 beats → 25a basic transitions with quick
+   placement → 25d stingers («перебивки») → 25c templates → 25b edge
+   transitions → 25e 360 looks. Stingers come early because the user
+   already has stinger clips (film burn, white noise).
+6. **Колір і ШІ**: 14 levels → 15 bars → 26 glow/blur → 6 vignette shapes → 16 subtitles
    → text-based editing.
 7. **Якість 360** (from `OPENOSV.md`, mostly needs 360 footage: one public
    sample now, the user's camera ~2027-02): 17 easing presets and 18 bundled

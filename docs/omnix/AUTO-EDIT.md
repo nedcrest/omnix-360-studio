@@ -6,6 +6,11 @@ properly. I make the project in the contact sheet with descriptions of what
 and where, with marks, and for the AI that is the guideline to build a good
 sequence and edit it automatically. Or is that crooked and unrealistic?"
 
+**Status: designed, deliberately not started.** The user, 2026-10-23:
+"I wouldn't do AI functions yet: Omnix doesn't have its full working
+functionality." It is milestone 9, the last. Speech transcription and faces,
+which it will use, are milestone 4 (gaps 29, 30).
+
 ## Is it realistic?
 
 Yes for a **good first edit** that the user then polishes. No for a finished
@@ -51,8 +56,8 @@ editor needs, in one file, and nothing it has to dig for:
 - **Marks:** time or span, role, note, flag.
 - **What's available:** memes, stingers, sfx and graphics from the bin's
   folders.
-- **Later:** transcripts with word times (Whisper; shared with subtitles,
-  gap 16).
+- **Later:** transcripts with word times (gap 29) and who is in each clip
+  (gap 30).
 
 The contact sheet gains a few brief fields, per day:
 - target length;

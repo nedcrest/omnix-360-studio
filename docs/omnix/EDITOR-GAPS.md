@@ -342,8 +342,35 @@ are in `AUTO-EDIT.md`:
 - 28c Omnix `schema`, `describe` and reloading the project when its file
   changes;
 - 28d brief fields in the contact sheet;
-- 28e transcripts;
+- 28e transcripts (from gap 29);
 - 28f the review loop.
+
+### 29. Speech transcription — medium (user, 2026-10-23)
+
+footage-agent's planned `speech.py` (README: ⬜, the `speech` Poetry group
+already lists faster-whisper; not installed). Whisper locally on the RTX
+3060 (large-v3 fits 12 GB; Ukrainian is supported), word timestamps, run on
+the cleaned voice where one is chosen, else the clip's sound, and only
+where there is speech. Written to the clip's sidecar. It feeds subtitles
+(16), text-based editing, search by what was said, the bin and Info panel,
+and later AI auto-edit cutting on phrases (28). Licence: faster-whisper
+(MIT), Whisper weights (MIT).
+
+### 30. Who is in the frame — medium (user, 2026-10-23)
+
+footage-agent's planned `faces.py` (README: ⬜, the `faces` group lists
+insightface + onnxruntime-gpu). The README's plan: take the named people's
+reference embeddings from the home Immich, which already recognises and
+names them with the same model family (InsightFace / ArcFace), so nothing is
+labelled twice. Per clip: who appears, when, how big. Omnix shows it in the
+bin (filter by person) and Info.
+- ⚠ **InsightFace's pretrained models are for non-commercial research
+  only.** That is fine for home use, but not shippable in a published
+  Omnix. If this ever goes public, use OpenCV's YuNet (detection) and SFace
+  (recognition), both Apache-2.0. Immich's own models are the same family,
+  so their licence applies to the embeddings we read too.
+- Also check Immich's API for reading faces (read-only, the user's own
+  server).
 
 ## Format rule for all of these
 
@@ -358,10 +385,6 @@ The user throws ideas in as they come; they are sorted here and regrouped
 whenever a better grouping shows. `ROADMAP.md` shows the same as cards (field
 `віха`) with each milestone's progress.
 
-0. **ШІ-монтаж** (AI auto-edit, gap 28; the user's main ask, 2026-10-23):
-   28a brief → 28b skill v0 on Kos 22.08 → 28c schema/describe/reload →
-   28d brief fields → 28e transcripts (with 16) → 28f review loop. v0 needs
-   only what exists; it grows with each milestone below.
 1. **Звук для Косу** (sound): 3a cleaned voice (in test) → 3 + 4A sound
    lanes, designed together → 11 per-clip −16 LUFS → auto-duck (in 3) →
    12 true-peak limit. First, because the Kos film's worst problem is sound,
@@ -374,17 +397,24 @@ whenever a better grouping shows. `ROADMAP.md` shows the same as cards (field
    preview in Omnix's viewer (designed with 10: the viewer gets three
    states) → bin grid, ratings from `notes.json`, LUTs, E/W → «new project
    with folders» in Omnix.
-4. **B-roll і групи**: video on the overlay lane (cheap cutaway) → 4B
+4. **Розуміння матеріалу** (footage-agent, can run beside the Omnix work):
+   29 speech transcription → 30 who is in the frame (names from Immich).
+   Feeds subtitles, text editing, bin search, and later AI auto-edit.
+5. **B-roll і групи**: video on the overlay lane (cheap cutaway) → 4B
    group/ungroup + connected clips + 8 multi-select, one format change,
    designed as one.
-5. **Ритм і переходи**: 13 beats → 25a basic transitions with quick
+6. **Ритм і переходи**: 13 beats → 25a basic transitions with quick
    placement → 25d stingers («перебивки») → 25c templates → 25b edge
    transitions → 25e 360 looks. Stingers come early because the user
    already has stinger clips (film burn, white noise).
-6. **Колір і ШІ**: 14 levels → 15 bars → 26 glow/blur → 6 vignette shapes → 16 subtitles
-   → text-based editing.
-7. **Якість 360** (from `OPENOSV.md`, mostly needs 360 footage: one public
+7. **Колір і текст**: 14 levels → 15 bars → 26 glow/blur → 6 vignette shapes →
+   16 subtitles (needs 29) → text-based editing (needs 29).
+8. **Якість 360** (from `OPENOSV.md`, mostly needs 360 footage: one public
    sample now, the user's camera ~2027-02): 17 easing presets and 18 bundled
    LUT any time (small, useful now) → 24 file facts → 19 lens protectors →
    20 mask release → 21 tilt diagnostic → 22 sky seam field (patents first)
    → 23 DJI presets → Osmo 360 II.
+9. **ШІ-монтаж** (gap 28, `AUTO-EDIT.md`): the user's main wish, but put
+   last on purpose (user, 2026-10-23: "I wouldn't do AI functions yet:
+   Omnix doesn't have its full working functionality"). The design stays
+   ready. The pieces it needs arrive with the milestones above.

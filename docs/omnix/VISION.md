@@ -67,9 +67,7 @@ Detail: `CONTEXT.md`.
 
 ## Where it goes
 
-Milestone 0, **ШІ-монтаж**, is the user's main ask: an AI edits from the
-contact sheet's brief by written rules (`AUTO-EDIT.md`). The rest is six
-milestones, kept current in `ROADMAP.md` (cards)
+The order of work is nine milestones, kept current in `ROADMAP.md` (cards)
 and `EDITOR-GAPS.md` (detail):
 
 1. **Звук для Косу.** Sound lanes, per-clip loudness, auto-duck under speech,
@@ -78,14 +76,18 @@ and `EDITOR-GAPS.md` (detail):
    skimmer, markers.
 3. **Матеріал і бін.** Preview in Omnix's viewer, grid, ratings from the
    contact sheet, new project with folders.
-4. **B-roll і групи.** Video on the overlay lane, group/ungroup, connected
+4. **Розуміння матеріалу.** Speech transcription and who is in the frame,
+   with local models in footage-agent.
+5. **B-roll і групи.** Video on the overlay lane, group/ungroup, connected
    clips, multi-select.
-5. **Ритм і переходи.** Cuts on the beat, and transitions (`TRANSITIONS.md`).
-6. **Колір і ШІ.** Levels, cinematic bars, vignette shapes, subtitles from
-   speech, text-based editing.
-7. **Якість 360.** Ideas from OpenOSV (`OPENOSV.md`): easing presets, a
-   bundled D-Log M LUT, lens protectors, a better seam beside the stick,
-   Osmo 360 II.
+6. **Ритм і переходи.** Cuts on the beat, transitions and stingers.
+7. **Колір і текст.** Levels, cinematic bars, glow, vignette shapes,
+   subtitles, text-based editing.
+8. **Якість 360.** Ideas from OpenOSV: easing presets, a bundled D-Log M
+   LUT, lens protectors, a better seam beside the stick, Osmo 360 II.
+9. **ШІ-монтаж.** An AI edits from the contact sheet's brief by written
+   rules (`AUTO-EDIT.md`). It is the user's main wish, but comes last on
+   purpose: first Omnix has to do everything an edit needs.
 
 Further out, no milestone yet:
 - speaker-follow (direction of arrival plus active speaker);

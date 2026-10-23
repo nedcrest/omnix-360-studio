@@ -586,6 +586,30 @@ choice. Keeps the edit magnetic: the blank is a cut like any other.
 The user also confirmed (2026-10-23): **the magnetic edit is handy.** Keep
 it the default; gaps happen only as blank cuts.
 
+### 33. Right-click menu on a cut's sound — small-medium (user, 2026-10-24)
+
+Right-click on the Clip sound lane offers:
+- **«Lower for voice-over»** to a set level. Proposed: −12 dB under the
+  normalized level, the common duck depth. The menu could show −6 / −12 /
+  −18 with −12 first.
+- **«Mute»**, and «Unmute» when muted.
+- **«Normalize…»** opens the normalize modal (gap 11) scoped to this cut;
+  more settings may come there later.
+- «Info» stays in the menu: right-click opens the Info panel today.
+
+How it fits:
+- All four act on **one per-cut level**, the field gap 11 adds for the
+  measured gain. Normalize sets it, «lower» subtracts 12 dB from it, mute
+  sets it to off (`OFF_DB`). One number, shown in Info, applied the same
+  in the player and the export, undoable. The volume line still works on
+  top.
+- Muted and lowered cuts should show it on the lane: a dimmed waveform
+  with a «−12» or «muted» tag, never colour alone.
+- iced has no native context menu. Build a small menu as a layer at the
+  pointer, closed by Esc or a click elsewhere. Make it once, for every
+  lane; music and SFX clips want the same menu later. Context menus at the
+  pointer are one of the Fitts's-law points in `TIMELINE-UX.md`.
+
 ## Format rule for all of these
 
 New fields only, each `#[serde(default, skip_serializing_if = …)]`, so every
@@ -599,7 +623,8 @@ The user throws ideas in as they come; they are sorted here and regrouped
 whenever a better grouping shows. `ROADMAP.md` shows the same as cards (field
 `віха`) with each milestone's progress.
 
-1. **Звук для Косу** (sound): 3a cleaned voice (done) → 3 + 4A sound
+1. **Звук для Косу** (sound): 33 the right-click menu goes with 11 (both
+   use the per-cut level). 3a cleaned voice (done) → 3 + 4A sound
    lanes, designed together → 11 per-clip −16 LUFS → auto-duck (in 3) →
    12 true-peak limit. First, because the Kos film's worst problem is sound,
    and its TODO puts sound right after the cuts.

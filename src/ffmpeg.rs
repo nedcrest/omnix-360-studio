@@ -819,12 +819,12 @@ pub fn wav(input: &Path, start: f64, duration: f64, output: &Path) -> Result<()>
 }
 
 /// What a whole edit's sound gets on top of joining its clips' stretches:
-/// their level, and the music track.
+/// their level, and the sound tracks (the music, the sound effects).
 pub struct Mix<'a> {
     /// The clips' sound, dB.
     pub sound_db: f64,
-    /// The music track: its level and clips.
-    pub music: &'a crate::project::Music,
+    /// The sound tracks, each with its level, clips and volume points.
+    pub tracks: Vec<&'a crate::project::Music>,
     /// The edit's length: music running on is cut here, faded out over
     /// `project::END_FADE`.
     pub length: f64,
@@ -843,7 +843,7 @@ impl Sound<'_> {
 impl Mix<'_> {
     /// Whether it changes anything.
     fn matters(&self) -> bool {
-        self.sound_db != 0.0 || !self.music.clips.is_empty() || !self.fades.is_none()
+        self.sound_db != 0.0 || self.tracks.iter().any(|t| !t.clips.is_empty()) || !self.fades.is_none()
     }
 }
 
@@ -953,11 +953,11 @@ fn level_filter(base: f64, keys: &[crate::project::VolumeKey], t: &str) -> Strin
     format!("volume=eval=frame:volume='if(lte({base}+{db},{off}),0,pow(10,({base}+{db})/20))'")
 }
 
-/// The filter graph for `Encoder::new` with a mix, adding the music's inputs
-/// to `cmd`: the clips' stretches joined (or silence where they have none)
-/// at their level, and each music clip trimmed to its stretch and to the
-/// edit, faded, placed at its time and at the track's level, all mixed over
-/// the edit's length.
+/// The filter graph for `Encoder::new` with a mix, adding the sound tracks'
+/// inputs to `cmd`: the clips' stretches joined (or silence where they have
+/// none) at their level, and each track's clips trimmed to their stretch and
+/// to the edit, faded, placed at their time and at their track's level, all
+/// mixed over the edit's length.
 fn mixed(cmd: &mut Command, audio: &[Sound<'_>], mix: &Mix<'_>) -> Result<String> {
     let stereo = "aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo";
     let mut graph = String::new();
@@ -978,12 +978,12 @@ fn mixed(cmd: &mut Command, audio: &[Sound<'_>], mix: &Mix<'_>) -> Result<String
         graph += &format!("{joined}volume={}[s];", crate::project::gain(mix.sound_db));
     } else {
         if !audio.is_empty() {
-            eprintln!("not every clip has sound; exporting the music alone");
+            eprintln!("not every clip has sound; exporting the music and sound effects alone");
         }
         graph += &format!("anullsrc=r=48000:cl=stereo,atrim=duration={}[s];", mix.length);
     }
     let mut parts = vec!["[s]".to_owned()];
-    for (i, clip) in mix.music.clips.iter().enumerate() {
+    for (track, i, clip) in mix.tracks.iter().flat_map(|t| t.clips.iter().enumerate().map(move |(i, c)| (*t, i, c))) {
         // What's left of the edit from where it starts.
         let room = mix.length - clip.at;
         let len = (clip.end - clip.start).min(room);
@@ -1005,7 +1005,7 @@ fn mixed(cmd: &mut Command, audio: &[Sound<'_>], mix: &Mix<'_>) -> Result<String
         }
         // Crossfades with the clips either side, equal power as the player
         // has them (a quarter sine each way).
-        let (cross_in, cross_out) = mix.music.crossfades(i);
+        let (cross_in, cross_out) = track.crossfades(i);
         if cross_in > 0.0 {
             chain += &format!(",afade=t=in:st=0:d={}:curve=qsin", cross_in.min(len));
         }
@@ -1013,7 +1013,7 @@ fn mixed(cmd: &mut Command, audio: &[Sound<'_>], mix: &Mix<'_>) -> Result<String
             chain += &format!(",afade=t=out:st={}:d={cross_out}:curve=qsin", len - cross_out);
         }
         let delay = (clip.at * 1000.0).round();
-        graph += &format!("{chain},adelay=delays={delay}:all=1,{}[m{input}];", level_filter(mix.music.volume, &mix.music.keyframes, "t"));
+        graph += &format!("{chain},adelay=delays={delay}:all=1,{}[m{input}];", level_filter(track.volume, &track.keyframes, "t"));
         parts.push(format!("[m{input}]"));
     }
     let mut fades = String::new();

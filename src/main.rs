@@ -186,8 +186,9 @@ enum Cmd {
         format: ffmpeg::Format,
         /// Write each cut to its own file for another editor, named after
         /// the project: "<name> - 001.mp4" and on, in the folder -o; and each
-        /// music clip as "<name> - music 001.wav" (48 kHz 24-bit, unfaded,
-        /// at the song's own level).
+        /// music clip as "<name> - music 001.wav", each sound effect as
+        /// "<name> - sfx 001.wav" (48 kHz 24-bit, unfaded, at the file's
+        /// own level).
         #[arg(long)]
         clips: bool,
         /// With --clips, seconds of extra footage either side of each cut
@@ -983,7 +984,7 @@ fn export(project: &project::Project, opts: &StitchOpts, out: &ExportOpts, progr
         // The whole edit gets its mix; a file per cut is for another editor,
         // so its sound is left as recorded and the music goes beside it.
         let length: f64 = cuts.clone().map(|n| (plan[n].2 - if n > cuts.start { overlap[n] } else { 0 }) as f64 / fps).sum();
-        let mix = ffmpeg::Mix { sound_db: project.sound.volume, music: &project.music, length, fades: project.fades };
+        let mix = ffmpeg::Mix { sound_db: project.sound.volume, tracks: project::SoundTrack::ALL.map(|t| project.track(t)).to_vec(), length, fades: project.fades };
         let mix = matches!(out.target, Target::One(_)).then_some(&mix);
         let mut encoder = ffmpeg::Encoder::new(&path, out.size, fps, &sound, mix, out.format, out.format == ffmpeg::Format::Resolve && gpu.is_some())?;
         // Overlays over the whole edit only; a file per cut has none.
@@ -1032,17 +1033,20 @@ fn export(project: &project::Project, opts: &StitchOpts, out: &ExportOpts, progr
         encoder.finish()?;
         written.push(path);
     }
-    // Beside the clips, each music clip as it is in the song, for the other
-    // editor to level and fade: with handles, but none of the mix.
+    // Beside the clips, each music and sound-effect clip as it is in its
+    // file, for the other editor to level and fade: with handles, but none
+    // of the mix.
     if let Target::Clips { dir, name, .. } = &out.target {
-        let mut music: Vec<_> = project.music.clips.iter().collect();
-        music.sort_by(|a, b| a.at.total_cmp(&b.at));
-        for (k, clip) in music.into_iter().enumerate() {
-            let path = dir.join(format!("{name} - music {:03}.wav", k + 1));
-            let from = (clip.start - handles).max(0.0);
-            let end = (clip.end + handles).min(ffmpeg::duration(&clip.input)?);
-            ffmpeg::wav(&clip.input, from, end - from, &path)?;
-            written.push(path);
+        for which in project::SoundTrack::ALL {
+            let mut clips: Vec<_> = project.track(which).clips.iter().collect();
+            clips.sort_by(|a, b| a.at.total_cmp(&b.at));
+            for (k, clip) in clips.into_iter().enumerate() {
+                let path = dir.join(format!("{name} - {} {:03}.wav", which.file_word(), k + 1));
+                let from = (clip.start - handles).max(0.0);
+                let end = (clip.end + handles).min(ffmpeg::duration(&clip.input)?);
+                ffmpeg::wav(&clip.input, from, end - from, &path)?;
+                written.push(path);
+            }
         }
     }
     Ok(written)
@@ -1215,7 +1219,7 @@ fn run() -> Result<()> {
             };
             let written = export(&project, &opts, &ExportOpts { size: (w, h), draft, cpu, format, target }, &mut print_progress())?;
             for path in &written {
-                // The music beside clips is sound only.
+                // The music and sound effects beside clips are sound only.
                 let size = if path.extension().is_some_and(|e| e == "wav") { String::new() } else { format!(" ({w}×{h})") };
                 eprintln!("wrote {}{size}", path.display());
             }
@@ -1372,26 +1376,32 @@ fn clip_number(input: &Path) -> String {
     digits.last().map_or_else(String::new, |d| d.to_string())
 }
 
-/// The music's loudness at edit time, 0..1, as the export mixes it (each
-/// song's peaks at its level, fades and crossfades), or `None` without
-/// music. Songs that can't be read are left out, with a note.
+/// The music's and sound effects' loudness at edit time, 0..1, as the
+/// export mixes them (each file's peaks at its track's level, fades and
+/// crossfades), or `None` without any. Files that can't be read are left
+/// out, with a note.
 fn sheet_music(project: &project::Project) -> Option<impl Fn(f64) -> f32 + '_> {
-    let track = &project.music;
-    if track.clips.is_empty() {
+    let tracks: Vec<_> = project::SoundTrack::ALL.iter().map(|&t| project.track(t)).filter(|t| !t.clips.is_empty()).collect();
+    if tracks.is_empty() {
         return None;
     }
-    let waves: Vec<_> = track.clips.iter().map(|c| player::music::Waveform::read(&c.input).inspect_err(|e| eprintln!("no waveform for {}: {e:#}", c.input.display())).ok()).collect();
+    let waves: Vec<Vec<_>> = tracks
+        .iter()
+        .map(|track| track.clips.iter().map(|c| player::music::Waveform::read(&c.input).inspect_err(|e| eprintln!("no waveform for {}: {e:#}", c.input.display())).ok()).collect())
+        .collect();
     let end = project::edit_length(&project.cuts);
     Some(move |t: f64| {
         let mut loudest = 0.0f32;
-        for (i, (clip, wave)) in track.clips.iter().zip(&waves).enumerate() {
-            let Some(wave) = wave else { continue };
-            if t < clip.at || t >= clip.ends() {
-                continue;
+        for (track, waves) in tracks.iter().zip(&waves) {
+            for (i, (clip, wave)) in track.clips.iter().zip(waves).enumerate() {
+                let Some(wave) = wave else { continue };
+                if t < clip.at || t >= clip.ends() {
+                    continue;
+                }
+                let peak = wave.peaks.get(((clip.start + t - clip.at) / player::music::WAVE_STEP) as usize).copied().unwrap_or(0.0);
+                let level = player::music::gain(track.level_at(t)) * player::music::envelope(clip, track.crossfades(i), t, end) as f32;
+                loudest = loudest.max(peak * level);
             }
-            let peak = wave.peaks.get(((clip.start + t - clip.at) / player::music::WAVE_STEP) as usize).copied().unwrap_or(0.0);
-            let level = player::music::gain(track.level_at(t)) * player::music::envelope(clip, track.crossfades(i), t, end) as f32;
-            loudest = loudest.max(peak * level);
         }
         loudest
     })

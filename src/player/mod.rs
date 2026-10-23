@@ -1055,10 +1055,14 @@ impl App {
             Aspect::Free => None,
             Aspect::Ratio(w, h) => Some(crate::view::Aspect(w.into(), h.into())),
         };
-        // The music in edit order, as it plays (the lane keeps the order
-        // they were added and split in).
-        let mut music = self.edit.music.clone();
-        music.clips.sort_by(|a, b| a.at.total_cmp(&b.at));
+        // Each sound track in edit order, as it plays (the lane keeps the
+        // order they were added and split in).
+        let ordered = |track: &crate::project::Music| {
+            let mut track = track.clone();
+            track.clips.sort_by(|a, b| a.at.total_cmp(&b.at));
+            track
+        };
+        let (music, sfx) = (ordered(&self.edit.music), ordered(&self.edit.sfx));
         let mut cuts = self.edit.cuts.clone();
         // Cuts with no keyframes of their own nor any before them show the
         // free look; the file alone would frame them straight ahead (and an
@@ -1078,7 +1082,7 @@ impl App {
         for cut in cuts.iter_mut().filter(|c| c.flat) {
             hold(cut, look_flat);
         }
-        Project { aspect, cuts, sound: self.edit.sound, music, fades: self.edit.fades, overlays: self.edit.overlays.clone(), text: self.edit.texts.clone() }
+        Project { aspect, cuts, sound: self.edit.sound, music, sfx, fades: self.edit.fades, overlays: self.edit.overlays.clone(), text: self.edit.texts.clone() }
     }
 
     /// Renders the edit to `path` on its own thread with the export the
@@ -1380,7 +1384,7 @@ impl App {
 
     /// Whether there is anything to save: cuts, or music to fill.
     fn has_edit(&self) -> bool {
-        !self.edit.cuts.is_empty() || !self.edit.music.clips.is_empty()
+        !self.edit.cuts.is_empty() || !self.edit.music.clips.is_empty() || !self.edit.sfx.clips.is_empty()
     }
 
     /// Parses the clip and probes the decoder off the UI thread.
@@ -1486,7 +1490,7 @@ impl App {
                 // Back to the start screen with an empty edit. Loaded clips
                 // stay in the library, so adding them again is instant; one
                 // still loading finishes there without becoming a cut.
-                self.edit.replace(Vec::new(), Default::default(), Default::default(), Default::default(), Vec::new(), Vec::new());
+                self.edit.replace(Vec::new(), Default::default(), Default::default(), Default::default(), Default::default(), Vec::new(), Vec::new());
                 self.hand_cut = None;
                 self.info = None;
                 self.selected_music = None;
@@ -1580,14 +1584,18 @@ impl App {
                 self.clip = None;
                 self.current = 0;
                 self.selected = None;
-                // Music that's gone is left out the same way.
-                let mut music = project.music;
-                let (here, gone): (Vec<_>, Vec<_>) = music.clips.into_iter().partition(|c| c.input.exists());
-                music.clips = here;
-                if !gone.is_empty() {
-                    let names: Vec<_> = gone.iter().map(|c| c.input.display().to_string()).collect();
-                    let said = self.error.take().map_or(String::new(), |e| e + ". ");
-                    self.error = Some(format!("{said}Left out missing music: {}", names.join(", ")));
+                // Music and sound effects that are gone are left out the same way.
+                let (mut music, mut sfx) = (project.music, project.sfx);
+                let mut gone = Vec::new();
+                for (track, word) in [(&mut music, "music"), (&mut sfx, "sound effects")] {
+                    let (here, lost): (Vec<_>, Vec<_>) = std::mem::take(&mut track.clips).into_iter().partition(|c| c.input.exists());
+                    track.clips = here;
+                    if !lost.is_empty() {
+                        let names: Vec<_> = lost.iter().map(|c| c.input.display().to_string()).collect();
+                        let said = self.error.take().map_or(String::new(), |e| e + ". ");
+                        self.error = Some(format!("{said}Left out missing {word}: {}", names.join(", ")));
+                    }
+                    gone.extend(lost);
                 }
                 // And overlay pictures.
                 let (mut overlays, texts) = (project.overlays, project.text);
@@ -1601,10 +1609,10 @@ impl App {
                     let said = self.error.take().map_or(String::new(), |e| e + ". ");
                     self.error = Some(format!("{said}Left out missing overlays: {}", lost.join(", ")));
                 }
-                let waves: Vec<_> = music.clips.iter().map(|c| self.load_waveform(&c.input)).collect();
+                let waves: Vec<_> = music.clips.iter().chain(&sfx.clips).map(|c| self.load_waveform(&c.input)).collect();
                 self.queue.extend(cuts.iter().map(|c| (c.input.clone(), false)));
                 let complete = missing.is_empty() && gone.is_empty() && lost.is_empty();
-                self.edit.replace(cuts, music, project.sound, project.fades, overlays, texts);
+                self.edit.replace(cuts, music, sfx, project.sound, project.fades, overlays, texts);
                 self.hand_cut = None;
                 self.info = None;
                 self.mark_flat();

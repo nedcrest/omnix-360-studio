@@ -32,6 +32,9 @@ pub struct Project {
     pub sound: Sound,
     #[serde(default, skip_serializing_if = "Music::is_empty")]
     pub music: Music,
+    /// Sound effects: a track like the music's, mixed in beside it.
+    #[serde(default, skip_serializing_if = "Music::is_empty")]
+    pub sfx: Music,
     /// Fades from black at the start and to black at the end.
     #[serde(default, skip_serializing_if = "Fades::is_none")]
     pub fades: Fades,
@@ -82,7 +85,37 @@ impl Sound {
     }
 }
 
-/// The music track: clips of songs placed on the edit's timeline.
+/// One of the edit's sound tracks besides the clips' own sound. Each is a
+/// `Music`: files placed on the edit's time, a level and volume points.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum SoundTrack {
+    Music,
+    Sfx,
+}
+
+impl SoundTrack {
+    /// Top to bottom, as the timeline shows them and the export mixes them.
+    pub const ALL: [SoundTrack; 2] = [SoundTrack::Music, SoundTrack::Sfx];
+
+    /// The lane's name on the timeline.
+    pub fn name(self) -> &'static str {
+        match self {
+            SoundTrack::Music => "Music",
+            SoundTrack::Sfx => "SFX",
+        }
+    }
+
+    /// The word for its files in a Clips export: "<name> - music 001.wav".
+    pub fn file_word(self) -> &'static str {
+        match self {
+            SoundTrack::Music => "music",
+            SoundTrack::Sfx => "sfx",
+        }
+    }
+}
+
+/// A sound track: clips of songs (or sound effects) placed on the edit's
+/// timeline. The music is one, the sound effects another (`SoundTrack`).
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Music {
@@ -395,7 +428,7 @@ impl Project {
         let text = std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
         let mut project: Project = serde_json::from_str(&text).with_context(|| format!("reading {}", path.display()))?;
         // Music alone is a start: its length is the frame to fill.
-        if project.cuts.is_empty() && project.music.clips.is_empty() {
+        if project.cuts.is_empty() && project.music.clips.is_empty() && project.sfx.clips.is_empty() {
             bail!("{} has no cuts", path.display());
         }
         let dir = path.parent().unwrap_or(Path::new(""));
@@ -422,11 +455,13 @@ impl Project {
                 }
             }
         }
-        for (n, clip) in project.music.clips.iter_mut().enumerate() {
-            if clip.end <= clip.start || clip.at < 0.0 {
-                bail!("music clip {} is empty or starts before the edit", n + 1);
+        for which in SoundTrack::ALL {
+            for (n, clip) in project.track_mut(which).clips.iter_mut().enumerate() {
+                if clip.end <= clip.start || clip.at < 0.0 {
+                    bail!("{} clip {} is empty or starts before the edit", which.file_word(), n + 1);
+                }
+                clip.input = dir.join(&clip.input);
             }
-            clip.input = dir.join(&clip.input);
         }
         for (n, item) in project.overlays.iter_mut().chain(&mut project.text).flat_map(|l| &mut l.items).enumerate() {
             if item.end <= item.start || item.at < 0.0 {
@@ -451,7 +486,7 @@ impl Project {
             bail!("a crossfade isn't a number");
         }
         settle_crossfades(&mut project.cuts);
-        let keys = project.cuts.iter_mut().map(|c| &mut c.volume).chain([&mut project.music.keyframes]);
+        let keys = project.cuts.iter_mut().map(|c| &mut c.volume).chain([&mut project.music.keyframes, &mut project.sfx.keyframes]);
         for keys in keys {
             if keys.iter().any(|k| !k.t.is_finite() || !k.volume.is_finite()) {
                 bail!("a volume point isn't a number");
@@ -492,7 +527,7 @@ impl Project {
                 *lut = rel.to_string_lossy().into_owned();
             }
         }
-        for clip in &mut project.music.clips {
+        for clip in project.music.clips.iter_mut().chain(&mut project.sfx.clips) {
             if let Ok(rel) = clip.input.strip_prefix(dir) {
                 clip.input = rel.to_owned();
             }
@@ -508,6 +543,20 @@ impl Project {
     /// Length of the edit in seconds.
     pub fn duration(&self) -> f64 {
         edit_length(&self.cuts)
+    }
+
+    pub fn track(&self, which: SoundTrack) -> &Music {
+        match which {
+            SoundTrack::Music => &self.music,
+            SoundTrack::Sfx => &self.sfx,
+        }
+    }
+
+    pub fn track_mut(&mut self, which: SoundTrack) -> &mut Music {
+        match which {
+            SoundTrack::Music => &mut self.music,
+            SoundTrack::Sfx => &mut self.sfx,
+        }
     }
 }
 
@@ -648,6 +697,32 @@ mod tests {
         assert!(!serde_json::to_string(&Project::default()).unwrap().contains("music"));
         std::fs::write(&path, r#"{"music": {"clips": [{"input": "song.mp3", "at": 0, "in": 9, "out": 9}]}}"#).unwrap();
         assert!(Project::load(&path).is_err());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn sound_effects_are_a_track_of_their_own() {
+        let dir = std::env::temp_dir().join(format!("rosmo360-sfx-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("edit.json");
+        // Sound effects alone are a start, as music is; their files load
+        // relative to the project and their points in time order.
+        let json = r#"{"sfx": {"volume": -6, "clips": [{"input": "sfx/whoosh.wav", "at": 4, "in": 0, "out": 1.5}],
+                       "keyframes": [{"t": 5, "volume": -3}, {"t": 4, "volume": 0}]}}"#;
+        std::fs::write(&path, json).unwrap();
+        let p = Project::load(&path).unwrap();
+        assert!(p.music.is_empty());
+        assert_eq!(p.sfx.clips[0].input, dir.join("sfx/whoosh.wav"));
+        assert_eq!(p.sfx.keyframes.iter().map(|k| k.t).collect::<Vec<_>>(), [4.0, 5.0]);
+        assert_eq!(p.track(SoundTrack::Sfx).end(), 5.5);
+        p.save(&dir.join("again.json")).unwrap();
+        let text = std::fs::read_to_string(dir.join("again.json")).unwrap();
+        assert!(text.contains(r#""input": "sfx/whoosh.wav""#) && !text.contains("music"));
+        assert_eq!(Project::load(&dir.join("again.json")).unwrap(), p);
+        // An older project has no "sfx", and saving it writes none.
+        assert!(!serde_json::to_string(&Project::default()).unwrap().contains("sfx"));
+        std::fs::write(&path, r#"{"sfx": {"clips": [{"input": "a.wav", "at": -1, "in": 0, "out": 1}]}}"#).unwrap();
+        assert!(Project::load(&path).unwrap_err().to_string().contains("sfx clip 1"));
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

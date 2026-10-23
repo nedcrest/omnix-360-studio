@@ -9,18 +9,20 @@
 //! dissolving in over it.
 
 use crate::overlay::{Item, ItemRef, Lane, Track};
-use crate::project::{Cut, Fades, Music, Sound};
+use crate::project::{Cut, Fades, Music, Sound, SoundTrack};
 
 /// The shortest a split or trim may leave a cut, in seconds.
 pub const MIN_CUT: f64 = 0.2;
 
 /// What undo brings back: everything an edit changes.
-type Snapshot = (Vec<Cut>, Music, Sound, Fades, Vec<Lane>, Vec<Lane>);
+type Snapshot = (Vec<Cut>, Music, Music, Sound, Fades, Vec<Lane>, Vec<Lane>);
 
 #[derive(Default)]
 pub struct Edit {
     pub cuts: Vec<Cut>,
     pub music: Music,
+    /// Sound effects, a track like the music's.
+    pub sfx: Music,
     pub sound: Sound,
     pub fades: Fades,
     /// The overlay lanes and the text's; the player shows and edits the
@@ -38,11 +40,26 @@ impl Edit {
         crate::project::edit_length(&self.cuts)
     }
 
-    /// The timeline's length: the video's, or the music's while it runs on
-    /// beyond it (the frame still to fill). The export ends with the video.
+    /// The timeline's length: the video's, or the music's (or sound
+    /// effects') while it runs on beyond it (the frame still to fill). The
+    /// export ends with the video.
     pub fn frame(&self) -> f64 {
         let overlays = self.lanes().flat_map(|l| &l.items).map(Item::ends).fold(0.0, f64::max);
-        self.duration().max(self.music.end()).max(overlays)
+        self.duration().max(self.music.end()).max(self.sfx.end()).max(overlays)
+    }
+
+    pub fn track(&self, which: SoundTrack) -> &Music {
+        match which {
+            SoundTrack::Music => &self.music,
+            SoundTrack::Sfx => &self.sfx,
+        }
+    }
+
+    pub fn track_mut(&mut self, which: SoundTrack) -> &mut Music {
+        match which {
+            SoundTrack::Music => &mut self.music,
+            SoundTrack::Sfx => &mut self.sfx,
+        }
     }
 
     /// Where cut `i` starts on the timeline (the edit's end for `i` past
@@ -78,12 +95,12 @@ impl Edit {
     }
 
     fn snapshot(&self) -> Snapshot {
-        (self.cuts.clone(), self.music.clone(), self.sound, self.fades, self.overlays.clone(), self.texts.clone())
+        (self.cuts.clone(), self.music.clone(), self.sfx.clone(), self.sound, self.fades, self.overlays.clone(), self.texts.clone())
     }
 
-    fn restore(&mut self, (cuts, music, sound, fades, overlays, texts): Snapshot) -> Snapshot {
+    fn restore(&mut self, (cuts, music, sfx, sound, fades, overlays, texts): Snapshot) -> Snapshot {
         let now = self.snapshot();
-        (self.cuts, self.music, self.sound, self.fades, self.overlays, self.texts) = (cuts, music, sound, fades, overlays, texts);
+        (self.cuts, self.music, self.sfx, self.sound, self.fades, self.overlays, self.texts) = (cuts, music, sfx, sound, fades, overlays, texts);
         now
     }
 
@@ -110,13 +127,15 @@ impl Edit {
         true
     }
 
-    /// Starts over with `cuts` and their music, mix and overlays (an opened
-    /// or new project), forgetting undo.
-    pub fn replace(&mut self, cuts: Vec<Cut>, music: Music, sound: Sound, fades: Fades, overlays: Vec<Lane>, texts: Vec<Lane>) {
+    /// Starts over with `cuts` and their music, sound effects, mix and
+    /// overlays (an opened or new project), forgetting undo.
+    #[allow(clippy::too_many_arguments)]
+    pub fn replace(&mut self, cuts: Vec<Cut>, music: Music, sfx: Music, sound: Sound, fades: Fades, overlays: Vec<Lane>, texts: Vec<Lane>) {
         self.overlays = overlays;
         self.texts = texts;
         self.cuts = cuts;
         self.music = music;
+        self.sfx = sfx;
         self.sound = sound;
         self.fades = fades;
         self.undo.clear();

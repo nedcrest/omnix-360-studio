@@ -40,7 +40,17 @@ pub struct Settings {
     pub timeline_scale: f32,
     /// The view-angles strip shows under the transport row.
     pub view_angles: bool,
+    /// The whole interface's size: text, buttons, the timeline (`ui_scale`
+    /// in the app, iced's scale factor).
+    pub ui_scale: f32,
 }
+
+/// The interface's size range and steps (A− / A+ in the top bar), and its
+/// default: a little bigger than iced's own, which read small on the
+/// user's 43" screen (2026-10-24).
+pub const UI_SCALE: std::ops::RangeInclusive<f32> = 0.75..=2.0;
+pub const UI_STEP: f32 = 0.05;
+pub const UI_DEFAULT: f32 = 1.15;
 
 impl Default for Settings {
     fn default() -> Self {
@@ -63,6 +73,7 @@ impl Default for Settings {
             bin_pinned: false,
             timeline_scale: 1.0,
             view_angles: true,
+            ui_scale: UI_DEFAULT,
         }
     }
 }

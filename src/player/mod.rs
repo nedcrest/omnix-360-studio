@@ -183,6 +183,9 @@ pub fn run(inputs: Vec<PathBuf>, launch: Launch) -> Result<()> {
     // opens at once.
     std::thread::spawn(crate::text::families);
     let settings = settings::Settings::load();
+    // The interface's size grows the window with it, or the bars' ends
+    // would be cut off as they were at 1280 px.
+    let ui = settings.ui_scale.clamp(*settings::UI_SCALE.start(), *settings::UI_SCALE.end());
     let opts = Options {
         osv_size: launch.osv_size.or(settings.osv_size),
         hw: launch.hw,
@@ -210,10 +213,11 @@ pub fn run(inputs: Vec<PathBuf>, launch: Launch) -> Result<()> {
     .title(App::title)
     .subscription(App::subscription)
     .theme(|app: &App| app.theme.clone())
+    .scale_factor(|app: &App| app.ui_scale)
     .window(window::Settings {
         // Wide enough for the top bar and the transport row (at 1280 the
         // ends of both were cut off).
-        size: iced::Size::new(1640.0, 900.0),
+        size: iced::Size::new(1640.0 * ui, 900.0 * ui),
         // Closing asks first when the edit has unsaved changes.
         exit_on_close_request: false,
         // Wayland matches the window to its menu entry and icon by this id: in a
@@ -391,6 +395,8 @@ enum Message {
     /// cut) stabilisation and projection, shown and active; off, the bars
     /// hold editing only and the view can't be turned by accident.
     Framing(bool),
+    /// The interface bigger or smaller by this many steps; 0 resets it.
+    UiScale(i32),
     /// A song's waveform, read off the UI thread.
     Waveform(PathBuf, Result<Arc<music::Waveform>, String>),
     /// The waveform of what a cut plays, if it has sound.
@@ -577,6 +583,8 @@ struct App {
     selected_overlay: Option<crate::overlay::ItemRef>,
     /// The «Framing» switch: off (editing) by default, each start.
     framing: bool,
+    /// The interface's size (iced's scale factor), kept in the settings.
+    ui_scale: f32,
     /// The clip selected on a sound track.
     selected_music: Option<(SoundTrack, usize)>,
     /// A sound track's volume point selected, and the cut sound point:
@@ -783,6 +791,7 @@ impl App {
             split: saved.timeline_scale,
             split_kept: saved.timeline_scale,
             angles_shown: saved.view_angles,
+            ui_scale: saved.ui_scale.clamp(*settings::UI_SCALE.start(), *settings::UI_SCALE.end()),
             angle_draft: None,
             modifiers: keyboard::Modifiers::default(),
             scrubbing: None,
@@ -827,6 +836,7 @@ impl App {
             bin_pinned: self.bin.pinned,
             timeline_scale: self.split_kept,
             view_angles: self.angles_shown,
+            ui_scale: self.ui_scale,
         }
     }
 
@@ -2151,6 +2161,15 @@ impl App {
                 self.selected_music = Some((which, i));
                 self.selected = None;
                 return self.load_waveform(&path);
+            }
+            Message::UiScale(steps) => {
+                self.ui_scale = if steps == 0 {
+                    settings::UI_DEFAULT
+                } else {
+                    // Rounded to the step, so repeated clicks land on whole percents.
+                    ((self.ui_scale + steps as f32 * settings::UI_STEP) / settings::UI_STEP).round() * settings::UI_STEP
+                }
+                .clamp(*settings::UI_SCALE.start(), *settings::UI_SCALE.end());
             }
             Message::Framing(on) => {
                 self.framing = on;
@@ -3562,6 +3581,13 @@ impl App {
                 text("The mix as it plays, left and right: peak (faint) and RMS, red past 0 dBFS; the number is the loudest peak since play started, dBFS. It sums the clip sound and music at their levels, as the export mixes them, whatever the speakers are set to."),
                 tooltip::Position::Bottom,
             ),
+            tip(icon_button(TEXT_SMALLER, (self.ui_scale > *settings::UI_SCALE.start() + 1e-3).then_some(Message::UiScale(-1))), text("Make the interface smaller"), tooltip::Position::Bottom),
+            tip(
+                button(text(format!("{:.0}%", self.ui_scale * 100.0)).size(12)).style(button::text).padding([2, 2]).on_press(Message::UiScale(0)),
+                text(format!("Interface size; click for {:.0}%", settings::UI_DEFAULT * 100.0)),
+                tooltip::Position::Bottom,
+            ),
+            tip(icon_button(TEXT_BIGGER, (self.ui_scale < *settings::UI_SCALE.end() - 1e-3).then_some(Message::UiScale(1))), text("Make the interface bigger"), tooltip::Position::Bottom),
             tip(
                 icon_button(if self.fullscreen { FULLSCREEN_EXIT } else { FULLSCREEN }, Some(Message::Fullscreen)),
                 text(if self.fullscreen { "Leave fullscreen (F)" } else { "Fullscreen (F)" }),
@@ -3860,6 +3886,9 @@ const KEY_DELETE: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0
 /// File icons: a page with a plus (new project), a film strip with a plus
 /// (open or add clips), a note with a plus (add music), an open folder (open
 /// a project), a diskette (save) and one with a pencil (save as).
+/// A letter A with a minus or a plus: the interface's size.
+const TEXT_SMALLER: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 19l5-14 5 14M5 14h6M16 12h6"/></svg>"#;
+const TEXT_BIGGER: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 19l5-14 5 14M5 14h6M16 12h6M19 9v6"/></svg>"#;
 /// A speaker with a spark and a plus: add a sound effect.
 const ADD_SFX: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9v6h4l5 4V5L7 9z"/><path d="M15 9l2-2M16 12h2"/><path d="M19 15v6M16 18h6"/></svg>"#;
 const ADD_MUSIC: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l10-2v9"/><circle cx="6" cy="18" r="3"/><path d="M19 15v6M16 18h6"/></svg>"#;

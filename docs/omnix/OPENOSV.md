@@ -95,4 +95,3 @@ The exceptions are 17 (easing, useful for every keyframe now) and 18
 (bundled LUT, small).
 
 The stitch items (20–22) are upstream's domain. A plain-language write-up of what we would offer, and an English draft for the author, are in `SEAM-PROPOSAL.md` (not sent).
-the seam work in CLAUDE.md. Whether to offer them upstream as issues is the

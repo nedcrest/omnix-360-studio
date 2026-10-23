@@ -36,6 +36,9 @@ const PICK: f32 = 7.0;
 const BAR: f32 = 8.0;
 /// The cut row's height at scale 1, and the gap between cut blocks.
 const CUTS: f32 = 40.0;
+/// The clips' own sound under them at scale 1: each cut's waveform and its
+/// volume line.
+const CLIP_SOUND: f32 = 30.0;
 const GAP: f32 = 2.0;
 /// Under a track, a row of its effect keyframes and one of its view (a
 /// cut's) or motion (an overlay's) keyframes.
@@ -59,6 +62,8 @@ pub const SCALES: std::ops::RangeInclusive<f32> = 0.75..=3.0;
 #[derive(Clone, Copy, Debug)]
 pub struct Rows {
     cuts: f32,
+    /// The clip sound lane's height; it starts where the cuts end.
+    clip_sound: f32,
     effects_top: f32,
     keys_top: f32,
     seek_top: f32,
@@ -73,10 +78,12 @@ impl Rows {
     pub fn new(scale: f32) -> Self {
         let scale = scale.clamp(*SCALES.start(), *SCALES.end());
         let (cuts, music) = ((CUTS * scale).round(), (MUSIC * scale).round());
-        let seek_top = cuts + EFFECTS + KEYS;
+        let clip_sound = (CLIP_SOUND * scale).round();
+        let effects_top = cuts + clip_sound;
+        let seek_top = effects_top + EFFECTS + KEYS;
         let sounds_top = seek_top + SEEK;
         let height = sounds_top + SOUND_LANES as f32 * music + SCROLL;
-        Rows { cuts, effects_top: cuts, keys_top: cuts + EFFECTS, seek_top, music, sounds_top, height, overlay: (OVERLAY * scale).round() }
+        Rows { cuts, clip_sound, effects_top, keys_top: effects_top + EFFECTS, seek_top, music, sounds_top, height, overlay: (OVERLAY * scale).round() }
     }
 
     /// Where sound lane `i` starts.
@@ -95,8 +102,14 @@ impl Rows {
         (y >= self.sounds_top && i < SOUND_LANES as f32).then_some(i as usize)
     }
 
+    /// Where the cuts' volume lines run: over the clip sound lane.
     fn cut_lane(self) -> Lane {
-        (4.0, self.cuts - 8.0)
+        (self.cuts + 3.0, self.clip_sound - 6.0)
+    }
+
+    /// Whether `y` is on the clip sound lane.
+    fn on_clip_sound(self, y: f32) -> bool {
+        (self.cuts..self.effects_top).contains(&y)
     }
 }
 
@@ -104,7 +117,7 @@ impl Rows {
 const SOUND_LANES: usize = SoundTrack::ALL.len();
 /// The lanes' heights at scale 1, which a drag of the divider shares out:
 /// the cuts, the sound lanes and the two overlay lanes (text and pictures).
-pub const SCALABLE: f32 = CUTS + SOUND_LANES as f32 * MUSIC + 2.0 * OVERLAY;
+pub const SCALABLE: f32 = CUTS + CLIP_SOUND + SOUND_LANES as f32 * MUSIC + 2.0 * OVERLAY;
 /// A press on a cut that moves less than this is a click, not a drag.
 const DRAG_FROM: f32 = 4.0;
 /// A music edge dragged this close to a cut boundary, the playhead or
@@ -117,7 +130,7 @@ const VOLUME_BOTTOM: f64 = crate::project::OFF_DB;
 const POINT: f32 = 4.0;
 const EFFECT_MARK: iced::Color = iced::Color::from_rgb(0.78, 0.55, 1.0);
 /// Where a volume line runs: its top and height. A sound track's over its
-/// lane, a cut's sound over its block.
+/// lane, a cut's over the clip sound lane under it.
 type Lane = (f32, f32);
 const MUSIC_LINE: iced::Color = iced::Color::from_rgb(1.0, 0.78, 0.25);
 /// The sound effects' clips; the music's are the theme's green. From the
@@ -161,6 +174,9 @@ pub struct Block {
     pub thumbs: Vec<(f64, Handle)>,
     /// Its sound's volume points, clip time (some may lie outside the cut).
     pub sound: Vec<crate::project::VolumeKey>,
+    /// The waveform of the sound it plays (its cleaned voice, else its
+    /// clip's), by clip time, once read; none for a silent clip.
+    pub wave: Option<Arc<music::Waveform>>,
     /// How long it overlaps the cut before, dissolving in.
     pub crossfade: f64,
     /// Its effect keyframes' clip times.
@@ -551,8 +567,47 @@ impl Timeline {
         draw_line(frame, b, self.rows.sound_lane(li), MUSIC_LINE, ends, &points, selected);
     }
 
-    /// Each cut's sound line over its block, for cuts with points: the
-    /// points within the cut, and the line from its in to its out point.
+    /// The clip sound lane: under each cut, the waveform of what it plays,
+    /// and the lane's name.
+    fn draw_clip_sound(&self, frame: &mut Frame, theme: &Theme, b: Rectangle) {
+        let palette = theme.extended_palette();
+        let (top, h) = (self.rows.cuts + 1.0, self.rows.clip_sound - 2.0);
+        let lane = Path::rounded_rectangle(Point::new(self.x(0.0, b), top), Size::new((self.x(self.video, b) - self.x(0.0, b)).max(0.0), h), 3.0.into());
+        frame.fill(&lane, palette.background.weak.color.scale_alpha(0.35));
+        for (i, c) in self.blocks.iter().enumerate() {
+            let (l, r) = self.block_x(c, b);
+            if r < 0.0 || l > b.width {
+                continue;
+            }
+            let block = Path::rounded_rectangle(Point::new(l, top), Size::new((r - l).max(1.0), h), 3.0.into());
+            frame.fill(&block, SOUND_LINE.scale_alpha(if Some(i) == self.selected { 0.35 } else { 0.18 }));
+            let Some(w) = &c.wave else { continue };
+            let per_px = c.len / (r - l).max(1.0) as f64;
+            let bars = Path::new(|p| {
+                let mut x = l.max(0.0);
+                while x < r.min(b.width) {
+                    let (t0, t1) = (c.start + (x - l) as f64 * per_px, c.start + (x + 2.0 - l) as f64 * per_px);
+                    let (i0, i1) = ((t0 / music::WAVE_STEP) as usize, ((t1 / music::WAVE_STEP) as usize).max((t0 / music::WAVE_STEP) as usize + 1));
+                    let peak = w.peaks.get(i0..i1.min(w.peaks.len())).map_or(0.0, |s| s.iter().fold(0.0f32, |a, &v| a.max(v)));
+                    let bh = (peak * (h - 4.0)).max(1.0);
+                    p.rectangle(Point::new(x, top + h / 2.0 - bh / 2.0), Size::new(1.5, bh));
+                    x += 2.0;
+                }
+            });
+            frame.fill(&bars, palette.background.base.text.scale_alpha(0.6));
+        }
+        // Through a crossfade the two cuts' sounds overlap, as their
+        // pictures do.
+        for c in self.blocks.iter().filter(|c| c.crossfade > 0.0) {
+            let (l, r) = (self.x(c.from, b), self.x(c.from + c.crossfade, b));
+            frame.fill(&Path::rectangle(Point::new(l, top), Size::new(r - l, h)), iced::Color::from_rgba(0.0, 0.0, 0.0, 0.35));
+        }
+        self.draw_sound(frame, b);
+        lane_tag(frame, "Clip sound", SOUND_LINE, top + h / 2.0);
+    }
+
+    /// Each cut's sound line on the clip sound lane, for cuts with points:
+    /// the points within the cut, and the line from its in to its out point.
     fn draw_sound(&self, frame: &mut Frame, b: Rectangle) {
         for (ci, c) in self.blocks.iter().enumerate() {
             if c.sound.is_empty() {
@@ -979,7 +1034,7 @@ impl canvas::Program<Message> for Marks {
             // Right-click a cut or a song: what file it is.
             Mouse(mouse::Event::ButtonPressed(mouse::Button::Right)) => {
                 let p = cursor.position_in(bounds)?;
-                let of = if p.y < self.rows.cuts {
+                let of = if p.y < self.rows.effects_top {
                     super::info::Of::Cut(self.block_at(p.x, bounds)?)
                 } else if let Some(lane) = self.rows.sound_at_y(p.y) {
                     super::info::Of::Music(self.sounds[lane].which, self.music_at(lane, p.x, bounds)?)
@@ -1004,16 +1059,19 @@ impl canvas::Program<Message> for Marks {
                     // A jump there, and a drag retimes it.
                     *drag = Drag::Effect { cut, key };
                     Message::Effect(super::effects::EffectMsg::Jump(cut, t))
-                } else if p.y < self.rows.cuts && let Some((cut, key)) = self.sound_at(p, bounds) {
+                } else if self.rows.on_clip_sound(p.y) && let Some((cut, key)) = self.sound_at(p, bounds) {
                     *drag = Drag::Sound { cut, key };
                     Message::SoundKeySelect(cut, key)
-                } else if p.y < self.rows.cuts && state.ctrl {
+                } else if self.rows.on_clip_sound(p.y) && state.ctrl {
                     // A sound point on the cut where clicked, dragged on.
                     let cut = self.block_at(p.x, bounds)?;
                     let c = &self.blocks[cut];
                     let t = c.start + self.t(p.x, bounds) - c.from;
                     *drag = Drag::Sound { cut, key: c.sound.partition_point(|k| k.t <= t) };
                     Message::SoundKeyAdd(cut, t, Timeline::volume_db(self.rows.cut_lane(), p.y))
+                } else if self.rows.on_clip_sound(p.y) {
+                    // Elsewhere on the lane: that cut, as a click on it.
+                    Message::Select(self.block_at(p.x, bounds)?)
                 } else if p.y < self.rows.cuts {
                     let per_px = self.span / Timeline::width(bounds) as f64;
                     let cut = match self.edge_hit(p.x, bounds) {
@@ -1206,7 +1264,7 @@ impl canvas::Program<Message> for Marks {
                 }
             }
         }
-        self.draw_sound(&mut frame, bounds);
+        self.draw_clip_sound(&mut frame, theme, bounds);
         frame.fill(&Path::rectangle(Point::new(at - 1.0, 0.0), Size::new(2.0, self.rows.seek_top)), palette.primary.strong.color);
         frame.fill(&Path::rectangle(Point::new(at - 1.0, self.rows.sounds_top), Size::new(2.0, SOUND_LANES as f32 * self.rows.music)), palette.primary.strong.color);
         frame.fill(&Path::circle(Point::new(at, mid), BAR), palette.primary.strong.color);
@@ -1242,16 +1300,21 @@ impl canvas::Program<Message> for Marks {
                         None => mouse::Interaction::default(),
                     };
                 }
+                if self.rows.on_clip_sound(p.y) {
+                    return if self.sound_at(p, bounds).is_some() {
+                        mouse::Interaction::Grab
+                    } else if state.ctrl && self.block_at(p.x, bounds).is_some() {
+                        mouse::Interaction::Crosshair
+                    } else if self.block_at(p.x, bounds).is_some() {
+                        mouse::Interaction::Pointer
+                    } else {
+                        mouse::Interaction::default()
+                    };
+                }
                 if p.y >= self.rows.cuts {
                     // Marks in either row drag to another time.
                     let on = if p.y < self.rows.keys_top { self.effect_at(p, bounds).is_some() } else { p.y < self.rows.seek_top && self.key_at(p.x, bounds).is_some() };
                     return if on { mouse::Interaction::Grab } else { mouse::Interaction::Pointer };
-                }
-                if self.sound_at(p, bounds).is_some() {
-                    return mouse::Interaction::Grab;
-                }
-                if state.ctrl && self.block_at(p.x, bounds).is_some() {
-                    return mouse::Interaction::Crosshair;
                 }
                 if self.edge_hit(p.x, bounds).is_some() {
                     return mouse::Interaction::ResizingHorizontally;

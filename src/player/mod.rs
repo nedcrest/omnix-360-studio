@@ -88,6 +88,13 @@ fn heard_audio(cut: &Cut) -> Option<PathBuf> {
     cut.audio.clone().filter(|a| a.exists())
 }
 
+/// The file to draw cut `cut`'s waveform from: what it plays (its cleaned
+/// voice, else its clip), the clip's `.LRF` beside it standing in for the
+/// clip, as it holds the same sound in a sixteenth of the file.
+fn cut_wave_file(cut: &Cut) -> PathBuf {
+    heard_audio(cut).or_else(|| ffmpeg::proxy(&cut.input)).unwrap_or_else(|| cut.input.clone())
+}
+
 impl fmt::Debug for Media {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Media").field("input", &self.input).finish_non_exhaustive()
@@ -381,6 +388,8 @@ enum Message {
     MusicPicked(Option<PathBuf>),
     /// A song's waveform, read off the UI thread.
     Waveform(PathBuf, Result<Arc<music::Waveform>, String>),
+    /// The waveform of what a cut plays, if it has sound.
+    CutWave(PathBuf, Option<Arc<music::Waveform>>),
     /// An overlay's picture ready (by `Item::key`), and the font its text
     /// missed.
     OverlayPicture(String, Result<(Arc<crate::overlay::Picture>, Option<String>), String>),
@@ -541,8 +550,13 @@ struct App {
     library: Vec<Media>,
     /// Each clip's timeline thumbnails by clip time, as they arrive.
     thumbs: std::collections::HashMap<PathBuf, Vec<(f64, image::Handle)>>,
-    /// Songs' waveforms, and the music clip selected on its lane.
+    /// Waveforms of sound clips and of what cuts play, by file.
     waveforms: std::collections::HashMap<PathBuf, Arc<music::Waveform>>,
+    /// The cuts' sound files whose waveforms were asked for: each once, a
+    /// silent one too (pictures, clips without sound).
+    cut_waves_asked: std::collections::HashSet<PathBuf>,
+    /// How many of them are being read now.
+    cut_waves_reading: usize,
     /// The mix's level as it plays.
     meter: meter::Meter,
     /// The overlays' pictures, scaled for the view: `None` while loading.
@@ -718,6 +732,8 @@ impl App {
             selected_overlay: None,
             selected_music: None,
             selected_volume: None,
+            cut_waves_asked: Default::default(),
+            cut_waves_reading: 0,
             selected_sound: None,
             music: Default::default(),
             partner: None,
@@ -829,7 +845,7 @@ impl App {
             self.auto_key(before);
         }
         self.keep_hand_view(before);
-        let task = Task::batch([task, self.load_overlay_pictures()]);
+        let task = Task::batch([task, self.load_overlay_pictures(), self.load_cut_waves()]);
         self.settle_look();
         self.settle_text();
         self.follow_crossfade();
@@ -1023,6 +1039,31 @@ impl App {
             }),
             move |r| Message::Waveform(path.clone(), r),
         )
+    }
+
+    /// Reads the waveforms of what the cuts play, each file once, two at a
+    /// time (a project of 30 clips on a spinning drive would otherwise read
+    /// them all at once): a cut's clip sound lane shows it once read. The
+    /// first read of a long clip takes a few seconds (3 s for an 8-minute
+    /// 3.8 GB one), later opens come from the cache. A file without sound
+    /// gives none, quietly: a picture's cut is simply silent.
+    fn load_cut_waves(&mut self) -> Task<Message> {
+        const AT_ONCE: usize = 2;
+        // Each file once, however many cuts use it.
+        let mut seen = std::collections::HashSet::new();
+        let mut wanted: Vec<PathBuf> = self.edit.cuts.iter().map(cut_wave_file).filter(|p| !self.waveforms.contains_key(p) && !self.cut_waves_asked.contains(p) && seen.insert(p.clone())).collect();
+        wanted.truncate(AT_ONCE.saturating_sub(self.cut_waves_reading));
+        self.cut_waves_reading += wanted.len();
+        Task::batch(wanted.into_iter().map(|path| {
+            self.cut_waves_asked.insert(path.clone());
+            Task::perform(
+                blocking({
+                    let path = path.clone();
+                    move || music::Waveform::read(&path).map(Arc::new).ok()
+                }),
+                move |wave| Message::CutWave(path.clone(), wave),
+            )
+        }))
     }
 
     /// What the speakers get: nothing while muted, so unmuting restores
@@ -2115,6 +2156,12 @@ impl App {
                 self.waveforms.insert(path, wave);
             }
             Message::Waveform(path, Err(e)) => self.error = Some(format!("Can't read {}: {e}", path.display())),
+            Message::CutWave(path, wave) => {
+                self.cut_waves_reading = self.cut_waves_reading.saturating_sub(1);
+                if let Some(wave) = wave {
+                    self.waveforms.insert(path, wave);
+                }
+            }
             Message::SelectMusic(which, i) => {
                 self.selected_music = Some((which, i));
                 self.selected_overlay = None;
@@ -3530,7 +3577,8 @@ impl App {
                     let to = (all.partition_point(|(t, _)| *t <= c.end) + 1).min(all.len());
                     all[from..to].to_vec()
                 });
-                timeline::Block { labels: cut_labels(c, self.opts.stabilize), from, len: c.end - c.start, start: c.start, keys, sound: c.volume.clone(), thumbs, crossfade: c.crossfade, effects: c.effects.iter().map(|k| k.t).collect() }
+                let wave = self.waveforms.get(&cut_wave_file(c)).cloned();
+                timeline::Block { labels: cut_labels(c, self.opts.stabilize), from, len: c.end - c.start, start: c.start, keys, sound: c.volume.clone(), wave, thumbs, crossfade: c.crossfade, effects: c.effects.iter().map(|k| k.t).collect() }
             })
             .collect();
         let (timeline_start, timeline_span) = self.timeline_window();

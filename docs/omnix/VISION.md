@@ -67,7 +67,9 @@ Detail: `CONTEXT.md`.
 
 ## Where it goes
 
-The order of work is six milestones, kept current in `ROADMAP.md` (cards)
+Milestone 0, **ШІ-монтаж**, is the user's main ask: an AI edits from the
+contact sheet's brief by written rules (`AUTO-EDIT.md`). The rest is six
+milestones, kept current in `ROADMAP.md` (cards)
 and `EDITOR-GAPS.md` (detail):
 
 1. **Звук для Косу.** Sound lanes, per-clip loudness, auto-duck under speech,

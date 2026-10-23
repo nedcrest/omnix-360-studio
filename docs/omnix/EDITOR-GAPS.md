@@ -329,6 +329,22 @@ A thin strip of the whole edit above the lanes while zoomed in (Resolve's
 dual timeline, cheaply), and a centred playhead as an option (CapCut,
 iMovie). Both are nice to have, not urgent.
 
+### 28. AI auto-edit from the contact sheet — the user's main ask (2026-10-23)
+
+"The main thing I'd like": an API, a skill and a snippet so an AI (Claude or
+another) can build the edit from the contact sheet's notes and marks as its
+brief, by rules written down properly. Realistic for a good first edit that
+the user polishes. The brief already exists (notes, roles, day stories), and
+so do the tools (`check`, `preview`, `export/omnix.py`). Design and steps
+are in `AUTO-EDIT.md`:
+- 28a brief export (footage-agent);
+- 28b skill v0 with the rules, the snippet and the loop, tried on Kos 22.08;
+- 28c Omnix `schema`, `describe` and reloading the project when its file
+  changes;
+- 28d brief fields in the contact sheet;
+- 28e transcripts;
+- 28f the review loop.
+
 ## Format rule for all of these
 
 New fields only, each `#[serde(default, skip_serializing_if = …)]`, so every
@@ -342,6 +358,10 @@ The user throws ideas in as they come; they are sorted here and regrouped
 whenever a better grouping shows. `ROADMAP.md` shows the same as cards (field
 `віха`) with each milestone's progress.
 
+0. **ШІ-монтаж** (AI auto-edit, gap 28; the user's main ask, 2026-10-23):
+   28a brief → 28b skill v0 on Kos 22.08 → 28c schema/describe/reload →
+   28d brief fields → 28e transcripts (with 16) → 28f review loop. v0 needs
+   only what exists; it grows with each milestone below.
 1. **Звук для Косу** (sound): 3a cleaned voice (in test) → 3 + 4A sound
    lanes, designed together → 11 per-clip −16 LUFS → auto-duck (in 3) →
    12 true-peak limit. First, because the Kos film's worst problem is sound,

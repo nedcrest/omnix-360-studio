@@ -165,6 +165,14 @@ group them so they move together). Needs a selection set instead of one
 index, and a choice of what "join" means: merging neighbours from the same
 clip is clear; a group of different clips is a format change (a group id).
 
+### 9. Timeline ease and accessibility — research done (user, 2026-10-23)
+
+The user asked for "maximum accessibility and convenience" after looking at
+good editors. The research, the measured weak spots and an order of
+eight packs are in `TIMELINE-UX.md`. Item 7 (selection frame) is now part of
+its pack 1, and the bin's skimmer is shared with the timeline's. Keys that
+clash with the 360 view (J/K/L, ↑/↓, E/Q, S) wait for the user's choice.
+
 ## Format rule for all of these
 
 New fields only, each `#[serde(default, skip_serializing_if = …)]`, so every
@@ -175,5 +183,6 @@ we only run our own build.
 ## Proposed order
 
 Taken by the user: 2 first (v1 done). Then 1 → 3 → 5 → 4A → 7 → 8; 6 any
-time; 4B when the rest is in use. 1 is a few hours and helps at
+time; 4B when the rest is in use. Where 9's packs go in this order is the
+user's call (proposal: pack 1, which includes 7, right after 3). 1 is a few hours and helps at
 once; 2 is the user's main ask and is where 3 and 5 plug in.

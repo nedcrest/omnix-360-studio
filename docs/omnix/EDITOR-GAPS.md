@@ -271,6 +271,49 @@ To settle when designing it:
 - **Cost.** Key handling in `mod.rs` splits by mode, which makes merges from
   upstream harder there.
 
+**Layout review (user, 2026-10-23: "much of the buttons is aimed at 360;
+worth redoing? what would you change now, putting the 360 part away until
+we get to it?").** What shows today, read from `view()` in `mod.rs`:
+- **Top bar:** ⚙, New, +Clip, +Music, +Overlay, +Text, Open, Save, Save as,
+  Aspect / Resolution / Export…; then for a 360 cut Stabilisation,
+  Projection, Source, Full res; meter, fullscreen, the proxy and GPU status
+  icons. File and Add buttons are interleaved.
+- **Transport row:** Play, Save view PNG, Save sphere PNG, time; K, delete
+  key, Ease, Follow, colour-track picker, FOV, Reset view; Effects,
+  Crossfade, Split, Delete, Undo, Redo; four zoom controls; Audio. About a
+  third of it is framing.
+- **Angles strip** under it (on by default), and the timeline's **View**
+  key row.
+
+Proposal: **don't comment the code out.** That would be dead code against
+upstream's rules, and would make every merge from upstream conflict.
+**Hide it behind the mode instead:** gap 10 as the way to put it away,
+one condition per group.
+- **Edit mode (default):**
+  - Top bar, grouped: ⚙ | New, Open, Save, Save as | +Clip, +Music,
+    +Sound effect, +Overlay, +Text (+Blank, gap 32) | Aspect, Export… |
+    meter, fullscreen.
+  - Transport row: Play, time | Split, Delete, Crossfade | Undo, Redo |
+    Effects, Audio | the «Framing» switch | timeline zoom.
+  - "Save frame as PNG" stays: a still for a thumbnail is useful in any
+    edit.
+  - The timeline loses the View key row (20 px more for the lanes).
+  - The 360 keys are off: arrows, Q/E, P, S, 0.
+- **Framing mode** adds, for the current cut:
+  - K, delete key, Ease, FOV, Reset view, and the angles strip;
+  - the View key row;
+  - for a 360 cut also Follow, the colour track, Save sphere, and
+    Stabilisation, Projection, Source and Full res in the top bar;
+  - the GPU and proxy status icons (they matter for 360 decoding).
+- Keyframes already in a project keep playing and exporting in Edit mode.
+  Only editing them needs Framing mode. Dragging the picture in Edit mode
+  does nothing.
+- Open question for the user: should the switch also light up for ordinary
+  videos and pictures? A push-in over a photo (Ken Burns) is the same
+  pan/zoom keyframes; proposal: yes, with the 360-only parts hidden.
+- Separate, later: the window title and the credit line say «rOsmo360».
+  Branding the fork as Omnix is its own small decision.
+
 ### 11. Bring a speech clip up to −16 LUFS — small-medium (Kos TODO, 2026-10-23)
 
 From `den1-TODO.md` (measured on the Kos day-1 master, made in Kdenlive):

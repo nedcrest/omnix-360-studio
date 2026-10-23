@@ -151,15 +151,19 @@ Omnix is a 360 viewer as well, and its keys are taken by looking around:
 | N | snapping on/off | free |
 | Alt+[ / Alt+] | trim to playhead | free |
 
-**Proposal.** Free keys go straight in: N, Alt+[ and Alt+], Alt+← and Alt+→.
-For the conflicts, the user decides. One option is that the keys act on the
-timeline when the pointer is over it and on the view when it is over the
-picture.
+**Decided direction (user, 2026-10-23): two modes.** Edit is the default,
+and its keys are the standard editing ones. Selecting a 360 clip lights up
+a switch to 360 framing, where today's view keys apply. Gap 10 in
+`EDITOR-GAPS.md` holds the details to settle. Free keys (N, Alt+[ / Alt+],
+Alt+← / Alt+→) can go in before it.
 
 ## Proposed order
 
-The first three packs are small, need no project format change, and are each
-checked by the user before the next starts.
+All of it is one milestone, «Зручний таймлайн», in the user's own order
+beside the other work (user, 2026-10-23). The first three packs are small,
+need no project format change, and are each checked by the user before the
+next starts. The two modes (gap 10) come before any pack that adds
+clashing keys (skimmer's S, J/K/L, ↑/↓).
 
 1. **Targets and frame.** 24 px hit zones, thick selection frame (gap 7),
    handles only on the selected clip, live number while dragging.

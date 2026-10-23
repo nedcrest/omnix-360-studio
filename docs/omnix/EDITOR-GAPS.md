@@ -173,6 +173,36 @@ eight packs are in `TIMELINE-UX.md`. Item 7 (selection frame) is now part of
 its pack 1, and the bin's skimmer is shared with the timeline's. Keys that
 clash with the 360 view (J/K/L, ↑/↓, E/Q, S) wait for the user's choice.
 
+### 10. Two modes: Edit and 360 framing — idea (user, 2026-10-23)
+
+The user's answer to the key clashes in `TIMELINE-UX.md`: Omnix is a video
+editor first. By default it is in **Edit** mode, where keys and the mouse
+edit the timeline. The timeline holds MP4s and raw Osmo 360 clips alike.
+Selecting a 360 clip lights up a switch (a slider-style toggle) to **360
+framing** mode, which has today's tools: looking around, view keyframes,
+stabilisation, projection, follow and colour track.
+
+Why it is right: every clash goes away without chords (J/K/L, ↑/↓, E/Q, S
+mean editing in one mode and the view in the other). The editing screen
+loses the 360-only controls. A stray drag can no longer reframe a cut,
+which matters with Auto keyframe on.
+
+To settle when designing it:
+- **What Edit mode shows of a 360 cut.** Its keyframed view, played as
+  exported. Does dragging the picture do nothing, or temporarily look
+  around without keying?
+- **Ordinary videos.** They have pan/zoom framing too (`view::Crop`). Should
+  the switch also light up for them, as «Кадрування»? Proposal: yes, with the
+  360-only parts hidden.
+- **Leaving the mode.** Esc, the switch, or selecting a non-360 cut. Moving to
+  another 360 cut keeps the mode.
+- **Showing the mode.** A coloured frame around the viewer plus the word
+  "360" in the switch, never colour alone (WCAG 1.4.1).
+- **Where 360-only controls go.** Stab/Projection pickers, the angles strip
+  and the View keyframe row show only in 360 mode.
+- **Cost.** Key handling in `mod.rs` splits by mode, which makes merges from
+  upstream harder there.
+
 ## Format rule for all of these
 
 New fields only, each `#[serde(default, skip_serializing_if = …)]`, so every

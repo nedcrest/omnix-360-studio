@@ -30,6 +30,7 @@ nothing be lost after a forced compact.
 ### Card title, Ukrainian, plain words
 - статус: робимо | чекає перевірки             ← only in Зараз
 - де: Omnix, footage-agent                     ← comma-separated
+- віха: Зручний таймлайн                       ← milestone: groups cards; the page shows its progress
 - з: YYYY-MM-DD                                ← started (Зараз)
 - коли: YYYY-MM-DD                             ← finished (Зроблено)
 - коміт: abc1234, def5678

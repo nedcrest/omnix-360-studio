@@ -41,6 +41,11 @@ h2 u{text-decoration:none;font-weight:400}
 .chip.st{border-color:currentColor}
 .chip.st.doing{color:var(--accent)} .chip.st.waiting{color:var(--wait)}
 .chip.code{font-family:ui-monospace,Menlo,monospace}
+.chip.mile{color:var(--accent);border-color:currentColor}
+.miles{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px}
+.mile{border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:.85rem}
+.mile b{font-weight:600}.mile .bar{height:4px;background:var(--line);border-radius:2px;margin-top:5px;overflow:hidden}
+.mile .bar i{display:block;height:100%;background:var(--accent)}
 .empty{color:var(--muted);font-size:.85rem;font-style:italic}
 /* Зроблене — стрічкою за датами, свіже вгорі. */
 .done{margin:30px 0 0;display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:24px}
@@ -63,6 +68,7 @@ h2 u{text-decoration:none;font-weight:400}
   <span class="live" id="live"><i></i><span id="when">з'єднуюсь…</span></span></header>
 <p class="sub">Оновлюється сама, щойно змінюється <code>docs/omnix/ROADMAP.md</code>.
 Свіжі зміни на мить підсвічуються.</p>
+<div class="miles" id="miles"></div>
 <div id="wait"></div>
 <div class="board" id="board"></div>
 <div class="done"><div><h2>Зроблено</h2><div class="tl" id="done"></div></div>
@@ -73,7 +79,7 @@ h2 u{text-decoration:none;font-weight:400}
 /* Формат ROADMAP.md (правила — .claude/skills/roadmap/SKILL.md):
    ## Колонка            → Зараз | Далі | Потім | Ідеї | Зроблено
    ### Назва картки
-   - ключ: значення     → статус, де, з, коли, коміт, пункт
+   - ключ: значення     → статус, де, віха, з, коли, коміт, пункт
    (порожній рядок)
    Вільний текст        → опис картки                                   */
 var COLS = ['Зараз', 'Далі', 'Потім', 'Ідеї'];
@@ -122,6 +128,7 @@ function cardEl(c, col) {
   var meta = el('div', 'meta'), st = c.meta['статус'];
   if (st) meta.appendChild(chip(st, 'st ' + (st === 'чекає перевірки' ? 'waiting' : 'doing')));
   if (c.meta['де']) c.meta['де'].split(',').forEach(function (w) { meta.appendChild(chip(w.trim())); });
+  if (c.meta['віха']) meta.appendChild(chip('◆ ' + c.meta['віха'], 'mile'));
   if (c.meta['пункт']) meta.appendChild(chip('пункт ' + c.meta['пункт']));
   if (c.meta['коміт']) meta.appendChild(chip(c.meta['коміт'], 'code'));
   if (meta.childNodes.length) d.appendChild(meta);
@@ -130,8 +137,29 @@ function cardEl(c, col) {
   return d;
 }
 
+// Віха (milestone) — група карток з однією метою. Смужка: скільки її карток
+// уже в «Зроблено».
+function miles(cols) {
+  var m = {}, order = [];
+  Object.keys(cols).forEach(function (k) {
+    cols[k].forEach(function (c) {
+      var v = c.meta['віха']; if (!v) return;
+      if (!m[v]) { m[v] = { done: 0, all: 0 }; order.push(v); }
+      m[v].all++; if (k === 'Зроблено') m[v].done++;
+    });
+  });
+  var box = document.getElementById('miles'); box.textContent = '';
+  order.forEach(function (v) {
+    var d = el('div', 'mile'); d.appendChild(el('b', null, '◆ ' + v));
+    d.appendChild(document.createTextNode(' · ' + m[v].done + ' з ' + m[v].all));
+    var bar = el('div', 'bar'), i = el('i'); i.style.width = (100 * m[v].done / m[v].all) + '%';
+    bar.appendChild(i); d.appendChild(bar); box.appendChild(d);
+  });
+}
+
 function render(md) {
   var cols = parse(md), now = {};
+  miles(cols);
   Object.keys(cols).forEach(function (k) { cols[k].forEach(function (c) { now[c.key] = c.sig; }); });
 
   // Чекає перевірки: зі «Зараз», окремою смугою.

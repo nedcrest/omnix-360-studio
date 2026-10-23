@@ -94,6 +94,5 @@ the user's camera comes around 2027-02, so these come after milestones 1–6.
 The exceptions are 17 (easing, useful for every keyframe now) and 18
 (bundled LUT, small).
 
-The stitch items (20–22) are upstream's domain: rOsmo360's author measured
+The stitch items (20–22) are upstream's domain. A plain-language write-up of what we would offer, and an English draft for the author, are in `SEAM-PROPOSAL.md` (not sent).
 the seam work in CLAUDE.md. Whether to offer them upstream as issues is the
-user's call; nothing has been sent.

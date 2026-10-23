@@ -283,6 +283,26 @@ cut level (format change) or as volume points (none). Measure both on Kos.
 `speechnorm`, the TODO's extra lift for a far-away voice, is the
 footage-agent cleaner's job, not Omnix's.
 
+**Measured on Kos 22.08 DJI_0001 (2026-10-23)**, after the user said it
+sounds "a bit quiet" at 0 dB:
+
+| File | Integrated loudness | LRA | True peak |
+|---|---|---|---|
+| clip | −30.7 LUFS | 13.7 LU | −6.8 dBFS |
+| cleaned voice `dnn6` | −32.2 LUFS | 16.0 LU | −10.5 dBFS |
+
+So the clip is ~15 dB under −16 LUFS, and cleaning made it 1.5 dB quieter
+still. The slider's 0 dB means "as recorded", not "loud enough". Findings
+for the build:
+- **The level sliders and volume points stop at +6 dB**, which is not
+  enough for footage like this. Allow more, e.g. +24 dB, for the gain.
+- **A gain this big needs a limiter.** +15 dB on a −6.8 dBFS peak goes 8 dB
+  over full scale. Gain and 12 belong together: do 11 and 12 as one step.
+- **The LRA (13–16 LU) is wide for speech.** Quiet words stay quiet next to
+  loud ones even at the right average. An optional gentle compressor (or
+  `speechnorm` in footage-agent's cleaner) would even it out. Decide after
+  hearing the plain gain plus limiter.
+
 ### 12. True-peak limit on export — small (Kos TODO, 2026-10-23)
 
 The export's mix ends in `amix` followed only by the edit's fades (`ffmpeg.rs` ~1027). Add a limiter for

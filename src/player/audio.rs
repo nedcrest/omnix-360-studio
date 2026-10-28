@@ -25,6 +25,11 @@ use std::time::{Duration, Instant};
 /// How much decoded audio to keep ahead of the device.
 const BUFFER_SECONDS: f64 = 0.5;
 
+/// The player's limiter (`build`): the export's limit (`ffmpeg::LIMITER`,
+/// −1.2 dBFS) and its release, seconds.
+const LIMIT: f32 = 0.87;
+const RELEASE: f64 = 0.05;
+
 /// The speakers' volume (f32 bits), on top of every stream's own.
 static LISTENING: AtomicU32 = AtomicU32::new(0x3f80_0000);
 
@@ -224,6 +229,12 @@ fn build<T: SizedSample + FromSample<f32>>(device: &cpal::Device, config: &Strea
     let channels = config.channels as usize;
     let rate = config.sample_rate as f64;
     let mut next = 0u64;
+    // Held under LIMIT as the export's limiter holds the mix: a cut raised
+    // by normalizing would otherwise clip at the device. Instant attack, a
+    // release of RELEASE seconds; each stream on its own (the export limits
+    // their sum), so near the limit the two differ a little.
+    let mut held = 1.0f32;
+    let release = (-1.0 / (RELEASE * rate)).exp() as f32;
     let stream = device.build_output_stream(
         *config,
         move |data: &mut [T], info: &OutputCallbackInfo| {
@@ -249,13 +260,30 @@ fn build<T: SizedSample + FromSample<f32>>(device: &cpal::Device, config: &Strea
             let first = (((EPOCH.elapsed() + latency).as_secs_f64() * rate) as u64).max(next);
             next = first + (data.len() / channels) as u64;
             let len = meter.slots.len() as u64;
+            let mut take = [0f32; 8];
             for (i, frame) in data.chunks_mut(channels).enumerate() {
                 let slot = &mut meter.slots[((first + i as u64) % len) as usize];
                 if slot.0 != first + i as u64 {
                     *slot = (first + i as u64, [0.0; 2]);
                 }
+                // The frame at its level, then the limiter over its loudest
+                // channel.
+                let mut peak = 0f32;
+                for c in 0..channels.min(take.len()) {
+                    take[c] = if i < frames { q.pop_front().unwrap_or(0.0) * volume } else { 0.0 };
+                    peak = peak.max(take[c].abs());
+                }
+                for _ in take.len()..channels {
+                    if i < frames {
+                        q.pop_front();
+                    }
+                }
+                held = 1.0 - (1.0 - held) * release;
+                if peak * held > LIMIT {
+                    held = LIMIT / peak;
+                }
                 for (c, s) in frame.iter_mut().enumerate() {
-                    let v = if i < frames { q.pop_front().unwrap_or(0.0) * volume } else { 0.0 };
+                    let v = take.get(c).copied().unwrap_or(0.0) * held;
                     // Mono counts on both sides; past the front pair, none.
                     if c < 2 {
                         slot.1[c] += v;

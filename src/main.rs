@@ -8,6 +8,7 @@ mod grade;
 mod ffmpeg;
 mod hdr;
 mod imu;
+mod loudness;
 mod lut;
 mod overlay;
 mod player;
@@ -71,6 +72,17 @@ enum Cmd {
         fast_pan: f64,
         #[command(flatten)]
         opts: StitchOpts,
+    },
+    /// Bring each cut's sound to -16 LUFS: measure what it plays over its
+    /// own stretch and give it the gain (the export's limiter holds the
+    /// peaks). Prints a line per cut; writes the project with -o.
+    Normalize {
+        project: PathBuf,
+        /// Only these cuts, numbered from 1 (all if none).
+        #[arg(long, value_delimiter = ',')]
+        cuts: Vec<usize>,
+        #[arg(short, long)]
+        output: Option<PathBuf>,
     },
     /// Stitch one frame to an equirectangular PNG.
     Stitch {
@@ -978,7 +990,7 @@ fn export(project: &project::Project, opts: &StitchOpts, out: &ExportOpts, progr
             .map(|(n, &(i, start, frames))| {
                 let crossfade = if n > cuts.start { overlap[n] as f64 / fps } else { 0.0 };
                 let input = heard[n].unwrap_or(&pipelines[i].input);
-                ffmpeg::Sound { input, start, duration: Some(frames as f64 / fps), volume: &project.cuts[n].volume, crossfade }
+                ffmpeg::Sound { input, start, duration: Some(frames as f64 / fps), volume: &project.cuts[n].volume, gain: project.cuts[n].sound_db(), crossfade }
             })
             .collect();
         // The whole edit gets its mix; a file per cut is for another editor,
@@ -1169,6 +1181,7 @@ fn run() -> Result<()> {
         }
         Cmd::Info { input } => info(&input)?,
         Cmd::Check { project, fast_pan, opts } => check::check(&project, &opts, fast_pan)?,
+        Cmd::Normalize { project, cuts, output } => loudness::normalize(&project, &cuts, output.as_deref())?,
         Cmd::Play { input, osv_size, hwaccel, stabilize, imu_axes, world_z_down } => {
             player::run(input, player::Launch { osv_size, hw: hwaccel, stabilize, imu_axes, world_z_down })?;
         }
@@ -1184,7 +1197,7 @@ fn run() -> Result<()> {
             let p = Pipeline::new(&input, &opts, stab::Mode::Off)?;
             let start = p.snap(start);
             let total = duration.map(|d| (d * p.fps).round() as usize);
-            let mut encoder = ffmpeg::Encoder::new(&output, (width, width / 2), p.fps, &[ffmpeg::Sound { input: &input, start, duration, volume: &[], crossfade: 0.0 }], None, ffmpeg::Format::Mp4, false)?;
+            let mut encoder = ffmpeg::Encoder::new(&output, (width, width / 2), p.fps, &[ffmpeg::Sound { input: &input, start, duration, volume: &[], crossfade: 0.0, gain: 0.0 }], None, ffmpeg::Format::Mp4, false)?;
             let began = Instant::now();
             let mut tick = |n: usize| {
                 if n.is_multiple_of(10) {
@@ -1208,7 +1221,7 @@ fn run() -> Result<()> {
                 // One clip is a project of one cut.
                 let reframe = framing.reframe()?.unwrap_or_else(|| Reframe::fixed(View::home(Projection::Perspective)));
                 let (start, end) = span(&input, start, duration, Some(&reframe))?;
-                project::Project { aspect: reframe.aspect, cuts: vec![project::Cut { input, start, end, keyframes: reframe.keyframes, stabilize: None, note: None, audio: None, volume: Vec::new(), crossfade: 0.0, effects: Vec::new(), lut: None, old_lut_strength: None, flat: false, lut_applied: None }], ..Default::default() }
+                project::Project { aspect: reframe.aspect, cuts: vec![project::Cut { input, start, end, keyframes: reframe.keyframes, stabilize: None, note: None, audio: None, volume: Vec::new(), crossfade: 0.0, effects: Vec::new(), lut: None, old_lut_strength: None, gain: 0.0, mute: false, loudness: None, flat: false, lut_applied: None }], ..Default::default() }
             };
             let aspect = aspect.or(project.aspect).unwrap_or(view::Aspect(16, 9));
             let [w, h] = size.unwrap_or_else(|| aspect.size(resolution.short_side())).map(|v| v as usize);

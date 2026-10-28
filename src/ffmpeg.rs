@@ -785,6 +785,8 @@ pub struct Sound<'a> {
     pub duration: Option<f64>,
     /// Volume points in clip time, applied only in a mix.
     pub volume: &'a [crate::project::VolumeKey],
+    /// The cut's own level, dB (`Cut::sound_db`), applied only in a mix.
+    pub gain: f64,
     /// Seconds it crossfades with the stretch before, only in a mix.
     pub crossfade: f64,
 }
@@ -817,6 +819,14 @@ pub fn wav(input: &Path, start: f64, duration: f64, output: &Path) -> Result<()>
     }
     Ok(())
 }
+
+/// The mix's last stage: peaks held under −1.2 dBFS (0.87), so cuts raised
+/// by normalizing don't clip: −1.2 rather than −1, as the peaks between
+/// samples (true peak) came out 0.2 dB over at −1 on a normalized Kos edit.
+/// Without `level=0` it would raise the whole
+/// mix by itself; without `latency=1` it would delay the sound by its 5 ms
+/// lookahead.
+pub const LIMITER: &str = "alimiter=limit=0.87:attack=5:release=50:level=0:latency=1";
 
 /// What a whole edit's sound gets on top of joining its clips' stretches:
 /// their level, and the sound tracks (the music, the sound effects).
@@ -876,7 +886,7 @@ impl Encoder {
             }
         }
         // The music's inputs, before any output option.
-        let points = audio.iter().any(|s| !s.volume.is_empty() || s.crossfade > 0.0);
+        let points = audio.iter().any(|s| !s.volume.is_empty() || s.crossfade > 0.0 || s.gain != 0.0);
         let graph = mix.filter(|m| m.matters() || points).map(|m| mixed(&mut cmd, audio, m)).transpose()?;
         cmd.args(["-map", "0:v"]);
         if let Some(graph) = graph {
@@ -964,7 +974,7 @@ fn mixed(cmd: &mut Command, audio: &[Sound<'_>], mix: &Mix<'_>) -> Result<String
     if !audio.is_empty() && audio.iter().all(Sound::sounds) {
         for (i, sound) in (1..).zip(audio) {
             // Its volume points, in clip time: the stretch's time starts at 0.
-            let level = if sound.volume.is_empty() { String::new() } else { format!(",{}", level_filter(0.0, sound.volume, &format!("(t+{})", sound.start))) };
+            let level = if sound.volume.is_empty() && sound.gain == 0.0 { String::new() } else { format!(",{}", level_filter(sound.gain, sound.volume, &format!("(t+{})", sound.start))) };
             graph += &format!("[{i}:a:0]{stereo}{}{level}[c{i}];", pad(sound));
         }
         // Joined in turn: a crossfade overlaps a stretch's end with the
@@ -1024,6 +1034,6 @@ fn mixed(cmd: &mut Command, audio: &[Sound<'_>], mix: &Mix<'_>) -> Result<String
         let d = mix.fades.fade_out.min(mix.length);
         fades += &format!(",afade=t=out:st={}:d={d}", mix.length - d);
     }
-    graph += &format!("{}amix=inputs={}:duration=first:normalize=0{fades}[a]", parts.concat(), parts.len());
+    graph += &format!("{}amix=inputs={}:duration=first:normalize=0{fades},{LIMITER}[a]", parts.concat(), parts.len());
     Ok(graph)
 }

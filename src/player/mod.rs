@@ -88,11 +88,16 @@ fn heard_audio(cut: &Cut) -> Option<PathBuf> {
     cut.audio.clone().filter(|a| a.exists())
 }
 
-/// The file to draw cut `cut`'s waveform from: what it plays (its cleaned
-/// voice, else its clip), the clip's `.LRF` beside it standing in for the
-/// clip, as it holds the same sound in a sixteenth of the file.
+/// The file to draw cut `cut`'s waveform from (`Cut::sound_file`).
 fn cut_wave_file(cut: &Cut) -> PathBuf {
-    heard_audio(cut).or_else(|| ffmpeg::proxy(&cut.input)).unwrap_or_else(|| cut.input.clone())
+    cut.sound_file()
+}
+
+/// A cut's sound as the speakers get it from the mix: the clips' level,
+/// its own (`Cut::sound_db`, silence when muted) and its volume points,
+/// as the export's `level_filter` adds them.
+fn cut_gain(clips_db: f64, own_db: f64, points_db: f64) -> f32 {
+    if own_db <= crate::project::OFF_DB { 0.0 } else { music::gain(clips_db + own_db + points_db) }
 }
 
 impl fmt::Debug for Media {
@@ -905,8 +910,8 @@ impl App {
             c.playback.set_volume(v);
         }
         if let (Some((_, theirs)), Some((i, inc))) = (shares, &self.partner) {
-            let points = self.edit.cuts.get(*i).map_or(0.0, |c| crate::project::volume_at(&c.volume, inc.playback.now()));
-            let v = music::gain(self.edit.sound.volume + points) * quarter(theirs);
+            let (own, points) = self.edit.cuts.get(*i).map_or((0.0, 0.0), |c| (c.sound_db(), crate::project::volume_at(&c.volume, inc.playback.now())));
+            let v = cut_gain(self.edit.sound.volume, own, points) * quarter(theirs);
             if let Some((_, inc)) = &mut self.partner {
                 inc.playback.set_volume(v);
             }
@@ -1029,14 +1034,15 @@ impl App {
         (startup * 1.5).max(0.5)
     }
 
-    /// The clips' sound in the mix: its level and the playing cut's volume
-    /// points where it is (the listening volume is `audio::set_listening`'s).
+    /// The clips' sound in the mix: its level, the playing cut's own level
+    /// (normalized, lowered or muted) and its volume points where it is
+    /// (the listening volume is `audio::set_listening`'s).
     fn clip_volume(&self) -> f32 {
-        let points = match (&self.clip, self.edit.cuts.get(self.current)) {
-            (Some(c), Some(cut)) => crate::project::volume_at(&cut.volume, c.playback.now()),
-            _ => 0.0,
+        let (own, points) = match (&self.clip, self.edit.cuts.get(self.current)) {
+            (Some(c), Some(cut)) => (cut.sound_db(), crate::project::volume_at(&cut.volume, c.playback.now())),
+            _ => (0.0, 0.0),
         };
-        music::gain(self.edit.sound.volume + points)
+        cut_gain(self.edit.sound.volume, own, points)
     }
 
     /// Reads `path`'s waveform for the music lane, unless it has it.
@@ -2900,7 +2906,7 @@ impl App {
         let end = if picture { ffmpeg::PICTURE_SECONDS } else { duration };
         let lut = self.auto_lut(&input);
         let spot = self.placing.remove(&input).unwrap_or(bin::Spot::End);
-        let cut = Cut { input, start: 0.0, end, keyframes: Default::default(), stabilize: Some(self.opts.stabilize), note: None, audio: None, volume: Vec::new(), crossfade: 0.0, effects: Vec::new(), lut, old_lut_strength: None, flat: false, lut_applied: None };
+        let cut = Cut { input, start: 0.0, end, keyframes: Default::default(), stabilize: Some(self.opts.stabilize), note: None, audio: None, volume: Vec::new(), crossfade: 0.0, effects: Vec::new(), lut, old_lut_strength: None, gain: 0.0, mute: false, loudness: None, flat: false, lut_applied: None };
         let i = match spot {
             bin::Spot::End => self.edit.insert_cut(usize::MAX, cut),
             bin::Spot::At(t) => self.edit.insert_at(t, cut),

@@ -352,6 +352,19 @@ pub struct Cut {
     /// (`Project::load`), never written.
     #[serde(default, rename = "lut_strength", skip_serializing)]
     pub old_lut_strength: Option<f64>,
+    /// Its own sound level, dB, on top of the edit's clip sound level and
+    /// under its volume points: set by normalizing (to
+    /// `loudness::TARGET_LUFS`) or from the menu ("lower for voice-over").
+    /// 0 is as recorded.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub gain: f64,
+    /// Its sound is off; `gain` is kept for when it's back on.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub mute: bool,
+    /// What normalizing measured of what the cut plays, LUFS, shown in
+    /// Info; it says nothing about the sound once trimmed again.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub loudness: Option<f64>,
     /// Its clip is an ordinary video (framed by cropping, not a 360 view):
     /// found when the clip is opened, not saved.
     #[serde(skip)]
@@ -362,6 +375,19 @@ pub struct Cut {
 }
 
 impl Cut {
+    /// Its sound's own level, dB: `gain`, or silence when muted.
+    pub fn sound_db(&self) -> f64 {
+        if self.mute { OFF_DB } else { self.gain }
+    }
+
+    /// The file whose sound the cut plays (its cleaned voice if it has one
+    /// and it exists, else its clip), and for measuring or drawing it the
+    /// clip's `.LRF` stands in for the clip: the same sound, a sixteenth of
+    /// the file.
+    pub fn sound_file(&self) -> PathBuf {
+        self.audio.clone().filter(|a| a.exists()).or_else(|| crate::ffmpeg::proxy(&self.input)).unwrap_or_else(|| self.input.clone())
+    }
+
     /// Loads the LUT it names (a library name, or a file) for `camera_at`.
     /// Says why when it can't: the cut then shows as filmed.
     pub fn resolve_lut(&mut self) -> Result<()> {

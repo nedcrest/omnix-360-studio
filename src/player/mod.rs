@@ -2262,6 +2262,9 @@ impl App {
                 self.select_sound(cut, i);
             }
             Message::SoundKeySelect(cut, i) => self.select_sound(cut, i),
+            // A point gone mid-drag (an undo) is no undo step, nor an index panic.
+            Message::VolumeMove(which, i, ..) if i >= self.edit.track(which).keyframes.len() => {}
+            Message::SoundKeyMove(cut, i, ..) if self.edit.cuts.get(cut).is_none_or(|c| i >= c.volume.len()) => {}
             Message::SoundKeyMove(cut, i, t, db) => {
                 let Some(c) = self.edit.cuts.get(cut) else { return Task::none() };
                 let (start, end) = (c.start, c.end);
@@ -2284,6 +2287,10 @@ impl App {
                     *k = crate::project::VolumeKey { t: t.clamp(lo, hi.max(lo)), volume: db };
                 }
             }
+            // A stale index (the clip gone mid-drag) is no undo step.
+            Message::MusicMove(which, i, _, _) if i >= self.edit.track(which).clips.len() => {}
+            Message::MusicTrim(which, i, ..) if i >= self.edit.track(which).clips.len() => {}
+            Message::KeyMove(i, k, _) if self.edit.cuts.get(i).is_none_or(|c| k >= c.keyframes.len()) => {}
             Message::MusicMove(which, i, want, overlap) => {
                 self.begin_drag();
                 if i < self.edit.track(which).clips.len() {
@@ -2302,9 +2309,6 @@ impl App {
             }
             Message::MusicTrim(which, i, in_edge, t, overlap) => {
                 self.begin_drag();
-                if i >= self.edit.track(which).clips.len() {
-                    return Task::none();
-                }
                 let song = self.waveforms.get(&self.edit.track(which).clips[i].input).map_or(f64::INFINITY, |w| w.duration);
                 let m = self.edit.track(which);
                 let c = &m.clips[i];
@@ -3383,7 +3387,8 @@ impl App {
         match key.as_ref() {
             Key::Named(Named::Escape) if self.picking.is_some() => return self.update(Message::PickColour),
             Key::Named(Named::Escape) if self.fullscreen => return self.update(Message::Fullscreen),
-            Key::Named(Named::Space) => self.with_playback(Playback::toggle),
+            // As the Play button: from the end of the edit, from the start.
+            Key::Named(Named::Space) => return self.update(Message::Toggle),
             Key::Named(Named::ArrowLeft) if mods.shift() => self.free_look().yaw -= 2.0 * step,
             Key::Named(Named::ArrowRight) if mods.shift() => self.free_look().yaw += 2.0 * step,
             Key::Named(arrow @ (Named::ArrowLeft | Named::ArrowRight)) => {
@@ -3485,7 +3490,7 @@ impl App {
                     return self.update(Message::Stab(next));
                 }
                 "g" | "G" => self.effect_message(effects::EffectMsg::Toggle),
-                "r" | "R" => self.rolling_shutter = !self.rolling_shutter,
+                "r" | "R" => return self.update(Message::RollingShutter(!self.rolling_shutter)),
                 "m" | "M" => return self.update(Message::Mute),
                 "p" | "P" => {
                     let i = Projection::ALL.iter().position(|&p| p == self.shown_view().projection).unwrap_or(0);

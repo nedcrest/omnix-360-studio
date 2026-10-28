@@ -1602,24 +1602,13 @@ impl App {
                 // stay in the library, so adding them again is instant; one
                 // still loading finishes there without becoming a cut.
                 self.edit.replace(Vec::new(), Default::default(), Default::default(), Default::default(), Default::default(), Vec::new(), Vec::new());
-                self.hand_cut = None;
-                self.info = None;
-                self.selected_music = None;
-                self.selected_volume = None;
-                self.selected_sound = None;
+                self.forget_edit_state();
                 self.saved_version = self.edit.version;
                 self.saved_aspect = self.aspect;
                 self.project = None;
-                self.clip = None;
-                self.held = None;
-                self.current = 0;
-                self.selected = None;
                 self.queue.clear();
                 self.loading_adds = false;
                 self.error = None;
-                self.save_status = None;
-                self.timeline_zoom = 1.0;
-                self.timeline_start = 0.0;
             }
             Message::CloseRequested if self.busy() => return self.confirm_stop(),
             Message::StopAndClose(stop) => {
@@ -1692,9 +1681,7 @@ impl App {
                     self.error = Some(format!("{said}Missing sound files, playing the clips' own: {}", deaf.join(", ")));
                 }
                 self.aspect = project.aspect.map_or(Aspect::Free, |a| Aspect::Ratio(a.0 as u16, a.1 as u16));
-                self.clip = None;
-                self.current = 0;
-                self.selected = None;
+                self.forget_edit_state();
                 // Music and sound effects that are gone are left out the same way.
                 let (mut music, mut sfx) = (project.music, project.sfx);
                 let mut gone = Vec::new();
@@ -1724,15 +1711,10 @@ impl App {
                 self.queue.extend(cuts.iter().map(|c| (c.input.clone(), false)));
                 let complete = missing.is_empty() && gone.is_empty() && lost.is_empty();
                 self.edit.replace(cuts, music, sfx, project.sound, project.fades, overlays, texts);
-                self.hand_cut = None;
-                self.info = None;
                 self.mark_flat();
                 self.saved_version = if complete { self.edit.version } else { 0 };
                 self.saved_aspect = self.aspect;
                 self.project = Some(path);
-                self.selected_music = None;
-                self.selected_volume = None;
-                self.selected_sound = None;
                 let next = if self.loading.is_none() { self.open_next() } else { Task::none() };
                 return Task::batch(waves.into_iter().chain([next]));
             }
@@ -3099,6 +3081,34 @@ impl App {
                 self.current = 0;
             }
         }
+    }
+
+    /// Forgets what pointed into the edit being left: selections, the
+    /// playing clip, menus and dialogs, places waiting for clips, the
+    /// timeline's window. New and Open share it: each used to clear its own
+    /// list, and both missed some (an overlay still selected after opening
+    /// a project, so Del removed an item of the new one).
+    fn forget_edit_state(&mut self) {
+        self.selected = None;
+        self.selected_overlay = None;
+        self.selected_music = None;
+        self.selected_volume = None;
+        self.selected_sound = None;
+        self.hand_cut = None;
+        self.info = None;
+        self.text_of = None;
+        self.clip = None;
+        self.held = None;
+        self.current = 0;
+        self.sound_menu = None;
+        self.normalize = None;
+        self.placing.clear();
+        self.picking = None;
+        self.auto_key_at = None;
+        self.dragging = false;
+        self.save_status = None;
+        self.timeline_zoom = 1.0;
+        self.timeline_start = 0.0;
     }
 
     /// After a cut's sound changed (its level is followed every frame; its

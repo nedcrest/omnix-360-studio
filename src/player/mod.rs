@@ -24,6 +24,10 @@ pub mod music;
 mod timeline;
 mod divider;
 mod angles;
+mod icons;
+mod sphere;
+mod media;
+mod keys;
 
 use crate::ffmpeg::{self, Hwaccel};
 use crate::stab::{ImuAxes, Mode, Stabilizer};
@@ -41,61 +45,11 @@ use playback::Playback;
 use std::fmt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-
-#[derive(Clone)]
-pub struct Media {
-    pub input: PathBuf,
-    /// Side-by-side proxy, if the clip has one.
-    pub proxy: Option<PathBuf>,
-    /// Stream the OSV at this size instead of the proxy.
-    pub osv_size: Option<u32>,
-    /// Pixels square of the OSV's lens tracks.
-    pub osv_full: u32,
-    pub hw: Hwaccel,
-    pub has_audio: bool,
-    /// A sound file heard in place of the clip's own (`Cut::audio`), set on
-    /// the copy a cut plays; the library's copy has none.
-    pub audio: Option<PathBuf>,
-    /// The cut's sound is evened out (`Cut::even`), on the copy it plays.
-    pub even: bool,
-    pub rig: Arc<Rig>,
-    pub stab: Stabilizer,
-    pub readout_ms: f64,
-    pub fps: f64,
-    pub duration: f64,
-    /// An ordinary video (`ffmpeg::flat`), not a 360 clip.
-    pub flat: Option<ffmpeg::Flat>,
-    /// The colour profile it was filmed in: D-Log M gets its LUT.
-    pub color_mode: crate::dji::ColorMode,
-}
-
-impl Media {
-    /// The file whose sound plays: the cut's own audio file, else the clip.
-    pub fn heard(&self) -> &Path {
-        self.audio.as_deref().unwrap_or(&self.input)
-    }
-
-    /// The filter its sound goes through: the leveler when evened out.
-    pub fn leveler(&self) -> Option<&'static str> {
-        self.even.then_some(crate::loudness::LEVELER)
-    }
-
-    /// This clip as cut `cut` plays it: with the cut's audio file, if any.
-    fn for_cut(&self, cut: &Cut) -> Media {
-        let mut media = self.clone();
-        media.audio = heard_audio(cut);
-        media.even = cut.even;
-        media.has_audio |= media.audio.is_some();
-        media
-    }
-}
-
-/// The audio file cut `cut` plays in place of its clip's sound: its own, if
-/// it has one that's there; a missing one leaves the clip's sound playing
-/// (the project's opening says which are missing).
-fn heard_audio(cut: &Cut) -> Option<PathBuf> {
-    cut.audio.clone().filter(|a| a.exists())
-}
+use icons::*;
+use sphere::*;
+use media::*;
+pub use media::{Launch, cache_clip};
+use keys::*;
 
 /// A cut's own sound level as the clip sound lane tags it: "muted", its
 /// gain, "even" when evened out; none at the clip's own level.
@@ -124,89 +78,7 @@ fn cut_gain(clips_db: f64, own_db: f64, points_db: f64) -> f32 {
     if own_db <= crate::project::OFF_DB { 0.0 } else { music::gain(own_db + points_db) * music::gain(clips_db) }
 }
 
-impl fmt::Debug for Media {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Media").field("input", &self.input).finish_non_exhaustive()
-    }
-}
-
-/// What the command line asked for; what it leaves out comes from the
-/// remembered settings.
-pub struct Launch {
-    pub osv_size: Option<u32>,
-    pub hw: Option<Hwaccel>,
-    pub stabilize: Option<Mode>,
-    pub imu_axes: ImuAxes,
-    pub world_z_down: bool,
-}
-
-/// Settings for loading and playing clips; the GUI updates them so the
-/// next clip opens the way the last one was left.
-#[derive(Clone)]
-pub struct Options {
-    pub osv_size: Option<u32>,
-    /// Forced decoder, or the one found by probing the first Osmo clip.
-    pub hw: Option<Hwaccel>,
-    /// `hw` was asked for (`--hwaccel`), not found.
-    pub hw_forced: bool,
-    pub stabilize: Mode,
-    pub imu_axes: ImuAxes,
-    pub world_z_down: bool,
-}
-
-/// Caches `input` the way opening it in the player would: its telemetry and
-/// timeline thumbnails (`rosmo360 cache add`).
-pub fn cache_clip(input: &Path) -> Result<()> {
-    let opts = Options { osv_size: None, hw: Some(Hwaccel::Software), hw_forced: true, stabilize: Mode::Horizon, imu_axes: ImuAxes::X180, world_z_down: false };
-    thumbs::make(&Media::load(input.to_owned(), &opts, &|_| {})?, |_, _| true)
-}
-
 pub use settings::config_dir;
-
-impl Media {
-    /// `progress` hears how far reading the clip's telemetry has got (0..1),
-    /// which is most of the time a clip takes to load.
-    fn load(input: PathBuf, opts: &Options, progress: &dyn Fn(f64)) -> Result<Media> {
-        let stitch = crate::StitchOpts { stabilize: Some(opts.stabilize), imu_axes: opts.imu_axes, world_z_down: opts.world_z_down, ..Default::default() };
-        let p = crate::Pipeline::load(&input, &stitch, opts.stabilize, progress)?;
-        let proxy = if p.flat.is_some() { None } else { ffmpeg::proxy(&input) };
-        // An ordinary video or picture has its own (`Pipeline::load_flat`):
-        // a GPU decoder takes no JPEG, and a picture loaded first made every
-        // later OSV decode in software, crawling at 1920 px.
-        let hw = match opts.hw {
-            _ if p.flat.is_some() && !opts.hw_forced => p.hw,
-            Some(hw) => hw,
-            None => {
-                let hw = Hwaccel::pick(&input, p.tracks[0])?;
-                eprintln!("decoding with {hw:?}");
-                hw
-            }
-        };
-        Ok(Media {
-            duration: ffmpeg::duration(&input)?,
-            osv_full: match p.flat {
-                Some(f) => f.size().0.max(f.size().1),
-                None => ffmpeg::dimensions(&input, p.tracks[0])?.0 as u32,
-            },
-            has_audio: ffmpeg::has_audio(&input)?,
-            audio: None,
-            even: false,
-            proxy,
-            osv_size: opts.osv_size,
-            hw,
-            rig: Arc::new(match p.flat {
-                Some(flat) => Rig::flat(p.tracks[0], flat.hdr),
-                None => Rig::new(p.lenses, p.tracks, false),
-            }),
-            stab: p.stab,
-            readout_ms: p.readout_ms,
-            fps: p.fps,
-            flat: p.flat,
-            color_mode: p.color_mode,
-            input,
-        })
-    }
-}
 
 pub fn run(inputs: Vec<PathBuf>, launch: Launch) -> Result<()> {
     // Finding the system's fonts takes a moment: done ahead, the font list
@@ -3335,143 +3207,6 @@ impl App {
         self.timeline_start = self.timeline_window().0;
     }
 
-    fn key(&mut self, key: Key, mods: keyboard::Modifiers) -> Task<Message> {
-        let step = 5.0;
-        // A dialog or a menu open takes the keys: Esc closes it (or stops a
-        // run), the rest wait.
-        let escape = matches!(key.as_ref(), Key::Named(Named::Escape));
-        if self.normalize.is_some() {
-            return if escape { self.update(Message::Sound(sound_ui::SoundMsg::Cancel)) } else { Task::none() };
-        }
-        if self.sound_menu.is_some() && escape {
-            return self.update(Message::Sound(sound_ui::SoundMsg::Menu(None)));
-        }
-        // Editing: the keys that turn, frame or key the view do nothing. K
-        // still adds a volume point to a selected sound.
-        let sound = self.selected_music.is_some() || self.selected_volume.is_some() || self.selected_sound.is_some();
-        if !self.framing && framing_key(&key, mods, sound) {
-            return Task::none();
-        }
-        match key.as_ref() {
-            Key::Named(Named::Escape) if self.picking.is_some() => return self.update(Message::PickColour),
-            Key::Named(Named::Escape) if self.fullscreen => return self.update(Message::Fullscreen),
-            // As the Play button: from the end of the edit, from the start.
-            Key::Named(Named::Space) => return self.update(Message::Toggle),
-            Key::Named(Named::ArrowLeft) if mods.shift() => self.free_look().yaw -= 2.0 * step,
-            Key::Named(Named::ArrowRight) if mods.shift() => self.free_look().yaw += 2.0 * step,
-            Key::Named(arrow @ (Named::ArrowLeft | Named::ArrowRight)) => {
-                self.follow = true;
-                let t = self.position() + if arrow == Named::ArrowLeft { -5.0 } else { 5.0 };
-                if let Some((i, t)) = self.edit.locate(t.max(0.0)) {
-                    let playing = self.clip.as_ref().is_some_and(|c| c.playback.playing);
-                    self.goto(i, t, playing);
-                }
-            }
-            // With the strip showing, a field typed in may want them.
-            Key::Named(arrow @ (Named::ArrowUp | Named::ArrowDown)) if self.angles_shown => {
-                return angles::arrow(if arrow == Named::ArrowUp { 1.0 } else { -1.0 });
-            }
-            Key::Named(Named::ArrowUp) => self.free_look().pitch += step,
-            Key::Named(Named::ArrowDown) => self.free_look().pitch -= step,
-            Key::Named(Named::Home) => self.free_look().reset(),
-            Key::Named(Named::Delete | Named::Backspace) if mods.shift() || self.selected_music.is_some() || self.selected_volume.is_some() || self.selected_sound.is_some() || self.selected_overlay.is_some() => {
-                return self.update(Message::DeleteCut);
-            }
-            // Editing: Del takes the selected cut (framing, the keyframe).
-            Key::Named(Named::Delete | Named::Backspace) if !self.framing => return self.update(Message::DeleteCut),
-            Key::Named(Named::Delete | Named::Backspace) => return self.update(Message::KeyDelete),
-            Key::Character(c) => match c {
-                "o" | "O" if mods.command() && mods.shift() => return self.update(Message::OpenProject),
-                "n" | "N" if mods.command() => return self.update(Message::NewProject),
-                "o" if mods.command() => return self.update(Message::Open),
-                "s" | "S" if mods.command() => return self.update(Message::SaveProject(mods.shift())),
-                "z" | "Z" if mods.command() && mods.shift() => return self.update(Message::Redo),
-                "z" if mods.command() => return self.update(Message::Undo),
-                "y" if mods.command() => return self.update(Message::Redo),
-                "e" | "E" if mods.command() => return self.update(Message::ExportPanel),
-                "," if mods.command() => return self.update(Message::SettingsPanel),
-                "c" | "C" => return self.update(Message::Split),
-                "b" | "B" if !mods.command() => return self.update(Message::BinPanel),
-                "q" | "Q" => self.free_look().roll -= step,
-                "e" | "E" => self.free_look().roll += step,
-                "=" | "+" if mods.command() => return self.update(Message::TimelineZoom(1.5, None)),
-                "-" if mods.command() => return self.update(Message::TimelineZoom(1.0 / 1.5, None)),
-                "0" if mods.command() => return self.update(Message::TimelineZoomTo(0.0)),
-                "0" => self.free_look().reset(),
-                // On a sound track: a volume point at the playhead, on its line.
-                "k" | "K" if self.selected_music.is_some() || self.selected_volume.is_some() => {
-                    let which = self.selected_music.or(self.selected_volume).unwrap().0;
-                    let t = self.position();
-                    let db = crate::project::volume_at(&self.edit.track(which).keyframes, t);
-                    self.edit.checkpoint();
-                    let keys = &mut self.edit.track_mut(which).keyframes;
-                    match keys.iter().position(|k| (k.t - t).abs() < 0.01) {
-                        Some(i) => self.select_volume(which, i),
-                        None => {
-                            let i = keys.partition_point(|k| k.t <= t);
-                            keys.insert(i, crate::project::VolumeKey { t, volume: db });
-                            self.select_volume(which, i);
-                        }
-                    }
-                }
-                // A cut's sound point selected: another at the playhead.
-                "k" | "K" if self.selected_sound.is_some() => {
-                    let Some((_, t)) = self.playing_cut() else { return Task::none() };
-                    let cut = self.current;
-                    let db = crate::project::volume_at(&self.edit.cuts[cut].volume, t);
-                    self.edit.checkpoint();
-                    let keys = &mut self.edit.cuts[cut].volume;
-                    match keys.iter().position(|k| (k.t - t).abs() < 0.01) {
-                        Some(i) => self.select_sound(cut, i),
-                        None => {
-                            let i = keys.partition_point(|k| k.t <= t);
-                            keys.insert(i, crate::project::VolumeKey { t, volume: db });
-                            self.select_sound(cut, i);
-                        }
-                    }
-                }
-                "k" | "K" => return self.update(Message::KeyAdd),
-                "j" | "J" => {
-                    if let Some(k) = self.current_key() {
-                        let ease = self.edit.cuts[self.current].keyframes[k].ease;
-                        let i = Ease::ALL.iter().position(|&e| e == ease).unwrap_or(0);
-                        return self.update(Message::KeyEase(Ease::ALL[(i + 1) % Ease::ALL.len()]));
-                    }
-                }
-                "[" => return self.key_step(-1.0),
-                "]" => return self.key_step(1.0),
-                "," | "." => {
-                    self.follow = true;
-                    let frames = if c == "," { -1.0 } else { 1.0 };
-                    self.with_playback(|p| p.step(frames));
-                }
-                "+" | "=" => self.free_look().zoom_by(-1.0),
-                "-" => self.free_look().zoom_by(1.0),
-                "s" | "S" => {
-                    let mode = self.clip.as_ref().map_or(self.opts.stabilize, |c| c.playback.media.stab.mode());
-                    let next = match mode {
-                        Mode::Off => Mode::Horizon,
-                        Mode::Horizon => Mode::Level,
-                        Mode::Level => Mode::Lock,
-                        Mode::Lock => Mode::Off,
-                    };
-                    return self.update(Message::Stab(next));
-                }
-                "g" | "G" => self.effect_message(effects::EffectMsg::Toggle),
-                "r" | "R" => return self.update(Message::RollingShutter(!self.rolling_shutter)),
-                "m" | "M" => return self.update(Message::Mute),
-                "p" | "P" => {
-                    let i = Projection::ALL.iter().position(|&p| p == self.shown_view().projection).unwrap_or(0);
-                    return self.update(Message::Projection(Projection::ALL[(i + 1) % Projection::ALL.len()]));
-                }
-                "f" | "F" => return self.update(Message::Fullscreen),
-                _ => {}
-            },
-            _ => {}
-        }
-        Task::none()
-    }
-
     /// The logo shown while a clip loads or decodes its first frame.
     fn logo(&self) -> Element<'_, Message> {
         image(self.logo.clone()).width(Length::Fixed(420.0)).into()
@@ -3890,24 +3625,6 @@ impl App {
 /// find them there, and merges from upstream stay simple.
 pub const NAME: &str = "Omnix";
 
-const LOGO: &[u8] = include_bytes!("../../vibewithravelund-lowres-corrected.jpg");
-
-/// Who made it, and how: credit to rOsmo360's author, whose work this is
-/// built on, and to the AI-assisted way it was made.
-fn credit<'a>() -> Element<'a, Message> {
-    container(text(concat!("Omnix · built on rOsmo360 ", env!("CARGO_PKG_VERSION"), " · Made by Vibing with Ravelund · 2026")).size(12).style(text::secondary)).width(Length::Fill).align_x(Alignment::Center).padding([2, 10]).into()
-}
-
-/// Edit icons: scissors (split), a bin (delete cut), arrows (undo, redo).
-/// Two film frames and a plus: give every cut this look.
-const TO_ALL_CUTS: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="11" height="8" rx="1"/><rect x="6" y="9" width="11" height="8" rx="1"/><path d="M9 9v2M13 9v2M20 15v6M17 18h6"/></svg>"#;
-/// Three sliders (the Effects panel).
-const EFFECTS: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3M14 2v4M8 10v4M16 18v4"/></svg>"#;
-/// Two strips crossing: one picture dissolving into the next.
-const CROSSFADE: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="12" height="12" rx="2"/><rect x="10" y="6" width="12" height="12" rx="2" stroke-dasharray="2 2"/></svg>"#;
-const SPLIT: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4 8.1 15.9M14.5 14.5 20 20M8.1 8.1 12 12"/></svg>"#;
-const DELETE_CUT: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/></svg>"#;
-const UNDO: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>"#;
 /// The next cut is primed this many seconds before the playing one ends:
 /// enough for its decoder to open and seek. From a network share that took
 /// 0.2-1.6 s; at 1 s ahead the slower ones still stalled the change.
@@ -3916,13 +3633,6 @@ const PREROLL: f64 = 3.0;
 /// The timeline zooms in until this many seconds fill it.
 const TIMELINE_SPAN: f64 = 2.0;
 
-/// Timeline zoom icons: a magnifier with a minus or plus, and arrows out to
-/// both ends (fit).
-const ZOOM_OUT: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round"><circle cx="10" cy="10" r="7"/><path d="m21 21-6-6M7 10h6"/></svg>"#;
-const ZOOM_IN: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round"><circle cx="10" cy="10" r="7"/><path d="m21 21-6-6M7 10h6M10 7v6"/></svg>"#;
-const ZOOM_FIT: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5v14M21 5v14M7 12h10M10 9l-3 3 3 3M14 9l3 3-3 3"/></svg>"#;
-const REDO: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg>"#;
-
 /// A short name for a clip on the timeline: DJI's clip number (the digits
 /// in CAM_20260713153034_0037_D), else the file name.
 fn clip_name(path: &Path) -> String {
@@ -3930,103 +3640,8 @@ fn clip_name(path: &Path) -> String {
     stem.split('_').rev().find(|p| p.len() == 4 && p.bytes().all(|b| b.is_ascii_digit())).map_or(stem.clone(), str::to_owned)
 }
 
-/// Keyframe icons: a diamond with a plus (add or update) or a cross (delete).
-const PICK: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m2 22 1-1h3l9-9M3 21v-3l9-9"/><path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3z"/></svg>"#;
-const KEY_ADD: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linejoin="round"><path d="M10 2 18 10 10 18 2 10z" fill="white"/><path d="M19 15v8M15 19h8" stroke-linecap="round"/></svg>"#;
-const KEY_DELETE: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linejoin="round"><path d="M10 2 18 10 10 18 2 10z"/><path d="m16 16 6 6M22 16l-6 6" stroke-linecap="round"/></svg>"#;
-
-/// File icons: a page with a plus (new project), a film strip with a plus
-/// (open or add clips), a note with a plus (add music), an open folder (open
-/// a project), a diskette (save) and one with a pencil (save as).
-/// A letter A with a minus or a plus: the interface's size.
-const TEXT_SMALLER: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 19l5-14 5 14M5 14h6M16 12h6"/></svg>"#;
-const TEXT_BIGGER: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 19l5-14 5 14M5 14h6M16 12h6M19 9v6"/></svg>"#;
-/// A speaker with a spark and a plus: add a sound effect.
-const ADD_SFX: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9v6h4l5 4V5L7 9z"/><path d="M15 9l2-2M16 12h2"/><path d="M19 15v6M16 18h6"/></svg>"#;
-const ADD_MUSIC: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l10-2v9"/><circle cx="6" cy="18" r="3"/><path d="M19 15v6M16 18h6"/></svg>"#;
-const NEW_PROJECT: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v4a2 2 0 0 0 2 2h4M9 15h6M12 18v-6"/></svg>"#;
-const ADD_OVERLAY: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="14" height="14" rx="2"/><circle cx="8" cy="8" r="1.5"/><path d="M17 12l-4-4-8 8"/><path d="M20 15v6M17 18h6"/></svg>"#;
-const ADD_TEXT: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7V4h12v3M10 4v16M7 20h6"/><path d="M19 13v8M15 17h8"/></svg>"#;
-const ADD_CLIP: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="14" height="18" rx="2"/><path d="M6 3v18M12 3v18M2 8h4M2 16h4M12 8h4M12 16h4M20 9v6M17 12h6"/></svg>"#;
 /// The bin: a box of files.
 pub(super) const BIN: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9"/><path d="M10 13h4"/></svg>"#;
-const OPEN_PROJECT: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg>"#;
-const SAVE: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7M7 3v4a1 1 0 0 0 1 1h7"/></svg>"#;
-const SAVE_AS: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h10.2a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V10"/><path d="M7 3v4a1 1 0 0 0 1 1h7M7 21v-7a1 1 0 0 1 1-1h4"/><path d="M21.4 15.6a1.98 1.98 0 0 0-2.8-2.8L14 17.4V20.2h2.8z"/></svg>"#;
-/// An arrow out of a tray (export) and a crossed circle (cancel a running job).
-const EXPORT: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3M7 8l5-5 5 5"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/></svg>"#;
-const SETTINGS: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>"#;
-const FOLDER: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>"#;
-const COPY: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>"#;
-const CANCEL: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m15 9-6 6M9 9l6 6"/></svg>"#;
-/// Transport: play, pause, a camera (save the view) and a globe (save the
-/// whole sphere).
-const PLAY: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4v16l13-8z" fill="white"/></svg>"#;
-const PAUSE: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16" rx="1" fill="white"/><rect x="14" y="4" width="4" height="16" rx="1" fill="white"/></svg>"#;
-const SAVE_VIEW: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z"/><circle cx="12" cy="13" r="3"/></svg>"#;
-const SAVE_SPHERE: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>"#;
-/// View: turn back (reset the view) and corners out or in (fullscreen).
-const RESET_VIEW: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>"#;
-const FULLSCREEN: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/></svg>"#;
-const FULLSCREEN_EXIT: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v3a2 2 0 0 1-2 2H3M21 8h-3a2 2 0 0 1-2-2V3M3 16h3a2 2 0 0 1 2 2v3M16 21v-3a2 2 0 0 1 2-2h3"/></svg>"#;
-
-/// Status: what the view shows (the proxy, the OSV or full res, a full-res
-/// frame on its way) and how it decodes (on the GPU, or in software).
-const SHOWING_PROXY: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 3v18M17 3v18M3 7.5h4M3 12h18M3 16.5h4M17 7.5h4M17 16.5h4"/></svg>"#;
-const SHOWING_FULL: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/></svg>"#;
-const SHOWING_LOADING: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 22h14M5 2h14M17 22v-4.2a2 2 0 0 0-.6-1.4L12 12l-4.4 4.4a2 2 0 0 0-.6 1.4V22M7 2v4.2a2 2 0 0 0 .6 1.4L12 12l4.4-4.4a2 2 0 0 0 .6-1.4V2"/></svg>"#;
-const DECODE_GPU: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9z"/></svg>"#;
-const DECODE_CPU: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6" rx="1"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></svg>"#;
-
-/// A hint on hover, on a box of its own so it reads over the picture.
-fn tip<'a>(content: impl Into<Element<'a, Message>>, hint: iced::widget::Text<'a>, position: tooltip::Position) -> Element<'a, Message> {
-    tooltip(content, container(hint).padding([4, 8]).style(container::rounded_box), position).into()
-}
-
-fn icon_button<'a>(icon: &'static [u8], on_press: Option<Message>) -> Element<'a, Message> {
-    button(svg_icon(icon)).padding(5).on_press_maybe(on_press).into()
-}
-
-/// An icon as the buttons show it.
-fn svg_icon(icon: &'static [u8]) -> svg::Svg<'static> {
-    svg(svg::Handle::from_memory(icon)).width(20).height(20)
-}
-
-/// A mix level for its slider: the bottom of the range is silence.
-fn db_label(db: f64) -> String {
-    if db <= crate::project::OFF_DB { "off".to_owned() } else { format!("{db:+.1} dB") }
-}
-
-/// A status icon, dimmed towards the background so it stays out of the
-/// way, with what it means on hover.
-fn status_icon<'a>(icon: &'static [u8], hint: String) -> Element<'a, Message> {
-    let dim = svg(svg::Handle::from_memory(icon)).width(18).height(18).style(|theme: &Theme, _| svg::Style {
-        color: Some(iced::Color { a: 0.45, ..theme.palette().text }),
-    });
-    tip(dim, text(hint), tooltip::Position::Bottom)
-}
-
-/// An icon with its words, for the start screen, which has the room.
-fn labelled_button<'a>(icon: &'static [u8], label: &'a str, on_press: Option<Message>) -> Element<'a, Message> {
-    button(row![svg(svg::Handle::from_memory(icon)).width(20).height(20), text(label)].spacing(8).align_y(Alignment::Center))
-        .padding([6, 12])
-        .on_press_maybe(on_press)
-        .into()
-}
-
-/// Speaker icons for the mute button, drawn in the button's text colour.
-const SPEAKER: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z" fill="white"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a10 10 0 0 1 0 14"/></svg>"#;
-const SPEAKER_MUTED: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z" fill="white"/><path d="m22 9-6 6"/><path d="m16 9 6 6"/></svg>"#;
-
-
-/// A thin upright line between groups of buttons in a bar.
-fn separator<'a>() -> Element<'a, Message> {
-    container(rule::vertical(1)).height(22).into()
-}
-
-fn labelled<'a>(label: &'a str, widget: impl Into<Element<'a, Message>>) -> Element<'a, Message> {
-    row![text(label), widget.into()].spacing(6).align_y(Alignment::Center).into()
-}
 
 /// A finished colour track: its CSV, where it starts (cut and clip time),
 /// how many samples found the colour, and the colour.
@@ -4038,22 +3653,6 @@ pub struct TrackDone {
     found: usize,
     rows: usize,
     colour: String,
-}
-
-/// The box being drawn to pick a colour, over the view.
-struct PickBox(Option<Rectangle>);
-
-impl canvas::Program<Message> for PickBox {
-    type State = ();
-
-    fn draw(&self, _: &(), renderer: &iced::Renderer, _: &Theme, bounds: Rectangle, _: mouse::Cursor) -> Vec<canvas::Geometry> {
-        let Some(r) = &self.0 else { return vec![] };
-        let mut frame = canvas::Frame::new(renderer, bounds.size());
-        let rect = canvas::Path::rectangle(Point::new(r.x * bounds.width, r.y * bounds.height), Size::new(r.width * bounds.width, r.height * bounds.height));
-        frame.fill(&rect, iced::Color { a: 0.15, ..iced::Color::WHITE });
-        frame.stroke(&rect, canvas::Stroke::default().with_width(2.0).with_color(iced::Color::WHITE));
-        vec![frame.into_geometry()]
-    }
 }
 
 /// The Follow picker's choices for a keyframe.
@@ -4148,183 +3747,12 @@ fn probe_sound(which: SoundTrack, path: PathBuf, at: Option<f64>) -> Task<Messag
     )
 }
 
-/// Messages that only framing does: turning, zooming or keying the view,
-/// its angles, stabilisation, projection, colour tracking.
-fn framing_only(message: &Message) -> bool {
-    matches!(
-        message,
-        Message::Look { .. }
-            | Message::Zoom(_)
-            | Message::Fov(_)
-            | Message::ResetView
-            | Message::KeyAdd
-            | Message::KeyDelete
-            | Message::KeyEase(_)
-            | Message::KeyFollow(_)
-            | Message::PickColour
-            | Message::Stab(_)
-            | Message::Projection(_)
-            | Message::AngleInput(..)
-            | Message::AngleNudge(..)
-            | Message::AngleArrow(..)
-            | Message::AngleScrubStart(_)
-            | Message::AngleScrub(..)
-    )
-}
-
-/// Keys that only framing uses: looking around (Shift+←/→, ↑/↓, Q/E,
-/// Home, 0, + and −), keyframes (K, J, [ and ]), stabilisation (S),
-/// projection (P), rolling shutter (R). K with a sound selected (`sound`)
-/// adds a volume point, which editing keeps.
-fn framing_key(key: &Key, mods: keyboard::Modifiers, sound: bool) -> bool {
-    match key.as_ref() {
-        Key::Named(Named::ArrowLeft | Named::ArrowRight) => mods.shift(),
-        Key::Named(Named::ArrowUp | Named::ArrowDown | Named::Home) => true,
-        Key::Character(c) if !mods.command() => match c {
-            "k" | "K" => !sound,
-            "q" | "Q" | "e" | "E" | "0" | "+" | "=" | "-" | "j" | "J" | "[" | "]" | "s" | "S" | "p" | "P" | "r" | "R" => true,
-            _ => false,
-        },
-        _ => false,
-    }
-}
-
 fn blocking<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> impl Future<Output = T> {
     let (tx, rx) = iced::futures::channel::oneshot::channel();
     std::thread::spawn(move || {
         let _ = tx.send(f());
     });
     async move { rx.await.expect("loader thread panicked") }
-}
-
-/// The 360 view widget: draws the shader primitive and turns drags and the
-/// scroll wheel into look and zoom messages.
-#[derive(Clone)]
-struct Sphere {
-    rig: Arc<Rig>,
-    shown: Arc<Shown>,
-    camera: Camera,
-    rig_from_view: Vec<M3>,
-    fov_deg: f64,
-    /// Drags draw a box to pick a colour instead of looking around.
-    picking: bool,
-    /// Through a crossfade, the next cut drawn over: its rig, frame,
-    /// framing, readout views and how far in it is (0..1).
-    incoming: Option<(Arc<Rig>, Arc<Shown>, Camera, Vec<M3>, f32)>,
-    overlays: Vec<gpu::OverlayDraw>,
-}
-
-#[derive(Default)]
-struct Drag {
-    button: Option<mouse::Button>,
-    last: Option<Point>,
-    /// The size last reported to the app.
-    size: Option<Size>,
-    /// Where a colour-picking box started, in the view.
-    pick: Option<Point>,
-}
-
-impl Sphere {
-    /// While picking a colour, a drag draws a box: the app hears of it as it
-    /// grows and once it's drawn, in fractions of the view.
-    fn pick(&self, drag: &mut Drag, event: &iced::Event, bounds: Rectangle, cursor: mouse::Cursor) -> Option<shader::Action<Message>> {
-        let at = || cursor.position().map(|p| Point::new((p.x - bounds.x).clamp(0.0, bounds.width), (p.y - bounds.y).clamp(0.0, bounds.height)));
-        let area = |a: Point, b: Point| {
-            Rectangle::new(Point::new(a.x.min(b.x) / bounds.width, a.y.min(b.y) / bounds.height), Size::new((a.x - b.x).abs() / bounds.width, (a.y - b.y).abs() / bounds.height))
-        };
-        match event {
-            iced::Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
-                cursor.position_over(bounds)?;
-                drag.pick = at();
-                Some(shader::Action::capture())
-            }
-            iced::Event::Mouse(mouse::Event::CursorMoved { .. }) => {
-                let (a, b) = (drag.pick?, at()?);
-                Some(shader::Action::publish(Message::PickArea(area(a, b))).and_capture())
-            }
-            iced::Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => {
-                let (a, b) = (drag.pick.take()?, at()?);
-                Some(shader::Action::publish(Message::AreaPicked(area(a, b), (bounds.width / bounds.height) as f64)).and_capture())
-            }
-            _ => None,
-        }
-    }
-
-    /// Drags look around, the wheel zooms.
-    fn input(&self, drag: &mut Drag, event: &iced::Event, bounds: Rectangle, cursor: mouse::Cursor) -> Option<shader::Action<Message>> {
-        if self.picking {
-            return self.pick(drag, event, bounds, cursor);
-        }
-        match event {
-            iced::Event::Mouse(mouse::Event::ButtonPressed(b @ (mouse::Button::Left | mouse::Button::Right))) => {
-                drag.last = Some(cursor.position_over(bounds)?);
-                drag.button = Some(*b);
-                Some(shader::Action::capture())
-            }
-            iced::Event::Mouse(mouse::Event::ButtonReleased(_)) if drag.button.is_some() => {
-                drag.button = None;
-                Some(shader::Action::publish(Message::LookDone).and_capture())
-            }
-            iced::Event::Mouse(mouse::Event::CursorMoved { position }) => {
-                let (button, last) = (drag.button?, drag.last?);
-                drag.last = Some(*position);
-                // Grab-style: the picture follows the pointer.
-                let k = self.fov_deg.to_radians() / bounds.height as f64;
-                let (dx, dy) = ((position.x - last.x) as f64, (position.y - last.y) as f64);
-                let look = match button {
-                    mouse::Button::Right => Message::Look { yaw: 0.0, pitch: 0.0, roll: dx * k },
-                    _ => Message::Look { yaw: -dx * k, pitch: dy * k, roll: 0.0 },
-                };
-                Some(shader::Action::publish(look).and_capture())
-            }
-            iced::Event::Mouse(mouse::Event::WheelScrolled { delta }) => {
-                cursor.position_over(bounds)?;
-                let lines = match delta {
-                    mouse::ScrollDelta::Lines { y, .. } => *y as f64,
-                    mouse::ScrollDelta::Pixels { y, .. } => *y as f64 / 40.0,
-                };
-                Some(shader::Action::publish(Message::Zoom(-lines)).and_capture())
-            }
-            _ => None,
-        }
-    }
-}
-
-impl shader::Program<Message> for Sphere {
-    type State = Drag;
-    type Primitive = gpu::Primitive;
-
-    fn update(&self, drag: &mut Drag, event: &iced::Event, bounds: Rectangle, cursor: mouse::Cursor) -> Option<shader::Action<Message>> {
-        let action = self.input(drag, event, bounds, cursor);
-        if action.is_none() && drag.size != Some(bounds.size()) {
-            drag.size = Some(bounds.size());
-            return Some(shader::Action::publish(Message::ViewSize(bounds.size())));
-        }
-        action
-    }
-
-    fn draw(&self, _: &Drag, _: mouse::Cursor, _: Rectangle) -> gpu::Primitive {
-        gpu::Primitive {
-            rig: self.rig.clone(),
-            shown: self.shown.clone(),
-            camera: self.camera,
-            rig_from_view: self.rig_from_view.clone(),
-            incoming: self.incoming.clone().map(|(rig, shown, camera, rig_from_view, mix)| gpu::Incoming { rig, shown, camera, rig_from_view, mix }),
-            overlays: self.overlays.clone(),
-        }
-    }
-
-    fn mouse_interaction(&self, drag: &Drag, bounds: Rectangle, cursor: mouse::Cursor) -> mouse::Interaction {
-        if self.picking && cursor.is_over(bounds) {
-            mouse::Interaction::Crosshair
-        } else if drag.button.is_some() {
-            mouse::Interaction::Grabbing
-        } else if cursor.is_over(bounds) {
-            mouse::Interaction::Grab
-        } else {
-            mouse::Interaction::default()
-        }
-    }
 }
 
 #[cfg(test)]

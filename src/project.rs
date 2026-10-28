@@ -150,6 +150,38 @@ pub fn volume_at(keys: &[VolumeKey], t: f64) -> f64 {
     }
 }
 
+/// Two volume points closer than this are one: K at a point selects it.
+const SAME_POINT: f64 = 0.01;
+
+/// Adds a volume point at `t`, `db`, in time order, and returns its index.
+/// A sound track's points and a cut's are both lists of these.
+pub fn add_volume_key(keys: &mut Vec<VolumeKey>, t: f64, db: f64) -> usize {
+    let i = keys.partition_point(|k| k.t <= t);
+    keys.insert(i, VolumeKey { t, volume: db });
+    i
+}
+
+/// The point at `t` (within `SAME_POINT`), or a new one there on the line,
+/// so the level doesn't jump: what K does on a sound.
+pub fn volume_key_at(keys: &mut Vec<VolumeKey>, t: f64) -> usize {
+    match keys.iter().position(|k| (k.t - t).abs() < SAME_POINT) {
+        Some(i) => i,
+        None => add_volume_key(keys, t, volume_at(keys, t)),
+    }
+}
+
+/// Point `i` dragged to `t`, `db`: kept between its neighbours (points
+/// keep their order) and within `range` (a cut's own stretch, or the edit
+/// from 0). Nothing if there's no point `i`.
+pub fn move_volume_key(keys: &mut [VolumeKey], i: usize, t: f64, db: f64, range: (f64, f64)) {
+    if i >= keys.len() {
+        return;
+    }
+    let lo = i.checked_sub(1).map_or(range.0, |j| keys[j].t + SAME_POINT).max(range.0);
+    let hi = keys.get(i + 1).map_or(range.1, |k| k.t - SAME_POINT).min(range.1);
+    keys[i] = VolumeKey { t: t.clamp(lo, hi.max(lo)), volume: db };
+}
+
 impl Music {
     pub fn is_empty(&self) -> bool {
         self.clips.is_empty() && self.volume == 0.0 && self.keyframes.is_empty()
@@ -836,6 +868,25 @@ mod tests {
         std::fs::write(&path, r#"{"sfx": {"clips": [{"input": "a.wav", "at": -1, "in": 0, "out": 1}]}}"#).unwrap();
         assert!(Project::load(&path).unwrap_err().to_string().contains("sfx clip 1"));
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn volume_points_stay_in_order() {
+        let mut keys = Vec::new();
+        assert_eq!(add_volume_key(&mut keys, 4.0, -6.0), 0);
+        assert_eq!(add_volume_key(&mut keys, 2.0, 0.0), 0);
+        assert_eq!(add_volume_key(&mut keys, 8.0, -12.0), 2);
+        // K at a point selects it; between two, a new one on the line.
+        assert_eq!(volume_key_at(&mut keys, 4.005), 1);
+        let i = volume_key_at(&mut keys, 6.0);
+        assert_eq!((i, keys[i].volume, keys.len()), (2, -9.0, 4));
+        // Dragged past a neighbour, it stops just before it; within range.
+        move_volume_key(&mut keys, 1, 9.0, 3.0, (0.0, 20.0));
+        assert_eq!((keys[1].t, keys[1].volume), (5.99, 3.0));
+        move_volume_key(&mut keys, 0, -5.0, 0.0, (1.0, 20.0));
+        assert_eq!(keys[0].t, 1.0);
+        move_volume_key(&mut keys, 9, 1.0, 0.0, (0.0, 20.0));
+        assert_eq!(keys.len(), 4);
     }
 
     #[test]

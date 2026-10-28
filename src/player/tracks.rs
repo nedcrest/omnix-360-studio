@@ -157,9 +157,7 @@ impl App {
             }
             Message::VolumeAdd(which, t, db) => {
                 self.begin_drag();
-                let keys = &mut self.edit.track_mut(which).keyframes;
-                let i = keys.partition_point(|k| k.t <= t);
-                keys.insert(i, crate::project::VolumeKey { t, volume: db });
+                let i = crate::project::add_volume_key(&mut self.edit.track_mut(which).keyframes, t, db);
                 self.select_volume(which, i);
             }
             Message::VolumeSelect(which, i) => self.select_volume(which, i),
@@ -167,9 +165,7 @@ impl App {
                 let Some(c) = self.edit.cuts.get(cut) else { return Task::none() };
                 let t = t.clamp(c.start, c.end);
                 self.begin_drag();
-                let keys = &mut self.edit.cuts[cut].volume;
-                let i = keys.partition_point(|k| k.t <= t);
-                keys.insert(i, crate::project::VolumeKey { t, volume: db });
+                let i = crate::project::add_volume_key(&mut self.edit.cuts[cut].volume, t, db);
                 self.select_sound(cut, i);
             }
             Message::SoundKeySelect(cut, i) => self.select_sound(cut, i),
@@ -180,23 +176,13 @@ impl App {
                 let Some(c) = self.edit.cuts.get(cut) else { return Task::none() };
                 let (start, end) = (c.start, c.end);
                 self.begin_drag();
-                let keys = &mut self.edit.cuts[cut].volume;
                 // Within the cut and between its neighbours.
-                let lo = i.checked_sub(1).map_or(start, |j| keys[j].t + 0.01).max(start);
-                let hi = keys.get(i + 1).map_or(end, |k| k.t - 0.01).min(end);
-                if let Some(k) = keys.get_mut(i) {
-                    *k = crate::project::VolumeKey { t: t.clamp(lo, hi.max(lo)), volume: db };
-                }
+                crate::project::move_volume_key(&mut self.edit.cuts[cut].volume, i, t, db, (start, end));
             }
             Message::VolumeMove(which, i, t, db) => {
                 self.begin_drag();
-                let keys = &mut self.edit.track_mut(which).keyframes;
                 // Between its neighbours: points keep their order.
-                let lo = i.checked_sub(1).map_or(0.0, |j| keys[j].t + 0.01);
-                let hi = keys.get(i + 1).map_or(f64::INFINITY, |k| k.t - 0.01);
-                if let Some(k) = keys.get_mut(i) {
-                    *k = crate::project::VolumeKey { t: t.clamp(lo, hi.max(lo)), volume: db };
-                }
+                crate::project::move_volume_key(&mut self.edit.track_mut(which).keyframes, i, t, db, (0.0, f64::INFINITY));
             }
             // A stale index (the clip gone mid-drag) is no undo step.
             Message::MusicMove(which, i, _, _) if i >= self.edit.track(which).clips.len() => {}

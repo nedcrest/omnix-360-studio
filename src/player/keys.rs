@@ -112,33 +112,29 @@ impl App {
                 "k" | "K" if self.selected_music.is_some() || self.selected_volume.is_some() => {
                     let which = self.selected_music.or(self.selected_volume).unwrap().0;
                     let t = self.position();
-                    let db = crate::project::volume_at(&self.edit.track(which).keyframes, t);
-                    self.edit.checkpoint();
-                    let keys = &mut self.edit.track_mut(which).keyframes;
-                    match keys.iter().position(|k| (k.t - t).abs() < 0.01) {
-                        Some(i) => self.select_volume(which, i),
-                        None => {
-                            let i = keys.partition_point(|k| k.t <= t);
-                            keys.insert(i, crate::project::VolumeKey { t, volume: db });
-                            self.select_volume(which, i);
-                        }
-                    }
+                    // An undo step only if a point is added, not when one is
+                    // just selected.
+                    let mut i = 0;
+                    self.edit.attempt(|e| {
+                        let keys = &mut e.track_mut(which).keyframes;
+                        let n = keys.len();
+                        i = crate::project::volume_key_at(keys, t);
+                        keys.len() > n
+                    });
+                    self.select_volume(which, i);
                 }
                 // A cut's sound point selected: another at the playhead.
                 "k" | "K" if self.selected_sound.is_some() => {
                     let Some((_, t)) = self.playing_cut() else { return Task::none() };
                     let cut = self.current;
-                    let db = crate::project::volume_at(&self.edit.cuts[cut].volume, t);
-                    self.edit.checkpoint();
-                    let keys = &mut self.edit.cuts[cut].volume;
-                    match keys.iter().position(|k| (k.t - t).abs() < 0.01) {
-                        Some(i) => self.select_sound(cut, i),
-                        None => {
-                            let i = keys.partition_point(|k| k.t <= t);
-                            keys.insert(i, crate::project::VolumeKey { t, volume: db });
-                            self.select_sound(cut, i);
-                        }
-                    }
+                    let mut i = 0;
+                    self.edit.attempt(|e| {
+                        let keys = &mut e.cuts[cut].volume;
+                        let n = keys.len();
+                        i = crate::project::volume_key_at(keys, t);
+                        keys.len() > n
+                    });
+                    self.select_sound(cut, i);
                 }
                 "k" | "K" => return self.update(Message::KeyAdd),
                 "j" | "J" => {

@@ -113,3 +113,131 @@ impl App {
         })
     }
 }
+
+impl App {
+    /// Overlays and text: this area's messages, as `handle` passes them on.
+    pub(super) fn on_overlay_ui(&mut self, message: Message) -> Task<Message> {
+        match message {
+            Message::AddOverlay => {
+                let dir = self.project.as_ref().and_then(|p| p.parent().map(Path::to_owned));
+                return Task::perform(
+                    async move {
+                        let mut dialog = rfd::AsyncFileDialog::new()
+                            .set_title("Add overlay pictures")
+                            .add_filter("Pictures", &["png", "PNG", "jpg", "JPG", "jpeg", "JPEG", "webp", "WEBP", "bmp", "BMP", "tif", "TIF", "tiff", "TIFF"]);
+                        if let Some(dir) = dir {
+                            dialog = dialog.set_directory(dir);
+                        }
+                        dialog.pick_files().await.unwrap_or_default().iter().map(|f| f.path().to_owned()).collect()
+                    },
+                    Message::OverlayPicked,
+                );
+            }
+            Message::OverlayPicked(paths) if !paths.is_empty() => {
+                self.edit.checkpoint();
+                // One after another from the playhead, each where it fits.
+                let mut at = self.position();
+                let lane = self.edit.lane_mut(crate::overlay::Track::Overlay);
+                for input in paths {
+                    lane.items.push(crate::overlay::Item { input, text: None, at, start: 0.0, end: ffmpeg::PICTURE_SECONDS, motion: Vec::new(), effects: Vec::new() });
+                    let i = lane.items.len() - 1;
+                    lane.items[i].at = lane.place(i, at);
+                    at = lane.items[i].ends();
+                    self.selected_overlay = Some((crate::overlay::Track::Overlay, i));
+                }
+                self.selected_music = None;
+                self.selected_volume = None;
+                self.selected_sound = None;
+            }
+            Message::OverlayPicked(_) => {}
+            Message::OverlaySelect(i) => {
+                // Typing in another overlay is a change of its own for undo.
+                self.dragging = false;
+                self.selected_overlay = i;
+                if i.is_some() {
+                    self.selected_music = None;
+                    self.selected_volume = None;
+                    self.selected_sound = None;
+                }
+            }
+            Message::OverlayMove((track, i), at) => {
+                if self.edit.item((track, i)).is_some() {
+                    self.begin_drag();
+                    let lane = self.edit.lane_mut(track);
+                    lane.items[i].at = lane.place(i, at);
+                }
+            }
+            Message::OverlayTrim((track, i), start, t) => {
+                if self.edit.item((track, i)).is_some() {
+                    self.begin_drag();
+                    let lane = self.edit.lane_mut(track);
+                    let (lo, hi) = lane.room(i);
+                    let item = &mut lane.items[i];
+                    if start {
+                        // Its picture stays where it is on the edit; a
+                        // picture has nothing before its own start.
+                        let earliest = (item.start - (item.at - lo)).max(0.0);
+                        let t = t.clamp(earliest, item.end - edit::MIN_CUT);
+                        item.at += t - item.start;
+                        item.start = t;
+                    } else {
+                        let latest = (item.start + (hi - item.at)).min(item.start + ffmpeg::PICTURE_MOST);
+                        item.end = t.clamp(item.start + edit::MIN_CUT, latest);
+                    }
+                }
+            }
+            Message::OverlayJump(at) => {
+                self.follow = true;
+                if let Some((i, t)) = self.edit.locate(at) {
+                    self.goto(i, t, false);
+                }
+            }
+            Message::OverlayKeyMove(r, effects, key, t) => {
+                self.follow = true;
+                self.begin_drag();
+                let gap = 1.0 / self.fps();
+                let Some(item) = self.edit.item_mut(r) else { return Task::none() };
+                let local = if effects {
+                    crate::view::retime(&mut item.effects, key, t, gap);
+                    item.effects.get(key).map(|k| k.t)
+                } else {
+                    crate::view::retime(&mut item.motion, key, t, gap);
+                    item.motion.get(key).map(|k| k.t)
+                };
+                // Follow the mark, so what it holds shows as it moves.
+                if let Some(at) = local.map(|t| item.at + t - item.start)
+                    && let Some((i, t)) = self.edit.locate(at)
+                {
+                    self.scrub_to(i, t);
+                }
+            }
+            Message::OverlayPicture(key, Ok((picture, missing))) => {
+                static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+                if let Some(font) = missing {
+                    self.error = Some(format!("The font {font} isn't on this computer; its text shows in Inter"));
+                }
+                self.overlay_thumbs.insert(key.clone(), overlay_thumb(&picture));
+                self.overlay_pictures.insert(key, Some((NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed), picture)));
+            }
+            Message::OverlayPicture(key, Err(e)) => {
+                self.error = Some(format!("Couldn't read the overlay {}: {e}", key.trim_start_matches("file:")));
+            }
+            Message::AddText => {
+                self.edit.checkpoint();
+                let at = self.position();
+                let lane = self.edit.lane_mut(crate::overlay::Track::Text);
+                lane.items.push(crate::overlay::Item { input: PathBuf::new(), text: Some(Default::default()), at, start: 0.0, end: ffmpeg::PICTURE_SECONDS, motion: Vec::new(), effects: Vec::new() });
+                let i = lane.items.len() - 1;
+                lane.items[i].at = lane.place(i, at);
+                self.selected_overlay = Some((crate::overlay::Track::Text, i));
+                self.selected_music = None;
+                self.selected_volume = None;
+                self.selected_sound = None;
+                // Its words and look are set in the text panel, open now.
+                self.text_of = None;
+            }
+            _ => {}
+        }
+        Task::none()
+    }
+}

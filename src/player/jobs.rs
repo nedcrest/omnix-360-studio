@@ -272,3 +272,171 @@ impl App {
         Task::none()
     }
 }
+
+impl App {
+    /// Long work: export, colour tracking, saving a photo: this area's messages, as `handle` passes them on.
+    pub(super) fn on_jobs(&mut self, message: Message) -> Task<Message> {
+        match message {
+            Message::Export => {
+                if self.edit.cuts.is_empty() || self.exporting.is_some() {
+                    return Task::none();
+                }
+                let dir = self.export_base().parent().map(Path::to_owned);
+                let (clips, ext) = (self.export_clips, self.export_format.extension());
+                let name = format!("{}_{}.{ext}", self.export_name(), self.resolution);
+                return Task::perform(
+                    async move {
+                        let mut dialog = rfd::AsyncFileDialog::new();
+                        if let Some(dir) = dir {
+                            dialog = dialog.set_directory(dir);
+                        }
+                        if clips {
+                            dialog.set_title("Export the cuts as clips, into the folder").pick_folder().await.map(|f| f.path().to_owned())
+                        } else {
+                            let kind = if ext == "mov" { "QuickTime video" } else { "MP4 video" };
+                            dialog.set_title("Export video").add_filter(kind, &[ext]).set_file_name(name).save_file().await.map(|f| f.path().to_owned())
+                        }
+                    },
+                    Message::ExportTo,
+                );
+            }
+            Message::ExportTo(None) => {}
+            Message::ExportTo(Some(path)) => return self.start_export(path),
+            Message::ExportProgress(f) => {
+                if let Some((_, done)) = &mut self.exporting {
+                    *done = f;
+                }
+            }
+            Message::ExportCancel => {
+                if let Some((cancel, _)) = &self.exporting {
+                    cancel.store(true, std::sync::atomic::Ordering::Relaxed);
+                }
+            }
+            Message::PickColour if self.on_flat() => {}
+            Message::PickColour => {
+                self.picking_white = false;
+                if self.picking.take().is_none() && self.clip.is_some() {
+                    self.with_playback(Playback::pause);
+                    self.picking = Some(None);
+                    self.save_status = Some("Draw a box over the subject to track its colour (Esc cancels)".to_owned());
+                } else {
+                    self.save_status = None;
+                }
+            }
+            Message::PickArea(area) => {
+                if self.picking.is_some() {
+                    self.picking = Some(Some(area));
+                }
+            }
+            Message::AreaPicked(area, aspect) => {
+                self.picking = None;
+                self.save_status = None;
+                if area.width < 0.004 || area.height < 0.004 {
+                    return Task::none();
+                }
+                if std::mem::take(&mut self.picking_white) {
+                    if let Some((rgb, _)) = self.sample_area(area, aspect) {
+                        self.white_balance(rgb);
+                    }
+                } else if let Some((rgb, dir)) = self.sample_area(area, aspect) {
+                    match crate::track::Colour::from_rgb(rgb, 18.0) {
+                        Ok(colour) => return self.start_track(colour, crate::track::hex(rgb), dir),
+                        Err(e) => self.error = Some(format!("{e:#}")),
+                    }
+                }
+            }
+            Message::TrackProgress(f) => {
+                if let Some((_, done)) = &mut self.tracking {
+                    *done = f;
+                }
+            }
+            Message::TrackCancel => {
+                if let Some((cancel, _)) = &self.tracking {
+                    cancel.store(true, std::sync::atomic::Ordering::Relaxed);
+                }
+            }
+            Message::Tracked(result) => {
+                let cancelled = self.tracking.take().is_some_and(|(c, _)| c.load(std::sync::atomic::Ordering::Relaxed));
+                match result {
+                    Ok(done) => self.follow_track(done),
+                    Err(_) if cancelled => self.save_status = Some("Tracking cancelled".to_owned()),
+                    Err(e) => self.error = Some(format!("Tracking failed: {e}")),
+                }
+                return self.close_when_stopped();
+            }
+            Message::ExportDone(result) => {
+                let cancelled = self.exporting.take().is_some_and(|(c, _)| c.load(std::sync::atomic::Ordering::Relaxed));
+                match result {
+                    Ok(paths) => {
+                        let name = |p: &PathBuf| p.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+                        self.save_status = Some(match paths.as_slice() {
+                            [one] => format!("Exported {}", name(one)),
+                            [first, ..] => format!("Exported {} clips to {}", paths.len(), first.parent().map_or_else(String::new, |d| d.display().to_string())),
+                            [] => "Exported nothing".to_owned(),
+                        });
+                    }
+                    Err(_) if cancelled => self.save_status = Some("Export cancelled".to_owned()),
+                    Err(e) => self.error = Some(format!("Export failed: {e}")),
+                }
+                return self.close_when_stopped();
+            }
+            Message::Save(what) => {
+                let Some(c) = &self.clip else { return Task::none() };
+                let media = &c.playback.media;
+                let stem = media.input.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+                let name = format!("{stem}_{:.2}s_{}.png", c.playback.shown_pts, if what == Saving::View { "view" } else { "360" });
+                let dir = media.input.parent().map(Path::to_owned);
+                return Task::perform(
+                    async move {
+                        let mut dialog = rfd::AsyncFileDialog::new().set_title("Save photo").add_filter("PNG image", &["png"]).set_file_name(name);
+                        if let Some(dir) = dir {
+                            dialog = dialog.set_directory(dir);
+                        }
+                        dialog.save_file().await.map(|f| f.path().to_owned())
+                    },
+                    move |path| Message::SaveTo(what, path),
+                );
+            }
+            Message::SaveTo(_, None) => {}
+            Message::SaveTo(what, Some(path)) => {
+                let Some(c) = &self.clip else { return Task::none() };
+                let media = &c.playback.media;
+                let shot = match what {
+                    Saving::Sphere => export::Shot::Sphere { width: SAVE_SPHERE_PX },
+                    Saving::View => {
+                        let k = SAVE_VIEW_PX / self.view_size.width.max(self.view_size.height).max(1.0);
+                        // Even sizes keep image tools that halve chroma happy.
+                        let px = |v: f32| ((v * k / 2.0).round() as usize).max(1) * 2;
+                        export::Shot::View {
+                            camera: Box::new(self.camera()),
+                            size: (px(self.view_size.width), px(self.view_size.height)),
+                        }
+                    }
+                };
+                let request = export::Request {
+                    input: media.input.clone(),
+                    flat: media.flat,
+                    hw: media.hw,
+                    rig: media.rig.clone(),
+                    stab: media.stab.clone(),
+                    readout_ms: media.readout_ms,
+                    t: c.playback.shown_pts,
+                    rolling_shutter: self.rolling_shutter,
+                    shot,
+                    path,
+                };
+                self.save_status = Some("Saving photo…".to_owned());
+                return Task::perform(blocking(move || export::save(request).map_err(|e| format!("{e:#}"))), Message::Saved);
+            }
+            Message::Saved(result) => match result {
+                Ok(_) => self.save_status = None,
+                Err(e) => {
+                    self.save_status = None;
+                    self.error = Some(format!("Saving failed: {e}"));
+                }
+            },
+            _ => {}
+        }
+        Task::none()
+    }
+}

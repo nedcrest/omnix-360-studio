@@ -16,6 +16,7 @@
 //! window of its own.
 
 use super::{App, Message, blocking, tip};
+use super::tracks::probe_sound;
 use crate::project::SoundTrack;
 use iced::widget::{button, column, container, image, row, rule, scrollable, text, tooltip};
 use iced::{Alignment, Element, Length, Task};
@@ -438,5 +439,49 @@ mod tests {
     fn length_reads_as_minutes() {
         assert_eq!(clock(65.4), "1:05");
         assert_eq!(clock(3.0), "0:03");
+    }
+}
+
+impl App {
+    /// The bin: this area's messages, as `handle` passes them on.
+    pub(super) fn on_bin(&mut self, message: Message) -> Task<Message> {
+        match message {
+            // Pinned, it stays open.
+            Message::BinPanel if self.bin.open && self.bin.pinned => {}
+            Message::BinPanel => self.bin.open = !self.bin.open,
+            Message::BinPin => {
+                self.bin.pinned = !self.bin.pinned;
+                self.bin.open |= self.bin.pinned;
+            }
+            Message::BinRefresh => return self.rescan_bin(),
+            Message::BinPreview(path, kind) => return self.bin_preview(path, kind),
+            Message::BinStop => self.stop_preview(),
+            Message::BinMeta(read) => self.bin.meta.extend(read),
+            Message::BinFrames(path, frames) => {
+                if let Some(p) = self.bin.preview.as_mut().filter(|p| p.path == path) {
+                    p.frames = frames;
+                }
+            }
+            Message::BinAdd(path, Kind::Clip, place) => {
+                // Where it goes is decided now, from the playhead now: the
+                // clip may take a while to load.
+                let spot = self.spot(place);
+                self.placing.insert(path.clone(), spot);
+                return self.update(Message::Picked(vec![path]));
+            }
+            Message::BinAdd(path, Kind::Picture, _) => return self.update(Message::OverlayPicked(vec![path])),
+            Message::BinAdd(path, Kind::Sound(which), place) => {
+                // Onto its section's track, where it fits nearest the spot,
+                // decided now from the playhead now.
+                let at = match self.spot(place) {
+                    Spot::End => None,
+                    Spot::At(t) => Some(t),
+                    Spot::Join(t) => Some(crate::project::offsets(&self.edit.cuts).into_iter().chain([self.edit.duration()]).nth(self.edit.nearest_join(t)).unwrap_or(t)),
+                };
+                return probe_sound(which, path, at);
+            }
+            _ => {}
+        }
+        Task::none()
     }
 }

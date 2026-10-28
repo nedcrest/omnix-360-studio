@@ -505,3 +505,51 @@ mod tests {
         assert!((cut_gain(-6.0, 3.0, 3.0) - 1.0).abs() < 1e-6);
     }
 }
+
+impl App {
+    /// Playing and moving through the edit: this area's messages, as `handle` passes them on.
+    pub(super) fn on_transport(&mut self, message: Message) -> Task<Message> {
+        match message {
+            Message::Tick => {
+                self.tick();
+                if self.clip.as_ref().is_some_and(|c| c.playback.playing) {
+                    self.reveal_playhead();
+                }
+            }
+            Message::TimelineZoom(factor, anchor) => self.zoom_timeline(self.timeline_zoom * factor, anchor),
+            Message::TimelineZoomTo(v) => self.zoom_timeline(self.timeline_most_zoom().powf(v), None),
+            Message::TimelinePan(start) => self.timeline_start = start,
+            Message::Toggle => {
+                self.follow = true;
+                let playing = self.clip.as_ref().is_some_and(|c| c.playback.playing);
+                if !playing && self.position() >= self.edit.duration() - 1.5 / self.fps() {
+                    // From the end of the edit, play again from the start.
+                    let start = self.edit.cuts.first().map_or(0.0, |c| c.start);
+                    self.goto(0, start, true);
+                } else {
+                    self.with_playback(Playback::toggle);
+                }
+            }
+            Message::Scrub(t) => {
+                self.follow = true;
+                // In an overlap, the selected cut's time, if it's one of the two.
+                let selected = self.selected.filter(|&i| i < self.edit.cuts.len()).and_then(|i| {
+                    let (from, c) = (self.edit.offset(i), &self.edit.cuts[i]);
+                    (t >= from && t < from + c.len()).then(|| (i, c.start + t - from))
+                });
+                if let Some((i, t)) = selected.or_else(|| self.edit.locate(t)) {
+                    self.scrub_to(i, t);
+                }
+            }
+            Message::ScrubDone => {
+                self.dragging = false;
+                self.with_playback(Playback::scrub_end);
+                if let Some((_, inc)) = &mut self.partner {
+                    inc.playback.scrub_end();
+                }
+            }
+            _ => {}
+        }
+        Task::none()
+    }
+}

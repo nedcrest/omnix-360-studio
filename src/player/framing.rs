@@ -277,3 +277,121 @@ impl App {
         })
     }
 }
+
+impl App {
+    /// The view and its keyframes: this area's messages, as `handle` passes them on.
+    pub(super) fn on_framing(&mut self, message: Message) -> Task<Message> {
+        match message {
+            Message::LookDone => {}
+            Message::Framing(on) => {
+                self.framing = on;
+                if !on {
+                    self.picking = None;
+                }
+            }
+            Message::KeyMove(i, k, _) if self.edit.cuts.get(i).is_none_or(|c| k >= c.keyframes.len()) => {}
+            Message::KeyAdd => {
+                if self.playing_cut().is_some() {
+                    self.edit.checkpoint();
+                    self.key_view();
+                }
+            }
+            Message::KeyDelete => {
+                if let Some(k) = self.current_key() {
+                    self.edit.checkpoint();
+                    self.edit.cuts[self.current].keyframes.remove(k);
+                }
+            }
+            Message::KeyEase(ease) => {
+                if let Some(k) = self.current_key()
+                    && self.edit.cuts[self.current].keyframes[k].ease != ease
+                {
+                    self.edit.checkpoint();
+                    self.edit.cuts[self.current].keyframes.set_ease(k, ease);
+                    self.follow = true;
+                }
+            }
+            Message::KeyFollow(_) | Message::Stab(_) | Message::Projection(_) if self.on_flat() => {}
+            Message::KeyFollow(aiming) => {
+                let (Some(k), Some((_, t))) = (self.current_key(), self.playing_cut()) else { return Task::none() };
+                if Aiming::of(&self.edit.cuts[self.current].keyframes[k].follow) == aiming {
+                    return Task::none();
+                }
+                let follow = match aiming {
+                    Aiming::Fixed => None,
+                    Aiming::Stick => Some(Follow::Stick),
+                    // A track comes from picking its colour; the keyframe
+                    // here follows it once tracked.
+                    Aiming::Colour => return self.update(Message::PickColour),
+                };
+                let aims = self.aims(t);
+                self.edit.checkpoint();
+                self.edit.cuts[self.current].keyframes.set_follow(k, follow, &|f, _| aims.iter().find(|a| &a.0 == f).and_then(|a| a.1));
+                self.follow = true;
+            }
+            Message::KeyJump(i, k) => {
+                self.follow = true;
+                self.selected = Some(i);
+                if let Some(t) = self.edit.cuts.get(i).and_then(|c| c.keyframes.get(k)).map(|k| k.t) {
+                    let playing = self.clip.as_ref().is_some_and(|c| c.playback.playing);
+                    self.goto(i, t, playing);
+                }
+            }
+            Message::KeyMove(i, k, t) => {
+                self.follow = true;
+                self.begin_drag();
+                let gap = 1.0 / self.fps();
+                let Some(cut) = self.edit.cuts.get_mut(i) else { return Task::none() };
+                cut.keyframes.retime(k, t, gap);
+                let t = cut.keyframes[k].t;
+                self.scrub_to(i, t);
+            }
+            Message::Look { yaw, pitch, roll } => {
+                let look = self.free_look();
+                look.yaw += yaw.to_degrees();
+                look.pitch += pitch.to_degrees();
+                look.roll += roll.to_degrees();
+            }
+            Message::Zoom(deg) => self.free_look().zoom_by(deg),
+            Message::Fov(deg) => self.free_look().fov = deg,
+            Message::AngleInput(angle, typed) => self.type_angle(angle, typed),
+            Message::AngleDone => {}
+            Message::AngleScrubStart(angle) => self.scrubbing = Some(angle),
+            Message::AngleScrubDone => self.scrubbing = None,
+            Message::AngleScrub(angle, dx) => self.scrub_angle(angle, dx),
+            Message::AngleNudge(angle, dir) => self.nudge_angle(angle, dir),
+            Message::AngleArrow(Some(angle), dir) => self.nudge_angle(angle, dir),
+            Message::AngleArrow(None, dir) => self.free_look().pitch += 5.0 * dir,
+            Message::Stab(mode) => {
+                // The playing cut's, and the one new cuts get.
+                self.opts.stabilize = mode;
+                if self.edit.cuts.get(self.current).is_some_and(|c| c.stabilize != Some(mode)) {
+                    self.edit.checkpoint();
+                    self.edit.cuts[self.current].stabilize = Some(mode);
+                }
+                self.with_playback(|p| p.media.stab.set_mode(mode));
+            }
+            Message::Projection(p) => {
+                let look = self.free_look();
+                look.projection = p;
+                look.reset();
+            }
+            Message::Source(s) => {
+                let size = match s {
+                    Source::Proxy => None,
+                    Source::Osv(size) => Some(size),
+                };
+                self.opts.osv_size = size;
+                self.with_playback(|p| p.set_osv_size(size));
+            }
+            Message::RollingShutter(on) => self.rolling_shutter = on,
+            Message::FullOnPause(on) => {
+                self.full_on_pause = on;
+                self.with_playback(|p| p.set_full_on_pause(on));
+            }
+            Message::ResetView => self.free_look().reset(),
+            _ => {}
+        }
+        Task::none()
+    }
+}

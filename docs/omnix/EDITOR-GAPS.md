@@ -610,6 +610,30 @@ How it fits:
   lane; music and SFX clips want the same menu later. Context menus at the
   pointer are one of the Fitts's-law points in `TIMELINE-UX.md`.
 
+### 34. Import from devices in the studio — medium, footage-agent (user, 2026-10-28)
+
+The user recalled wanting a new project plus dropping files into it from
+devices (phone, camera, drone), "or some handy integration". Then they
+saw part of it was done. What exists and what doesn't:
+- **Exists:** the studio's «Новий проєкт» (`95d646f`: creates the folder
+  tree) and `scripts/ingest.py` (CLI). It finds mounted volumes with a
+  `DCIM` folder, takes the day's files (`--date`), merges the camera's
+  internal memory and its card, puts `.LRF` aside as proxies, never deletes
+  originals, and has `--dry-run`.
+- **Missing:**
+  - an **«Імпорт» button in the studio** for the chosen project;
+  - a **phone** path: Android mounts over MTP under
+    `/run/user/1000/gvfs/mtp:*`, not `/media`, so `find_sources` misses it;
+  - checking the **drone** (DJI Neo 2 card) and Osmo 360 cards:
+    probably DCIM too, check;
+  - **skipping files already imported** (size and name, or a short hash),
+    so the same card can be read twice;
+  - a **per-device subfolder** in `01_footage` (`phone/`, `action2/`,
+    `neo2/`, `osmo360/`), from the camera's metadata or file name;
+  - **progress** while copying (a long job, like gap 11's modal).
+- Footage-agent's side: the other agent may take it. Recorded in
+  `docs/OMNIX.md` there too.
+
 ## Format rule for all of these
 
 New fields only, each `#[serde(default, skip_serializing_if = …)]`, so every
@@ -632,7 +656,7 @@ whenever a better grouping shows. `ROADMAP.md` shows the same as cards (field
    two modes → 9 pack 1 (with 7) → 5 markers → 9 click routes → 9 snapping
    → 9 skimmer (needs 10 for S) → 9 action bar → 9 typed time and UI scale
    → 27 overview strip, centred playhead option.
-3. **Матеріал і бін** (material in): 1 + 2 bin buttons (done) → bin
+3. **Матеріал і бін** (material in): 34 import from devices in the studio; 1 + 2 bin buttons (done) → bin
    preview in Omnix's viewer (designed with 10: the viewer gets three
    states) → bin grid, ratings from `notes.json`, LUTs, E/W → «new project
    with folders» in Omnix.

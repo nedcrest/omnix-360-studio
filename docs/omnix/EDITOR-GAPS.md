@@ -394,6 +394,17 @@ How to build it so the player and the export sound the same:
   | gentle `dynaudnorm=f=250:g=15:p=0.9:m=8` | 12.7 | 6.8 |
   | strong `speechnorm=e=12.5:r=0.0001:l=1` | 11.8 | 3.3 |
 
+  **Correction (2026-10-28, after the user heard no difference):**
+  - Measured moment to moment, the gentle B lifted quiet words only 2.5 dB.
+  - Worse, dynaudnorm's default boundary ramp made **every cut start 13–15
+    dB quiet** for 1–2 s in the export.
+  - Fixed in `e78442b`: `b=1`, and the default is now the medium
+    `dynaudnorm=f=150:g=7:p=0.9:m=12:b=1`. Quiet words go up +5.5 dB and
+    the cut starts match the plain export.
+
+  The samples were regenerated: A plain, B gentle, **C medium (the
+  default)**, D speechnorm. Listen around 28–34 s of the voice.
+  Old note:
   Listening samples, each at −16 LUFS, so only the character differs:
   `~/omnix-samples/out/levelers/{voice-0001,clip-0005}-{A-plain,B-gentle,
   C-strong}.flac`. Default until the user picks: B, gentle. The strong one

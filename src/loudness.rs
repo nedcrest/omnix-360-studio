@@ -17,16 +17,25 @@ use std::process::Stdio;
 pub const TARGET_LUFS: f64 = -16.0;
 /// The most a cut is raised or lowered when normalized, dB.
 pub const MOST_GAIN: f64 = 24.0;
+/// The gentle speech leveler a cut gets with `Cut::even`: over quarter
+/// seconds, quiet stretches are lifted towards the loud ones (at most 8x),
+/// loud ones left alone. Chosen over `speechnorm` (stronger, and may pump
+/// and lift the noise between words) on Kos clips: loudness range 16.0 →
+/// 12.7 LU on a cleaned voice, 10.9 → 6.8 on a clip's own sound. The user
+/// has samples of both to choose by ear (EDITOR-GAPS gap 11).
+pub const LEVELER: &str = "dynaudnorm=f=250:g=15:p=0.9:m=8";
 /// Quieter than this is silence, not something to raise.
 const SILENT_LUFS: f64 = -70.0;
 
 /// The integrated loudness of `duration` seconds of `input`'s first sound
-/// track from `start`, LUFS; `None` if it's silent there.
-pub fn measure(input: &Path, start: f64, duration: f64) -> Result<Option<f64>> {
+/// track from `start`, LUFS, after `filter` if any (as the cut will sound);
+/// `None` if it's silent there.
+pub fn measure(input: &Path, start: f64, duration: f64, filter: Option<&str>) -> Result<Option<f64>> {
+    let chain = filter.map_or("ebur128=framelog=quiet".to_owned(), |f| format!("{f},ebur128=framelog=quiet"));
     let out = crate::ffmpeg::tool("ffmpeg")
         .args(["-hide_banner", "-nostats", "-nostdin", "-ss", &start.to_string(), "-t", &duration.to_string(), "-i"])
         .arg(input)
-        .args(["-map", "0:a:0", "-af", "ebur128=framelog=quiet", "-f", "null", "-"])
+        .args(["-map", "0:a:0", "-af", &chain, "-f", "null", "-"])
         .stdout(Stdio::null())
         .output()
         .context("running ffmpeg")?;
@@ -61,19 +70,20 @@ pub fn measure_cut(cut: &crate::project::Cut) -> Result<Option<(f64, f64)>> {
     if !crate::ffmpeg::has_audio(&file).unwrap_or(false) {
         return Ok(None);
     }
-    Ok(measure(&file, cut.start, cut.end - cut.start)?.map(|lufs| (lufs, normalizing_gain(lufs))))
+    Ok(measure(&file, cut.start, cut.end - cut.start, cut.even.then_some(LEVELER))?.map(|lufs| (lufs, normalizing_gain(lufs))))
 }
 
 /// `rosmo360 normalize`: measures each cut (all, or those numbered in
-/// `only`, from 1) and gives it the gain to the target, printing a line
-/// each; writes the project to `output` if given.
-pub fn normalize(project: &std::path::Path, only: &[usize], output: Option<&std::path::Path>) -> Result<()> {
+/// `only`, from 1), evened out first if `even`, and gives it the gain to the
+/// target, printing a line each; writes the project to `output` if given.
+pub fn normalize(project: &std::path::Path, only: &[usize], even: bool, output: Option<&std::path::Path>) -> Result<()> {
     let mut p = crate::project::Project::load(project)?;
     for (n, cut) in p.cuts.iter_mut().enumerate() {
         if !only.is_empty() && !only.contains(&(n + 1)) {
             continue;
         }
         let name = cut.input.file_name().map_or_else(String::new, |f| f.to_string_lossy().into_owned());
+        cut.even = even;
         match measure_cut(cut)? {
             Some((lufs, gain)) => {
                 println!("#{:<3} {name}  {lufs:.1} LUFS  {:+.1} dB", n + 1, gain);
@@ -112,13 +122,15 @@ mod tests {
         let quiet = make("quiet.wav", "sine=f=440:d=6,volume=-30dB");
         let louder = make("louder.wav", "sine=f=440:d=6,volume=-24dB");
         let silent = make("silent.wav", "anullsrc=r=48000:cl=mono,atrim=duration=3");
-        let (a, b) = (measure(&quiet, 0.0, 6.0).unwrap().unwrap(), measure(&louder, 0.0, 6.0).unwrap().unwrap());
+        let (a, b) = (measure(&quiet, 0.0, 6.0, None).unwrap().unwrap(), measure(&louder, 0.0, 6.0, None).unwrap().unwrap());
         // 6 dB louder reads 6 LU more, and the gain to the target follows.
         assert!(((b - a) - 6.0).abs() < 0.2, "{a} {b}");
         assert!((gain_to_target(a) - (TARGET_LUFS - a)).abs() < 0.06);
         // Just a stretch of it measures the same, and silence is none.
-        assert!((measure(&quiet, 2.0, 3.0).unwrap().unwrap() - a).abs() < 0.3);
-        assert_eq!(measure(&silent, 0.0, 3.0).unwrap(), None);
+        assert!((measure(&quiet, 2.0, 3.0, None).unwrap().unwrap() - a).abs() < 0.3);
+        assert_eq!(measure(&silent, 0.0, 3.0, None).unwrap(), None);
+        // The leveler lifts a steady quiet tone towards its peak.
+        assert!(measure(&quiet, 0.0, 6.0, Some(LEVELER)).unwrap().unwrap() > a + 6.0);
         assert_eq!(normalizing_gain(-60.0), MOST_GAIN);
         std::fs::remove_dir_all(&dir).unwrap();
     }

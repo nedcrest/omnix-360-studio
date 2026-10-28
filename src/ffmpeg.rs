@@ -787,6 +787,8 @@ pub struct Sound<'a> {
     pub volume: &'a [crate::project::VolumeKey],
     /// The cut's own level, dB (`Cut::sound_db`), applied only in a mix.
     pub gain: f64,
+    /// Evened out first (`loudness::LEVELER`), only in a mix.
+    pub even: bool,
     /// Seconds it crossfades with the stretch before, only in a mix.
     pub crossfade: f64,
 }
@@ -886,7 +888,7 @@ impl Encoder {
             }
         }
         // The music's inputs, before any output option.
-        let points = audio.iter().any(|s| !s.volume.is_empty() || s.crossfade > 0.0 || s.gain != 0.0);
+        let points = audio.iter().any(|s| !s.volume.is_empty() || s.crossfade > 0.0 || s.gain != 0.0 || s.even);
         let graph = mix.filter(|m| m.matters() || points).map(|m| mixed(&mut cmd, audio, m)).transpose()?;
         cmd.args(["-map", "0:v"]);
         if let Some(graph) = graph {
@@ -975,7 +977,8 @@ fn mixed(cmd: &mut Command, audio: &[Sound<'_>], mix: &Mix<'_>) -> Result<String
         for (i, sound) in (1..).zip(audio) {
             // Its volume points, in clip time: the stretch's time starts at 0.
             let level = if sound.volume.is_empty() && sound.gain == 0.0 { String::new() } else { format!(",{}", level_filter(sound.gain, sound.volume, &format!("(t+{})", sound.start))) };
-            graph += &format!("[{i}:a:0]{stereo}{}{level}[c{i}];", pad(sound));
+            let even = if sound.even { format!(",{}", crate::loudness::LEVELER) } else { String::new() };
+            graph += &format!("[{i}:a:0]{stereo}{even}{}{level}[c{i}];", pad(sound));
         }
         // Joined in turn: a crossfade overlaps a stretch's end with the
         // next's start (equal power, as the music's), else end to end.

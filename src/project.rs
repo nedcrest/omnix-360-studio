@@ -358,6 +358,10 @@ pub struct Cut {
     /// 0 is as recorded.
     #[serde(default, skip_serializing_if = "is_zero")]
     pub gain: f64,
+    /// Its sound evened out: quiet stretches lifted, loud ones left alone
+    /// (`loudness::LEVELER`), before its level. Normalizing measures it so.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub even: bool,
     /// Its sound is off; `gain` is kept for when it's back on.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub mute: bool,

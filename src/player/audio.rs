@@ -107,9 +107,10 @@ pub struct Audio {
 }
 
 impl Audio {
-    /// Starts playing `input`'s first audio track from `start` seconds.
-    pub fn start(input: &Path, start: f64, volume: f32) -> Result<Audio> {
-        let audio = Audio::prepare(input, start, volume)?;
+    /// Starts playing `input`'s first audio track from `start` seconds,
+    /// through `filter` if any.
+    pub fn start(input: &Path, start: f64, volume: f32, filter: Option<&str>) -> Result<Audio> {
+        let audio = Audio::prepare(input, start, volume, filter)?;
         audio.play();
         Ok(audio)
     }
@@ -117,7 +118,9 @@ impl Audio {
     /// Opens the device and starts decoding from `start`, filling the buffer,
     /// but plays silence until `play`: the next cut's sound, ready ahead, so
     /// moving on to it needn't wait for the device or ffmpeg.
-    pub fn prepare(input: &Path, start: f64, volume: f32) -> Result<Audio> {
+    /// `filter`: an ffmpeg audio filter the sound goes through first (a
+    /// cut's leveler), as the export applies it.
+    pub fn prepare(input: &Path, start: f64, volume: f32, filter: Option<&str>) -> Result<Audio> {
         let device = cpal::default_host().default_output_device().context("no audio output device")?;
         let supported = device.default_output_config().context("querying the audio device")?;
         let format = supported.sample_format();
@@ -125,10 +128,13 @@ impl Audio {
         let channels = config.channels as usize;
         let rate = config.sample_rate as f64;
 
-        let mut child = crate::ffmpeg::tool("ffmpeg")
-            .args(["-v", "error", "-nostdin", "-ss", &start.to_string(), "-i"])
-            .arg(input)
-            .args(["-map", "0:a:0", "-f", "f32le", "-ac", &channels.to_string(), "-ar", &config.sample_rate.to_string(), "-"])
+        let mut cmd = crate::ffmpeg::tool("ffmpeg");
+        cmd.args(["-v", "error", "-nostdin", "-ss", &start.to_string(), "-i"]).arg(input).args(["-map", "0:a:0"]);
+        if let Some(filter) = filter {
+            cmd.args(["-af", filter]);
+        }
+        let mut child = cmd
+            .args(["-f", "f32le", "-ac", &channels.to_string(), "-ar", &config.sample_rate.to_string(), "-"])
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
             .spawn()

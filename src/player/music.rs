@@ -148,7 +148,7 @@ impl Player {
             let ready = || old.iter().position(|o| !o.started && o.is(clip));
             let mut open = match in_step.or_else(ready) {
                 Some(k) => old.swap_remove(k),
-                None => match Audio::prepare(&clip.input, want, 0.0) {
+                None => match Audio::prepare(&clip.input, want, 0.0, None) {
                     Ok(audio) => Open { input: clip.input.clone(), at: clip.at, from: want, audio, started: false },
                     Err(e) => {
                         eprintln!("no music: {e:#}");
@@ -178,7 +178,7 @@ impl Player {
             }
             let mut open = match old.iter().position(|o| o.is(next)) {
                 Some(k) => old.swap_remove(k),
-                None => match Audio::prepare(&next.input, next.start, level(i, next.at)) {
+                None => match Audio::prepare(&next.input, next.start, level(i, next.at), None) {
                     Ok(audio) => Open { input: next.input.clone(), at: next.at, from: next.start, audio, started: false },
                     Err(e) => {
                         eprintln!("no music: {e:#}");

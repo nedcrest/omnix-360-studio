@@ -55,6 +55,8 @@ pub struct Media {
     /// A sound file heard in place of the clip's own (`Cut::audio`), set on
     /// the copy a cut plays; the library's copy has none.
     pub audio: Option<PathBuf>,
+    /// The cut's sound is evened out (`Cut::even`), on the copy it plays.
+    pub even: bool,
     pub rig: Arc<Rig>,
     pub stab: Stabilizer,
     pub readout_ms: f64,
@@ -72,10 +74,16 @@ impl Media {
         self.audio.as_deref().unwrap_or(&self.input)
     }
 
+    /// The filter its sound goes through: the leveler when evened out.
+    pub fn leveler(&self) -> Option<&'static str> {
+        self.even.then_some(crate::loudness::LEVELER)
+    }
+
     /// This clip as cut `cut` plays it: with the cut's audio file, if any.
     fn for_cut(&self, cut: &Cut) -> Media {
         let mut media = self.clone();
         media.audio = heard_audio(cut);
+        media.even = cut.even;
         media.has_audio |= media.audio.is_some();
         media
     }
@@ -166,6 +174,7 @@ impl Media {
             },
             has_audio: ffmpeg::has_audio(&input)?,
             audio: None,
+            even: false,
             proxy,
             osv_size: opts.osv_size,
             hw,
@@ -956,7 +965,7 @@ impl App {
             return;
         };
         match &mut self.partner {
-            Some((j, inc)) if *j == i && inc.playback.media.input == input && inc.playback.media.audio == heard_audio(&self.edit.cuts[i]) => {
+            Some((j, inc)) if *j == i && inc.playback.media.input == input && inc.playback.media.audio == heard_audio(&self.edit.cuts[i]) && inc.playback.media.even == self.edit.cuts[i].even => {
                 let p = &mut inc.playback;
                 // Primed to catch up: started as the edit gets there.
                 if let Some(at) = p.go_at {
@@ -2906,7 +2915,7 @@ impl App {
         let end = if picture { ffmpeg::PICTURE_SECONDS } else { duration };
         let lut = self.auto_lut(&input);
         let spot = self.placing.remove(&input).unwrap_or(bin::Spot::End);
-        let cut = Cut { input, start: 0.0, end, keyframes: Default::default(), stabilize: Some(self.opts.stabilize), note: None, audio: None, volume: Vec::new(), crossfade: 0.0, effects: Vec::new(), lut, old_lut_strength: None, gain: 0.0, mute: false, loudness: None, flat: false, lut_applied: None };
+        let cut = Cut { input, start: 0.0, end, keyframes: Default::default(), stabilize: Some(self.opts.stabilize), note: None, audio: None, volume: Vec::new(), crossfade: 0.0, effects: Vec::new(), lut, old_lut_strength: None, gain: 0.0, even: false, mute: false, loudness: None, flat: false, lut_applied: None };
         let i = match spot {
             bin::Spot::End => self.edit.insert_cut(usize::MAX, cut),
             bin::Spot::At(t) => self.edit.insert_at(t, cut),
@@ -2935,7 +2944,7 @@ impl App {
         let Some(cut) = self.edit.cuts.get(i) else { return };
         let t = t.clamp(cut.start, cut.end);
         // Another clip, or the same clip heard through another audio file.
-        let other_clip = self.clip.as_ref().is_none_or(|c| c.playback.media.input != cut.input || c.playback.media.audio != heard_audio(cut));
+        let other_clip = self.clip.as_ref().is_none_or(|c| c.playback.media.input != cut.input || c.playback.media.audio != heard_audio(cut) || c.playback.media.even != cut.even);
         if (i != self.current || other_clip) && self.held.is_none() {
             self.held = self.sphere();
         }
@@ -3180,7 +3189,7 @@ impl App {
         let loaded = |input: &PathBuf| self.library.iter().find(|m| &m.input == input);
         // A next cut that starts where this one ends in the same clip (after
         // a split) just plays on: no seek, nothing to prime.
-        let carries_on = next_cut.is_some_and(|n| n.input == cut.input && n.audio == cut.audio && (n.start - cut.end).abs() < 1.5 / p.media.fps && n.crossfade == 0.0);
+        let carries_on = next_cut.is_some_and(|n| n.input == cut.input && n.audio == cut.audio && n.even == cut.even && (n.start - cut.end).abs() < 1.5 / p.media.fps && n.crossfade == 0.0);
         // Where the next cut comes in: this one's end, or before it by the
         // crossfade.
         let change = self.edit.crossfade_from(self.current).unwrap_or(cut.end);

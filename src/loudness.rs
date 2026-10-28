@@ -87,14 +87,20 @@ pub fn normalize(project: &std::path::Path, only: &[usize], even: bool, output: 
             continue;
         }
         let name = cut.input.file_name().map_or_else(String::new, |f| f.to_string_lossy().into_owned());
-        cut.even = even;
-        match measure_cut(cut)? {
-            Some((lufs, gain)) => {
+        // Measured as it will sound; changed only once measured, so a cut
+        // that can't be read is left as it was and the rest go on, as in
+        // the app's dialog.
+        let mut trial = cut.clone();
+        trial.even = even;
+        match measure_cut(&trial) {
+            Ok(Some((lufs, gain))) => {
                 println!("#{:<3} {name}  {lufs:.1} LUFS  {:+.1} dB", n + 1, gain);
+                cut.even = even;
                 cut.gain = gain;
                 cut.loudness = Some(lufs);
             }
-            None => println!("#{:<3} {name}  silent, left as it is", n + 1),
+            Ok(None) => println!("#{:<3} {name}  silent, left as it is", n + 1),
+            Err(e) => println!("#{:<3} {name}  couldn't measure, left as it is: {e:#}", n + 1),
         }
     }
     if let Some(out) = output {

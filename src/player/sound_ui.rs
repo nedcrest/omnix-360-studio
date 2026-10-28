@@ -132,7 +132,9 @@ impl App {
             },
             SoundMsg::Close => self.normalize = None,
             SoundMsg::Menu(at) => self.sound_menu = at,
-            SoundMsg::Lower(i) => self.set_cut_sound(i, |c| c.gain += VOICE_OVER_DIP),
+            // Twice at most: further down it would be as good as muted,
+            // without saying so.
+            SoundMsg::Lower(i) => self.set_cut_sound(i, |c| c.gain = (c.gain + VOICE_OVER_DIP).max(normal_gain(c) + 2.0 * VOICE_OVER_DIP)),
             SoundMsg::Restore(i) => self.set_cut_sound(i, |c| c.gain = normal_gain(c)),
             SoundMsg::Mute(i, on) => self.set_cut_sound(i, |c| c.mute = on),
             SoundMsg::Even1(i, on) => {

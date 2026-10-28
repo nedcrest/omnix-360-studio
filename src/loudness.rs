@@ -5,7 +5,7 @@
 //! Why: the user's footage (Kos, 2026-10) measured 15 dB under what web
 //! video is heard at. 0 dB on a level means "as recorded", not "loud
 //! enough", so a cut is measured and given its own level (`Cut::gain`);
-//! the export's limiter (`ffmpeg::LIMITER`) keeps the raised peaks under
+//! the export's limiter (`ffmpeg::mix::LIMITER`) keeps the raised peaks under
 //! full scale.
 
 use anyhow::{Context, Result, bail};

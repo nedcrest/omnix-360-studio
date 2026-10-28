@@ -25,7 +25,7 @@ use std::time::{Duration, Instant};
 /// How much decoded audio to keep ahead of the device.
 const BUFFER_SECONDS: f64 = 0.5;
 
-/// The player's limiter (`build`): the export's limit (`ffmpeg::LIMITER`,
+/// The player's limiter (`build`): the export's limit (`ffmpeg::mix::LIMITER`,
 /// −1.2 dBFS) and its release, seconds.
 const LIMIT: f32 = 0.87;
 const RELEASE: f64 = 0.05;

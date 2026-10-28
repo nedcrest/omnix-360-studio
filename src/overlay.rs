@@ -204,6 +204,34 @@ impl Lane {
 
     /// The edit times item `i` may stretch to before meeting a neighbour:
     /// (earliest start, latest end).
+    /// Item `i` dragged to start at `at`: where it fits nearest (`place`).
+    pub fn move_to(&mut self, i: usize, at: f64) {
+        if i < self.items.len() {
+            self.items[i].at = self.place(i, at);
+        }
+    }
+
+    /// Item `i`'s in edge (`in_edge`) or out edge dragged to `t` in its own
+    /// time. Its picture stays where it is on the edit; it can't start
+    /// before its own 0, run into its neighbours, be shorter than `min`, or
+    /// last longer than `most` from its start.
+    pub fn trim(&mut self, i: usize, in_edge: bool, t: f64, min: f64, most: f64) {
+        if i >= self.items.len() {
+            return;
+        }
+        let (lo, hi) = self.room(i);
+        let item = &mut self.items[i];
+        if in_edge {
+            let earliest = (item.start - (item.at - lo)).max(0.0);
+            let t = t.clamp(earliest, item.end - min);
+            item.at += t - item.start;
+            item.start = t;
+        } else {
+            let latest = (item.start + (hi - item.at)).min(item.start + most);
+            item.end = t.clamp(item.start + min, latest);
+        }
+    }
+
     pub fn room(&self, i: usize) -> (f64, f64) {
         let me = &self.items[i];
         let others = self.items.iter().enumerate().filter(|&(j, _)| j != i).map(|(_, c)| c);
@@ -457,6 +485,27 @@ mod tests {
         assert_eq!(lane.place(2, 12.0), 14.0);
         assert_eq!(lane.place(2, 8.5), 8.0);
         assert_eq!(lane.room(1), (4.0, 20.0));
+    }
+
+    #[test]
+    fn items_trim_in_place_within_their_room() {
+        let mut lane = Lane { items: vec![item(0.0, 4.0), item(10.0, 4.0), item(20.0, 2.0)] };
+        // The in edge 1 s in: it starts 1 s later on the edit.
+        lane.trim(1, true, 1.0, 0.2, 3600.0);
+        assert_eq!((lane.items[1].at, lane.items[1].start), (11.0, 1.0));
+        // Back past its own 0: no further than 0.
+        lane.trim(1, true, -5.0, 0.2, 3600.0);
+        assert_eq!((lane.items[1].at, lane.items[1].start), (10.0, 0.0));
+        // The out edge stops at the next item, and at `most`.
+        lane.trim(1, false, 50.0, 0.2, 3600.0);
+        assert_eq!(lane.items[1].end, 10.0);
+        lane.trim(2, false, 50.0, 0.2, 5.0);
+        assert_eq!(lane.items[2].end, 5.0);
+        // Dragged into the item at 10-20, nearer its start: it stops edge
+        // to edge before it, in the room after the first item.
+        lane.move_to(2, 12.0);
+        assert_eq!(lane.items[2].at, 5.0);
+        lane.trim(9, true, 1.0, 0.2, 5.0);
     }
 
     #[test]

@@ -250,6 +250,18 @@ impl Edit {
         self.insert_cut(at, cut)
     }
 
+    /// Where the cut at index `i` is after cut `from` moved to position `to`
+    /// (`move_cut`'s numbers): for keeping the playing and the selected cut
+    /// the same cuts.
+    pub fn moved_index(from: usize, to: usize, i: usize) -> usize {
+        let landed = if to > from { to - 1 } else { to };
+        if i == from {
+            return landed;
+        }
+        let j = if i > from { i - 1 } else { i };
+        if j >= landed { j + 1 } else { j }
+    }
+
     /// Moves cut `from` so it plays at position `to` (counted before the move).
     pub fn move_cut(&mut self, from: usize, to: usize) {
         let cut = self.cuts.remove(from);
@@ -352,6 +364,20 @@ mod tests {
         assert_eq!(e.cuts.len(), 2);
         assert!(e.redo());
         assert_eq!(e.cuts.len(), 3);
+    }
+
+    #[test]
+    fn indices_follow_a_moved_cut() {
+        // Five cuts a b c d e; b (1) moved to before e (4): a c d b e.
+        let mut e = Edit::default();
+        e.cuts = ["a", "b", "c", "d", "e"].iter().map(|n| cut(n, 0.0, 1.0)).collect();
+        e.move_cut(1, 4);
+        let names: Vec<_> = e.cuts.iter().map(|c| c.input.to_string_lossy().into_owned()).collect();
+        assert_eq!(names, ["a", "c", "d", "b", "e"]);
+        // Each old index lands where its cut now is.
+        assert_eq!((0..5).map(|i| Edit::moved_index(1, 4, i)).collect::<Vec<_>>(), [0, 3, 1, 2, 4]);
+        // And moving one earlier.
+        assert_eq!((0..5).map(|i| Edit::moved_index(3, 0, i)).collect::<Vec<_>>(), [1, 2, 3, 0, 4]);
     }
 
     #[test]

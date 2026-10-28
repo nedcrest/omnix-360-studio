@@ -163,27 +163,13 @@ impl App {
             Message::OverlayMove((track, i), at) => {
                 if self.edit.item((track, i)).is_some() {
                     self.begin_drag();
-                    let lane = self.edit.lane_mut(track);
-                    lane.items[i].at = lane.place(i, at);
+                    self.edit.lane_mut(track).move_to(i, at);
                 }
             }
             Message::OverlayTrim((track, i), start, t) => {
                 if self.edit.item((track, i)).is_some() {
                     self.begin_drag();
-                    let lane = self.edit.lane_mut(track);
-                    let (lo, hi) = lane.room(i);
-                    let item = &mut lane.items[i];
-                    if start {
-                        // Its picture stays where it is on the edit; a
-                        // picture has nothing before its own start.
-                        let earliest = (item.start - (item.at - lo)).max(0.0);
-                        let t = t.clamp(earliest, item.end - edit::MIN_CUT);
-                        item.at += t - item.start;
-                        item.start = t;
-                    } else {
-                        let latest = (item.start + (hi - item.at)).min(item.start + ffmpeg::PICTURE_MOST);
-                        item.end = t.clamp(item.start + edit::MIN_CUT, latest);
-                    }
+                    self.edit.lane_mut(track).trim(i, start, t, edit::MIN_CUT, ffmpeg::PICTURE_MOST);
                 }
             }
             Message::OverlayJump(at) => {

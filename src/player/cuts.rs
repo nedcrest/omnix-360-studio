@@ -103,14 +103,7 @@ impl App {
                 if to != from && to != from + 1 {
                     self.edit.checkpoint();
                     self.selected_sound = None;
-                    let at = |i: usize| {
-                        let landed = if to > from { to - 1 } else { to };
-                        if i == from {
-                            return landed;
-                        }
-                        let j = if i > from { i - 1 } else { i };
-                        if j >= landed { j + 1 } else { j }
-                    };
+                    let at = |i: usize| edit::Edit::moved_index(from, to, i);
                     self.edit.move_cut(from, to);
                     self.current = at(self.current);
                     self.selected = Some(at(from));

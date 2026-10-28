@@ -1743,8 +1743,11 @@ impl App {
                 if let (Some(path), false) = (&self.project, as_new) {
                     return self.update(Message::SaveProjectTo(Some(path.clone())));
                 }
-                // Named after the first clip, or the song a project starts from.
-                let first = self.edit.cuts.first().map(|c| &c.input).or(self.edit.music.clips.first().map(|c| &c.input)).unwrap();
+                // Named after the first clip, or the song (or sound effect) a
+                // project starts from: `has_edit` holds one of them.
+                let Some(first) = self.edit.cuts.first().map(|c| &c.input).or(self.edit.music.clips.first().map(|c| &c.input)).or(self.edit.sfx.clips.first().map(|c| &c.input)) else {
+                    return Task::none();
+                };
                 let dir = self.project.as_ref().unwrap_or(first).parent().map(Path::to_owned);
                 let name = self.project.as_ref().and_then(|p| p.file_name()).map_or_else(
                     || format!("{}_edit.json", first.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default()),

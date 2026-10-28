@@ -976,7 +976,14 @@ fn mixed(cmd: &mut Command, audio: &[Sound<'_>], mix: &Mix<'_>) -> Result<String
     if !audio.is_empty() && audio.iter().all(Sound::sounds) {
         for (i, sound) in (1..).zip(audio) {
             // Its volume points, in clip time: the stretch's time starts at 0.
-            let level = if sound.volume.is_empty() && sound.gain == 0.0 { String::new() } else { format!(",{}", level_filter(sound.gain, sound.volume, &format!("(t+{})", sound.start))) };
+            // Muted is silent whatever its points say (the player's rule).
+            let level = if sound.gain <= crate::project::OFF_DB {
+                ",volume=0".to_owned()
+            } else if sound.volume.is_empty() && sound.gain == 0.0 {
+                String::new()
+            } else {
+                format!(",{}", level_filter(sound.gain, sound.volume, &format!("(t+{})", sound.start)))
+            };
             let even = if sound.even { format!(",{}", crate::loudness::LEVELER) } else { String::new() };
             graph += &format!("[{i}:a:0]{stereo}{even}{}{level}[c{i}];", pad(sound));
         }
@@ -1039,4 +1046,26 @@ fn mixed(cmd: &mut Command, audio: &[Sound<'_>], mix: &Mix<'_>) -> Result<String
     }
     graph += &format!("{}amix=inputs={}:duration=first:normalize=0{fades},{LIMITER}[a]", parts.concat(), parts.len());
     Ok(graph)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn stretch<'a>(input: &'a Path, gain: f64, volume: &'a [crate::project::VolumeKey]) -> Sound<'a> {
+        Sound { input, start: 2.0, duration: Some(4.0), volume, gain, even: false, crossfade: 0.0 }
+    }
+
+    #[test]
+    fn a_muted_cut_is_silent_in_the_mix_whatever_its_points() {
+        let up = [crate::project::VolumeKey { t: 3.0, volume: 6.0 }];
+        let music = crate::project::Music::default();
+        let mix = Mix { sound_db: 0.0, tracks: vec![&music], length: 8.0, fades: Default::default() };
+        let (a, b) = (Path::new("a.mp4"), Path::new("b.mp4"));
+        let graph = mixed(&mut tool("ffmpeg"), &[stretch(a, crate::project::OFF_DB, &up), stretch(b, 3.0, &[])], &mix).unwrap();
+        // The first stretch silenced, the second at +3 dB, the limiter last.
+        assert!(graph.contains("[1:a:0]") && graph.split("[c1]").next().unwrap().contains("volume=0"), "{graph}");
+        assert!(graph.contains(&format!("volume={}", crate::project::gain(3.0))), "{graph}");
+        assert!(graph.ends_with(&format!("{LIMITER}[a]")), "{graph}");
+    }
 }

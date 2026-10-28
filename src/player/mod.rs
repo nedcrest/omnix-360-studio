@@ -117,11 +117,11 @@ fn cut_wave_file(cut: &Cut) -> PathBuf {
     cut.sound_file()
 }
 
-/// A cut's sound as the speakers get it from the mix: the clips' level,
-/// its own (`Cut::sound_db`, silence when muted) and its volume points,
-/// as the export's `level_filter` adds them.
+/// A cut's sound as the speakers get it from the mix, as the export works
+/// it out: its own level (`Cut::sound_db`, silence when muted) plus its
+/// volume points, off at `OFF_DB`; times the clips' level.
 fn cut_gain(clips_db: f64, own_db: f64, points_db: f64) -> f32 {
-    if own_db <= crate::project::OFF_DB { 0.0 } else { music::gain(clips_db + own_db + points_db) }
+    if own_db <= crate::project::OFF_DB { 0.0 } else { music::gain(own_db + points_db) * music::gain(clips_db) }
 }
 
 impl fmt::Debug for Media {
@@ -4343,6 +4343,16 @@ impl shader::Program<Message> for Sphere {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_cuts_sound_as_the_export_mixes_it() {
+        // Muted is silent even with a point above 0 dB.
+        assert_eq!(cut_gain(0.0, crate::project::OFF_DB, 6.0), 0.0);
+        // Its own level and points go off at OFF_DB on their own, before
+        // the clips' level, as each stretch's volume filter does.
+        assert_eq!(cut_gain(10.0, -30.0, -12.0), 0.0);
+        assert!((cut_gain(-6.0, 3.0, 3.0) - 1.0).abs() < 1e-6);
+    }
 
     #[test]
     fn editing_keeps_the_editing_keys() {

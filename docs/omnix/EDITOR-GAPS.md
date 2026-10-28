@@ -379,6 +379,25 @@ How to build it so the player and the export sound the same:
   (seconds each).
 - **Step 1 ships with gap 12's limiter** at the end of the export mix
   (−1 dBTP). Without it a +15 dB gain clips.
+- **Step 1 built** (`18671af`): `Cut.gain/mute/loudness`, `loudness.rs`,
+  `rosmo360 normalize`, the export limiter (0.87 = −1.2 dBFS, `level=0`,
+  `latency=1`), the player's limiter. Measured on Kos 22.08 cuts 1–6:
+  −32.5 → −16.1 LUFS, true peak −1.0 dBTP, sync 0.0 ms.
+- **The user asked the same as step 2 (2026-10-28):** "can it normalize by
+  the dB of each stretch, so where it's loud enough it isn't raised and
+  where it's quiet it is?" Measured on Kos, LRA = how far quiet and loud
+  are apart:
+
+  | Filter | DJI_0001 voice | DJI_0005 |
+  |---|---|---|
+  | none | 16.0 LU | 10.9 LU |
+  | gentle `dynaudnorm=f=250:g=15:p=0.9:m=8` | 12.7 | 6.8 |
+  | strong `speechnorm=e=12.5:r=0.0001:l=1` | 11.8 | 3.3 |
+
+  Listening samples, each at −16 LUFS, so only the character differs:
+  `~/omnix-samples/out/levelers/{voice-0001,clip-0005}-{A-plain,B-gentle,
+  C-strong}.flac`. Default until the user picks: B, gentle. The strong one
+  may pump and lift the noise between words.
 - **Step 2, «lift quiet, tame loud».** A fixed, gentle speech leveler per
   cut (ffmpeg `speechnorm` or `dynaudnorm` with preset values, chosen by ear
   on Kos). It sits in the player's audio decode and in the export's stretch

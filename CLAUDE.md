@@ -215,7 +215,18 @@ Runtime dependencies: `ffmpeg` and `ffprobe` CLIs (bundled ones beside the binar
 
 ## Layout
 
-- `src/main.rs`: CLI. `Pipeline` holds the shared setup: rig, lenses, stabiliser, fps.
+**Omnix (this fork) refactored the layout on 2026-10-28**: the map, the plan and what's left are in `docs/omnix/ARCHITECTURE.md`. In short:
+- `src/lib.rs` is the crate; `src/main.rs` only calls `cli::main`.
+- `src/cli.rs` holds the commands.
+- `src/pipeline.rs`: `Pipeline` holds the shared setup (rig, lenses, stabiliser, fps), plus `encode` and `grade_frame`.
+- `src/export.rs` does the export, `src/preview.rs` the contact sheets, `src/analyse.rs` info, scan, seam and track, and `src/fsutil.rs` `replace_file`.
+- `src/loudness.rs` normalizes to −16 LUFS; `src/ffmpeg/mix.rs` is the export's sound mix and limiter.
+- `src/player/mod.rs` keeps the `App` struct, `Message`, update and `view`. Each area handles its own messages in its module (`on_*`):
+  - `file`, `jobs`, `panels`, `transport`, `cuts`, `framing`, `tracks`, `overlay_ui`, `bin`, `sound_ui`;
+  - `bars.rs` draws the bars, `keys.rs` the keyboard, `icons.rs` the icons;
+  - `sphere.rs` is the view widget, `media.rs` the clip.
+
+The entries below describe what each piece does; where they say `main.rs` or `player/mod.rs`, read the module named above.
 - `src/stitch.rs`: CPU reference stitcher. It is the ground truth the shader must match.
   - Lens projection: ThetaPoly with 5 k terms plus tangential.
   - Rasterised validity masks.

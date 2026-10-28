@@ -58,6 +58,25 @@ code as it is, not its history.
    - The user guide knows nothing of sound lanes, Framing, normalize or
      the bin.
 
+## Progress (2026-10-28)
+
+| Step | State | Commits |
+|---|---|---|
+| 1. Library crate | done: `lib.rs`, `cli`, `pipeline`, `export`, `preview`, `analyse`, `fsutil`; export byte-identical | `de8167b` |
+| 2. `Cut::new` | done | `f6cb3ac` |
+| 3. `Edit` wraps `Project` | done: Deref to the project; `Project::as_shown` (save's view rule) tested | `cdd3a77` |
+| 4. Split `player/mod.rs` | done: 4400 → 910 lines; `on_*` per area; `bars.rs` | `c96c636`, `3d91c99`, `67c9841`, `be71b78` |
+| 5. Edit API | in part: volume points, `Music::drag_to`/`trim`, `Lane::move_to`/`trim`, `Edit::moved_index`, `Music::append`, `Edit::attempt`, all tested | `5b28c58`, `a8bf813`, `8530506` |
+| 6. Sound tracks generic | done | `87a3f55` |
+| 7. `ffmpeg` split | in part: `ffmpeg/mix.rs` with its test | `bb7f767` |
+| 8. Timeline lanes | not started: changes drawing and the mouse everywhere, wants the user's eyes after | — |
+| 9. Docs | the code's docs and CLAUDE.md's Layout; the user guide not yet | `e0b4bbf` |
+
+Tests: 63 → 68. Still to do from step 5:
+- one `Selection` enum instead of five loose `Option`s;
+- overlay append and key retime;
+- normalize through one function shared by the dialog and the CLI.
+
 ## Bugs the analysis found — fixed (2026-10-28)
 
 | Commit | Bug |

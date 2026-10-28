@@ -42,10 +42,6 @@ impl std::fmt::Display for Resolution {
     }
 }
 
-/// Renders every cut of `project` back to back into one MP4 at `size`,
-/// with their sound. Each clip is set up once however many cuts use it.
-/// `progress(done, total)` hears of every frame; an error from it (a
-/// cancel) stops the export and removes the unfinished file.
 /// Sets up each cut's clip once per clip and stabilisation (the cut's own
 /// wins over the command's): the pipelines, and per cut the index of its own.
 pub(crate) fn cut_pipelines(project: &mut project::Project, opts: &StitchOpts, proxy: bool) -> Result<(Vec<Pipeline>, Vec<usize>)> {

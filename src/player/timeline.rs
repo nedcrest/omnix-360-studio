@@ -4,9 +4,14 @@
 //! cut's keyframes as diamonds (shaped by their ease): click the bar to seek,
 //! click a diamond to jump to it, drag one to retime it.
 //!
-//! Under the seek bar is the music lane: the music track's clips with their
-//! waveforms, moved and trimmed like cuts, and a line where the video ends
-//! (music beyond it fades out in the export).
+//! Under the cuts is the Clip sound lane: each cut's waveform (what it
+//! plays: its cleaned voice or its clip's sound) with its volume line and
+//! its level tag; a right-click opens the cut's sound menu. Under the seek
+//! bar are the sound lanes, one per `SoundTrack` (Music, SFX): their clips
+//! with waveforms, moved and trimmed like cuts, crossfading with Shift, a
+//! volume line each, and a line where the video ends (sound beyond it
+//! fades out in the export). Every lane has its name pinned at the left.
+//! The View key row shows only while framing.
 //!
 //! Above the cuts is the overlay lane, a canvas of its own (`OverlayLane`):
 //! its pictures as blocks, selected, moved and trimmed like music. Under

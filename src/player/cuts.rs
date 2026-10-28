@@ -26,9 +26,6 @@ pub(super) fn cut_labels(c: &Cut, default: Mode) -> Vec<String> {
 }
 
 impl App {
-    /// Adds the whole clip as a cut at the end of the edit and selects it.
-    /// The first clip starts playing, as opening a clip always did; later
-    /// ones leave playback where it is.
     /// A bin button's place as a spot on the edit, from the playhead now.
     pub(super) fn spot(&self, place: bin::Place) -> bin::Spot {
         match place {
@@ -38,6 +35,9 @@ impl App {
         }
     }
 
+    /// Adds the whole clip as a cut where the bin's button said (else at
+    /// the end) and selects it. The first clip starts playing, as opening a
+    /// clip always did; later ones leave playback where it is.
     pub(super) fn add_cut(&mut self, input: PathBuf, duration: f64) {
         self.edit.checkpoint();
         // A picture has no length of its own: a few seconds, trimmed at will.

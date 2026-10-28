@@ -41,6 +41,7 @@ pub(super) fn probe_sound(which: SoundTrack, path: PathBuf, at: Option<f64>) -> 
 }
 
 impl App {
+    /// Reads `path`'s waveform for its lane, unless it has it.
     pub(super) fn load_waveform(&self, path: &Path) -> Task<Message> {
         if self.waveforms.contains_key(path) {
             return Task::none();
@@ -80,7 +81,6 @@ impl App {
         }))
     }
 
-    /// Saves the edit for undo once per drag.
     /// Selects a sound track's volume point `i`, and nothing else.
     pub(super) fn select_volume(&mut self, which: SoundTrack, i: usize) {
         self.selected_volume = Some((which, i));

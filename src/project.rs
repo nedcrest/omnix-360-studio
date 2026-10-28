@@ -7,10 +7,16 @@
 //! each keyframe on the same moment of footage. Keyframes outside the cut's
 //! in and out points are kept, so extending the cut again brings them back.
 //!
-//! Music is the other way round: its clips sit at times on the edit, so
-//! cutting the video to the music leaves the music where it is. It is cut
-//! on its own lane, and the edit ends with the last video cut, the music
-//! faded out there if it runs on.
+//! The sound tracks (`SoundTrack`: the music, the sound effects) are the
+//! other way round: their clips sit at times on the edit, so cutting the
+//! video to the music leaves the music where it is. Each is cut on its own
+//! lane, and the edit ends with the last video cut, a track faded out there
+//! if it runs on. A cut's own sound has its level (`gain`, normalized to
+//! −16 LUFS by `loudness`), `mute` and `even` (evened out), and plays a
+//! cleaned voice in place of the clip's where `audio` names one.
+//!
+//! This is the public file format: new fields are optional, so an older
+//! project always loads.
 
 use crate::stab::Mode;
 use crate::view::{Aim, Aspect, Camera, Keyframes, Projection, View};
@@ -204,9 +210,9 @@ impl Music {
     }
 
     /// The start nearest `want` where clip `i` fits without overlapping the
-    /// others: clips never play over each other (crossfades will be an effect
-    /// of their own), so one pushed into another stops edge to edge against
-    /// it, and hops past it once `want` is nearer the far side.
+    /// others: a plain drag never makes an overlap (a crossfade is made with
+    /// Shift, `fits`), so one pushed into another stops edge to edge
+    /// against it, and hops past it once `want` is nearer the far side.
     pub fn place(&self, i: usize, want: f64) -> f64 {
         let len = self.clips[i].end - self.clips[i].start;
         let others = || self.clips.iter().enumerate().filter(move |&(j, _)| j != i).map(|(_, c)| c);

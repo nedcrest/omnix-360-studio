@@ -1,7 +1,8 @@
-//! The music track in the player: each song's waveform for the timeline,
-//! and its sound kept in step with the edit while it plays.
+//! A sound track in the player (the music, the sound effects: one `Player`
+//! each): its files' waveforms for the timeline, and its sound kept in step
+//! with the edit while it plays.
 //!
-//! Music has an audio stream of its own, apart from the clips' sound, so it
+//! A track has an audio stream of its own, apart from the clips' sound, so it
 //! plays on through cut changes untouched. It follows edit time: started at
 //! the song's place when playback reaches a music clip, restarted only after
 //! a jump (or if it drifts), and set to its level every frame, which carries

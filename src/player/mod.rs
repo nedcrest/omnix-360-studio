@@ -594,7 +594,6 @@ struct App {
     picking: Option<Option<Rectangle>>,
     /// The box picks a white balance, not a colour to track.
     picking_white: bool,
-    /// The Effects panel shows beside the view.
     /// The panel docked at the right of the view, if one is open.
     side: Option<Side>,
     /// The Info panel (at the left, in the Text panel's place).
@@ -766,7 +765,6 @@ impl App {
         task
     }
 
-    /// Reads `path`'s waveform for the music lane, unless it has it.
     /// Reads the bin again when the project's folder changed: another
     /// project opened, or this one saved somewhere else.
     fn follow_bin(&mut self) -> Task<Message> {
@@ -834,6 +832,7 @@ impl App {
         }
     }
 
+    /// Saves the edit for undo once per drag.
     fn begin_drag(&mut self) {
         if !self.dragging {
             self.edit.checkpoint();
@@ -876,6 +875,9 @@ fn clock(t: f64) -> String {
     format!("{}:{:05.2}", (t / 60.0) as u32, t % 60.0)
 }
 
+/// Runs `f` on a thread of its own and gives its result as a future: for
+/// work that blocks (ffprobe, decoding a waveform) without holding up the
+/// window.
 fn blocking<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> impl Future<Output = T> {
     let (tx, rx) = iced::futures::channel::oneshot::channel();
     std::thread::spawn(move || {

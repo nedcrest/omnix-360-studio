@@ -56,7 +56,8 @@ pub fn measure(input: &Path, start: f64, duration: f64, filter: Option<&str>) ->
     Ok((lufs > SILENT_LUFS).then_some(lufs))
 }
 
-/// The gain, dB, that brings `lufs` to the target, within `MOST_GAIN`.
+/// The gain, dB, that brings `lufs` to the target (unbounded;
+/// `normalizing_gain` holds it within `MOST_GAIN`).
 pub fn gain_to_target(lufs: f64) -> f64 {
     ((TARGET_LUFS - lufs) * 10.0).round() / 10.0
 }

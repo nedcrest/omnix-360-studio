@@ -16,6 +16,7 @@ mod meter;
 mod playback;
 pub mod render;
 mod settings;
+mod sound_ui;
 mod source;
 mod thumbs;
 mod effects;
@@ -94,6 +95,21 @@ impl Media {
 /// (the project's opening says which are missing).
 fn heard_audio(cut: &Cut) -> Option<PathBuf> {
     cut.audio.clone().filter(|a| a.exists())
+}
+
+/// A cut's own sound level as the clip sound lane tags it: "muted", its
+/// gain, "even" when evened out; none at the clip's own level.
+fn cut_level_tag(cut: &Cut) -> Option<String> {
+    let mut parts = Vec::new();
+    if cut.mute {
+        parts.push("muted".to_owned());
+    } else if cut.gain != 0.0 {
+        parts.push(format!("{:+.1}", cut.gain));
+    }
+    if cut.even {
+        parts.push("even".to_owned());
+    }
+    (!parts.is_empty()).then(|| parts.join(" · "))
 }
 
 /// The file to draw cut `cut`'s waveform from (`Cut::sound_file`).
@@ -411,6 +427,8 @@ enum Message {
     Framing(bool),
     /// The interface bigger or smaller by this many steps; 0 resets it.
     UiScale(i32),
+    /// A cut's sound by hand: the Normalize dialog and the right-click menu.
+    Sound(sound_ui::SoundMsg),
     /// A song's waveform, read off the UI thread.
     Waveform(PathBuf, Result<Arc<music::Waveform>, String>),
     /// The waveform of what a cut plays, if it has sound.
@@ -599,6 +617,10 @@ struct App {
     framing: bool,
     /// The interface's size (iced's scale factor), kept in the settings.
     ui_scale: f32,
+    /// The Normalize dialog, while open.
+    normalize: Option<sound_ui::Dialog>,
+    /// The right-click menu on a cut's sound: which cut, where.
+    sound_menu: Option<(usize, iced::Point)>,
     /// The clip selected on a sound track.
     selected_music: Option<(SoundTrack, usize)>,
     /// A sound track's volume point selected, and the cut sound point:
@@ -760,6 +782,8 @@ impl App {
 
             selected_overlay: None,
             framing: false,
+            normalize: None,
+            sound_menu: None,
             selected_music: None,
             selected_volume: None,
             cut_waves_asked: Default::default(),
@@ -2177,6 +2201,7 @@ impl App {
                 self.selected = None;
                 return self.load_waveform(&path);
             }
+            Message::Sound(msg) => return self.sound_ui(msg),
             Message::UiScale(steps) => {
                 self.ui_scale = if steps == 0 {
                     settings::UI_DEFAULT
@@ -3073,6 +3098,21 @@ impl App {
         }
     }
 
+    /// After a cut's sound changed (its level is followed every frame; its
+    /// evening out is in the decode), restarts the playing cut's sound if
+    /// evening out changed, where it is.
+    fn reload_cut_sound(&mut self) {
+        let Some(cut) = self.edit.cuts.get(self.current) else { return };
+        let Some(c) = &self.clip else { return };
+        if c.playback.media.even == cut.even {
+            return;
+        }
+        let playing = c.playback.playing;
+        if let Some((_, t)) = self.playing_cut() {
+            self.goto(self.current, t, playing);
+        }
+    }
+
     /// The view to change by hand: stops following keyframes, carrying on
     /// from the view they show now.
     fn free_look(&mut self) -> &mut View {
@@ -3312,6 +3352,15 @@ impl App {
 
     fn key(&mut self, key: Key, mods: keyboard::Modifiers) -> Task<Message> {
         let step = 5.0;
+        // A dialog or a menu open takes the keys: Esc closes it (or stops a
+        // run), the rest wait.
+        let escape = matches!(key.as_ref(), Key::Named(Named::Escape));
+        if self.normalize.is_some() {
+            return if escape { self.update(Message::Sound(sound_ui::SoundMsg::Cancel)) } else { Task::none() };
+        }
+        if self.sound_menu.is_some() && escape {
+            return self.update(Message::Sound(sound_ui::SoundMsg::Menu(None)));
+        }
         // Editing: the keys that turn, frame or key the view do nothing. K
         // still adds a volume point to a selected sound.
         let sound = self.selected_music.is_some() || self.selected_volume.is_some() || self.selected_sound.is_some();
@@ -3675,7 +3724,8 @@ impl App {
                     all[from..to].to_vec()
                 });
                 let wave = self.waveforms.get(&cut_wave_file(c)).cloned();
-                timeline::Block { labels: cut_labels(c, self.opts.stabilize), from, len: c.end - c.start, start: c.start, keys, sound: c.volume.clone(), wave, thumbs, crossfade: c.crossfade, effects: c.effects.iter().map(|k| k.t).collect() }
+                let level = cut_level_tag(c);
+                timeline::Block { labels: cut_labels(c, self.opts.stabilize), from, len: c.end - c.start, start: c.start, keys, sound: c.volume.clone(), wave, level, muted: c.mute, thumbs, crossfade: c.crossfade, effects: c.effects.iter().map(|k| k.t).collect() }
             })
             .collect();
         let (timeline_start, timeline_span) = self.timeline_window();
@@ -3843,7 +3893,8 @@ impl App {
             text("Drag to give the timeline or the picture more room (double-click: as it was)"),
             tooltip::Position::Top,
         );
-        column![top, view, divider, transport].push(self.angles_strip().filter(|_| self.framing)).push(timeline).push(error.map(|e| container(e).padding([0, 10]))).push(credit()).into()
+        let window: Element<'_, Message> = column![top, view, divider, transport].push(self.angles_strip().filter(|_| self.framing)).push(timeline).push(error.map(|e| container(e).padding([0, 10]))).push(credit()).into();
+        self.normalize_dialog(self.sound_menu_layer(window))
     }
 }
 

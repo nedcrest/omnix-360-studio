@@ -43,6 +43,11 @@ impl App {
             level("Clip sound", self.edit.sound.volume, Message::SoundLevel, "The clips' own sound, in playback and the export."),
             level("Music", self.edit.music.volume, |db| Message::TrackLevel(SoundTrack::Music, db), "The music track, in playback and the export."),
             level("SFX", self.edit.sfx.volume, |db| Message::TrackLevel(SoundTrack::Sfx, db), "The sound effects track, in playback and the export."),
+            iced::widget::button(text("Normalize sound…"))
+                .on_press_maybe((!self.edit.cuts.is_empty()).then(|| {
+                    let scope = self.selected.filter(|&i| i < self.edit.cuts.len()).map_or(super::sound_ui::Scope::All, super::sound_ui::Scope::Cut);
+                    Message::Sound(super::sound_ui::SoundMsg::Open(scope))
+                })),
             note("To change the level within a cut or a track, Ctrl+click its lane on the timeline for a volume point."),
         ]
         .spacing(14)

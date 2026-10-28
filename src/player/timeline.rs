@@ -182,6 +182,10 @@ pub struct Block {
     /// The waveform of the sound it plays (its cleaned voice, else its
     /// clip's), by clip time, once read; none for a silent clip.
     pub wave: Option<Arc<music::Waveform>>,
+    /// Its own sound level as a short tag ("+16.1", "−12 · even"), and
+    /// whether it's muted: shown on the clip sound lane.
+    pub level: Option<String>,
+    pub muted: bool,
     /// How long it overlaps the cut before, dissolving in.
     pub crossfade: f64,
     /// Its effect keyframes' clip times.
@@ -599,7 +603,20 @@ impl Timeline {
                     x += 2.0;
                 }
             });
-            frame.fill(&bars, palette.background.base.text.scale_alpha(0.6));
+            frame.fill(&bars, palette.background.base.text.scale_alpha(if c.muted { 0.2 } else { 0.6 }));
+        }
+        // Each cut's level, where there's room: a tag at its left, so
+        // a lowered or muted cut shows in words, not colour alone.
+        for c in &self.blocks {
+            let (l, r) = self.block_x(c, b);
+            let Some(label) = &c.level else { continue };
+            let w = label.chars().count() as f32 * 6.0 + 8.0;
+            if r - l < w + 12.0 || r < 0.0 || l > b.width {
+                continue;
+            }
+            let x = l.max(PICK + 80.0).min(r - w - 4.0);
+            frame.fill(&Path::rounded_rectangle(Point::new(x, top + h / 2.0 - 7.0), Size::new(w, 14.0), 3.0.into()), iced::Color::from_rgba(0.0, 0.0, 0.0, 0.7));
+            frame.fill_text(Text { content: label.clone(), position: Point::new(x + 4.0, top + h / 2.0), color: iced::Color::WHITE, size: 10.0.into(), align_y: Vertical::Center, ..Default::default() });
         }
         // Through a crossfade the two cuts' sounds overlap, as their
         // pictures do.
@@ -1037,9 +1054,15 @@ impl canvas::Program<Message> for Marks {
                 };
                 Some(canvas::Action::publish(message).and_capture())
             }
-            // Right-click a cut or a song: what file it is.
+            // Right-click a cut or a song: what file it is; a cut's sound:
+            // its menu, where the pointer is.
             Mouse(mouse::Event::ButtonPressed(mouse::Button::Right)) => {
                 let p = cursor.position_in(bounds)?;
+                if self.rows.on_clip_sound(p.y) {
+                    let cut = self.block_at(p.x, bounds)?;
+                    let at = cursor.position()?;
+                    return Some(canvas::Action::publish(Message::Sound(super::sound_ui::SoundMsg::Menu(Some((cut, at))))).and_capture());
+                }
                 let of = if p.y < self.rows.effects_top {
                     super::info::Of::Cut(self.block_at(p.x, bounds)?)
                 } else if let Some(lane) = self.rows.sound_at_y(p.y) {

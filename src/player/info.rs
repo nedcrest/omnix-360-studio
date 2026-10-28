@@ -245,6 +245,9 @@ impl App {
                     let name = audio.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
                     rows.push(("Sound", if audio.exists() { format!("{name}, in place of the clip's") } else { format!("{name} is missing: the clip's own plays") }));
                 }
+                if let Some(level) = sound_level(cut) {
+                    rows.push(("Level", level));
+                }
                 let uses = self.edit.cuts.iter().filter(|c| c.input == info.path).count();
                 if uses > 1 {
                     rows.push(("Used", format!("in {uses} cuts")));
@@ -271,4 +274,23 @@ mod tests {
     fn file_uris_escape_what_a_uri_needs() {
         assert_eq!(super::file_uri(std::path::Path::new("/Videoklipp/Fjell tur/ø_0037.OSV")), "file:///Videoklipp/Fjell%20tur/%C3%B8_0037.OSV");
     }
+}
+
+/// A cut's own sound level in words, if it has one: its gain, muted,
+/// evened out, and what normalizing measured.
+pub fn sound_level(cut: &crate::project::Cut) -> Option<String> {
+    let mut parts = Vec::new();
+    if cut.mute {
+        parts.push("muted".to_owned());
+    }
+    if cut.gain != 0.0 {
+        parts.push(format!("{:+.1} dB", cut.gain));
+    }
+    if cut.even {
+        parts.push("evened out".to_owned());
+    }
+    if let Some(lufs) = cut.loudness {
+        parts.push(format!("measured {lufs:.1} LUFS"));
+    }
+    (!parts.is_empty()).then(|| parts.join(" · "))
 }

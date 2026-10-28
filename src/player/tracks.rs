@@ -189,42 +189,13 @@ impl App {
             Message::MusicTrim(which, i, ..) if i >= self.edit.track(which).clips.len() => {}
             Message::MusicMove(which, i, want, overlap) => {
                 self.begin_drag();
-                if i < self.edit.track(which).clips.len() {
-                    let m = self.edit.track(which);
-                    let c = &m.clips[i];
-                    let len = c.end - c.start;
-                    // A plain drag never overlaps: it stops edge to edge, or
-                    // hops past. With Shift it slides in as far as it may.
-                    let at = if overlap || m.crossfades(i) != (0.0, 0.0) {
-                        crate::project::Music::reach(c.at, want.max(0.0), |at| m.fits(i, at, len, overlap))
-                    } else {
-                        m.place(i, want)
-                    };
-                    self.edit.track_mut(which).clips[i].at = at;
-                }
+                self.edit.track_mut(which).drag_to(i, want, overlap);
             }
             Message::MusicTrim(which, i, in_edge, t, overlap) => {
                 self.begin_drag();
+                // The file's length comes with its waveform.
                 let song = self.waveforms.get(&self.edit.track(which).clips[i].input).map_or(f64::INFINITY, |w| w.duration);
-                let m = self.edit.track(which);
-                let c = &m.clips[i];
-                // Song time to edit time on this clip: the song stays put on
-                // the edit, so trimming its start moves where the clip
-                // begins, not what plays when. Within the song and the edit,
-                // and into a neighbour only with Shift.
-                let to_edit = c.at - c.start;
-                let (start, end) = (c.start, c.end);
-                if in_edge {
-                    let want = t.max(start - c.at).max(0.0).min(end - edit::MIN_CUT);
-                    let start = crate::project::Music::reach(start, want, |s| m.fits(i, s + to_edit, end - s, overlap));
-                    let c = &mut self.edit.track_mut(which).clips[i];
-                    c.at = start + to_edit;
-                    c.start = start;
-                } else {
-                    let want = t.min(song).max(start + edit::MIN_CUT);
-                    let end = crate::project::Music::reach(end, want, |e| m.fits(i, c.at, e - start, overlap));
-                    self.edit.track_mut(which).clips[i].end = end;
-                }
+                self.edit.track_mut(which).trim(i, in_edge, t, overlap, song, edit::MIN_CUT);
             }
             Message::SoundLevel(db) => {
                 self.begin_drag();

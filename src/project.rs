@@ -272,6 +272,42 @@ impl Music {
         (fade_in, fade_out)
     }
 
+    /// Clip `i` dragged to start at edit time `want`. A plain drag never
+    /// overlaps: it stops edge to edge, or hops past (`place`). With
+    /// `overlap` (Shift) it slides into a neighbour as far as it may, and
+    /// so does a clip already crossfading.
+    pub fn drag_to(&mut self, i: usize, want: f64, overlap: bool) {
+        let Some(c) = self.clips.get(i) else { return };
+        let len = c.end - c.start;
+        let at = if overlap || self.crossfades(i) != (0.0, 0.0) {
+            Music::reach(c.at, want.max(0.0), |at| self.fits(i, at, len, overlap))
+        } else {
+            self.place(i, want)
+        };
+        self.clips[i].at = at;
+    }
+
+    /// Clip `i`'s in edge (`in_edge`) or out edge dragged to time `t` in its
+    /// file, `file_len` seconds long. The file stays put on the edit, so
+    /// trimming the in edge moves where the clip begins, not what plays
+    /// when. It stays within the file and the edit, at least `min` long, and
+    /// goes into a neighbour only with `overlap`.
+    pub fn trim(&mut self, i: usize, in_edge: bool, t: f64, overlap: bool, file_len: f64, min: f64) {
+        let Some(c) = self.clips.get(i) else { return };
+        let to_edit = c.at - c.start;
+        let (start, end, at) = (c.start, c.end, c.at);
+        if in_edge {
+            let want = t.max(start - at).max(0.0).min(end - min);
+            let start = Music::reach(start, want, |s| self.fits(i, s + to_edit, end - s, overlap));
+            let c = &mut self.clips[i];
+            c.at = start + to_edit;
+            c.start = start;
+        } else {
+            let want = t.min(file_len).max(start + min);
+            self.clips[i].end = Music::reach(end, want, |e| self.fits(i, at, e - start, overlap));
+        }
+    }
+
     /// Adds `len` seconds of `input` from its start, nearest `at` where it
     /// fits (`place`), and returns its index.
     pub fn append(&mut self, input: PathBuf, at: f64, len: f64) -> usize {
@@ -868,6 +904,31 @@ mod tests {
         std::fs::write(&path, r#"{"sfx": {"clips": [{"input": "a.wav", "at": -1, "in": 0, "out": 1}]}}"#).unwrap();
         assert!(Project::load(&path).unwrap_err().to_string().contains("sfx clip 1"));
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn sound_clips_drag_and_trim_without_overlapping_unless_asked() {
+        let clip = |at: f64, start: f64, end: f64| MusicClip { input: "s.wav".into(), at, start, end, fade_in: 0.0, fade_out: 0.0 };
+        let mut m = Music { clips: vec![clip(0.0, 0.0, 10.0), clip(12.0, 0.0, 10.0)], ..Default::default() };
+        // Dragged into the second, nearer its start: stops edge to edge.
+        m.drag_to(0, 4.0, false);
+        assert_eq!(m.clips[0].at, 2.0);
+        // With Shift it overlaps (a crossfade), partly.
+        m.drag_to(0, 6.0, true);
+        assert_eq!(m.clips[0].at, 6.0);
+        m.drag_to(0, 0.0, false);
+        // Its in edge to 3 s into the file: it starts 3 s later on the
+        // edit, what plays when unchanged.
+        m.trim(0, true, 3.0, false, 60.0, 0.2);
+        assert_eq!((m.clips[0].at, m.clips[0].start), (3.0, 3.0));
+        // The out edge stops at the neighbour, and at the file's end.
+        m.trim(0, false, 30.0, false, 60.0, 0.2);
+        assert!((m.clips[0].end - 12.0).abs() < 1e-6, "{}", m.clips[0].end);
+        m.trim(1, false, 99.0, false, 15.0, 0.2);
+        assert_eq!(m.clips[1].end, 15.0);
+        // A clip gone (an undo mid-drag) is nothing.
+        m.drag_to(5, 1.0, false);
+        m.trim(5, true, 1.0, false, 9.0, 0.2);
     }
 
     #[test]

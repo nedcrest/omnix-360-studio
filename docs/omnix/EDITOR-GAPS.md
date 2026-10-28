@@ -634,6 +634,39 @@ saw part of it was done. What exists and what doesn't:
 - Footage-agent's side: the other agent may take it. Recorded in
   `docs/OMNIX.md` there too.
 
+### 35. Code analysis and refactor: scalable, API-driven, documented (user, 2026-10-28)
+
+"After the patch, before the check: an analysis of the code (I don't
+remember if we did one), a refactor to make it easily scalable and
+API-driven: not stuffing everything into one script or one class, but
+separating it properly, and documenting it too."
+
+What we know already:
+- Upstream had a code audit once (0.6.0, seven fixes; it noted
+  `player/mod.rs` was only skimmed). We never did one on our changes.
+- `src/player/mod.rs` is over 4000 lines: `App` holds the state, every
+  message's handling, the keys and the whole `view()`. `src/main.rs` is
+  the CLI plus the export pipeline. This is the "one class" the user means.
+
+Plan:
+- **Analysis first**, written to `docs/omnix/ARCHITECTURE.md`. It covers
+  the modules and what each owns, where state and logic tangle, and what an
+  "API" means here: a plain-data edit model with operations (`edit.rs`
+  already is one) that the UI, the CLI and later an AI all call. Also
+  risks, bugs found on the way, and an order of steps.
+- **Then the refactor in small, behaviour-free commits**, with tests after
+  each and the measured paths (export timing, loudness) re-checked:
+  - split `App::handle` by area (sound tracks, overlays, keyframes,
+    project file, bin) into modules;
+  - move the edit operations the UI does inline (sound clips' move, trim
+    and split, normalize) into `edit.rs` / `project.rs` with tests;
+  - put the bars' view code next to its messages.
+- **The cost to name:** upstream's `player/mod.rs` changes will no longer
+  merge cleanly. That is acceptable for a fork that has become its own
+  editor, but from then on taking upstream changes means porting them by
+  hand. The analysis says which upstream areas (stitch, colour, export
+  pipeline) we keep untouched so they still merge.
+
 ## Format rule for all of these
 
 New fields only, each `#[serde(default, skip_serializing_if = …)]`, so every

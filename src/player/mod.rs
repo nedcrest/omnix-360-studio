@@ -2921,7 +2921,7 @@ impl App {
         let end = if picture { ffmpeg::PICTURE_SECONDS } else { duration };
         let lut = self.auto_lut(&input);
         let spot = self.placing.remove(&input).unwrap_or(bin::Spot::End);
-        let cut = Cut { input, start: 0.0, end, keyframes: Default::default(), stabilize: Some(self.opts.stabilize), note: None, audio: None, volume: Vec::new(), crossfade: 0.0, effects: Vec::new(), lut, old_lut_strength: None, gain: 0.0, even: false, mute: false, loudness: None, flat: false, lut_applied: None };
+        let cut = Cut { stabilize: Some(self.opts.stabilize), lut, ..Cut::new(input, 0.0, end) };
         let i = match spot {
             bin::Spot::End => self.edit.insert_cut(usize::MAX, cut),
             bin::Spot::At(t) => self.edit.insert_at(t, cut),

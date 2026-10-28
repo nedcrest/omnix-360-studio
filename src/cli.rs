@@ -590,7 +590,7 @@ pub(crate) fn run() -> Result<()> {
                 // One clip is a project of one cut.
                 let reframe = framing.reframe()?.unwrap_or_else(|| Reframe::fixed(View::home(Projection::Perspective)));
                 let (start, end) = span(&input, start, duration, Some(&reframe))?;
-                project::Project { aspect: reframe.aspect, cuts: vec![project::Cut { input, start, end, keyframes: reframe.keyframes, stabilize: None, note: None, audio: None, volume: Vec::new(), crossfade: 0.0, effects: Vec::new(), lut: None, old_lut_strength: None, gain: 0.0, even: false, mute: false, loudness: None, flat: false, lut_applied: None }], ..Default::default() }
+                project::Project { aspect: reframe.aspect, cuts: vec![project::Cut { keyframes: reframe.keyframes, ..project::Cut::new(input, start, end) }], ..Default::default() }
             };
             let aspect = aspect.or(project.aspect).unwrap_or(view::Aspect(16, 9));
             let [w, h] = size.unwrap_or_else(|| aspect.size(resolution.short_side())).map(|v| v as usize);

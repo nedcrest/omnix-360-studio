@@ -388,6 +388,32 @@ pub struct Cut {
 }
 
 impl Cut {
+    /// A cut of `input` from `start` to `end` seconds, nothing else set.
+    /// The one place a cut is spelled out field by field, so a new field
+    /// means one edit here, not one at every cut made.
+    pub fn new(input: PathBuf, start: f64, end: f64) -> Cut {
+        Cut {
+            input,
+            start,
+            end,
+            keyframes: Default::default(),
+            stabilize: None,
+            note: None,
+            audio: None,
+            volume: Vec::new(),
+            crossfade: 0.0,
+            effects: Vec::new(),
+            lut: None,
+            old_lut_strength: None,
+            gain: 0.0,
+            even: false,
+            mute: false,
+            loudness: None,
+            flat: false,
+            lut_applied: None,
+        }
+    }
+
     /// Its sound's own level, dB: `gain`, or silence when muted.
     pub fn sound_db(&self) -> f64 {
         if self.mute { OFF_DB } else { self.gain }

@@ -17,13 +17,17 @@ use std::process::Stdio;
 pub const TARGET_LUFS: f64 = -16.0;
 /// The most a cut is raised or lowered when normalized, dB.
 pub const MOST_GAIN: f64 = 24.0;
-/// The gentle speech leveler a cut gets with `Cut::even`: over quarter
-/// seconds, quiet stretches are lifted towards the loud ones (at most 8x),
-/// loud ones left alone. Chosen over `speechnorm` (stronger, and may pump
-/// and lift the noise between words) on Kos clips: loudness range 16.0 →
-/// 12.7 LU on a cleaned voice, 10.9 → 6.8 on a clip's own sound. The user
-/// has samples of both to choose by ear (EDITOR-GAPS gap 11).
-pub const LEVELER: &str = "dynaudnorm=f=250:g=15:p=0.9:m=8";
+/// The speech leveler a cut gets with `Cut::even`: over 150 ms frames
+/// with a short window, quiet stretches are lifted towards the loud ones
+/// (at most 12x), loud ones left alone. `b=1` (alternative boundary mode)
+/// takes the first and last frames' own gain: without it the gain ramps up
+/// from 1 at every cut's start and the first second or two came out 13-15
+/// dB quiet. Measured on Kos (2026-10-28): a cleaned voice's quiet words
+/// +5.5 dB against plain gain, its spread quiet→loud 18.0 → 13.0 dB; a
+/// clip's own sound 11.0 → 4.3. The gentler `f=250:g=15:m=8` lifted the
+/// voice only 2.5 dB, which the user couldn't hear. Samples for choosing by
+/// ear: EDITOR-GAPS gap 11.
+pub const LEVELER: &str = "dynaudnorm=f=150:g=7:p=0.9:m=12:b=1";
 /// Quieter than this is silence, not something to raise.
 const SILENT_LUFS: f64 = -70.0;
 

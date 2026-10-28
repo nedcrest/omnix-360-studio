@@ -240,6 +240,15 @@ impl Music {
         (fade_in, fade_out)
     }
 
+    /// Adds `len` seconds of `input` from its start, nearest `at` where it
+    /// fits (`place`), and returns its index.
+    pub fn append(&mut self, input: PathBuf, at: f64, len: f64) -> usize {
+        self.clips.push(MusicClip { input, at, start: 0.0, end: len, fade_in: 0.0, fade_out: 0.0 });
+        let i = self.clips.len() - 1;
+        self.clips[i].at = self.place(i, at);
+        i
+    }
+
     /// Splits clip `i` at edit time `t`, each half staying where it was on the
     /// edit; false if `t` leaves either half shorter than `min`.
     pub fn split(&mut self, i: usize, t: f64, min: f64) -> bool {
@@ -754,6 +763,19 @@ mod tests {
         std::fs::write(&path, r#"{"sfx": {"clips": [{"input": "a.wav", "at": -1, "in": 0, "out": 1}]}}"#).unwrap();
         assert!(Project::load(&path).unwrap_err().to_string().contains("sfx clip 1"));
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_sound_appended_lands_where_it_fits() {
+        let mut m = Music::default();
+        assert_eq!(m.append("a.wav".into(), 2.0, 5.0), 0);
+        assert_eq!((m.clips[0].at, m.clips[0].end), (2.0, 5.0));
+        // Wanted inside the first, nearer its end: it goes after it.
+        let i = m.append("b.wav".into(), 5.0, 1.0);
+        assert_eq!(m.clips[i].at, 7.0);
+        // Nearer the first's start: it stops edge to edge before it.
+        let j = m.append("c.wav".into(), 2.5, 1.0);
+        assert_eq!(m.clips[j].at, 1.0);
     }
 
     #[test]

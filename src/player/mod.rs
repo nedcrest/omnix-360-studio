@@ -421,6 +421,9 @@ enum Message {
     /// effect.
     AddSound(SoundTrack),
     SoundPicked(SoundTrack, Option<PathBuf>),
+    /// A sound file's length read off the UI thread, to add it to a track
+    /// at a time (`None`: after the track's last clip).
+    SoundProbed(SoundTrack, PathBuf, Option<f64>, Result<f64, String>),
     /// The «Framing» switch: the view's keyframes, angles and (for a 360
     /// cut) stabilisation and projection, shown and active; off, the bars
     /// hold editing only and the view can't be turned by accident.
@@ -1820,21 +1823,14 @@ impl App {
             }
             Message::BinAdd(path, bin::Kind::Picture, _) => return self.update(Message::OverlayPicked(vec![path])),
             Message::BinAdd(path, bin::Kind::Sound(which), place) => {
-                // Onto its section's track, where it fits nearest the spot.
-                let duration = ffmpeg::duration(&path).unwrap_or(60.0);
+                // Onto its section's track, where it fits nearest the spot,
+                // decided now from the playhead now.
                 let at = match self.spot(place) {
-                    bin::Spot::End => self.edit.track(which).end(),
-                    bin::Spot::At(t) => t,
-                    bin::Spot::Join(t) => crate::project::offsets(&self.edit.cuts).into_iter().chain([self.edit.duration()]).nth(self.edit.nearest_join(t)).unwrap_or(t),
+                    bin::Spot::End => None,
+                    bin::Spot::At(t) => Some(t),
+                    bin::Spot::Join(t) => Some(crate::project::offsets(&self.edit.cuts).into_iter().chain([self.edit.duration()]).nth(self.edit.nearest_join(t)).unwrap_or(t)),
                 };
-                self.edit.checkpoint();
-                let track = self.edit.track_mut(which);
-                track.clips.push(crate::project::MusicClip { input: path.clone(), at, start: 0.0, end: duration, fade_in: 0.0, fade_out: 0.0 });
-                let i = track.clips.len() - 1;
-                track.clips[i].at = track.place(i, at);
-                self.selected_music = Some((which, i));
-                self.selected = None;
-                return self.load_waveform(&path);
+                return probe_sound(which, path, at);
             }
             Message::AutoKey(on) => self.auto_key = on,
             Message::SplitDrag(dy) => self.split = (self.split_kept - dy / timeline::SCALABLE).clamp(*timeline::SCALES.start(), *timeline::SCALES.end()),
@@ -2168,20 +2164,19 @@ impl App {
             }
             Message::SoundPicked(_, None) => {}
             Message::SoundPicked(which, Some(path)) => {
-                // Its length comes with the waveform; until then a stand-in
-                // that the waveform corrects.
-                let duration = ffmpeg::duration(&path).unwrap_or(60.0);
-                self.edit.checkpoint();
                 // A song after the music already there, whole; a sound
                 // effect at the playhead, where it's wanted.
                 let at = match which {
-                    SoundTrack::Music => self.edit.music.end(),
-                    SoundTrack::Sfx => self.position(),
+                    SoundTrack::Music => None,
+                    SoundTrack::Sfx => Some(self.position()),
                 };
-                let track = self.edit.track_mut(which);
-                track.clips.push(crate::project::MusicClip { input: path.clone(), at, start: 0.0, end: duration, fade_in: 0.0, fade_out: 0.0 });
-                let i = track.clips.len() - 1;
-                track.clips[i].at = track.place(i, at);
+                return probe_sound(which, path, at);
+            }
+            Message::SoundProbed(_, path, _, Err(e)) => self.error = Some(format!("Can't add {}: {e}", path.display())),
+            Message::SoundProbed(which, path, at, Ok(len)) => {
+                self.edit.checkpoint();
+                let at = at.unwrap_or_else(|| self.edit.track(which).end());
+                let i = self.edit.track_mut(which).append(path.clone(), at, len);
                 self.selected_music = Some((which, i));
                 self.selected = None;
                 return self.load_waveform(&path);
@@ -4166,6 +4161,20 @@ fn overlay_thumb(picture: &crate::overlay::Picture) -> iced::widget::image::Hand
 
 /// Runs `f` on its own thread so blocking work (parsing, ffprobe) stays off
 /// the executor.
+/// Reads a sound file's length on a thread (ffprobe can take seconds on a
+/// network or spinning drive, and froze the window), then adds it to track
+/// `which` at `at` (`SoundProbed`). A file that can't be read is said so,
+/// not added as a minute of nothing.
+fn probe_sound(which: SoundTrack, path: PathBuf, at: Option<f64>) -> Task<Message> {
+    Task::perform(
+        blocking({
+            let path = path.clone();
+            move || ffmpeg::duration(&path).map_err(|e| format!("{e:#}"))
+        }),
+        move |len| Message::SoundProbed(which, path.clone(), at, len),
+    )
+}
+
 /// Messages that only framing does: turning, zooming or keying the view,
 /// its angles, stabilisation, projection, colour tracking.
 fn framing_only(message: &Message) -> bool {

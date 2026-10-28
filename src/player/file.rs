@@ -95,7 +95,7 @@ impl App {
 
     /// Whether there is anything to save: cuts, or music to fill.
     pub(super) fn has_edit(&self) -> bool {
-        !self.edit.cuts.is_empty() || !self.edit.music.clips.is_empty() || !self.edit.sfx.clips.is_empty()
+        !self.edit.cuts.is_empty() || self.edit.sound_clips().next().is_some()
     }
 
     /// Parses the clip and probes the decoder off the UI thread.
@@ -292,7 +292,7 @@ impl App {
             Message::ProjectPicked(None) => {}
             Message::SaveProjectTo(None) => self.after_save = None,
             Message::ProjectPicked(Some(path)) => {
-                let project = match Project::load(&path) {
+                let mut project = match Project::load(&path) {
                     Ok(p) => p,
                     Err(e) => {
                         self.error = Some(format!("{e:#}"));
@@ -300,7 +300,7 @@ impl App {
                     }
                 };
                 // Cuts of clips that are gone can't play; say so and leave them out.
-                let (mut cuts, missing): (Vec<_>, Vec<_>) = project.cuts.into_iter().partition(|c| c.input.exists());
+                let (mut cuts, missing): (Vec<_>, Vec<_>) = std::mem::take(&mut project.cuts).into_iter().partition(|c| c.input.exists());
                 // Each cut gets a mode of its own, so changing one leaves the rest.
                 for c in &mut cuts {
                     c.stabilize.get_or_insert(self.opts.stabilize);
@@ -319,10 +319,11 @@ impl App {
                 }
                 self.aspect = project.aspect.map_or(Aspect::Free, |a| Aspect::Ratio(a.0 as u16, a.1 as u16));
                 self.forget_edit_state();
-                // Music and sound effects that are gone are left out the same way.
-                let (mut music, mut sfx) = (project.music, project.sfx);
+                // Sound clips that are gone are left out the same way.
                 let mut gone = Vec::new();
-                for (track, word) in [(&mut music, "music"), (&mut sfx, "sound effects")] {
+                for which in SoundTrack::ALL {
+                    let word = which.name();
+                    let track = project.track_mut(which);
                     let (here, lost): (Vec<_>, Vec<_>) = std::mem::take(&mut track.clips).into_iter().partition(|c| c.input.exists());
                     track.clips = here;
                     if !lost.is_empty() {
@@ -333,7 +334,7 @@ impl App {
                     gone.extend(lost);
                 }
                 // And overlay pictures.
-                let (mut overlays, texts) = (project.overlays, project.text);
+                let (mut overlays, texts) = (std::mem::take(&mut project.overlays), std::mem::take(&mut project.text));
                 let mut lost = Vec::new();
                 for lane in &mut overlays {
                     let (here, gone): (Vec<_>, Vec<_>) = std::mem::take(&mut lane.items).into_iter().partition(|it| it.text.is_some() || it.input.exists());
@@ -344,10 +345,10 @@ impl App {
                     let said = self.error.take().map_or(String::new(), |e| e + ". ");
                     self.error = Some(format!("{said}Left out missing overlays: {}", lost.join(", ")));
                 }
-                let waves: Vec<_> = music.clips.iter().chain(&sfx.clips).map(|c| self.load_waveform(&c.input)).collect();
+                let waves: Vec<_> = project.sound_clips().map(|c| self.load_waveform(&c.input)).collect();
                 self.queue.extend(cuts.iter().map(|c| (c.input.clone(), false)));
                 let complete = missing.is_empty() && gone.is_empty() && lost.is_empty();
-                self.edit.replace(Project { aspect: None, cuts, sound: project.sound, music, sfx, fades: project.fades, overlays, text: texts });
+                self.edit.replace(Project { aspect: None, cuts, overlays, text: texts, ..project });
                 self.mark_flat();
                 self.saved_version = if complete { self.edit.version } else { 0 };
                 self.saved_aspect = self.aspect;
@@ -364,7 +365,7 @@ impl App {
                 }
                 // Named after the first clip, or the song (or sound effect) a
                 // project starts from: `has_edit` holds one of them.
-                let Some(first) = self.edit.cuts.first().map(|c| &c.input).or(self.edit.music.clips.first().map(|c| &c.input)).or(self.edit.sfx.clips.first().map(|c| &c.input)) else {
+                let Some(first) = self.edit.cuts.first().map(|c| &c.input).or(self.edit.sound_clips().next().map(|c| &c.input)) else {
                     return Task::none();
                 };
                 let dir = self.project.as_ref().unwrap_or(first).parent().map(Path::to_owned);

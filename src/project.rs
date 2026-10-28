@@ -87,6 +87,12 @@ impl Sound {
 
 /// One of the edit's sound tracks besides the clips' own sound. Each is a
 /// `Music`: files placed on the edit's time, a level and volume points.
+///
+/// To add one (a voice-over track): a variant here and in `ALL`, a field on
+/// `Project` (serde default, skipped when empty, so old projects load), and
+/// its arms in the `match`es the compiler then points to (`track`,
+/// `track_mut`, its name and colour, where a new clip goes). Everything else
+/// goes over `ALL`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum SoundTrack {
     Music,
@@ -561,7 +567,7 @@ impl Project {
         let text = std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
         let mut project: Project = serde_json::from_str(&text).with_context(|| format!("reading {}", path.display()))?;
         // Music alone is a start: its length is the frame to fill.
-        if project.cuts.is_empty() && project.music.clips.is_empty() && project.sfx.clips.is_empty() {
+        if project.cuts.is_empty() && project.sound_clips().next().is_none() {
             bail!("{} has no cuts", path.display());
         }
         let dir = path.parent().unwrap_or(Path::new(""));
@@ -660,9 +666,11 @@ impl Project {
                 *lut = rel.to_string_lossy().into_owned();
             }
         }
-        for clip in project.music.clips.iter_mut().chain(&mut project.sfx.clips) {
-            if let Ok(rel) = clip.input.strip_prefix(dir) {
-                clip.input = rel.to_owned();
+        for which in SoundTrack::ALL {
+            for clip in &mut project.track_mut(which).clips {
+                if let Ok(rel) = clip.input.strip_prefix(dir) {
+                    clip.input = rel.to_owned();
+                }
             }
         }
         for item in project.overlays.iter_mut().chain(&mut project.text).flat_map(|l| &mut l.items) {
@@ -705,6 +713,11 @@ impl Project {
             hold(cut, look_flat);
         }
         p
+    }
+
+    /// Every clip on every sound track.
+    pub fn sound_clips(&self) -> impl Iterator<Item = &MusicClip> {
+        SoundTrack::ALL.into_iter().flat_map(|t| &self.track(t).clips)
     }
 
     pub fn track(&self, which: SoundTrack) -> &Music {

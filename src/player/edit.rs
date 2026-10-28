@@ -48,7 +48,8 @@ impl Edit {
     /// export ends with the video.
     pub fn frame(&self) -> f64 {
         let overlays = self.lanes().flat_map(|l| &l.items).map(Item::ends).fold(0.0, f64::max);
-        self.duration().max(self.music.end()).max(self.sfx.end()).max(overlays)
+        let sounds = crate::project::SoundTrack::ALL.iter().map(|&t| self.track(t).end()).fold(0.0, f64::max);
+        self.duration().max(sounds).max(overlays)
     }
 
     /// Where cut `i` starts on the timeline (the edit's end for `i` past

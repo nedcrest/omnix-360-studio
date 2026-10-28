@@ -474,7 +474,7 @@ struct App {
     selected_volume: Option<(SoundTrack, usize)>,
     selected_sound: Option<(usize, usize)>,
     /// Each sound track's streams, in `SoundTrack::ALL`'s order.
-    music: [music::Player; 2],
+    music: [music::Player; SoundTrack::ALL.len()],
     /// Through a crossfade, the other cut of it alongside: its index and
     /// clip. Usually the next one, coming in over the playing cut; while
     /// paused with the incoming cut selected for editing, that one is the

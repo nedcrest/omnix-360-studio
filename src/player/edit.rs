@@ -1,6 +1,7 @@
-//! The timeline's edit: cuts played one after another, the music under them
-//! and the mix, with undo. Plain data, so the edits can be checked without a
-//! window.
+//! The timeline's edit: a `Project` (cuts played one after another, the
+//! sound tracks under them, overlays, the mix) with undo. It derefs to the
+//! project, so `edit.cuts` is the project's; an undo step is a copy of the
+//! project. Plain data, so the edits can be checked without a window.
 //!
 //! Edit time runs along the timeline from 0 to the edit's length; each cut
 //! covers its stretch of it, and clip time is where in its own clip that is.
@@ -9,57 +10,45 @@
 //! dissolving in over it.
 
 use crate::overlay::{Item, ItemRef, Lane, Track};
-use crate::project::{Cut, Fades, Music, Sound, SoundTrack};
+use crate::project::{Cut, Project};
 
 /// The shortest a split or trim may leave a cut, in seconds.
 pub const MIN_CUT: f64 = 0.2;
 
-/// What undo brings back: everything an edit changes.
-type Snapshot = (Vec<Cut>, Music, Music, Sound, Fades, Vec<Lane>, Vec<Lane>);
-
 #[derive(Default)]
 pub struct Edit {
-    pub cuts: Vec<Cut>,
-    pub music: Music,
-    /// Sound effects, a track like the music's.
-    pub sfx: Music,
-    pub sound: Sound,
-    pub fades: Fades,
-    /// The overlay lanes and the text's; the player shows and edits the
-    /// first of each.
-    pub overlays: Vec<Lane>,
-    pub texts: Vec<Lane>,
-    undo: Vec<Snapshot>,
-    redo: Vec<Snapshot>,
+    /// What's being edited. Its `aspect` isn't used: the app keeps the
+    /// shape and writes it on save (`App::to_project`). The player shows and
+    /// edits the first overlay lane and the first text lane.
+    project: Project,
+    /// Copies of the project to go back and forth to.
+    undo: Vec<Project>,
+    redo: Vec<Project>,
     /// Counts changes, so the app can tell whether the edit was saved.
     pub version: u64,
 }
 
-impl Edit {
-    pub fn duration(&self) -> f64 {
-        crate::project::edit_length(&self.cuts)
-    }
+impl std::ops::Deref for Edit {
+    type Target = Project;
 
+    fn deref(&self) -> &Project {
+        &self.project
+    }
+}
+
+impl std::ops::DerefMut for Edit {
+    fn deref_mut(&mut self) -> &mut Project {
+        &mut self.project
+    }
+}
+
+impl Edit {
     /// The timeline's length: the video's, or the music's (or sound
     /// effects') while it runs on beyond it (the frame still to fill). The
     /// export ends with the video.
     pub fn frame(&self) -> f64 {
         let overlays = self.lanes().flat_map(|l| &l.items).map(Item::ends).fold(0.0, f64::max);
         self.duration().max(self.music.end()).max(self.sfx.end()).max(overlays)
-    }
-
-    pub fn track(&self, which: SoundTrack) -> &Music {
-        match which {
-            SoundTrack::Music => &self.music,
-            SoundTrack::Sfx => &self.sfx,
-        }
-    }
-
-    pub fn track_mut(&mut self, which: SoundTrack) -> &mut Music {
-        match which {
-            SoundTrack::Music => &mut self.music,
-            SoundTrack::Sfx => &mut self.sfx,
-        }
     }
 
     /// Where cut `i` starts on the timeline (the edit's end for `i` past
@@ -94,14 +83,12 @@ impl Edit {
         self.offset(i) + (clip_t - self.cuts[i].start)
     }
 
-    fn snapshot(&self) -> Snapshot {
-        (self.cuts.clone(), self.music.clone(), self.sfx.clone(), self.sound, self.fades, self.overlays.clone(), self.texts.clone())
+    fn snapshot(&self) -> Project {
+        self.project.clone()
     }
 
-    fn restore(&mut self, (cuts, music, sfx, sound, fades, overlays, texts): Snapshot) -> Snapshot {
-        let now = self.snapshot();
-        (self.cuts, self.music, self.sfx, self.sound, self.fades, self.overlays, self.texts) = (cuts, music, sfx, sound, fades, overlays, texts);
-        now
+    fn restore(&mut self, then: Project) -> Project {
+        std::mem::replace(&mut self.project, then)
     }
 
     /// Remembers the edit as it is, for undo; call before each change.
@@ -144,17 +131,9 @@ impl Edit {
         true
     }
 
-    /// Starts over with `cuts` and their music, sound effects, mix and
-    /// overlays (an opened or new project), forgetting undo.
-    #[allow(clippy::too_many_arguments)]
-    pub fn replace(&mut self, cuts: Vec<Cut>, music: Music, sfx: Music, sound: Sound, fades: Fades, overlays: Vec<Lane>, texts: Vec<Lane>) {
-        self.overlays = overlays;
-        self.texts = texts;
-        self.cuts = cuts;
-        self.music = music;
-        self.sfx = sfx;
-        self.sound = sound;
-        self.fades = fades;
+    /// Starts over with `project` (an opened or new one), forgetting undo.
+    pub fn replace(&mut self, project: Project) {
+        self.project = project;
         self.undo.clear();
         self.redo.clear();
         self.version += 1;
@@ -162,14 +141,14 @@ impl Edit {
 
     /// Every overlay lane, lowest first: the overlays', then the text's.
     pub fn lanes(&self) -> impl Iterator<Item = &Lane> {
-        self.overlays.iter().chain(&self.texts)
+        self.overlays.iter().chain(&self.text)
     }
 
     /// The lane of `track` the player shows, if there is one yet.
     pub fn lane(&self, track: Track) -> Option<&Lane> {
         match track {
             Track::Overlay => self.overlays.first(),
-            Track::Text => self.texts.first(),
+            Track::Text => self.text.first(),
         }
     }
 
@@ -177,7 +156,7 @@ impl Edit {
     pub fn lane_mut(&mut self, track: Track) -> &mut Lane {
         let lanes = match track {
             Track::Overlay => &mut self.overlays,
-            Track::Text => &mut self.texts,
+            Track::Text => &mut self.text,
         };
         if lanes.is_empty() {
             lanes.push(Lane::default());
@@ -192,7 +171,7 @@ impl Edit {
     pub fn item_mut(&mut self, (track, i): ItemRef) -> Option<&mut Item> {
         match track {
             Track::Overlay => self.overlays.first_mut(),
-            Track::Text => self.texts.first_mut(),
+            Track::Text => self.text.first_mut(),
         }?
         .items
         .get_mut(i)
@@ -275,7 +254,8 @@ impl Edit {
     pub fn move_cut(&mut self, from: usize, to: usize) {
         let cut = self.cuts.remove(from);
         let to = if to > from { to - 1 } else { to };
-        self.cuts.insert(to.min(self.cuts.len()), cut);
+        let to = to.min(self.cuts.len());
+        self.cuts.insert(to, cut);
         crate::project::settle_crossfades(&mut self.cuts);
     }
 }
@@ -290,7 +270,9 @@ mod tests {
     }
 
     fn edit() -> Edit {
-        Edit { cuts: vec![cut("a", 10.0, 14.0), cut("b", 2.0, 5.0)], ..Default::default() }
+        let mut e = Edit::default();
+        e.cuts = vec![cut("a", 10.0, 14.0), cut("b", 2.0, 5.0)];
+        e
     }
 
     #[test]

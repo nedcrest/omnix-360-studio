@@ -610,6 +610,35 @@ impl Project {
         edit_length(&self.cuts)
     }
 
+    /// The project as a file should hold what the player shows: each sound
+    /// track's clips in edit order (a lane keeps the order they were added
+    /// and split in), and the views looked at by hand held as keyframes.
+    /// A 360 cut with no keyframes of its own nor any before it shows the
+    /// free look `look_360`; the file alone would frame it straight ahead,
+    /// so the first such cut gets it at its in point (later 360 cuts carry
+    /// it on). An ordinary video without keyframes shows its whole picture
+    /// as the file frames it, except cut `framing` (one being framed by
+    /// hand right now), which gets `look_flat`. The home view is never held:
+    /// an untouched project gets no extra keyframes.
+    pub fn as_shown(&self, look_360: View, look_flat: View, framing: Option<usize>) -> Project {
+        let mut p = self.clone();
+        for which in SoundTrack::ALL {
+            p.track_mut(which).clips.sort_by(|a, b| a.at.total_cmp(&b.at));
+        }
+        let hold = |cut: &mut Cut, look: View| {
+            if cut.keyframes.is_empty() && look != View::home(Projection::Perspective) {
+                cut.keyframes.set(cut.start, look, 0.0, &|_, _| None);
+            }
+        };
+        if let Some(cut) = p.cuts.iter_mut().find(|c| !c.flat) {
+            hold(cut, look_360);
+        }
+        if let Some(cut) = framing.and_then(|i| p.cuts.get_mut(i)).filter(|c| c.flat) {
+            hold(cut, look_flat);
+        }
+        p
+    }
+
     pub fn track(&self, which: SoundTrack) -> &Music {
         match which {
             SoundTrack::Music => &self.music,
@@ -763,6 +792,24 @@ mod tests {
         std::fs::write(&path, r#"{"music": {"clips": [{"input": "song.mp3", "at": 0, "in": 9, "out": 9}]}}"#).unwrap();
         assert!(Project::load(&path).is_err());
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn saving_holds_what_was_looked_at_by_hand_and_no_more() {
+        let flat = |name: &str| Cut { flat: true, ..Cut::new(name.into(), 0.0, 5.0) };
+        let mut p = Project { cuts: vec![Cut::new("a.osv".into(), 0.0, 5.0), Cut::new("b.osv".into(), 0.0, 5.0), flat("c.mp4"), flat("d.mp4")], ..Default::default() };
+        p.music.clips = ["late.wav", "early.wav"].iter().zip([9.0, 1.0]).map(|(n, at)| MusicClip { input: n.into(), at, start: 0.0, end: 2.0, fade_in: 0.0, fade_out: 0.0 }).collect();
+        let home = View::home(Projection::Perspective);
+        let turned = View { yaw: 40.0, ..home };
+        // Nothing looked at: nothing held; sound clips in edit order.
+        let same = p.as_shown(home, home, None);
+        assert!(same.cuts.iter().all(|c| c.keyframes.is_empty()));
+        assert_eq!(same.music.clips[0].at, 1.0);
+        // The 360 look on the first 360 cut only; the hand-framed video's
+        // look on it alone, not on the other video.
+        let held = p.as_shown(turned, turned, Some(3));
+        let keyed: Vec<bool> = held.cuts.iter().map(|c| !c.keyframes.is_empty()).collect();
+        assert_eq!(keyed, [true, false, false, true]);
     }
 
     #[test]

@@ -1166,37 +1166,10 @@ impl App {
             Aspect::Free => None,
             Aspect::Ratio(w, h) => Some(crate::view::Aspect(w.into(), h.into())),
         };
-        // Each sound track in edit order, as it plays (the lane keeps the
-        // order they were added and split in).
-        let ordered = |track: &crate::project::Music| {
-            let mut track = track.clone();
-            track.clips.sort_by(|a, b| a.at.total_cmp(&b.at));
-            track
-        };
-        let (music, sfx) = (ordered(&self.edit.music), ordered(&self.edit.sfx));
-        let mut cuts = self.edit.cuts.clone();
-        // 360 cuts with no keyframes of their own nor any before them show
-        // the free look; the file alone would frame them straight ahead. The
-        // look is held as a keyframe at the in point of the first such cut,
-        // so the export, the CLI and the next open frame them as seen (later
-        // 360 cuts carry it on). An ordinary video without keyframes shows
-        // its whole picture, as the file frames it, except the one being
-        // framed by hand right now: only that one gets the look.
         let (look_360, look_flat) = if self.look_flat { (self.other_look, self.look) } else { (self.look, self.other_look) };
-        let hold = |cut: &mut Cut, look: View| {
-            if cut.keyframes.is_empty() && look != View::home(Projection::Perspective) {
-                cut.keyframes.set(cut.start, look, 0.0, &|_, _| None);
-            }
-        };
-        if let Some(cut) = cuts.iter_mut().find(|c| !c.flat) {
-            hold(cut, look_360);
-        }
-        if !self.follow
-            && let Some(cut) = cuts.get_mut(self.current).filter(|c| c.flat)
-        {
-            hold(cut, look_flat);
-        }
-        Project { aspect, cuts, sound: self.edit.sound, music, sfx, fades: self.edit.fades, overlays: self.edit.overlays.clone(), text: self.edit.texts.clone() }
+        // The video being framed by hand right now, if any (`Project::as_shown`).
+        let framing = (!self.follow).then_some(self.current);
+        Project { aspect, ..self.edit.as_shown(look_360, look_flat, framing) }
     }
 
     /// Renders the edit to `path` on its own thread with the export the
@@ -1604,7 +1577,7 @@ impl App {
                 // Back to the start screen with an empty edit. Loaded clips
                 // stay in the library, so adding them again is instant; one
                 // still loading finishes there without becoming a cut.
-                self.edit.replace(Vec::new(), Default::default(), Default::default(), Default::default(), Default::default(), Vec::new(), Vec::new());
+                self.edit.replace(Project::default());
                 self.forget_edit_state();
                 self.saved_version = self.edit.version;
                 self.saved_aspect = self.aspect;
@@ -1713,7 +1686,7 @@ impl App {
                 let waves: Vec<_> = music.clips.iter().chain(&sfx.clips).map(|c| self.load_waveform(&c.input)).collect();
                 self.queue.extend(cuts.iter().map(|c| (c.input.clone(), false)));
                 let complete = missing.is_empty() && gone.is_empty() && lost.is_empty();
-                self.edit.replace(cuts, music, sfx, project.sound, project.fades, overlays, texts);
+                self.edit.replace(Project { aspect: None, cuts, sound: project.sound, music, sfx, fades: project.fades, overlays, text: texts });
                 self.mark_flat();
                 self.saved_version = if complete { self.edit.version } else { 0 };
                 self.saved_aspect = self.aspect;

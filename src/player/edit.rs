@@ -111,6 +111,23 @@ impl Edit {
         self.version += 1;
     }
 
+    /// Makes `change` one undo step if it says it changed anything; if it
+    /// says not, the edit is as it was, with redo and the saved state
+    /// untouched. (Checkpoint-then-undo on a failed change wiped redo and
+    /// marked the edit unsaved.)
+    pub fn attempt(&mut self, change: impl FnOnce(&mut Edit) -> bool) -> bool {
+        let before = self.snapshot();
+        if change(self) {
+            self.undo.push(before);
+            self.redo.clear();
+            self.version += 1;
+            true
+        } else {
+            self.restore(before);
+            false
+        }
+    }
+
     pub fn undo(&mut self) -> bool {
         let Some(then) = self.undo.pop() else { return false };
         let now = self.restore(then);
@@ -353,5 +370,24 @@ mod tests {
         assert_eq!(e.cuts.len(), 2);
         assert!(e.redo());
         assert_eq!(e.cuts.len(), 3);
+    }
+
+    #[test]
+    fn a_change_that_fails_leaves_undo_redo_and_the_saved_state() {
+        let mut e = Edit::default();
+        e.cuts = vec![cut("a.mp4", 0.0, 10.0)];
+        e.checkpoint();
+        e.cuts[0].end = 8.0;
+        e.undo();
+        let version = e.version;
+        // Too near the in point to split: nothing changes, redo survives.
+        assert!(!e.attempt(|e| e.split(0, 0.05)));
+        assert_eq!((e.version, e.cuts.len(), e.cuts[0].end), (version, 1, 10.0));
+        assert!(e.redo(), "redo kept");
+        // A change that works is one undo step.
+        assert!(e.attempt(|e| e.split(0, 4.0)));
+        assert_eq!(e.cuts.len(), 2);
+        assert!(e.undo());
+        assert_eq!(e.cuts.len(), 1);
     }
 }

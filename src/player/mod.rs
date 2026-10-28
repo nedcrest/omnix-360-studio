@@ -2380,23 +2380,20 @@ impl App {
             Message::Split if self.selected_music.is_some() => {
                 let (which, i) = self.selected_music.unwrap();
                 let at = self.position();
-                self.edit.checkpoint();
-                if self.edit.track_mut(which).split(i, at, edit::MIN_CUT) {
+                if self.edit.attempt(|e| e.track_mut(which).split(i, at, edit::MIN_CUT)) {
                     self.selected_music = Some((which, i + 1));
-                } else {
-                    self.edit.undo();
                 }
             }
             Message::Split => {
                 let Some((_, t)) = self.playing_cut() else { return Task::none() };
                 let i = self.current;
-                self.edit.checkpoint();
-                if self.edit.split(i, t) {
+                if self.edit.attempt(|e| e.split(i, t)) {
                     // The playhead is now at the start of the second half.
                     self.current = i + 1;
                     self.selected = Some(i + 1);
-                } else {
-                    self.edit.undo();
+                    // The cuts after it moved up one: a sound point selected
+                    // by (cut, point) would now name another cut's.
+                    self.selected_sound = None;
                 }
             }
             Message::DeleteCut if self.selected_overlay.is_some() => {
@@ -2936,6 +2933,9 @@ impl App {
         };
         self.mark_flat();
         self.selected = Some(i);
+        // Cuts after it moved: a sound point selected by (cut, point) or a
+        // track's would now name the wrong one.
+        self.selected_sound = None;
         if self.clip.is_none() {
             self.follow = true;
             self.goto(i, 0.0, true);

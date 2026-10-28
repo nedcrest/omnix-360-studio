@@ -1,0 +1,507 @@
+//! Playing the edit: the clock and moving on from cut to cut (`tick`, the
+//! next cut primed `PREROLL` ahead), the crossfade partner playing alongside,
+//! the music's and the clips' levels as it plays, going to a time, and the
+//! timeline's window following the playhead.
+
+use super::*;
+
+/// A cut's sound as the speakers get it from the mix, as the export works
+/// it out: its own level (`Cut::sound_db`, silence when muted) plus its
+/// volume points, off at `OFF_DB`; times the clips' level.
+pub(super) fn cut_gain(clips_db: f64, own_db: f64, points_db: f64) -> f32 {
+    if own_db <= crate::project::OFF_DB { 0.0 } else { music::gain(own_db + points_db) * music::gain(clips_db) }
+}
+
+/// The next cut is primed this many seconds before the playing one ends:
+/// enough for its decoder to open and seek. From a network share that took
+/// 0.2-1.6 s; at 1 s ahead the slower ones still stalled the change.
+pub(super) const PREROLL: f64 = 3.0;
+
+/// The timeline zooms in until this many seconds fill it.
+pub(super) const TIMELINE_SPAN: f64 = 2.0;
+
+impl App {
+    /// Keeps the music in step with the edit: playing where playback is, at
+    /// its level, or stopped while playback is.
+    pub(super) fn follow_music(&mut self) {
+        let (playing, t) = match &self.clip {
+            // Only while the clock runs: waiting for its first frame it stands
+            // still, and music started then took it as drift and restarted
+            // over and over until the picture came.
+            Some(c) if self.current < self.edit.cuts.len() => (c.playback.running(), self.edit.edit_time(self.current, c.playback.now())),
+            _ => (false, 0.0),
+        };
+        for (player, which) in self.music.iter_mut().zip(SoundTrack::ALL) {
+            player.follow(self.edit.track(which), t, self.edit.duration(), playing);
+        }
+        self.meter.follow(playing);
+        // The cut's own volume points move its level as it plays, and
+        // through a crossfade the two cuts trade places, equal power.
+        let shares = self.crossfade_shares();
+        let quarter = |x: f64| (x.clamp(0.0, 1.0) * std::f64::consts::FRAC_PI_2).sin() as f32;
+        let v = self.clip_volume() * shares.map_or(1.0, |(mine, _)| quarter(mine));
+        if let Some(c) = &mut self.clip {
+            c.playback.set_volume(v);
+        }
+        if let (Some((_, theirs)), Some((i, inc))) = (shares, &self.partner) {
+            let (own, points) = self.edit.cuts.get(*i).map_or((0.0, 0.0), |c| (c.sound_db(), crate::project::volume_at(&c.volume, inc.playback.now())));
+            let v = cut_gain(self.edit.sound.volume, own, points) * quarter(theirs);
+            if let Some((_, inc)) = &mut self.partner {
+                inc.playback.set_volume(v);
+            }
+        }
+    }
+
+    /// Keeps the cut crossfading in alongside the playing one wherever
+    /// playback is in a crossfade (played into, sought, scrubbed or paused
+    /// there): at the matching time in its own clip, playing or paused with
+    /// it. Elsewhere there's none.
+    pub(super) fn follow_crossfade(&mut self) {
+        // Played, the outgoing cut leads again, as `tick` expects.
+        if self.clip.as_ref().is_some_and(|c| c.playback.playing) && self.partner.as_ref().is_some_and(|(j, _)| j + 1 == self.current) {
+            self.swap_partner();
+            if let Some(c) = &mut self.clip {
+                c.playback.scrub_end();
+                c.playback.play();
+            }
+        }
+        let want = (|| {
+            let (cut, t) = self.clip_now()?;
+            let playing = self.clip.as_ref()?.playback.playing;
+            // The outgoing cut playing or paused in its crossfade: the next
+            // cut alongside.
+            if let Some(from) = self.edit.crossfade_from(self.current)
+                && t >= from
+                && t < cut.end
+            {
+                let next = &self.edit.cuts[self.current + 1];
+                return Some((self.current + 1, next.input.clone(), next.start + (t - from), playing));
+            }
+            // The incoming cut paused in it (taken over to edit): the one
+            // before alongside, shown when it's not selected.
+            if !playing && self.current > 0 && t < cut.start + cut.crossfade {
+                let before = &self.edit.cuts[self.current - 1];
+                return Some((self.current - 1, before.input.clone(), before.end - cut.crossfade + (t - cut.start), false));
+            }
+            None
+        })();
+        let Some((i, input, t, playing)) = want else {
+            self.partner = None;
+            return;
+        };
+        match &mut self.partner {
+            Some((j, inc)) if *j == i && inc.playback.media.input == input && inc.playback.media.audio == heard_audio(&self.edit.cuts[i]) && inc.playback.media.even == self.edit.cuts[i].even => {
+                let p = &mut inc.playback;
+                // Primed to catch up: started as the edit gets there.
+                if let Some(at) = p.go_at {
+                    if !playing {
+                        p.go_at = None;
+                        p.pause();
+                    } else if t >= at - 0.5 / p.media.fps {
+                        p.go();
+                    }
+                    return;
+                }
+                // Played from paused, primed ahead as a resync is: played
+                // from its paused frame, it came up behind and froze for the
+                // 1-2 s of a resync.
+                if p.playing != playing {
+                    if !playing {
+                        p.pause();
+                    } else {
+                        inc.playback = p.primed_again(t + Self::catch_up(p.startup()));
+                        return;
+                    }
+                }
+                // Playing, the two clocks run side by side, once it's running:
+                // waiting for its first frame (a second or more for the OSV)
+                // its clock stands still, and taking that for drift restarted
+                // it over and over. Drifted, it's primed again further on, by
+                // its decoder's start-up and some: jumped to where the edit
+                // was, it came up as far behind as its start took and jumped
+                // again, showing nothing (OSV 1920 px, 1.1-1.4 s). Paused, it
+                // follows the playhead as the playing cut does when scrubbed:
+                // a frame at a time, skipping those overtaken (a jump each
+                // time started decoders faster than they ended).
+                if playing {
+                    if p.running() && (p.now() - t).abs() > 0.25 {
+                        inc.playback = p.primed_again(t + Self::catch_up(p.startup()));
+                    }
+                } else if (p.target() - t).abs() > 1.0 / p.media.fps {
+                    p.scrub(t);
+                }
+            }
+            // Played into: the cut readied ahead, if it was.
+            _ if playing && t - self.edit.cuts[i].start < 0.25 && self.preroll.as_ref().is_some_and(|(j, inp, at, _)| (*j, inp, *at) == (i, &input, self.edit.cuts[i].start)) => {
+                let (_, _, _, mut primed) = self.preroll.take().unwrap();
+                primed.go();
+                self.partner = Some((i, Clip { playback: primed, shown: None }));
+            }
+            _ => {
+                let Some(media) = self.library.iter().find(|m| m.input == input) else { return };
+                let mut media = media.for_cut(&self.edit.cuts[i]);
+                media.osv_size = self.opts.osv_size;
+                media.stab.set_mode(self.edit.cuts[i].stabilize.unwrap_or(self.opts.stabilize));
+                // Playing, primed ahead to start as the edit gets there, as
+                // a resync is.
+                let playback = if playing {
+                    let mut p = Playback::primed(media, t + Self::catch_up(0.0), 0.0, self.full_on_pause);
+                    p.go_at = Some(p.target());
+                    p
+                } else {
+                    let mut p = Playback::new(media, 0.0, self.full_on_pause);
+                    p.jump(t, false);
+                    p
+                };
+                self.partner = Some((i, Clip { playback, shown: None }));
+            }
+        }
+    }
+
+    /// How far ahead of the edit a crossfade's partner is primed to catch
+    /// up, for a decoder that took `startup` seconds to start last time:
+    /// with room for it to take longer (it varied 1.1-1.4 s), at least half
+    /// a second.
+    pub(super) fn catch_up(startup: f64) -> f64 {
+        // Not measured yet: about an OSV's at 1920 px.
+        let startup = if startup > 0.0 { startup } else { 1.0 };
+        (startup * 1.5).max(0.5)
+    }
+
+    /// The clips' sound in the mix: its level, the playing cut's own level
+    /// (normalized, lowered or muted) and its volume points where it is
+    /// (the listening volume is `audio::set_listening`'s).
+    pub(super) fn clip_volume(&self) -> f32 {
+        let (own, points) = match (&self.clip, self.edit.cuts.get(self.current)) {
+            (Some(c), Some(cut)) => (cut.sound_db(), crate::project::volume_at(&cut.volume, c.playback.now())),
+            _ => (0.0, 0.0),
+        };
+        cut_gain(self.edit.sound.volume, own, points)
+    }
+
+    pub(super) fn with_playback(&mut self, f: impl FnOnce(&mut Playback)) {
+        if let Some(c) = &mut self.clip {
+            f(&mut c.playback);
+            self.error = c.playback.error.clone();
+        }
+    }
+
+    pub(super) fn tick(&mut self) {
+        let volume = self.clip_volume();
+        if let Some((_, inc)) = &mut self.partner
+            && inc.playback.go_at.is_none()
+            && let Some((frame, fix)) = inc.playback.tick()
+        {
+            inc.shown = Some(Arc::new(Shown::new(frame, fix)));
+        }
+        let Some(c) = &mut self.clip else { return };
+        if let Some((frame, fix)) = c.playback.tick() {
+            c.shown = Some(Arc::new(Shown::new(frame, fix)));
+            self.held = None;
+        }
+        self.error = c.playback.error.clone();
+        let Some(cut) = self.edit.cuts.get(self.current) else { return };
+        let p = &c.playback;
+        // A cut running to its clip's end has paused there (`ended`), and
+        // still moves on.
+        if !p.playing && !p.ended {
+            self.preroll = None;
+            return;
+        }
+        let next = self.current + 1;
+        let next_cut = self.edit.cuts.get(next);
+        let loaded = |input: &PathBuf| self.library.iter().find(|m| &m.input == input);
+        // A next cut that starts where this one ends in the same clip (after
+        // a split) just plays on: no seek, nothing to prime.
+        let carries_on = next_cut.is_some_and(|n| n.input == cut.input && n.audio == cut.audio && n.even == cut.even && (n.start - cut.end).abs() < 1.5 / p.media.fps && n.crossfade == 0.0);
+        // Where the next cut comes in: this one's end, or before it by the
+        // crossfade.
+        let change = self.edit.crossfade_from(self.current).unwrap_or(cut.end);
+        // In the last `PREROLL` seconds, ready the next cut so the change is
+        // instant.
+        if p.now() >= change - PREROLL
+            && !carries_on
+            && self.partner.as_ref().is_none_or(|(i, _)| *i != next)
+            && let Some(n) = next_cut
+            && self.preroll.as_ref().is_none_or(|(i, input, start, _)| (*i, input, *start) != (next, &n.input, n.start))
+            && let Some(media) = loaded(&n.input)
+        {
+            let mut media = media.for_cut(n);
+            media.osv_size = self.opts.osv_size;
+            media.stab.set_mode(n.stabilize.unwrap_or(self.opts.stabilize));
+            let primed = Playback::primed(media, n.start, volume, self.full_on_pause);
+            self.preroll = Some((next, n.input.clone(), n.start, primed));
+        }
+        // Its sound starts a device latency early, so it's heard from the
+        // moment this cut's ends (that latency is otherwise a gap, and the
+        // picture waits through it to stay in sync).
+        if let Some((i, input, at, primed)) = &mut self.preroll
+            && next_cut.is_some_and(|n| (*i, &*input, *at) == (next, &n.input, n.start))
+            && primed.sound_lead().is_some_and(|lead| p.now() >= change - lead)
+        {
+            primed.start_sound();
+        }
+        // A crossfade starts: the next cut plays on alongside, drawn over
+        // this one, until this one ends.
+        if change < cut.end
+            && p.now() >= change
+            && self.partner.as_ref().is_none_or(|(i, _)| *i != next)
+            && let Some((i, input, at, mut primed)) = self.preroll.take()
+        {
+            if next_cut.is_some_and(|n| (i, &input, at) == (next, &n.input, n.start)) {
+                primed.go();
+                self.partner = Some((next, Clip { playback: primed, shown: None }));
+            }
+        }
+        // At a cut's out point (or the clip's end), play on into the next cut.
+        if p.now() < cut.end && !p.ended {
+            return;
+        }
+        match next_cut {
+            None if p.playing => c.playback.pause(),
+            None => {}
+            // Its clip is still loading: wait at the out point.
+            Some(n) if loaded(&n.input).is_none() => {
+                if p.playing {
+                    c.playback.pause();
+                    self.save_status = Some(format!("Cut {} is still loading", next + 1));
+                }
+            }
+            Some(_) if carries_on && !p.ended => {
+                self.current = next;
+                let mode = self.edit.cuts[next].stabilize.unwrap_or(self.opts.stabilize);
+                self.with_playback(|p| p.media.stab.set_mode(mode));
+            }
+            // Out of a crossfade: the cut that came in plays on.
+            Some(_) if self.partner.as_ref().is_some_and(|(i, _)| *i == next) => {
+                let (_, mut incoming) = self.partner.take().unwrap();
+                if incoming.playback.go_at.is_some() {
+                    incoming.playback.go();
+                }
+                self.clip = Some(incoming);
+                self.current = next;
+                self.preroll = None;
+            }
+            Some(n) => {
+                let start = n.start;
+                match self.preroll.take() {
+                    Some((i, input, at, mut primed)) if (i, &input, at) == (next, &n.input, n.start) => {
+                        // The last frame stays up until the primed one's first.
+                        if self.held.is_none() {
+                            self.held = self.sphere();
+                        }
+                        primed.go();
+                        self.clip = Some(Clip { playback: primed, shown: None });
+                        self.current = next;
+                    }
+                    _ => self.goto(next, start, true),
+                }
+            }
+        }
+    }
+
+    /// Shows cut `i` at clip time `t`, playing or paused. A cut of another
+    /// clip gets a fresh playback of it from the library; the last frame
+    /// stays on screen until the new one is decoded.
+    pub(super) fn goto(&mut self, i: usize, t: f64, play: bool) {
+        let Some(cut) = self.edit.cuts.get(i) else { return };
+        let t = t.clamp(cut.start, cut.end);
+        // Another clip, or the same clip heard through another audio file.
+        let other_clip = self.clip.as_ref().is_none_or(|c| c.playback.media.input != cut.input || c.playback.media.audio != heard_audio(cut) || c.playback.media.even != cut.even);
+        if (i != self.current || other_clip) && self.held.is_none() {
+            self.held = self.sphere();
+        }
+        match &mut self.clip {
+            Some(c) if !other_clip => c.playback.jump(t, play),
+            _ => {
+                let Some(media) = self.library.iter().find(|m| m.input == cut.input) else { return };
+                let mut media = media.for_cut(cut);
+                media.osv_size = self.opts.osv_size;
+                let mut playback = Playback::new(media, self.clip_volume(), self.full_on_pause);
+                playback.jump(t, play);
+                self.clip = Some(Clip { playback, shown: None });
+            }
+        }
+        self.current = i;
+        let mode = self.edit.cuts[i].stabilize.unwrap_or(self.opts.stabilize);
+        self.with_playback(|p| p.media.stab.set_mode(mode));
+        self.settle_look();
+    }
+
+    /// Follows a drag (the playhead, a trim, a keyframe) to clip time `t`
+    /// of cut `i`, switching clips if the drag crossed into another one.
+    pub(super) fn scrub_to(&mut self, i: usize, t: f64) {
+        if i != self.current || self.clip.is_none() {
+            self.goto(i, t, false);
+        }
+        self.with_playback(|p| p.scrub(t));
+    }
+
+    /// Where playback is in the playing cut, by the clock `tick` changes
+    /// cuts by: playing, the clock (the frame shown lags it a little, and
+    /// going by that dropped a crossfade `tick` had just begun); paused,
+    /// where it's been put.
+    pub(super) fn clip_now(&self) -> Option<(&Cut, f64)> {
+        let cut = self.edit.cuts.get(self.current)?;
+        let p = &self.clip.as_ref()?.playback;
+        Some((cut, if p.playing { p.now() } else { p.target() }.clamp(cut.start, cut.end)))
+    }
+
+    /// Through a crossfade, the current cut's share of the blend and its
+    /// partner's (linear, adding to 1): the outgoing cut's falls as the
+    /// incoming one's rises.
+    pub(super) fn crossfade_shares(&self) -> Option<(f64, f64)> {
+        let (cut, t) = self.clip_now()?;
+        let (j, _) = self.partner.as_ref()?;
+        let incoming = if *j == self.current + 1 {
+            let from = self.edit.crossfade_from(self.current)?;
+            (t >= from && t < cut.end).then(|| (t - from) / (cut.end - from))?
+        } else {
+            (*j + 1 == self.current && t < cut.start + cut.crossfade).then(|| (t - cut.start) / cut.crossfade)?
+        };
+        Some(if *j == self.current + 1 { (1.0 - incoming, incoming) } else { (incoming, 1.0 - incoming) })
+    }
+
+    /// Makes the partner the current cut and the current one its partner:
+    /// to edit the other cut of a crossfade, or to play it as it plays.
+    pub(super) fn swap_partner(&mut self) {
+        let Some((j, other)) = self.partner.take() else { return };
+        if let Some(mine) = self.clip.replace(other) {
+            self.partner = Some((self.current, mine));
+        }
+        self.current = j;
+    }
+
+    /// The other cut of a crossfade, as the view draws it over the current one.
+    pub(super) fn partner_layer(&self) -> Option<(Arc<Rig>, Arc<Shown>, Camera, Vec<M3>, f32)> {
+        // Paused with the playing cut selected, it's shown on its own, to
+        // frame it.
+        if self.selected == Some(self.current) && self.clip.as_ref().is_some_and(|c| !c.playback.playing) {
+            return None;
+        }
+        let (i, inc) = self.partner.as_ref()?;
+        let shown = inc.shown.clone()?;
+        let p = &inc.playback;
+        let t = p.target();
+        // As `camera` frames the playing cut: by its keyframes (or those it
+        // holds from before), else the view as it is.
+        let keyed = || crate::project::keyframed(&self.edit.cuts, *i, t).and_then(|(k, at)| k.camera_at(at, &crate::project::held(&|f, t| self.aim_in(&p.media, f, t), at == t, t)));
+        // The free look of the partner's own kind: a 360 view would push an
+        // ordinary video's picture off screen, and the other way round.
+        let look = if self.edit.cuts.get(*i).is_some_and(|c| c.flat) == self.look_flat { self.look } else { self.other_look };
+        let camera = if self.follow { keyed().unwrap_or_else(|| look.camera()) } else { look.camera() };
+        let camera = Camera { grade: self.grade(*i, t), lut: self.edit.cuts.get(*i).and_then(|c| c.lut_applied), ..camera };
+        Some((p.media.rig.clone(), shown, camera, p.rig_from_view(self.rolling_shutter), self.crossfade_shares()?.1 as f32))
+    }
+
+    /// The playing cut, and the playhead's clip time. That is where a seek
+    /// went even before its frame has decoded, and within the cut: in points
+    /// fall between frames, so the frame shown can be a hair before it, and a
+    /// keyframe there would be outside the cut, never drawn.
+    pub(super) fn playing_cut(&self) -> Option<(&Cut, f64)> {
+        let cut = self.edit.cuts.get(self.current)?;
+        Some((cut, self.clip.as_ref()?.playback.target().clamp(cut.start, cut.end)))
+    }
+
+    pub(super) fn fps(&self) -> f64 {
+        self.clip.as_ref().map_or(30.0, |c| c.playback.media.fps)
+    }
+
+    /// The playhead in edit time.
+    pub(super) fn position(&self) -> f64 {
+        match &self.clip {
+            Some(c) if self.current < self.edit.cuts.len() => {
+                // In points fall between frames, so the frame shown can be a
+                // hair before the cut.
+                let cut = &self.edit.cuts[self.current];
+                self.edit.edit_time(self.current, c.playback.position().clamp(cut.start, cut.end))
+            }
+            _ => 0.0,
+        }
+    }
+
+    /// After a cut's sound changed (its level is followed every frame; its
+    /// evening out is in the decode), restarts the playing cut's sound if
+    /// evening out changed, where it is.
+    pub(super) fn reload_cut_sound(&mut self) {
+        let Some(cut) = self.edit.cuts.get(self.current) else { return };
+        let Some(c) = &self.clip else { return };
+        if c.playback.media.even == cut.even {
+            return;
+        }
+        let playing = c.playback.playing;
+        if let Some((_, t)) = self.playing_cut() {
+            self.goto(self.current, t, playing);
+        }
+    }
+
+    /// After cuts were removed or restored: back to edit time `at`, or the
+    /// start screen if no cut is left.
+    pub(super) fn after_edit(&mut self, at: f64) {
+        self.selected = self.selected.filter(|&i| i < self.edit.cuts.len());
+        // Its cut may have moved or gone.
+        self.selected_sound = None;
+        match self.edit.locate(at.min(self.edit.duration())) {
+            Some((i, t)) => {
+                // The playback may be of a clip no longer at this index.
+                if self.edit.cuts[i].input != self.clip.as_ref().map_or_else(PathBuf::new, |c| c.playback.media.input.clone()) {
+                    self.clip = None;
+                }
+                self.goto(i, t, false);
+            }
+            None => {
+                self.clip = None;
+                self.current = 0;
+            }
+        }
+    }
+
+    /// The stretch of edit time the timeline shows: (start, span).
+    pub(super) fn timeline_window(&self) -> (f64, f64) {
+        let d = self.edit.frame();
+        let span = (d / self.timeline_zoom).max(TIMELINE_SPAN.min(d));
+        (self.timeline_start.clamp(0.0, (d - span).max(0.0)), span)
+    }
+
+    /// The closest zoom: `TIMELINE_SPAN` seconds across.
+    pub(super) fn timeline_most_zoom(&self) -> f64 {
+        (self.edit.frame() / TIMELINE_SPAN).max(1.0)
+    }
+
+    /// Zooms the timeline keeping `anchor` in place: by default the playhead
+    /// if it is in sight, else the middle.
+    pub(super) fn zoom_timeline(&mut self, zoom: f64, anchor: Option<f64>) {
+        let (start, span) = self.timeline_window();
+        let position = self.position();
+        let anchor = anchor.unwrap_or(if position >= start && position <= start + span { position } else { start + span / 2.0 });
+        self.timeline_zoom = zoom.clamp(1.0, self.timeline_most_zoom());
+        let (_, new_span) = self.timeline_window();
+        self.timeline_start = anchor - (anchor - start) / span.max(1e-9) * new_span;
+        self.timeline_start = self.timeline_window().0;
+    }
+
+    /// Scrolls the timeline to keep the playhead in sight, a page at a time.
+    pub(super) fn reveal_playhead(&mut self) {
+        let (start, span) = self.timeline_window();
+        let position = self.position();
+        if position < start || position > start + span {
+            self.timeline_start = (position - span * 0.05).max(0.0);
+        }
+        self.timeline_start = self.timeline_window().0;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_cuts_sound_as_the_export_mixes_it() {
+        // Muted is silent even with a point above 0 dB.
+        assert_eq!(cut_gain(0.0, crate::project::OFF_DB, 6.0), 0.0);
+        // Its own level and points go off at OFF_DB on their own, before
+        // the clips' level, as each stretch's volume filter does.
+        assert_eq!(cut_gain(10.0, -30.0, -12.0), 0.0);
+        assert!((cut_gain(-6.0, 3.0, 3.0) - 1.0).abs() < 1e-6);
+    }
+}

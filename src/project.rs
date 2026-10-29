@@ -352,7 +352,13 @@ impl Music {
     /// Adds `len` seconds of `input` from its start, nearest `at` where it
     /// fits (`place`), and returns its index.
     pub fn append(&mut self, input: PathBuf, at: f64, len: f64) -> usize {
-        self.clips.push(MusicClip { input, at, start: 0.0, end: len, fade_in: 0.0, fade_out: 0.0 });
+        self.append_part(input, at, 0.0, len)
+    }
+
+    /// Adds the file's `start`..`end` as a clip as near `at` as fits: a
+    /// recorded take, its lead-in before the playback started left out.
+    pub fn append_part(&mut self, input: PathBuf, at: f64, start: f64, end: f64) -> usize {
+        self.clips.push(MusicClip { input, at, start, end, fade_in: 0.0, fade_out: 0.0 });
         let i = self.clips.len() - 1;
         self.clips[i].at = self.place(i, at);
         i
@@ -1023,6 +1029,19 @@ mod tests {
         // Nearer the first's start: it stops edge to edge before it.
         let j = m.append("c.wav".into(), 2.5, 1.0);
         assert_eq!(m.clips[j].at, 1.0);
+    }
+
+    #[test]
+    fn a_take_lands_without_its_lead_in() {
+        let mut m = Music::default();
+        m.append("song.wav".into(), 10.0, 2.0);
+        // 3.4 s recorded, the first 0.9 before the playback started.
+        let i = m.append_part("take.wav".into(), 4.0, 0.9, 3.4);
+        assert_eq!((m.clips[i].at, m.clips[i].start, m.clips[i].end), (4.0, 0.9, 3.4));
+        // Its 2.5 s heard, not 3.4, decide where it fits: edge to edge
+        // before the song.
+        let j = m.append_part("take2.wav".into(), 7.6, 0.9, 3.4);
+        assert_eq!(m.clips[j].at, 7.5);
     }
 
     #[test]

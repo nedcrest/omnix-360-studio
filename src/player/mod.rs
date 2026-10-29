@@ -37,6 +37,7 @@ mod file;
 mod tracks;
 mod overlay_ui;
 mod cuts;
+mod record_ui;
 
 use crate::ffmpeg::{self, Hwaccel};
 use crate::stab::{ImuAxes, Mode, Stabilizer};
@@ -144,6 +145,7 @@ enum Side {
     Effects,
     Export,
     Audio,
+    Record,
 }
 
 /// The shape of the view, and so of a saved view: free fills the window.
@@ -275,6 +277,8 @@ enum Message {
     UiScale(i32),
     /// A cut's sound by hand: the Normalize dialog and the right-click menu.
     Sound(sound_ui::SoundMsg),
+    /// The Record panel: a voice-over recorded onto the Voice lane.
+    Record(record_ui::RecordMsg),
     /// A song's waveform, read off the UI thread.
     Waveform(PathBuf, Result<Arc<music::Waveform>, String>),
     /// The waveform of what a cut plays, if it has sound.
@@ -598,6 +602,8 @@ struct App {
     picking_white: bool,
     /// The panel docked at the right of the view, if one is open.
     side: Option<Side>,
+    /// The Record panel's choices and recorders.
+    record: record_ui::Panel,
     /// The Info panel (at the left, in the Text panel's place).
     info: Option<info::Info>,
     /// A running colour track: its cancel flag and progress, 0..1.
@@ -691,6 +697,7 @@ impl App {
             picking: None,
             picking_white: false,
             side: None,
+            record: record_ui::Panel::new(saved.record_input.clone(), saved.record_channel, saved.record_countdown, saved.record_play),
             info: None,
             tracking: None,
             saved_settings: saved,
@@ -722,6 +729,10 @@ impl App {
             timeline_scale: self.split_kept,
             view_angles: self.angles_shown,
             ui_scale: self.ui_scale,
+            record_input: self.record.input.clone(),
+            record_channel: self.record.channel,
+            record_countdown: self.record.countdown,
+            record_play: self.record.play,
         }
     }
 
@@ -740,7 +751,7 @@ impl App {
             message,
             Message::Look { .. } | Message::Zoom(_) | Message::Fov(_) | Message::ResetView | Message::Key(..) | Message::AngleInput(..) | Message::AngleNudge(..) | Message::AngleArrow(..) | Message::AngleScrub(..)
         );
-        let quiet = matches!(message, Message::Tick | Message::LoadingTick | Message::ViewSize(_) | Message::Modifiers(_));
+        let quiet = matches!(message, Message::Tick | Message::LoadingTick | Message::ViewSize(_) | Message::Modifiers(_) | Message::Record(record_ui::RecordMsg::Tick));
         if !looking && !quiet {
             self.auto_key_at = None;
         }
@@ -759,6 +770,8 @@ impl App {
         self.follow_crossfade();
         self.follow_music();
         let task = Task::batch([task, self.follow_bin()]);
+        // Another panel took the Record panel's place: stop listening.
+        let task = if self.side != Some(Side::Record) && self.record.active() { Task::batch([task, self.close_record()]) } else { task };
         let now = self.settings();
         if now != self.saved_settings {
             now.save();
@@ -798,6 +811,12 @@ impl App {
         // the next event.
         let busy = self.clip.iter().chain(self.partner.as_ref().map(|(_, c)| c)).any(|c| c.playback.busy());
         let close = window::close_requests().map(|_| Message::CloseRequested);
+        // The Record panel's meter and countdown, every screen frame.
+        let (keys, close) = if self.side == Some(Side::Record) {
+            (Subscription::batch([keys, window::frames().map(|_| Message::Record(record_ui::RecordMsg::Tick))]), close)
+        } else {
+            (keys, close)
+        };
         if busy {
             Subscription::batch([keys, close, window::frames().map(|_| Message::Tick)])
         } else if self.loading.is_some() {
@@ -831,6 +850,7 @@ impl App {
                 task
             }
             Message::Sound(msg) => self.sound_ui(msg),
+            Message::Record(msg) => self.record_ui(msg),
         }
     }
 

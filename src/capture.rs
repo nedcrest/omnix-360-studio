@@ -125,8 +125,9 @@ fn parse_sources(json: &str, default: &str) -> Result<Vec<Input>> {
 /// Which channel of a two-channel input to record: an interface's mic is
 /// usually on the first alone, and averaging both would lose 6 dB and mix
 /// in the other input.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Channel {
+    #[default]
     First,
     Second,
     Both,

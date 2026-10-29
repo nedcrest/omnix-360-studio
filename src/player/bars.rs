@@ -106,7 +106,11 @@ impl App {
                 tooltip::Position::Bottom,
             ),
             tip(icon_button(ADD_SFX, Some(Message::AddSound(SoundTrack::Sfx))), text("Add a sound effect at the playhead, on the SFX lane"), tooltip::Position::Bottom),
-            tip(icon_button(ADD_VOICE, Some(Message::AddSound(SoundTrack::Voice))), text("Add a voice-over at the playhead, on the Voice lane"), tooltip::Position::Bottom),
+            tip(
+                icon_button(ADD_VOICE, Some(Message::Record(super::record_ui::RecordMsg::Toggle))),
+                text(if self.side == Some(Side::Record) { "Close the voice-over panel" } else { "Voice-over: record one at the playhead, or add one from disk" }),
+                tooltip::Position::Bottom,
+            ),
             tip(icon_button(ADD_OVERLAY, Some(Message::AddOverlay)), text("Add pictures over the picture, at the playhead (PNG transparency shows through)"), tooltip::Position::Bottom),
             tip(icon_button(ADD_TEXT, Some(Message::AddText)), text("Add text over the picture, at the playhead (typed in the Text panel at the left)"), tooltip::Position::Bottom),
             separator(),
@@ -201,6 +205,7 @@ impl App {
             Some(Side::Effects) => row![view, self.effects_panel()].into(),
             Some(Side::Export) => row![view, self.export_panel()].into(),
             Some(Side::Audio) => row![view, self.audio_panel()].into(),
+            Some(Side::Record) => row![view, self.record_panel()].into(),
             None => view.into(),
         };
         // A text item's words and look, at the left while it's selected.

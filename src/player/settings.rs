@@ -43,6 +43,14 @@ pub struct Settings {
     /// The whole interface's size: text, buttons, the timeline (`ui_scale`
     /// in the app, iced's scale factor).
     pub ui_scale: f32,
+    /// The voice-over input, by its source name (`capture::Input::name`);
+    /// the system's default if `None` or gone.
+    pub record_input: Option<String>,
+    pub record_channel: crate::capture::Channel,
+    /// Three seconds' count before recording.
+    pub record_countdown: bool,
+    /// The edit plays while recording.
+    pub record_play: bool,
 }
 
 /// The interface's size range and steps (A− / A+ in the top bar), and its
@@ -74,6 +82,10 @@ impl Default for Settings {
             timeline_scale: 1.0,
             view_angles: true,
             ui_scale: UI_DEFAULT,
+            record_input: None,
+            record_channel: crate::capture::Channel::First,
+            record_countdown: true,
+            record_play: true,
         }
     }
 }

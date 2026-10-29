@@ -141,11 +141,12 @@ and easy to work in. A free-form mode can come later if ever needed.
   cleaned voice, else the clip's sound from the `.LRF`) and its volume line,
   moved off the thumbnails. Read two files at a time, cached.
 
+**Built 2026-10-29:** the Voice lane (`a6776ec`) and fade handles on sound
+clips' top corners (`bc19aab`).
+
 **Not yet:**
-- a voice-over lane (one more `SoundTrack`);
 - two sound effects at once (a second SFX lane);
-- auto-duck;
-- fade handles on a sound clip's corners.
+- auto-duck.
 
 ### 4. The clip's sound as its own lane — 4A built with 3; 4B its own milestone
 

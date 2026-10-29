@@ -103,7 +103,13 @@ impl App {
     pub(super) fn on_tracks(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::AddSound(which) => {
-                let dir = self.project.as_ref().and_then(|p| p.parent().map(Path::to_owned));
+                // The track's own folder in the project (made if missing:
+                // the project's tree is footage-agent's layout), else the
+                // project's folder.
+                let dir = self.project.as_deref().and_then(bin::root).map(|root| {
+                    let dir = root.join(which.folder());
+                    if std::fs::create_dir_all(&dir).is_ok() { dir } else { root }
+                });
                 let (title, filter) = match which {
                     SoundTrack::Music => ("Add music", "Music"),
                     SoundTrack::Sfx => ("Add a sound effect", "Sounds"),

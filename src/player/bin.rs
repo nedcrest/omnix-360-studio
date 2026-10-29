@@ -75,9 +75,9 @@ const ADD_JOIN: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0
 const SECTIONS: [(&str, Kind, &[&str]); 6] = [
     ("Footage", Kind::Clip, &["01_footage"]),
     ("External video", Kind::Clip, &["06_external"]),
-    ("Music", Kind::Sound(SoundTrack::Music), &["02_audio/music"]),
-    ("Voice-over", Kind::Sound(SoundTrack::Voice), &["02_audio/voiceover"]),
-    ("Sound effects", Kind::Sound(SoundTrack::Sfx), &["07_sfx"]),
+    ("Music", Kind::Sound(SoundTrack::Music), &[SoundTrack::Music.folder()]),
+    ("Voice-over", Kind::Sound(SoundTrack::Voice), &[SoundTrack::Voice.folder()]),
+    ("Sound effects", Kind::Sound(SoundTrack::Sfx), &[SoundTrack::Sfx.folder()]),
     ("Graphics", Kind::Picture, &["08_graphics"]),
 ];
 

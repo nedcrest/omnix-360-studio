@@ -122,6 +122,17 @@ impl SoundTrack {
         }
     }
 
+    /// Its files' folder under a project's folder, in footage-agent's
+    /// layout (`footage_agent/layout.py`, the source of truth): where the
+    /// add button opens and the bin looks.
+    pub const fn folder(self) -> &'static str {
+        match self {
+            SoundTrack::Music => "02_audio/music",
+            SoundTrack::Sfx => "07_sfx",
+            SoundTrack::Voice => "02_audio/voiceover",
+        }
+    }
+
     /// The word for its files in a Clips export: "<name> - music 001.wav".
     pub fn file_word(self) -> &'static str {
         match self {

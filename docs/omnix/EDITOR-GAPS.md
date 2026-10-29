@@ -383,8 +383,9 @@ How to build it so the player and the export sound the same:
   out: "39 cuts done. Levels from −3.4 to +5.7 dB. 2 without sound". The
   lane tags show ("−2.8 · even"). The waveforms of scooter clips fill the
   lane: wind noise, checked in the cache (median peak 0.6–0.7, against
-  0.01–0.05 for the talking clips). Not yet tried: the right-click menu,
-  and listening.
+  0.01–0.05 for the talking clips). Then the right-click menu: «Lower for
+  voice-over» and «Back to normal level» work both ways (on a scooter
+  clip). Not yet tried: Mute, «Show volume line», listening.
 - **Step 1 built** (`18671af`): `Cut.gain/mute/loudness`, `loudness.rs`,
   `rosmo360 normalize`, the export limiter (0.87 = −1.2 dBFS, `level=0`,
   `latency=1`), the player's limiter. Measured on Kos 22.08 cuts 1–6:

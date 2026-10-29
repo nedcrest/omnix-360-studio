@@ -413,6 +413,18 @@ impl Timeline {
         self.sounds[lane].volume.iter().position(|k| (self.x(k.t, b) - p.x).abs() <= PICK && (Self::volume_y(self.rows.sound_lane(lane), k.volume) - p.y).abs() <= PICK)
     }
 
+    /// Whether `p` is on a cut's volume line, where it's drawn (the cut
+    /// has points): a click there adds a point, as a rubber band.
+    fn on_sound_line(&self, p: Point, b: Rectangle) -> bool {
+        let Some(i) = self.block_at(p.x, b) else { return false };
+        let c = &self.blocks[i];
+        if c.sound.is_empty() {
+            return false;
+        }
+        let t = c.start + self.t(p.x, b) - c.from;
+        (Self::volume_y(self.rows.cut_lane(), crate::project::volume_at(&c.sound, t)) - p.y).abs() <= PICK
+    }
+
     /// A cut's sound point under `p`, if any: (cut, point).
     fn sound_at(&self, p: Point, b: Rectangle) -> Option<(usize, usize)> {
         self.blocks.iter().enumerate().find_map(|(ci, c)| {
@@ -1096,8 +1108,9 @@ impl canvas::Program<Message> for Marks {
                 } else if self.rows.on_clip_sound(p.y) && let Some((cut, key)) = self.sound_at(p, bounds) {
                     *drag = Drag::Sound { cut, key };
                     Message::SoundKeySelect(cut, key)
-                } else if self.rows.on_clip_sound(p.y) && state.ctrl {
-                    // A sound point on the cut where clicked, dragged on.
+                } else if self.rows.on_clip_sound(p.y) && (state.ctrl || self.on_sound_line(p, bounds)) {
+                    // A sound point on the cut where clicked (Ctrl, or on
+                    // its line once it shows), dragged on.
                     let cut = self.block_at(p.x, bounds)?;
                     let c = &self.blocks[cut];
                     let t = c.start + self.t(p.x, bounds) - c.from;
@@ -1338,7 +1351,7 @@ impl canvas::Program<Message> for Marks {
                 if self.rows.on_clip_sound(p.y) {
                     return if self.sound_at(p, bounds).is_some() {
                         mouse::Interaction::Grab
-                    } else if state.ctrl && self.block_at(p.x, bounds).is_some() {
+                    } else if (state.ctrl && self.block_at(p.x, bounds).is_some()) || self.on_sound_line(p, bounds) {
                         mouse::Interaction::Crosshair
                     } else if self.block_at(p.x, bounds).is_some() {
                         mouse::Interaction::Pointer

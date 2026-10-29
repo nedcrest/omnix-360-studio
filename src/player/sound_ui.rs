@@ -62,6 +62,9 @@ pub enum SoundMsg {
     Lower(usize),
     Restore(usize),
     Mute(usize, bool),
+    /// Cut `i`'s volume line shown: points at its in and out at 0 dB, so
+    /// nothing sounds different until one is moved.
+    ShowLine(usize),
     Even1(usize, bool),
 }
 
@@ -137,6 +140,11 @@ impl App {
             SoundMsg::Lower(i) => self.set_cut_sound(i, |c| c.gain = (c.gain + VOICE_OVER_DIP).max(normal_gain(c) + 2.0 * VOICE_OVER_DIP)),
             SoundMsg::Restore(i) => self.set_cut_sound(i, |c| c.gain = normal_gain(c)),
             SoundMsg::Mute(i, on) => self.set_cut_sound(i, |c| c.mute = on),
+            SoundMsg::ShowLine(i) => self.set_cut_sound(i, |c| {
+                for t in [c.start, c.end] {
+                    crate::project::add_volume_key(&mut c.volume, t, 0.0);
+                }
+            }),
             SoundMsg::Even1(i, on) => {
                 // Evening out changes how loud it is: measured again, as
                 // normalizing would.
@@ -233,6 +241,10 @@ impl App {
         let mut items = column![item(format!("Lower for voice-over ({VOICE_OVER_DIP:+.0} dB)"), SoundMsg::Lower(i))];
         if (cut.gain - normal_gain(cut)).abs() > 0.05 {
             items = items.push(item(format!("Back to normal level ({:+.1} dB)", normal_gain(cut)), SoundMsg::Restore(i)));
+        }
+        // The line shows once the cut has points; then a click on it adds one.
+        if cut.volume.is_empty() {
+            items = items.push(item("Show volume line".into(), SoundMsg::ShowLine(i)));
         }
         items = items
             .push(item(if cut.mute { "Unmute".into() } else { "Mute".into() }, SoundMsg::Mute(i, !cut.mute)))

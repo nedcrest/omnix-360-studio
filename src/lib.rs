@@ -6,6 +6,7 @@
 
 mod align;
 mod cache;
+mod capture;
 mod check;
 mod dissolve;
 mod dji;

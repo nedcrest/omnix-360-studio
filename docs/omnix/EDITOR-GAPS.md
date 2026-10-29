@@ -724,34 +724,73 @@ be a side panel of its own, and the sound written straight into the
 Voice lane on the timeline. It must show what recording device is
 connected (Bluetooth mic, audio interface, etc.)."
 
-Design, to be finished with the research (good examples: Final Cut's
-Record Voiceover, Premiere's track record button, iMovie, CapCut,
-Audacity):
-- The +Voice button opens a small menu: «Add from disk…» (today's dialog)
-  and «Record…», which opens a Record side panel at the right (where
-  Effects, Export and Audio sit).
-- The panel offers:
-  - the input device, by name, with its kind (Bluetooth, USB, built-in);
-  - its live level meter;
-  - Record and Stop;
-  - a 3-2-1 countdown;
-  - «play the edit while recording» (for headphones);
-  - where the take goes (the playhead).
-- The take is written as a WAV into the project's `02_audio/voiceover`
-  (`voice-001.wav` …) and lands on the Voice lane at the point where
-  recording started, as soon as it stops: one undo step.
-- How, in keeping with the rules (ffmpeg as a separate program):
-  - list PipeWire/Pulse sources (`pactl -f json list sources`, without
-    the `.monitor` ones);
-  - record with `ffmpeg -f pulse -i <source>`;
-  - read the level from a raw pipe beside the file;
-  - stop with `q`, so the WAV is finished cleanly.
-- To get right:
-  - **Latency.** A take recorded while the edit plays comes in late by
-    the input and output latency, so shift it back by that.
-  - **Bluetooth headsets.** Recording through a Bluetooth headset's mic
-    switches it to its call profile: 16 kHz mono, worse sound, and the
-    playback drops in quality too. Say so beside a Bluetooth device.
+**What good editors do** (research, 2026-10-29: Final Cut's Record
+Voiceover, Resolve's Edit-page voiceover, Premiere's track mic button,
+iMovie, CapCut, Audacity, Kdenlive, Shotcut, OBS):
+- a 3-2-1 countdown;
+- the edit plays while you record, with "use headphones" or "mute the
+  project";
+- a big input meter with a clip warning, alive *before* Record;
+- the device defaults to the system's and is remembered;
+- takes are named and numbered automatically;
+- the playhead goes back to the start after Stop;
+- noise cleanup is one switch afterwards;
+- Audacity alone is open about latency: it shifts the take after
+  recording.
+
+Shotcut is the warning: no device picker, no meter, and users get lost.
+
+**Design for Omnix:**
+- **Entry.** The microphone button opens the Record panel at the right.
+  Its first line is «Add from disk…», so the button gives both, as asked.
+- **The panel, top to bottom:**
+  1. Input: friendly name with its kind (Bluetooth / USB / built-in /
+     webcam), starting on the default and then remembered.
+  2. A warning when needed. Bluetooth: phone quality, 16 kHz, and the
+     headset's playback drops too while recording. A webcam: low quality.
+  3. A live level meter with a peak mark and a CLIP light, running while
+     the panel is open.
+  4. Channel (1 / 2 / both) for a two-channel interface.
+  5. Countdown 3 s (on); Play the edit while recording, use headphones
+     (on).
+  6. A big Record / Stop button, with the elapsed time.
+- **Flow.**
+  - Record starts ffmpeg at once, as a warm-up: opening the device, and
+    Bluetooth's profile switch, take 0.3–2 s.
+  - The countdown runs, then the edit plays from the playhead T.
+  - On Stop, ffmpeg gets `q` (a clean WAV).
+  - The take lands on the Voice lane at T, its in point past the warm-up
+    and the countdown and corrected for latency, as one undo step. The
+    playhead goes back to T.
+- **File.** `02_audio/voiceover/VO_<date-time>_take<NN>.wav`, 48 kHz,
+  24-bit, mono, never overwritten. It is kept whole and trimmed only on
+  the timeline.
+- **This machine** (PipeWire 1.0.5, ffmpeg 6.1.1):
+  - Inputs: the Scarlett Solo (USB, 2 channels, the mic on channel 1)
+    and the webcam's mic (16 kHz mono). The built-in card's profile is
+    `off`, so its mic isn't listed.
+  - `pactl -f json list sources`, keeping `media.class == Audio/Source`;
+    `device.bus` is bluetooth / usb / pci and `device.form_factor` says
+    webcam or headset; hot-plug arrives on `pactl -f json subscribe`.
+  - Recording: `ffmpeg -f pulse -i <source>`, one channel with
+    `pan=mono|c0=cN`, `asplit` into the WAV (`pcm_s24le`, `-rf64 auto`)
+    and into `astats` metadata on stderr for the meter. Writing `q` to
+    stdin stops it cleanly (tested).
+- **Latency.** Speaking along to playback, the voice is late by the output
+  plus input latency: 20–60 ms wired, 150–300 ms on Bluetooth. The in
+  point adds the device's output latency (cpal knows it) and an input
+  estimate. A «Voice sync (ms)» setting comes later if it's audibly off.
+- **Bluetooth.**
+  - A2DP has no mic.
+  - Using the headset's mic switches it to HFP/HSP: mono, 8 or 16 kHz,
+    and playback drops to that too. WirePlumber switches on its own when
+    the mic opens; the warm-up covers it.
+  - A USB mic for input and the Bluetooth headset for listening is the
+    good pair.
+- **Later:**
+  - takes stacked as alternates, and a takes list;
+  - «Clean up voice» (footage-agent's cleaner, or `afftdn`);
+  - enabling a disabled built-in card's profile.
 
 ## Format rule for all of these
 

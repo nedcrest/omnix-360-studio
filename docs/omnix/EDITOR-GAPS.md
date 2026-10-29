@@ -385,7 +385,8 @@ How to build it so the player and the export sound the same:
   lane: wind noise, checked in the cache (median peak 0.6–0.7, against
   0.01–0.05 for the talking clips). Then the right-click menu: «Lower for
   voice-over» and «Back to normal level» work both ways (on a scooter
-  clip). Not yet tried: Mute, «Show volume line», listening.
+  clip). Mute and «Show volume line» with points work too (2026-10-29).
+  Card done. Left: the user's ear on the leveler (samples A–D).
 - **Step 1 built** (`18671af`): `Cut.gain/mute/loudness`, `loudness.rs`,
   `rosmo360 normalize`, the export limiter (0.87 = −1.2 dBFS, `level=0`,
   `latency=1`), the player's limiter. Measured on Kos 22.08 cuts 1–6:

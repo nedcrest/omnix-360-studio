@@ -715,6 +715,44 @@ Built (see the commit): «Show volume line» puts points at the cut's in and
 out at 0 dB. A click on the drawn line adds a point and drags it, without
 Ctrl. Later, the same for the music and SFX clips' menus.
 
+### 36. Record a voice-over inside Omnix — medium-large (user, 2026-10-29)
+
+User: "for the voice-over there should be a way to record right here in
+the edit: the microphone opens a context menu with 'add from disk' or
+'record here in the editor'. Look at good examples of such windows. Can
+be a side panel of its own, and the sound written straight into the
+Voice lane on the timeline. It must show what recording device is
+connected (Bluetooth mic, audio interface, etc.)."
+
+Design, to be finished with the research (good examples: Final Cut's
+Record Voiceover, Premiere's track record button, iMovie, CapCut,
+Audacity):
+- The +Voice button opens a small menu: «Add from disk…» (today's dialog)
+  and «Record…», which opens a Record side panel at the right (where
+  Effects, Export and Audio sit).
+- The panel offers:
+  - the input device, by name, with its kind (Bluetooth, USB, built-in);
+  - its live level meter;
+  - Record and Stop;
+  - a 3-2-1 countdown;
+  - «play the edit while recording» (for headphones);
+  - where the take goes (the playhead).
+- The take is written as a WAV into the project's `02_audio/voiceover`
+  (`voice-001.wav` …) and lands on the Voice lane at the point where
+  recording started, as soon as it stops: one undo step.
+- How, in keeping with the rules (ffmpeg as a separate program):
+  - list PipeWire/Pulse sources (`pactl -f json list sources`, without
+    the `.monitor` ones);
+  - record with `ffmpeg -f pulse -i <source>`;
+  - read the level from a raw pipe beside the file;
+  - stop with `q`, so the WAV is finished cleanly.
+- To get right:
+  - **Latency.** A take recorded while the edit plays comes in late by
+    the input and output latency, so shift it back by that.
+  - **Bluetooth headsets.** Recording through a Bluetooth headset's mic
+    switches it to its call profile: 16 kHz mono, worse sound, and the
+    playback drops in quality too. Say so beside a Bluetooth device.
+
 ## Format rule for all of these
 
 New fields only, each `#[serde(default, skip_serializing_if = …)]`, so every

@@ -146,6 +146,7 @@ const MUSIC_LINE: iced::Color = iced::Color::from_rgb(1.0, 0.78, 0.25);
 /// The sound effects' clips; the music's are the theme's green. From the
 /// colour-blind-safe Okabe-Ito set, and every lane is named as well.
 const SFX_COLOUR: iced::Color = iced::Color::from_rgb(0.80, 0.47, 0.65);
+const VOICE_COLOUR: iced::Color = iced::Color::from_rgb(0.34, 0.71, 0.91);
 const SOUND_LINE: iced::Color = iced::Color::from_rgb(0.35, 0.85, 1.0);
 
 /// An overlay lane's height at scale 1, above the cuts.
@@ -503,6 +504,7 @@ impl Timeline {
         let colour = match which {
             SoundTrack::Music => palette.success.base.color,
             SoundTrack::Sfx => SFX_COLOUR,
+            SoundTrack::Voice => VOICE_COLOUR,
         };
         let (top, h) = (self.rows.sound_top(li) + 2.0, self.rows.music - 4.0);
         let lane = Path::rounded_rectangle(Point::new(self.x(0.0, b), top), Size::new((self.x(self.duration, b) - self.x(0.0, b)).max(0.0), h), 4.0.into());

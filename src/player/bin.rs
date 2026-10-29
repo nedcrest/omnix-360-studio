@@ -76,8 +76,7 @@ const SECTIONS: [(&str, Kind, &[&str]); 6] = [
     ("Footage", Kind::Clip, &["01_footage"]),
     ("External video", Kind::Clip, &["06_external"]),
     ("Music", Kind::Sound(SoundTrack::Music), &["02_audio/music"]),
-    // On the music lane until voice-over has a lane of its own.
-    ("Voice-over", Kind::Sound(SoundTrack::Music), &["02_audio/voiceover"]),
+    ("Voice-over", Kind::Sound(SoundTrack::Voice), &["02_audio/voiceover"]),
     ("Sound effects", Kind::Sound(SoundTrack::Sfx), &["07_sfx"]),
     ("Graphics", Kind::Picture, &["08_graphics"]),
 ];

@@ -48,6 +48,8 @@ pub(super) const TEXT_BIGGER: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg
 /// A speaker with a spark and a plus: add a sound effect.
 pub(super) const ADD_SFX: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9v6h4l5 4V5L7 9z"/><path d="M15 9l2-2M16 12h2"/><path d="M19 15v6M16 18h6"/></svg>"#;
 
+/// A microphone and a plus: add a voice-over.
+pub(super) const ADD_VOICE: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="6" height="11" rx="3"/><path d="M2 10a6 6 0 0 0 12 0M8 16v4"/><path d="M19 13v6M16 16h6"/></svg>"#;
 pub(super) const ADD_MUSIC: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l10-2v9"/><circle cx="6" cy="18" r="3"/><path d="M19 15v6M16 18h6"/></svg>"#;
 
 pub(super) const NEW_PROJECT: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v4a2 2 0 0 0 2 2h4M9 15h6M12 18v-6"/></svg>"#;

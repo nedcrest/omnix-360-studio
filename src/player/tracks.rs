@@ -107,6 +107,7 @@ impl App {
                 let (title, filter) = match which {
                     SoundTrack::Music => ("Add music", "Music"),
                     SoundTrack::Sfx => ("Add a sound effect", "Sounds"),
+                    SoundTrack::Voice => ("Add a voice-over", "Sounds"),
                 };
                 return Task::perform(
                     async move {
@@ -122,10 +123,10 @@ impl App {
             Message::SoundPicked(_, None) => {}
             Message::SoundPicked(which, Some(path)) => {
                 // A song after the music already there, whole; a sound
-                // effect at the playhead, where it's wanted.
+                // effect or a voice-over at the playhead, where it's wanted.
                 let at = match which {
                     SoundTrack::Music => None,
-                    SoundTrack::Sfx => Some(self.position()),
+                    SoundTrack::Sfx | SoundTrack::Voice => Some(self.position()),
                 };
                 return probe_sound(which, path, at);
             }

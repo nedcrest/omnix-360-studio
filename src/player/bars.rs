@@ -106,6 +106,7 @@ impl App {
                 tooltip::Position::Bottom,
             ),
             tip(icon_button(ADD_SFX, Some(Message::AddSound(SoundTrack::Sfx))), text("Add a sound effect at the playhead, on the SFX lane"), tooltip::Position::Bottom),
+            tip(icon_button(ADD_VOICE, Some(Message::AddSound(SoundTrack::Voice))), text("Add a voice-over at the playhead, on the Voice lane"), tooltip::Position::Bottom),
             tip(icon_button(ADD_OVERLAY, Some(Message::AddOverlay)), text("Add pictures over the picture, at the playhead (PNG transparency shows through)"), tooltip::Position::Bottom),
             tip(icon_button(ADD_TEXT, Some(Message::AddText)), text("Add text over the picture, at the playhead (typed in the Text panel at the left)"), tooltip::Position::Bottom),
             separator(),

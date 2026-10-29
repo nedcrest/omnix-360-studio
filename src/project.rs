@@ -41,6 +41,9 @@ pub struct Project {
     /// Sound effects: a track like the music's, mixed in beside it.
     #[serde(default, skip_serializing_if = "Music::is_empty")]
     pub sfx: Music,
+    /// A voice-over: a track like the music's.
+    #[serde(default, skip_serializing_if = "Music::is_empty")]
+    pub voice: Music,
     /// Fades from black at the start and to black at the end.
     #[serde(default, skip_serializing_if = "Fades::is_none")]
     pub fades: Fades,
@@ -103,17 +106,19 @@ impl Sound {
 pub enum SoundTrack {
     Music,
     Sfx,
+    Voice,
 }
 
 impl SoundTrack {
     /// Top to bottom, as the timeline shows them and the export mixes them.
-    pub const ALL: [SoundTrack; 2] = [SoundTrack::Music, SoundTrack::Sfx];
+    pub const ALL: [SoundTrack; 3] = [SoundTrack::Music, SoundTrack::Sfx, SoundTrack::Voice];
 
     /// The lane's name on the timeline.
     pub fn name(self) -> &'static str {
         match self {
             SoundTrack::Music => "Music",
             SoundTrack::Sfx => "SFX",
+            SoundTrack::Voice => "Voice",
         }
     }
 
@@ -122,6 +127,7 @@ impl SoundTrack {
         match self {
             SoundTrack::Music => "music",
             SoundTrack::Sfx => "sfx",
+            SoundTrack::Voice => "voice",
         }
     }
 }
@@ -730,6 +736,7 @@ impl Project {
         match which {
             SoundTrack::Music => &self.music,
             SoundTrack::Sfx => &self.sfx,
+            SoundTrack::Voice => &self.voice,
         }
     }
 
@@ -737,6 +744,7 @@ impl Project {
         match which {
             SoundTrack::Music => &mut self.music,
             SoundTrack::Sfx => &mut self.sfx,
+            SoundTrack::Voice => &mut self.voice,
         }
     }
 }

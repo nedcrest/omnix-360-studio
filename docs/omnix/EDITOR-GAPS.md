@@ -703,6 +703,15 @@ Plan:
   hand. The analysis says which upstream areas (stitch, colour, export
   pipeline) we keep untouched so they still merge.
 
+### 33b. Show a cut's volume line from the menu — built 2026-10-29 (user)
+
+User: "show the sound line from an option in the context menu (it'd start
+at 0 dB), so I can pull the level up with the curve here and there".
+
+Built (see the commit): «Show volume line» puts points at the cut's in and
+out at 0 dB. A click on the drawn line adds a point and drags it, without
+Ctrl. Later, the same for the music and SFX clips' menus.
+
 ## Format rule for all of these
 
 New fields only, each `#[serde(default, skip_serializing_if = …)]`, so every

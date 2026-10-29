@@ -774,8 +774,8 @@ Shotcut is the warning: no device picker, no meter, and users get lost.
     webcam or headset; hot-plug arrives on `pactl -f json subscribe`.
   - Recording: `ffmpeg -f pulse -i <source>`, one channel with
     `pan=mono|c0=cN`, `asplit` into the WAV (`pcm_s24le`, `-rf64 auto`)
-    and into `astats` metadata on stderr for the meter. Writing `q` to
-    stdin stops it cleanly (tested).
+    and into `astats` metadata, printed in ffmpeg's log, for the meter.
+    Writing `q` to stdin stops it cleanly (tested).
 - **Latency.** Speaking along to playback, the voice is late by the output
   plus input latency: 20–60 ms wired, 150–300 ms on Bluetooth. The in
   point adds the device's output latency (cpal knows it) and an input
@@ -787,6 +787,27 @@ Shotcut is the warning: no device picker, no meter, and users get lost.
     the mic opens; the warm-up covers it.
   - A USB mic for input and the Bluetooth headset for listening is the
     good pair.
+- **Built 2026-10-29** (`35735d6` recorder, `084c617` panel), waiting
+  for the user's check. `src/capture.rs` lists the inputs and records;
+  `src/player/record_ui.rs` is the panel. Defaults taken alone, to change
+  if wanted:
+  - the latency is a fixed estimate, 0.04 s wired and 0.25 s Bluetooth,
+    not measured from cpal; plus 0.05 s for the meter's reading window
+    (the first sound is dated by its first level line);
+  - where the edit was at the playhead is read off the playback's own
+    clock in its first second, so a slow start doesn't shift the take;
+  - countdown and play-along on; input, channel and both switches
+    remembered in the settings;
+  - Record is off until the project is saved (takes go in its folder);
+  - closing the panel mid-take stops it and keeps the take;
+  - a take shorter than 0.1 s after the countdown is dropped with a
+    message (the file stays on disk);
+  - the meter's floor is −60 dBFS; CLIP lights at −0.1 dBFS and stays on
+    until clicked;
+  - Linux only (PipeWire/Pulse via `pactl`); other systems say so.
+- **Found while building:** ffmpeg's `ametadata=file=/dev/stderr` sits in
+  a 32 KB buffer, so the meter got nothing for minutes. The levels come
+  through ffmpeg's log (`-loglevel info`) instead, live.
 - **Later:**
   - takes stacked as alternates, and a takes list;
   - «Clean up voice» (footage-agent's cleaner, or `afftdn`);

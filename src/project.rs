@@ -326,6 +326,18 @@ impl Music {
         }
     }
 
+    /// Clip `i`'s fade at its start (`in_edge`) or end set to `seconds`:
+    /// from 0 to what the clip has left beside its other fade.
+    pub fn set_fade(&mut self, i: usize, in_edge: bool, seconds: f64) {
+        let Some(c) = self.clips.get_mut(i) else { return };
+        let len = c.end - c.start;
+        if in_edge {
+            c.fade_in = seconds.clamp(0.0, (len - c.fade_out).max(0.0));
+        } else {
+            c.fade_out = seconds.clamp(0.0, (len - c.fade_in).max(0.0));
+        }
+    }
+
     /// Adds `len` seconds of `input` from its start, nearest `at` where it
     /// fits (`place`), and returns its index.
     pub fn append(&mut self, input: PathBuf, at: f64, len: f64) -> usize {
@@ -956,6 +968,18 @@ mod tests {
         // A clip gone (an undo mid-drag) is nothing.
         m.drag_to(5, 1.0, false);
         m.trim(5, true, 1.0, false, 9.0, 0.2);
+    }
+
+    #[test]
+    fn fades_stay_within_the_clip() {
+        let mut m = Music::default();
+        m.append("a.wav".into(), 0.0, 10.0);
+        m.set_fade(0, true, 3.0);
+        m.set_fade(0, false, 9.0);
+        assert_eq!((m.clips[0].fade_in, m.clips[0].fade_out), (3.0, 7.0));
+        m.set_fade(0, true, -2.0);
+        assert_eq!(m.clips[0].fade_in, 0.0);
+        m.set_fade(4, true, 1.0);
     }
 
     #[test]

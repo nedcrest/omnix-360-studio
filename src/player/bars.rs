@@ -251,6 +251,8 @@ impl App {
                         start: c.start,
                         len: c.end - c.start,
                         wave: self.waveforms.get(&c.input).cloned(),
+                        fade_in: c.fade_in,
+                        fade_out: c.fade_out,
                     })
                     .collect();
                 timeline::SoundLane { which, blocks, volume: track.keyframes.clone() }

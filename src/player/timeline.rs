@@ -145,6 +145,8 @@ type Lane = (f32, f32);
 const MUSIC_LINE: iced::Color = iced::Color::from_rgb(1.0, 0.78, 0.25);
 /// The sound effects' clips; the music's are the theme's green. From the
 /// colour-blind-safe Okabe-Ito set, and every lane is named as well.
+/// How far down from a sound clip's top its fade handles take the mouse.
+const FADE_BAND: f32 = 12.0;
 const SFX_COLOUR: iced::Color = iced::Color::from_rgb(0.80, 0.47, 0.65);
 const VOICE_COLOUR: iced::Color = iced::Color::from_rgb(0.34, 0.71, 0.91);
 const SOUND_LINE: iced::Color = iced::Color::from_rgb(0.35, 0.85, 1.0);
@@ -227,6 +229,9 @@ pub struct MusicBlock {
     pub len: f64,
     /// The song's waveform, once read.
     pub wave: Option<Arc<music::Waveform>>,
+    /// Its fades in and out, seconds: a handle at each top corner.
+    pub fade_in: f64,
+    pub fade_out: f64,
 }
 
 pub struct Timeline {
@@ -279,6 +284,9 @@ pub enum Drag {
     /// Shift-dragging cut `cut`'s start edge: its crossfade, `from` seconds
     /// when pressed at `x0`; dragging left lengthens it.
     Crossfade { cut: usize, x0: f32, from: f64, per_px: f64 },
+    /// Dragging the fade handle at clip `clip`'s start (`in_edge`) or end on
+    /// sound lane `lane`; the fade was `from` seconds when pressed at `x0`.
+    Fade { lane: usize, clip: usize, in_edge: bool, x0: f32, from: f64, per_px: f64 },
     /// Dragging sound lane `lane`'s volume point `key`.
     Volume { lane: usize, key: usize },
     /// Dragging cut `cut`'s sound point `key`.
@@ -409,6 +417,27 @@ impl Timeline {
         (VOLUME_TOP - ((y - lane.0) / lane.1) as f64 * (VOLUME_TOP - VOLUME_BOTTOM)).clamp(VOLUME_BOTTOM, VOLUME_TOP)
     }
 
+    /// A fade handle under `p` on sound lane `lane`: (clip, at its start).
+    /// The handles sit along the clip's top, where its fades end.
+    fn fade_at(&self, lane: usize, p: Point, b: Rectangle) -> Option<(usize, bool)> {
+        let top = self.rows.sound_top(lane) + 2.0;
+        if p.y > top + FADE_BAND {
+            return None;
+        }
+        let per_px = self.span / Self::width(b) as f64;
+        self.sounds[lane].blocks.iter().enumerate().find_map(|(i, m)| {
+            let (l, r) = (self.x(m.from, b), self.x(m.from + m.len, b));
+            let (fi, fo) = (l + (m.fade_in / per_px) as f32, r - (m.fade_out / per_px) as f32);
+            if (p.x - fi).abs() <= PICK && p.x >= l - 1.0 && p.x <= r + 1.0 {
+                Some((i, true))
+            } else if (p.x - fo).abs() <= PICK && p.x >= l - 1.0 && p.x <= r + 1.0 {
+                Some((i, false))
+            } else {
+                None
+            }
+        })
+    }
+
     /// Sound lane `lane`'s volume point under `p`, if any.
     fn volume_at(&self, lane: usize, p: Point, b: Rectangle) -> Option<usize> {
         self.sounds[lane].volume.iter().position(|k| (self.x(k.t, b) - p.x).abs() <= PICK && (Self::volume_y(self.rows.sound_lane(lane), k.volume) - p.y).abs() <= PICK)
@@ -532,6 +561,25 @@ impl Timeline {
                     }
                 });
                 frame.fill(&bars, palette.background.base.text.scale_alpha(0.7));
+            }
+            // Fades: the clip shaded above a line from its corner to where
+            // the fade ends, a handle there along the top.
+            for (fade, at_start) in [(m.fade_in, true), (m.fade_out, false)] {
+                let w = (fade / (m.len.max(1e-9)) * (r - l) as f64) as f32;
+                let (corner, end) = if at_start { (l, l + w) } else { (r, r - w) };
+                if w > 0.5 {
+                    let shade = Path::new(|p| {
+                        p.move_to(Point::new(corner, top));
+                        p.line_to(Point::new(end, top));
+                        p.line_to(Point::new(corner, top + h));
+                        p.close();
+                    });
+                    frame.fill(&shade, iced::Color::from_rgba(0.0, 0.0, 0.0, 0.4));
+                    frame.stroke(&Path::line(Point::new(corner, top + h), Point::new(end, top)), Stroke::default().with_width(1.0).with_color(iced::Color::from_rgba(1.0, 1.0, 1.0, 0.7)));
+                }
+                let knob = Path::circle(Point::new(end, top + 4.0), 3.5);
+                frame.fill(&knob, iced::Color::WHITE);
+                frame.stroke(&knob, Stroke::default().with_width(1.0).with_color(iced::Color::from_rgba(0.0, 0.0, 0.0, 0.7)));
             }
             if selected {
                 frame.stroke(&block, Stroke::default().with_width(2.0).with_color(palette.primary.strong.color));
@@ -1144,7 +1192,12 @@ impl canvas::Program<Message> for Marks {
                     Message::Select(cut)
                 } else if let Some(lane) = self.rows.sound_at_y(p.y) {
                     let which = self.sounds[lane].which;
-                    if let Some(key) = self.volume_at(lane, p, bounds) {
+                    if let Some((clip, in_edge)) = self.fade_at(lane, p, bounds) {
+                        let m = &self.sounds[lane].blocks[clip];
+                        let per_px = self.span / Timeline::width(bounds) as f64;
+                        *drag = Drag::Fade { lane, clip, in_edge, x0: p.x, from: if in_edge { m.fade_in } else { m.fade_out }, per_px };
+                        Message::SelectMusic(which, clip)
+                    } else if let Some(key) = self.volume_at(lane, p, bounds) {
                         *drag = Drag::Volume { lane, key };
                         Message::VolumeSelect(which, key)
                     } else if state.ctrl {
@@ -1199,6 +1252,11 @@ impl canvas::Program<Message> for Marks {
                         Message::MusicMove(self.sounds[*lane].which, *clip, at + self.snap(*lane, *clip, &[at, at + len], *per_px), state.shift)
                     }
                     Drag::Crossfade { cut, x0, from, per_px } => Message::Crossfade(*cut, *from + (*x0 - x) as f64 * *per_px),
+                    Drag::Fade { lane, clip, in_edge, x0, from, per_px } => {
+                        // Rightwards lengthens a fade in, leftwards a fade out.
+                        let dx = (x - *x0) as f64 * *per_px;
+                        Message::MusicFade(self.sounds[*lane].which, *clip, *in_edge, *from + if *in_edge { dx } else { -dx })
+                    }
                     Drag::Volume { lane, key } => Message::VolumeMove(self.sounds[*lane].which, *key, self.t(x, bounds), Timeline::volume_db(self.rows.sound_lane(*lane), position.y - bounds.y)),
                     Drag::Sound { cut, key } => {
                         let c = &self.blocks[*cut];
@@ -1219,7 +1277,7 @@ impl canvas::Program<Message> for Marks {
                 Drag::None => None,
                 Drag::Move { cut, moved: true, to, .. } => Some(canvas::Action::publish(Message::MoveCut(cut, to)).and_capture()),
                 Drag::Move { .. } | Drag::Scroll { .. } => Some(canvas::Action::request_redraw().and_capture()),
-                Drag::Playhead | Drag::Key { .. } | Drag::Effect { .. } | Drag::Trim { .. } | Drag::MusicMove { .. } | Drag::MusicTrim { .. } | Drag::Volume { .. } | Drag::Sound { .. } | Drag::Crossfade { .. } => {
+                Drag::Playhead | Drag::Key { .. } | Drag::Effect { .. } | Drag::Trim { .. } | Drag::MusicMove { .. } | Drag::MusicTrim { .. } | Drag::Fade { .. } | Drag::Volume { .. } | Drag::Sound { .. } | Drag::Crossfade { .. } => {
                     Some(canvas::Action::publish(Message::ScrubDone).and_capture())
                 }
             },
@@ -1331,13 +1389,16 @@ impl canvas::Program<Message> for Marks {
 
     fn mouse_interaction(&self, state: &State, bounds: Rectangle, cursor: mouse::Cursor) -> mouse::Interaction {
         match state.drag {
-            Drag::Trim { .. } | Drag::MusicTrim { .. } | Drag::Crossfade { .. } => mouse::Interaction::ResizingHorizontally,
+            Drag::Trim { .. } | Drag::MusicTrim { .. } | Drag::Fade { .. } | Drag::Crossfade { .. } => mouse::Interaction::ResizingHorizontally,
             Drag::None => {
                 let Some(p) = cursor.position_in(bounds) else { return mouse::Interaction::default() };
                 if p.y >= self.rows.height - SCROLL {
                     return if self.zoomed() { mouse::Interaction::Grab } else { mouse::Interaction::default() };
                 }
                 if let Some(lane) = self.rows.sound_at_y(p.y) {
+                    if self.fade_at(lane, p, bounds).is_some() {
+                        return mouse::Interaction::ResizingHorizontally;
+                    }
                     if self.volume_at(lane, p, bounds).is_some() {
                         return mouse::Interaction::Grab;
                     }

@@ -198,6 +198,12 @@ impl App {
                 let song = self.waveforms.get(&self.edit.track(which).clips[i].input).map_or(f64::INFINITY, |w| w.duration);
                 self.edit.track_mut(which).trim(i, in_edge, t, overlap, song, edit::MIN_CUT);
             }
+            Message::MusicFade(which, i, in_edge, seconds) => {
+                if i < self.edit.track(which).clips.len() {
+                    self.begin_drag();
+                    self.edit.track_mut(which).set_fade(i, in_edge, seconds);
+                }
+            }
             Message::SoundLevel(db) => {
                 self.begin_drag();
                 self.edit.sound.volume = db;

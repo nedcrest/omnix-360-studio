@@ -29,7 +29,7 @@ impl App {
         } else {
             crate::Target::One(path.with_extension(self.export_format.extension()))
         };
-        let out = crate::ExportOpts { size: (w as usize, h as usize), draft: false, cpu: false, format: self.export_format, target };
+        let out = crate::ExportOpts { size: (w as usize, h as usize), draft: false, cpu: false, format: self.export_format, target, loudness: self.export_loudness };
         let opts = crate::StitchOpts {
             stabilize: Some(self.opts.stabilize),
             imu_axes: self.opts.imu_axes,

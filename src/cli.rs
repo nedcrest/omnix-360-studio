@@ -210,6 +210,11 @@ pub(crate) enum Cmd {
         /// the other editor).
         #[arg(long, requires = "clips")]
         graded: bool,
+        /// Bring the whole film's sound to this loudness, LUFS integrated
+        /// (YouTube and most streaming: -14; Apple and podcasts: -16;
+        /// broadcast: -23). Not with --clips.
+        #[arg(long, allow_negative_numbers = true, conflicts_with = "clips")]
+        loudness: Option<f64>,
         /// Stitch from the low-resolution proxy (LRF): a quick, soft draft.
         #[arg(long)]
         draft: bool,
@@ -591,7 +596,7 @@ pub(crate) fn run() -> Result<()> {
             encoder.finish()?;
             eprintln!("wrote {}", output.display());
         }
-        Cmd::Export { input, framing, start, duration, resolution, aspect, size, output, format, clips, handles, graded, draft, cpu, opts } => {
+        Cmd::Export { input, framing, start, duration, resolution, aspect, size, output, format, clips, handles, graded, loudness, draft, cpu, opts } => {
             let name = input.file_stem().map_or_else(|| "export".to_owned(), |s| s.to_string_lossy().into_owned());
             let project = if is_project(&input) {
                 if framing.reframe.is_some() || framing.view.is_some() || start.is_some() || duration.is_some() {
@@ -611,7 +616,7 @@ pub(crate) fn run() -> Result<()> {
             } else {
                 Target::One(output.unwrap_or_else(|| PathBuf::from(format!("clip.{}", format.extension()))))
             };
-            let written = export(&project, &opts, &ExportOpts { size: (w, h), draft, cpu, format, target }, &mut print_progress())?;
+            let written = export(&project, &opts, &ExportOpts { size: (w, h), draft, cpu, format, target, loudness }, &mut print_progress())?;
             for path in &written {
                 // The music and sound effects beside clips are sound only.
                 let size = if path.extension().is_some_and(|e| e == "wav") { String::new() } else { format!(" ({w}×{h})") };

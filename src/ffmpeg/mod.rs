@@ -11,7 +11,7 @@ use crate::hdr::Hdr;
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 
 mod mix;
-pub use mix::{Mix, Sound};
+pub use mix::{LIMITER, Mix, Sound};
 use mix::{mixed, pad};
 
 /// A command running ffmpeg's `tool` (`ffmpeg` or `ffprobe`): one bundled
@@ -763,6 +763,14 @@ impl Format {
         match self {
             Format::Mp4 => "mp4",
             Format::Resolve => "mov",
+        }
+    }
+
+    /// Its sound's codec, for a pass that re-encodes the sound alone.
+    pub fn audio_codec(self) -> &'static [&'static str] {
+        match self {
+            Format::Mp4 => &["-c:a", "aac"],
+            Format::Resolve => &["-c:a", "pcm_s16le", "-ar", "48000"],
         }
     }
 

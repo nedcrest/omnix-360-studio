@@ -89,6 +89,9 @@ pub(crate) struct ExportOpts {
     pub cpu: bool,
     pub format: ffmpeg::Format,
     pub target: Target,
+    /// The whole film's sound brought to this loudness, LUFS integrated
+    /// (`loudness::bring_to`); a file per cut is left as it is.
+    pub loudness: Option<f64>,
 }
 
 pub(crate) enum Target {
@@ -235,6 +238,11 @@ pub(crate) fn export(project: &project::Project, opts: &StitchOpts, out: &Export
         drop(sink);
         drop(burn);
         encoder.finish()?;
+        if let (Some(target), Target::One(_)) = (out.loudness, &out.target)
+            && let Some((before, gain)) = crate::loudness::bring_to(&path, target, out.format)?
+        {
+            eprintln!("loudness {before:.1} → {target:.1} LUFS ({gain:+.1} dB)");
+        }
         written.push(path);
     }
     // Beside the clips, each music and sound-effect clip as it is in its

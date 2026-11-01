@@ -12,6 +12,7 @@ impl App {
             Message::ExportClips(on) => self.export_clips = on,
             Message::ExportGraded(on) => self.export_graded = on,
             Message::ExportFormat(f) => self.export_format = f,
+            Message::ExportLoudness(l) => self.export_loudness = l.0,
             Message::Info(of) => {
                 let path = match of {
                     info::Of::Cut(i) => self.edit.cuts.get(i).map(|c| c.input.clone()),

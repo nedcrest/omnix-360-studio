@@ -124,3 +124,31 @@ fn check_says_what_looks_like_a_mistake() {
     assert!(said.contains("short"), "{said}");
     assert!(said.contains("repeat"), "{said}");
 }
+
+/// The integrated loudness of `file`, LUFS.
+fn loudness(dir: &Path, file: &str) -> f64 {
+    let out = Command::new("ffmpeg").current_dir(dir).args(["-hide_banner", "-nostdin", "-i", file, "-af", "ebur128=framelog=quiet", "-vn", "-f", "null", "-"]).output().unwrap();
+    let text = String::from_utf8_lossy(&out.stderr);
+    text.lines().filter_map(|l| l.trim().strip_prefix("I:")?.trim().strip_suffix("LUFS")?.trim().parse().ok()).next_back().expect("a loudness")
+}
+
+#[test]
+fn exports_the_whole_film_at_a_loudness_target() {
+    if !has_ffmpeg() {
+        return;
+    }
+    let d = dir("loudness");
+    clip(&d, "a.mp4", 3.0, 440);
+    clip(&d, "b.mp4", 3.0, 660);
+    std::fs::write(d.join("edit.json"), r#"{"cuts": [{"input": "a.mp4", "in": 0, "out": 3}, {"input": "b.mp4", "in": 0, "out": 3}]}"#).unwrap();
+    omnix(&d, &["export", "edit.json", "--cpu", "-o", "plain.mp4", "--size", "320x180"]);
+    let said = omnix(&d, &["export", "edit.json", "--cpu", "-o", "loud.mp4", "--size", "320x180", "--loudness", "-14"]);
+    let (plain, loud) = (loudness(&d, "plain.mp4"), loudness(&d, "loud.mp4"));
+    let frames: u32 = probe(&d, "loud.mp4", "v", "nb_read_frames").parse().unwrap();
+    std::fs::remove_dir_all(&d).unwrap();
+    // The tones come out near −21 LUFS as mixed; brought to −14, the
+    // picture untouched.
+    assert!(plain < -17.0, "as mixed {plain}");
+    assert!((loud + 14.0).abs() < 0.5, "brought to {loud}: {said}");
+    assert_eq!(frames, 180);
+}

@@ -103,6 +103,44 @@ pub fn measure_stretch(file: &std::path::Path, (start, end): (f64, f64), filter:
     Ok(measure(file, start, end - start, filter)?.map(|lufs| (lufs, normalizing_gain(lufs))))
 }
 
+/// Loudness targets for a whole film, LUFS integrated, by where it goes
+/// (gap 46a). Sources disagree on the social ones; these are the most
+/// cited (`EDITOR-GAPS.md` gap 45). Each turns down what's louder;
+/// YouTube doesn't turn up what's quieter.
+pub const TARGETS: [(&str, f64); 4] = [("YouTube, Spotify, TikTok, Instagram", -14.0), ("Apple, podcasts", -16.0), ("Broadcast (EBU R128)", -23.0), ("Louder (social, −11)", -11.0)];
+
+/// Brings exported film `path`'s sound to `target` LUFS integrated: it's
+/// measured, turned up or down by the difference and held under the
+/// export's limiter again (peaks under −1.2 dBFS), the picture copied as
+/// it is. Returns the loudness before and the gain, or `None` when it was
+/// silent or already within 0.1 LU.
+pub fn bring_to(path: &Path, target: f64, format: crate::ffmpeg::Format) -> Result<Option<(f64, f64)>> {
+    let length = crate::ffmpeg::duration(path)?;
+    let Some(before) = measure(path, 0.0, length, None)? else { return Ok(None) };
+    let gain = target - before;
+    if gain.abs() < 0.1 {
+        return Ok(None);
+    }
+    let ext = path.extension().map_or_else(String::new, |e| e.to_string_lossy().into_owned());
+    let tmp = path.with_extension(format!("loudness.{ext}"));
+    let ok = crate::ffmpeg::tool("ffmpeg")
+        .args(["-v", "error", "-nostdin", "-y", "-i"])
+        .arg(path)
+        .args(["-map", "0", "-c", "copy"])
+        .args(format.audio_codec())
+        .args(["-af", &format!("volume={gain}dB,{}", crate::ffmpeg::LIMITER)])
+        .arg(&tmp)
+        .status()
+        .context("running ffmpeg")?
+        .success();
+    if !ok {
+        let _ = std::fs::remove_file(&tmp);
+        bail!("ffmpeg couldn't set the loudness of {}", path.display());
+    }
+    std::fs::rename(&tmp, path).with_context(|| format!("replacing {}", path.display()))?;
+    Ok(Some((before, gain)))
+}
+
 /// `rosmo360 normalize`: measures each cut (all, or those numbered in
 /// `only`, from 1), evened out first if `even`, and gives it the gain to the
 /// target, printing a line each; writes the project to `output` if given.

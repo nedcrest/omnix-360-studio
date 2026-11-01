@@ -10,6 +10,29 @@ use iced::{Element, Length};
 
 const WIDTH: f32 = 300.0;
 
+/// A loudness target for the Export panel's list: as mixed, or a
+/// platform's (`loudness::TARGETS`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Loudness(pub Option<f64>);
+
+impl Loudness {
+    fn all() -> Vec<Loudness> {
+        std::iter::once(Loudness(None)).chain(crate::loudness::TARGETS.iter().map(|&(_, t)| Loudness(Some(t)))).collect()
+    }
+}
+
+impl std::fmt::Display for Loudness {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.0 {
+            None => f.write_str("As mixed"),
+            Some(t) => {
+                let name = crate::loudness::TARGETS.iter().find(|&&(_, v)| v == t).map_or("", |&(n, _)| n);
+                write!(f, "{t:.0} LUFS · {name}")
+            }
+        }
+    }
+}
+
 /// How far an option's note and sub-options sit in, to line up with its
 /// label after the radio button or checkbox.
 const INDENT: f32 = 26.0;
@@ -68,6 +91,15 @@ impl App {
             ]
             .spacing(6),
             column![text("Clips"), clips].spacing(6),
+            column![
+                text("Loudness"),
+                tip(
+                    pick_list(Loudness::all(), Some(Loudness(self.export_loudness)), Message::ExportLoudness).text_size(13).width(Length::Fill),
+                    text("The whole film's sound measured after the export and turned up or down to this, peaks held under −1 dBFS; the picture isn't touched. A file per cut is left as mixed"),
+                    tooltip::Position::Left,
+                ),
+            ]
+            .spacing(4),
             rule::horizontal(1),
             column![text(what), note(about_shape)].spacing(2),
             labelled_button(EXPORT, if self.export_clips { "Export clips…" } else { "Export…" }, go),

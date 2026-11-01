@@ -230,6 +230,27 @@ mod tests {
     }
 
     #[test]
+    fn the_exports_volume_line_sounds_as_the_player_draws_it() {
+        use crate::ffmpeg::testmedia;
+        let dir = testmedia::dir("level-filter");
+        let (plain, levelled) = (dir.join("plain.wav"), dir.join("levelled.wav"));
+        testmedia::tone(&plain, 3.0);
+        let keys = [crate::project::VolumeKey { t: 0.5, volume: 0.0 }, crate::project::VolumeKey { t: 1.5, volume: -12.0 }, crate::project::VolumeKey { t: 2.5, volume: 6.0 }];
+        let filter = level_filter(-3.0, &keys, "t");
+        testmedia::ffmpeg(&["-i", plain.to_str().unwrap(), "-af", &filter, levelled.to_str().unwrap()]);
+        let (base, got) = (crate::ffmpeg::audio_levels(&plain, 0.1).unwrap(), crate::ffmpeg::audio_levels(&levelled, 0.1).unwrap());
+        std::fs::remove_dir_all(&dir).unwrap();
+        // Each tenth of a second, as `volume_at` says at its middle.
+        for (k, ((b, _), (g, _))) in base.iter().zip(&got).enumerate().take(29) {
+            let t = k as f64 * 0.1 + 0.05;
+            let want = -3.0 + crate::project::volume_at(&keys, t);
+            assert!((g - b - want).abs() < 0.6, "at {t:.2} s: {:.2} dB, want {want:.2}", g - b);
+        }
+        // At or below OFF_DB: silence, as the player has it.
+        assert!(level_filter(crate::project::OFF_DB, &[], "t").ends_with("volume=0"));
+    }
+
+    #[test]
     fn a_cuts_sound_fades_in_and_out_over_its_own_stretch() {
         let music = crate::project::Music::default();
         let mix = Mix { sound_db: 0.0, tracks: vec![&music], length: 4.0, fades: Default::default() };

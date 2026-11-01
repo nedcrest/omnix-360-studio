@@ -890,3 +890,29 @@ impl Encoder {
     }
 }
 
+
+/// Media made for tests by ffmpeg's own generators: tiny, in a folder of
+/// the test's own (tests run side by side), never real footage.
+#[cfg(test)]
+pub mod testmedia {
+    use std::path::{Path, PathBuf};
+
+    /// A fresh folder for test `name`, removed by the caller.
+    pub fn dir(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("omnix-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    /// Runs ffmpeg with `args` (after `-v error -y`), panicking if it fails.
+    pub fn ffmpeg(args: &[&str]) {
+        let ok = super::tool("ffmpeg").args(["-v", "error", "-nostdin", "-y"]).args(args).status().unwrap().success();
+        assert!(ok, "ffmpeg {args:?}");
+    }
+
+    /// A steady 1 kHz tone, `secs` long, 48 kHz mono WAV at `path`.
+    pub fn tone(path: &Path, secs: f64) {
+        ffmpeg(&["-f", "lavfi", "-i", &format!("sine=f=1000:d={secs}:sample_rate=48000"), path.to_str().unwrap()]);
+    }
+}

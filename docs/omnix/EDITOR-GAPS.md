@@ -783,7 +783,7 @@ out at its end. Optional `Cut.sound_fade_in/out` (seconds, absent = 0);
 the player's clip volume and the export's mix both apply it (CPU = export
 rule), and a crossfade's own sound blend stays as it is.
 
-**Built 2026-11-01** (`a8d9e6f`), waiting for the check. Straight fades, as
+**Built 2026-11-01** (`a8d9e6f`), confirmed by the user 2026-11-01. Straight fades, as
 the sound clips'; handles shown only where the cut has sound; a split
 keeps each fade at its half's outer end; the waveform shows the fade.
 Export checked: 2 s fades on the talk cut measured −50 dB at its start,
@@ -836,7 +836,7 @@ Draw it scaled by the cut's gain and volume points (and its mute), and,
 when evened, from the evened sound (the waveform read through
 `LEVELER`, cached beside the raw one). Then the change is visible.
 
-**Built 2026-11-01** (`ded823b`), waiting for the user's check. Defaults
+**Built 2026-11-01** (`ded823b`), confirmed by the user 2026-11-01. Defaults
 taken: the file's own waveform stays faint behind the heard one, so a
 change shows against what was there; bars a gain pushes past full scale
 are orange (the export's limiter holds them); linear height as before
@@ -952,7 +952,7 @@ Shotcut is the warning: no device picker, no meter, and users get lost.
   system's sound settings change, so the meter shows it at once and the
   take is recorded with it; a boost above 100 % is digital and raises the
   noise too.
-  **Built 2026-11-01** (`93365ce`), waiting for the check. Range 0–200 %
+  **Built 2026-11-01** (`93365ce`), confirmed by the user 2026-11-01. Range 0–200 %
   (not 150: the webcam was already at 100 % when it peaked at −12 dB, and
   PipeWire's 200 % is ×8, +18 dB). Read again when the input changes; the
   slider stays usable while recording, like a knob on an interface.

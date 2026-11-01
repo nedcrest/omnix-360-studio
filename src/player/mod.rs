@@ -41,7 +41,7 @@ mod record_ui;
 
 use crate::ffmpeg::{self, Hwaccel};
 use crate::stab::{ImuAxes, Mode, Stabilizer};
-use crate::project::{Cut, Own, Project, SoundTrack};
+use crate::project::{Cut, Line, Own, Project, SoundTrack};
 use crate::stitch::M3;
 use crate::view::{Camera, Ease, Follow, Keyframes, Projection, View};
 use anyhow::{Context, Result};
@@ -312,17 +312,12 @@ enum Message {
     /// Clip `i`'s in (`true`) or out edge dragged to this time in its file,
     /// with Shift held or not.
     MusicTrim(SoundTrack, usize, bool, f64, bool),
-    /// A track's volume point added at this edit time and level (dB).
-    VolumeAdd(SoundTrack, f64, f64),
-    VolumeSelect(SoundTrack, usize),
-    /// A track's volume point `i` dragged to this edit time and level.
-    VolumeMove(SoundTrack, usize, f64, f64),
-    /// A point on a cut's or a sound clip's own volume line, at this time
-    /// in its file and level (dB).
-    SoundKeyAdd(Own, f64, f64),
-    SoundKeySelect(Own, usize),
-    /// An own line's point dragged to this file time and level.
-    SoundKeyMove(Own, usize, f64, f64),
+    /// A point on a volume line (a track's, a cut's or a sound clip's own)
+    /// added at this time (edit time on a track, file time on an own line)
+    /// and level (dB); selected; dragged.
+    PointAdd(Line, f64, f64),
+    PointSelect(Line, usize),
+    PointMove(Line, usize, f64, f64),
     /// The mix: the clips' sound and each sound track, in dB.
     SoundLevel(f64),
     TrackLevel(SoundTrack, f64),
@@ -486,8 +481,7 @@ struct App {
     selected_music: Option<(SoundTrack, usize)>,
     /// A sound track's volume point selected, and the cut sound point:
     /// (cut, point).
-    selected_volume: Option<(SoundTrack, usize)>,
-    selected_sound: Option<(Own, usize)>,
+    selected_point: Option<(Line, usize)>,
     /// Each sound track's streams, in `SoundTrack::ALL`'s order.
     music: [music::Player; SoundTrack::ALL.len()],
     /// Through a crossfade, the other cut of it alongside: its index and
@@ -652,11 +646,10 @@ impl App {
             normalize: None,
             sound_menu: None,
             selected_music: None,
-            selected_volume: None,
+            selected_point: None,
             cut_waves_asked: Default::default(),
             even_waves: Default::default(),
             cut_waves_reading: 0,
-            selected_sound: None,
             music: Default::default(),
             partner: None,
             edit: edit::Edit::default(),
@@ -853,7 +846,7 @@ impl App {
             m @ (Message::Select { .. } | Message::Trim { .. } | Message::MoveCut { .. } | Message::Crossfade { .. } | Message::ToggleCrossfade { .. } | Message::Split { .. } | Message::DeleteCut { .. } | Message::Undo { .. } | Message::Redo { .. }) => self.on_cuts(m),
             m @ (Message::LookDone { .. } | Message::Framing { .. } | Message::KeyMove { .. } | Message::KeyAdd { .. } | Message::KeyDelete { .. } | Message::KeyEase { .. } | Message::KeyFollow { .. } | Message::Stab { .. } | Message::Projection { .. } | Message::KeyJump { .. } | Message::Look { .. } | Message::Zoom { .. } | Message::Fov { .. } | Message::AngleInput { .. } | Message::AngleDone { .. } | Message::AngleScrubStart { .. } | Message::AngleScrubDone { .. } | Message::AngleScrub { .. } | Message::AngleNudge { .. } | Message::AngleArrow { .. } | Message::Source { .. } | Message::RollingShutter { .. } | Message::FullOnPause { .. } | Message::ResetView { .. }) => self.on_framing(m),
             m @ (Message::AddOverlay { .. } | Message::OverlayPicked { .. } | Message::OverlaySelect { .. } | Message::OverlayMove { .. } | Message::OverlayTrim { .. } | Message::OverlayJump { .. } | Message::OverlayKeyMove { .. } | Message::OverlayPicture { .. } | Message::AddText { .. }) => self.on_overlay_ui(m),
-            m @ (Message::AddSound { .. } | Message::SoundPicked { .. } | Message::SoundProbed { .. } | Message::Waveform { .. } | Message::CutWave { .. } | Message::SelectMusic { .. } | Message::VolumeAdd { .. } | Message::VolumeSelect { .. } | Message::SoundKeyAdd { .. } | Message::SoundKeySelect { .. } | Message::VolumeMove { .. } | Message::SoundKeyMove { .. } | Message::MusicMove { .. } | Message::MusicTrim { .. } | Message::Fade { .. } | Message::SoundLevel { .. } | Message::TrackLevel { .. } | Message::DuckDepth { .. } | Message::Duck { .. } | Message::Ducked { .. } | Message::LevelDone { .. }) => self.on_tracks(m),
+            m @ (Message::AddSound { .. } | Message::SoundPicked { .. } | Message::SoundProbed { .. } | Message::Waveform { .. } | Message::CutWave { .. } | Message::SelectMusic { .. } | Message::PointAdd { .. } | Message::PointSelect { .. } | Message::PointMove { .. } | Message::MusicMove { .. } | Message::MusicTrim { .. } | Message::Fade { .. } | Message::SoundLevel { .. } | Message::TrackLevel { .. } | Message::DuckDepth { .. } | Message::Duck { .. } | Message::Ducked { .. } | Message::LevelDone { .. }) => self.on_tracks(m),
             Message::Effect(e) => {
                 self.effect_message(e);
                 Task::none()

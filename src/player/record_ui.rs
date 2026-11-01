@@ -213,8 +213,7 @@ impl App {
                         self.selected_music = Some((SoundTrack::Voice, i));
                         self.selected = None;
                         self.selected_overlay = None;
-                        self.selected_volume = None;
-                        self.selected_sound = None;
+                        self.selected_point = None;
                         return self.load_waveform(&path);
                     }
                 }

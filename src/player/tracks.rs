@@ -91,18 +91,9 @@ impl App {
         }))
     }
 
-    /// Selects a sound track's volume point `i`, and nothing else.
-    pub(super) fn select_volume(&mut self, which: SoundTrack, i: usize) {
-        self.selected_volume = Some((which, i));
-        self.selected_music = None;
-        self.selected = None;
-        self.selected_sound = None;
-    }
-
-    /// Selects cut `cut`'s sound point `i`, and nothing else.
-    pub(super) fn select_sound(&mut self, own: Own, i: usize) {
-        self.selected_sound = Some((own, i));
-        self.selected_volume = None;
+    /// Selects point `i` of a volume line, and nothing else.
+    pub(super) fn select_point(&mut self, line: Line, i: usize) {
+        self.selected_point = Some((line, i));
         self.selected_music = None;
         self.selected = None;
     }
@@ -169,39 +160,27 @@ impl App {
                 self.selected_music = Some((which, i));
                 self.selected_overlay = None;
                 self.selected = None;
-                self.selected_volume = None;
-                self.selected_sound = None;
+                self.selected_point = None;
             }
-            Message::VolumeAdd(which, t, db) => {
-                self.begin_drag();
-                let i = crate::project::add_volume_key(&mut self.edit.track_mut(which).keyframes, t, db);
-                self.select_volume(which, i);
-            }
-            Message::VolumeSelect(which, i) => self.select_volume(which, i),
-            Message::SoundKeyAdd(own, t, db) => {
-                if self.edit.own_line(own).is_none() {
+            Message::PointAdd(line, t, db) => {
+                if self.edit.line_mut(line).is_none() {
                     return Task::none();
                 }
                 self.begin_drag();
-                let Some((keys, (start, end))) = self.edit.own_line_mut(own) else { return Task::none() };
+                let Some((keys, (start, end))) = self.edit.line_mut(line) else { return Task::none() };
                 let i = crate::project::add_volume_key(keys, t.clamp(start, end), db);
-                self.select_sound(own, i);
+                self.select_point(line, i);
             }
-            Message::SoundKeySelect(own, i) => self.select_sound(own, i),
+            Message::PointSelect(line, i) => self.select_point(line, i),
             // A point gone mid-drag (an undo) is no undo step, nor an index panic.
-            Message::VolumeMove(which, i, ..) if i >= self.edit.track(which).keyframes.len() => {}
-            Message::SoundKeyMove(own, i, ..) if self.edit.own_line(own).is_none_or(|(keys, _)| i >= keys.len()) => {}
-            Message::SoundKeyMove(own, i, t, db) => {
+            Message::PointMove(line, i, ..) if self.edit.line_mut(line).is_none_or(|(keys, _)| i >= keys.len()) => {}
+            Message::PointMove(line, i, t, db) => {
                 self.begin_drag();
-                // Within its stretch of the file and between its neighbours.
-                if let Some((keys, range)) = self.edit.own_line_mut(own) {
+                // Within its stretch and between its neighbours: points
+                // keep their order.
+                if let Some((keys, range)) = self.edit.line_mut(line) {
                     crate::project::move_volume_key(keys, i, t, db, range);
                 }
-            }
-            Message::VolumeMove(which, i, t, db) => {
-                self.begin_drag();
-                // Between its neighbours: points keep their order.
-                crate::project::move_volume_key(&mut self.edit.track_mut(which).keyframes, i, t, db, (0.0, f64::INFINITY));
             }
             // A stale index (the clip gone mid-drag) is no undo step.
             Message::MusicMove(which, i, _, _) if i >= self.edit.track(which).clips.len() => {}
@@ -243,7 +222,7 @@ impl App {
                         self.edit.checkpoint();
                         let line = crate::duck::duck(&self.edit.music.keyframes, &spans, self.duck_db);
                         self.edit.music.keyframes = line;
-                        self.selected_volume = None;
+                        self.selected_point = None;
                     }
                 }
             }

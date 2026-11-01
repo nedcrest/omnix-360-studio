@@ -58,7 +58,7 @@ impl App {
         self.selected = Some(i);
         // Cuts after it moved: a sound point selected by (cut, point) or a
         // track's would now name the wrong one.
-        self.selected_sound = None;
+        self.selected_point = None;
         if self.clip.is_none() {
             self.follow = true;
             self.goto(i, 0.0, true);
@@ -83,8 +83,7 @@ impl App {
                 }
                 self.selected = Some(i);
                 self.selected_music = None;
-                self.selected_volume = None;
-                self.selected_sound = None;
+                self.selected_point = None;
                 self.selected_overlay = None;
             }
             Message::Trim(i, start, t) => {
@@ -102,7 +101,7 @@ impl App {
             Message::MoveCut(from, to) => {
                 if to != from && to != from + 1 {
                     self.edit.checkpoint();
-                    self.selected_sound = None;
+                    self.selected_point = None;
                     let at = |i: usize| edit::Edit::moved_index(from, to, i);
                     self.edit.move_cut(from, to);
                     self.current = at(self.current);
@@ -136,7 +135,7 @@ impl App {
                     self.selected = Some(i + 1);
                     // The cuts after it moved up one: a sound point selected
                     // by (cut, point) would now name another cut's.
-                    self.selected_sound = None;
+                    self.selected_point = None;
                 }
             }
             Message::DeleteCut if self.selected_overlay.is_some() => {
@@ -146,21 +145,8 @@ impl App {
                     self.edit.lane_mut(track).items.remove(i);
                 }
             }
-            Message::DeleteCut if self.selected_sound.is_some() => {
-                let (own, i) = self.selected_sound.take().unwrap();
-                if self.edit.own_line(own).is_some_and(|(keys, _)| i < keys.len()) {
-                    self.edit.checkpoint();
-                    if let Some((keys, _)) = self.edit.own_line_mut(own) {
-                        keys.remove(i);
-                    }
-                }
-            }
-            Message::DeleteCut if self.selected_volume.is_some() => {
-                let (which, i) = self.selected_volume.take().unwrap();
-                if i < self.edit.track(which).keyframes.len() {
-                    self.edit.checkpoint();
-                    self.edit.track_mut(which).keyframes.remove(i);
-                }
+            Message::DeleteCut if let Some((line, i)) = self.selected_point => {
+                return self.sound_ui(super::sound_ui::SoundMsg::DeletePoint(line, i));
             }
             // With a song or sound effect selected, delete that, not the
             // cut under the playhead (Shift+Del used to, being the key for

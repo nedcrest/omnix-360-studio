@@ -146,8 +146,7 @@ impl App {
                     self.selected_overlay = Some((crate::overlay::Track::Overlay, i));
                 }
                 self.selected_music = None;
-                self.selected_volume = None;
-                self.selected_sound = None;
+                self.selected_point = None;
             }
             Message::OverlayPicked(_) => {}
             Message::OverlaySelect(i) => {
@@ -156,8 +155,7 @@ impl App {
                 self.selected_overlay = i;
                 if i.is_some() {
                     self.selected_music = None;
-                    self.selected_volume = None;
-                    self.selected_sound = None;
+                    self.selected_point = None;
                 }
             }
             Message::OverlayMove((track, i), at) => {
@@ -217,8 +215,7 @@ impl App {
                 lane.items[i].at = lane.place(i, at);
                 self.selected_overlay = Some((crate::overlay::Track::Text, i));
                 self.selected_music = None;
-                self.selected_volume = None;
-                self.selected_sound = None;
+                self.selected_point = None;
                 // Its words and look are set in the text panel, open now.
                 self.text_of = None;
             }

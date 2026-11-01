@@ -159,8 +159,7 @@ impl App {
         self.selected = None;
         self.selected_overlay = None;
         self.selected_music = None;
-        self.selected_volume = None;
-        self.selected_sound = None;
+        self.selected_point = None;
         self.hand_cut = None;
         self.info = None;
         self.text_of = None;

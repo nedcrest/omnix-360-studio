@@ -175,8 +175,7 @@ impl App {
             }
             SoundMsg::DeletePoint(line, i) => {
                 self.sound_menu = None;
-                self.selected_sound = None;
-                self.selected_volume = None;
+                self.selected_point = None;
                 if self.edit.line_mut(line).is_some_and(|(keys, _)| i < keys.len()) {
                     self.edit.checkpoint();
                     if let Some((keys, _)) = self.edit.line_mut(line) {
@@ -186,8 +185,7 @@ impl App {
             }
             SoundMsg::DeleteLine(line) => {
                 self.sound_menu = None;
-                self.selected_sound = None;
-                self.selected_volume = None;
+                self.selected_point = None;
                 if self.edit.line_mut(line).is_some_and(|(keys, _)| !keys.is_empty()) {
                     self.edit.checkpoint();
                     if let Some((keys, _)) = self.edit.line_mut(line) {

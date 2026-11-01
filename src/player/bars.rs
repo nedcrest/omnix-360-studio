@@ -271,8 +271,7 @@ impl App {
             blocks,
             sounds,
             selected_music: self.selected_music,
-            selected_volume: self.selected_volume,
-            selected_sound: self.selected_sound,
+            selected_point: self.selected_point,
             video: self.edit.duration(),
             clips_db: self.edit.sound.volume,
             duration: self.edit.frame(),
@@ -301,7 +300,7 @@ impl App {
         let (lo, hi) = shown_view.fov_range();
         // With a song selected, C splits that instead.
         let music = self.selected_music.and_then(|(which, i)| self.edit.track(which).clips.get(i));
-        let point = self.selected_volume.is_some() || self.selected_sound.is_some();
+        let point = self.selected_point.is_some();
         // Any cut but the first can crossfade in from the one before.
         let crossfade_cut = Some(self.selected.unwrap_or(self.current)).filter(|&i| i > 0).and_then(|i| self.edit.cuts.get(i));
         let can_split = match music {

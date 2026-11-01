@@ -58,7 +58,7 @@ impl App {
         }
         // Editing: the keys that turn, frame or key the view do nothing. K
         // still adds a volume point to a selected sound.
-        let sound = self.selected_music.is_some() || self.selected_volume.is_some() || self.selected_sound.is_some();
+        let sound = self.selected_music.is_some() || self.selected_point.is_some();
         if !self.framing && framing_key(&key, mods, sound) {
             return Task::none();
         }
@@ -84,7 +84,7 @@ impl App {
             Key::Named(Named::ArrowUp) => self.free_look().pitch += step,
             Key::Named(Named::ArrowDown) => self.free_look().pitch -= step,
             Key::Named(Named::Home) => self.free_look().reset(),
-            Key::Named(Named::Delete | Named::Backspace) if mods.shift() || self.selected_music.is_some() || self.selected_volume.is_some() || self.selected_sound.is_some() || self.selected_overlay.is_some() => {
+            Key::Named(Named::Delete | Named::Backspace) if mods.shift() || self.selected_music.is_some() || self.selected_point.is_some() || self.selected_overlay.is_some() => {
                 return self.update(Message::DeleteCut);
             }
             // Editing: Del takes the selected cut (framing, the keyframe).
@@ -108,38 +108,28 @@ impl App {
                 "-" if mods.command() => return self.update(Message::TimelineZoom(1.0 / 1.5, None)),
                 "0" if mods.command() => return self.update(Message::TimelineZoomTo(0.0)),
                 "0" => self.free_look().reset(),
-                // On a sound track: a volume point at the playhead, on its line.
-                "k" | "K" if self.selected_music.is_some() || self.selected_volume.is_some() => {
-                    let which = self.selected_music.or(self.selected_volume).unwrap().0;
-                    let t = self.position();
+                // A sound clip or a point selected: a volume point at the
+                // playhead on that line: a track's, the playing cut's own, or
+                // the same sound clip's own (within it).
+                "k" | "K" if self.selected_music.is_some() || self.selected_point.is_some() => {
+                    let line = self.selected_point.map(|(l, _)| l).or(self.selected_music.map(|(w, _)| Line::Track(w)));
+                    let at = match line {
+                        Some(Line::Track(which)) => Some((Line::Track(which), self.position())),
+                        Some(Line::Own(Own::Cut(_))) => self.playing_cut().map(|(_, t)| (Line::Own(Own::Cut(self.current)), t)),
+                        Some(Line::Own(own @ Own::Clip(which, c))) => self.edit.track(which).clips.get(c).map(|m| (Line::Own(own), m.start + self.position() - m.at)).filter(|(_, t)| self.edit.own_line(own).is_some_and(|(_, (s, e))| *t >= s && *t <= e)),
+                        None => None,
+                    };
+                    let Some((line, t)) = at else { return Task::none() };
                     // An undo step only if a point is added, not when one is
                     // just selected.
                     let mut i = 0;
                     self.edit.attempt(|e| {
-                        let keys = &mut e.track_mut(which).keyframes;
+                        let Some((keys, _)) = e.line_mut(line) else { return false };
                         let n = keys.len();
                         i = crate::project::volume_key_at(keys, t);
                         keys.len() > n
                     });
-                    self.select_volume(which, i);
-                }
-                // A cut's sound point selected: another at the playhead.
-                // An own line's point selected: another at the playhead, on
-                // the playing cut's line or on the same sound clip's.
-                "k" | "K" if let Some((own, _)) = self.selected_sound => {
-                    let at = match own {
-                        Own::Cut(_) => self.playing_cut().map(|(_, t)| (Own::Cut(self.current), t)),
-                        Own::Clip(which, c) => self.edit.track(which).clips.get(c).map(|m| (own, m.start + self.position() - m.at)).filter(|(_, t)| self.edit.own_line(own).is_some_and(|(_, (s, e))| *t >= s && *t <= e)),
-                    };
-                    let Some((own, t)) = at else { return Task::none() };
-                    let mut i = 0;
-                    self.edit.attempt(|e| {
-                        let Some((keys, _)) = e.own_line_mut(own) else { return false };
-                        let n = keys.len();
-                        i = crate::project::volume_key_at(keys, t);
-                        keys.len() > n
-                    });
-                    self.select_sound(own, i);
+                    self.select_point(line, i);
                 }
                 "k" | "K" => return self.update(Message::KeyAdd),
                 "j" | "J" => {

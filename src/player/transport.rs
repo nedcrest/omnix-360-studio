@@ -432,7 +432,7 @@ impl App {
     pub(super) fn after_edit(&mut self, at: f64) {
         self.selected = self.selected.filter(|&i| i < self.edit.cuts.len());
         // Its cut may have moved or gone.
-        self.selected_sound = None;
+        self.selected_point = None;
         match self.edit.locate(at.min(self.edit.duration())) {
             Some((i, t)) => {
                 // The playback may be of a clip no longer at this index.

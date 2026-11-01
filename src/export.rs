@@ -153,13 +153,8 @@ pub(crate) fn export(project: &project::Project, opts: &StitchOpts, out: &Export
     // Frames each cut shares with the one before: its crossfade, in the
     // whole edit only (a file per cut is for another editor's own), and
     // never more than either cut has to give.
-    let mut overlap = vec![0usize; plan.len()];
-    if matches!(out.target, Target::One(_)) {
-        for n in 1..plan.len() {
-            let room = (plan[n - 1].2 - overlap[n - 1]).min(plan[n].2).saturating_sub(1);
-            overlap[n] = ((project.cuts[n].crossfade * fps).round() as usize).min(room);
-        }
-    }
+    let frames: Vec<usize> = plan.iter().map(|p| p.2).collect();
+    let overlap = if matches!(out.target, Target::One(_)) { overlaps(&frames, &project.cuts.iter().map(|c| c.crossfade).collect::<Vec<_>>(), fps) } else { vec![0; plan.len()] };
     // Each file and the cuts it holds.
     let files: Vec<(PathBuf, std::ops::Range<usize>)> = match &out.target {
         Target::One(path) => vec![(path.clone(), 0..plan.len())],
@@ -192,7 +187,7 @@ pub(crate) fn export(project: &project::Project, opts: &StitchOpts, out: &Export
             .collect();
         // The whole edit gets its mix; a file per cut is for another editor,
         // so its sound is left as recorded and the music goes beside it.
-        let length: f64 = cuts.clone().map(|n| (plan[n].2 - if n > cuts.start { overlap[n] } else { 0 }) as f64 / fps).sum();
+        let length = edit_seconds(&frames, &overlap, cuts.clone(), fps);
         let mix = ffmpeg::Mix { sound_db: project.sound.volume, tracks: project::SoundTrack::ALL.map(|t| project.track(t)).to_vec(), length, fades: project.fades };
         let mix = matches!(out.target, Target::One(_)).then_some(&mix);
         let mut encoder = ffmpeg::Encoder::new(&path, out.size, fps, &sound, mix, out.format, out.format == ffmpeg::Format::Resolve && gpu.is_some())?;
@@ -259,4 +254,47 @@ pub(crate) fn export(project: &project::Project, opts: &StitchOpts, out: &Export
         }
     }
     Ok(written)
+}
+
+/// The frames each cut shares with the one before (its crossfade, at
+/// `fps`), never more than either has to give, keeping a frame of each its
+/// own: `frames` per cut, `crossfades` in seconds.
+fn overlaps(frames: &[usize], crossfades: &[f64], fps: f64) -> Vec<usize> {
+    let mut overlap = vec![0usize; frames.len()];
+    for n in 1..frames.len() {
+        let room = (frames[n - 1] - overlap[n - 1]).min(frames[n]).saturating_sub(1);
+        overlap[n] = ((crossfades[n] * fps).round() as usize).min(room);
+    }
+    overlap
+}
+
+/// How long cuts `cuts` last joined, seconds: their frames less what each
+/// shares with the one before it within the range. The mix is cut to it,
+/// so picture and sound end together.
+fn edit_seconds(frames: &[usize], overlap: &[usize], cuts: std::ops::Range<usize>, fps: f64) -> f64 {
+    let first = cuts.start;
+    cuts.map(|n| (frames[n] - if n > first { overlap[n] } else { 0 }) as f64 / fps).sum()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn crossfades_share_frames_within_what_each_cut_has() {
+        // 2 s, 2 s, 1 s at 30 fps; crossfades of 0.5 s and of 9 s.
+        let frames = [60, 60, 30];
+        let overlap = overlaps(&frames, &[0.0, 0.5, 9.0], 30.0);
+        // 15 frames; then all but one of what both have (60 − 15 vs 30).
+        assert_eq!(overlap, vec![0, 15, 29]);
+        assert!((edit_seconds(&frames, &overlap, 0..3, 30.0) - (150 - 15 - 29) as f64 / 30.0).abs() < 1e-12);
+        // A file per cut stands alone: what it shares with the one before
+        // isn't taken off.
+        assert_eq!(edit_seconds(&frames, &overlap, 1..2, 30.0), 2.0);
+        // As long as the project says, to the frame.
+        let mut cuts = vec![crate::project::Cut::new("a".into(), 0.0, 2.0), crate::project::Cut::new("b".into(), 0.0, 2.0)];
+        cuts[1].crossfade = 0.5;
+        let overlap = overlaps(&[60, 60], &[0.0, 0.5], 30.0);
+        assert!((edit_seconds(&[60, 60], &overlap, 0..2, 30.0) - crate::project::edit_length(&cuts)).abs() < 1.0 / 30.0);
+    }
 }

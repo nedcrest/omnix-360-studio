@@ -951,6 +951,30 @@ shape, not only its ends.
 - **Approved by the user 2026-11-01** ("like in FL, nice, approved"):
   built with the automation lanes, volume lines first.
 
+### 33i. No track volume line: each clip's own line only — medium (user, 2026-11-01)
+
+User, checking 33e's points: "clicks inside a clip edit only the cyan
+line; to edit the yellow (track) line you click outside the clip. I
+think we should remove the track line altogether: it works and overlaps
+the clip's. Clips have the functions anyway." Also: "K works only for
+the yellow track line" (with a clip selected, K added to the track's
+line, which was the clip's «main» line), and the Audio panel's «Lower
+under speech» wasn't found (it is under the speaker button in the
+transport row; to make it easier to find).
+
+Decided:
+- The track volume line goes: no drawing, no clicks, no menu item.
+- **Old projects keep their sound:** on load a track's points are moved
+  into the line of each clip on it (the clip's own level plus the track
+  line at each point's time, at its start and end and at every track
+  point inside it), and the track's points are dropped. The field is
+  still read, never written.
+- **Auto-duck** writes into the Music clips' own lines.
+- **K** with a sound clip selected adds a point on its own line.
+- The track's level slider (Audio panel) stays: the whole track up or
+  down.
+- `project::Line` (Own or Track) folds back into `Own`.
+
 ### 33d. Waveforms drawn as they're heard — small (user, 2026-11-01)
 
 User, after normalizing the scooter cut and lowering it for voice-over:

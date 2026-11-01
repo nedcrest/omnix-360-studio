@@ -1297,6 +1297,88 @@ also found two colours with two meanings (orange: overlays and «over full
 scale»; cyan: the clip sound lane and a clip's own line) and Music's
 colour following the theme.
 
+### 44. A clip's overall level, by hand: a knob after the duck — small-medium (user, 2026-11-01)
+
+User, after auto-duck drew the song's line: "some general knob per clip:
+say I don't like that the music is still too strong, then after the
+adjustment to the speech I could lower it overall (per clip)."
+
+The model has it already: a clip's `gain` (dB) sits under its own line,
+so the ducked shape stays and the whole clip moves; today only «Lower
+−12 dB», «Back to normal» and Normalize set it. Proposed:
+- every sound clip shows its level tag, as cuts do («−6.0 · even»);
+- **drag the tag up or down** to change the clip's level, 0.5 dB steps
+  (Shift: 0.1), the waveform following live; double-click: back to normal
+  (what normalizing gave it, or 0);
+- the same on a cut's tag on the Clip sound lane;
+- «Level…» in the clip's menu to type a number.
+One undo step per drag. Several clips selected (gap 8) later move
+together.
+
+### 45. A mix check: the sound's levels against a platform's, drawn and clickable — large (user, 2026-11-01)
+
+User: "an analysis of the sound lanes, as a panel, to see what stands out
+from the rest: say I forget to turn down a sound effect, or speech is too
+quiet somewhere. Choose the overall values YouTube or other platforms
+want for sounds, clips, music (apart and mixed) for a graphic panel.
+Maybe interactive, in place of the video view: a schematic of the sound
+lanes in their colours with hints where something should change by the
+rules; a click on an element selects that clip on the timeline and
+scrolls to it, to fix it by hand."
+
+**What it measures** (ffmpeg's `ebur128`, off the UI thread, cached until
+the edit changes): each clip's sound as heard (its level, line, fades,
+evening; the export's own graph per lane, so it's what the export makes):
+integrated and short-term loudness, true peak; the whole mix's integrated
+loudness and true peak; per stretch of speech, the music and effects
+under it relative to the speech.
+
+**Targets** (presets, editable). Sources disagree; the most-cited:
+- **YouTube, Spotify:** the whole mix about −14 LUFS integrated, true peak
+  under −1 dBTP; louder is turned down, quieter isn't turned up.
+- **Apple Music, Apple Podcasts:** −16 LUFS, −1 dBTP.
+- **TikTok, Instagram:** unpublished; sources say −14 (some −10…−12).
+- **Broadcast (EBU R128):** −23 LUFS.
+- **Music under speech:** 15–20 dB below the voice is the common advice;
+  WCAG 1.4.7 asks 20 dB for speech-led video. (Auto-duck's default 12 dB
+  is under that: to reconsider with this.)
+- **Speech:** steady across the edit (normalized to −16 LUFS today), no
+  stretch more than a few LU under the rest.
+- **Sound effects:** not louder than the speech around them by more than a
+  few dB at peak.
+
+**The view.** A switch beside «Framing» puts the mix check in the
+viewer's place:
+- the sound lanes as a schematic in their colours, each clip a block whose
+  height is its loudness, bands for the target drawn behind;
+- what breaks a rule marked on it, with the hint in words («SFX 9 dB over
+  the speech», «speech 7 LU quieter than the rest», «music only 8 dB under
+  the voice», «mix −19 LUFS: YouTube won't raise it»);
+- a click on a block selects that clip on the timeline and scrolls it into
+  view, to fix it by hand (its level knob, gap 44);
+- the whole mix's loudness and true peak against the preset, at the top.
+
+### 46. More for the sound: what the review found — ideas (2026-11-01)
+
+From going through what's there against what an editor of home video
+reaches for (the user's question «what else may be missing for sound?»):
+- **The export's overall loudness** (46a): a target for the whole mix
+  (YouTube −14 LUFS) measured and applied at export, true peak −1 dBTP;
+  today each cut is normalized to −16 and a limiter holds sample peaks at
+  −1.2 dBFS, but nothing sets the whole.
+- **A loudness meter** (46b): short-term and integrated LUFS beside the
+  peak meter while playing, so «too quiet» shows in the units the targets
+  use.
+- **Low cut, wind** (46c): a high-pass switch per clip (wind on the scooter
+  lives under ~150 Hz), and a «Clean up» (`afftdn` / `arnndn`) for steady
+  noise; footage-agent's cleaner already makes the cleaned voices.
+- **Solo and mute per lane** (46d): hear the Voice alone, or everything
+  but the music, while mixing.
+- **Two sound effects at once** (46e): a second SFX lane (gap 3's «not
+  yet»).
+- **The duck's depth** (46f): its 12 dB default against the 15–20 dB the
+  guides give; to set with the mix check's measurements.
+
 ## Format rule for all of these
 
 New fields only, each `#[serde(default, skip_serializing_if = …)]`, so every

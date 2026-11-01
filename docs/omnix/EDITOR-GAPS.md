@@ -911,6 +911,28 @@ Built 2026-11-01, waiting for the check. A right-click near a cut's or
 clip's drawn line now opens the line's menu; elsewhere on it, its sound
 menu as before.
 
+### 33h. Bending a line between two points into a curve — idea (user, 2026-11-01)
+
+User: "dragging the line between points (click and drag the line up or
+down bends it according to where you drag) makes a smooth curve."
+
+As FL Studio's automation and Ableton's curved segments: a segment's
+shape, not only its ends.
+- **Gesture.** Today a click on a line adds a point there. Proposed: press
+  on a segment and drag up or down → it bends (the further, the stronger);
+  a click without moving still adds a point. Double-click on a bent
+  segment makes it straight again.
+- **Data.** An optional `curve` on a point (−1..1, absent = straight),
+  shaping the segment after it: in dB, `a + (b − a)·shape(x)`, with
+  `shape(x) = x^(2^(curve·k))` or an equivalent that bends toward one end
+  as dragged. Old projects load straight.
+- **Same in the export** (CPU = export rule): `level_filter` writes the
+  curve into its per-frame expression (`pow` in ffmpeg's expression
+  language), tested on the string as now.
+- **Everywhere lines are:** a cut's and a sound clip's own lines, the
+  track lines, and later every automation lane (gap 39's generic `Curve`
+  gets it once, so effects and speed curves bend the same way).
+
 ### 33d. Waveforms drawn as they're heard — small (user, 2026-11-01)
 
 User, after normalizing the scooter cut and lowering it for voice-over:

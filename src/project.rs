@@ -160,6 +160,19 @@ pub struct Music {
     pub keyframes: Vec<VolumeKey>,
 }
 
+/// A straight fade's level `into` seconds after a start and `left` before
+/// an end, with fades of `fade_in` and `fade_out` seconds there, 0..1.
+pub fn fade_ramp(into: f64, left: f64, fade_in: f64, fade_out: f64) -> f64 {
+    let mut g: f64 = 1.0;
+    if fade_in > 0.0 {
+        g = g.min(into / fade_in);
+    }
+    if fade_out > 0.0 {
+        g = g.min(left / fade_out);
+    }
+    g.clamp(0.0, 1.0)
+}
+
 /// A volume point: `volume` dB at time `t`, straight lines (in dB) between
 /// points, held before the first and after the last.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
@@ -489,6 +502,12 @@ pub struct Cut {
     /// Its sound is off; `gain` is kept for when it's back on.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub mute: bool,
+    /// Its sound fades in from its start and out to its end, seconds
+    /// (the picture doesn't): straight, as the sound tracks' fades.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub sound_fade_in: f64,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub sound_fade_out: f64,
     /// What normalizing measured of what the cut plays, LUFS, shown in
     /// Info; it says nothing about the sound once trimmed again.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -523,6 +542,8 @@ impl Cut {
             gain: 0.0,
             even: false,
             mute: false,
+            sound_fade_in: 0.0,
+            sound_fade_out: 0.0,
             loudness: None,
             flat: false,
             lut_applied: None,
@@ -550,6 +571,22 @@ impl Cut {
         let path = crate::lut::find(name).with_context(|| format!("the LUT \"{name}\" isn't in the LUT library (or isn't there as a file)"))?;
         self.lut_applied = Some(crate::lut::shared(&path)?);
         Ok(())
+    }
+
+    /// How loud its sound is at clip time `t` from its fades, 0..1.
+    pub fn sound_fade(&self, t: f64) -> f64 {
+        fade_ramp(t - self.start, self.end - t, self.sound_fade_in, self.sound_fade_out)
+    }
+
+    /// Sets its sound's fade in (`in_edge`) or out, seconds, within what
+    /// the other fade leaves of it.
+    pub fn set_sound_fade(&mut self, in_edge: bool, seconds: f64) {
+        let len = self.len();
+        if in_edge {
+            self.sound_fade_in = seconds.clamp(0.0, (len - self.sound_fade_out).max(0.0));
+        } else {
+            self.sound_fade_out = seconds.clamp(0.0, (len - self.sound_fade_in).max(0.0));
+        }
     }
 
     pub fn len(&self) -> f64 {
@@ -1029,6 +1066,19 @@ mod tests {
         // Nearer the first's start: it stops edge to edge before it.
         let j = m.append("c.wav".into(), 2.5, 1.0);
         assert_eq!(m.clips[j].at, 1.0);
+    }
+
+    #[test]
+    fn a_cuts_sound_fades_within_its_length() {
+        let mut c = Cut::new("a.mp4".into(), 10.0, 14.0);
+        c.set_sound_fade(true, 1.0);
+        c.set_sound_fade(false, 9.0);
+        // The fade out takes what the fade in leaves of the 4 s.
+        assert_eq!((c.sound_fade_in, c.sound_fade_out), (1.0, 3.0));
+        assert_eq!(c.sound_fade(10.5), 0.5);
+        assert_eq!(c.sound_fade(11.0), 1.0);
+        assert_eq!(c.sound_fade(12.5), 0.5);
+        assert_eq!(c.sound_fade(14.0), 0.0);
     }
 
     #[test]

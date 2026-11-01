@@ -241,7 +241,7 @@ impl App {
                 let wave = self.waveforms.get(&cut_wave_file(c)).cloned();
                 let even_wave = if c.even { self.even_waves.get(&cut_wave_file(c)).cloned() } else { None };
                 let level = cut_level_tag(c);
-                timeline::Block { labels: cut_labels(c, self.opts.stabilize), from, len: c.end - c.start, start: c.start, keys, sound: c.volume.clone(), wave, even_wave, own_db: c.sound_db(), level, thumbs, crossfade: c.crossfade, effects: c.effects.iter().map(|k| k.t).collect() }
+                timeline::Block { labels: cut_labels(c, self.opts.stabilize), from, len: c.end - c.start, start: c.start, keys, sound: c.volume.clone(), wave, even_wave, own_db: c.sound_db(), fade_in: c.sound_fade_in, fade_out: c.sound_fade_out, level, thumbs, crossfade: c.crossfade, effects: c.effects.iter().map(|k| k.t).collect() }
             })
             .collect();
         let (timeline_start, timeline_span) = self.timeline_window();

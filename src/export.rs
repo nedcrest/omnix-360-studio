@@ -187,7 +187,7 @@ pub(crate) fn export(project: &project::Project, opts: &StitchOpts, out: &Export
             .map(|(n, &(i, start, frames))| {
                 let crossfade = if n > cuts.start { overlap[n] as f64 / fps } else { 0.0 };
                 let input = heard[n].unwrap_or(&pipelines[i].input);
-                ffmpeg::Sound { input, start, duration: Some(frames as f64 / fps), volume: &project.cuts[n].volume, gain: project.cuts[n].sound_db(), even: project.cuts[n].even, crossfade }
+                ffmpeg::Sound { input, start, duration: Some(frames as f64 / fps), volume: &project.cuts[n].volume, gain: project.cuts[n].sound_db(), even: project.cuts[n].even, crossfade, fade_in: project.cuts[n].sound_fade_in, fade_out: project.cuts[n].sound_fade_out }
             })
             .collect();
         // The whole edit gets its mix; a file per cut is for another editor,

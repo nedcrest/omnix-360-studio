@@ -218,6 +218,12 @@ impl App {
                     self.edit.track_mut(which).set_fade(i, in_edge, seconds);
                 }
             }
+            Message::SoundFade(i, in_edge, seconds) => {
+                if i < self.edit.cuts.len() {
+                    self.begin_drag();
+                    self.edit.cuts[i].set_sound_fade(in_edge, seconds);
+                }
+            }
             Message::SoundLevel(db) => {
                 self.begin_drag();
                 self.edit.sound.volume = db;

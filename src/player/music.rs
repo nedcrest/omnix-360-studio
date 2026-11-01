@@ -82,13 +82,7 @@ pub fn gain(db: f64) -> f32 {
 pub fn envelope(clip: &MusicClip, (cross_in, cross_out): (f64, f64), t: f64, video_end: f64) -> f64 {
     let into = t - clip.at;
     let left = clip.ends() - t;
-    let mut g: f64 = 1.0;
-    if clip.fade_in > 0.0 {
-        g = g.min(into / clip.fade_in);
-    }
-    if clip.fade_out > 0.0 {
-        g = g.min(left / clip.fade_out);
-    }
+    let mut g = project::fade_ramp(into, left, clip.fade_in, clip.fade_out);
     if clip.ends() > video_end {
         g = g.min((video_end - t) / project::END_FADE);
     }

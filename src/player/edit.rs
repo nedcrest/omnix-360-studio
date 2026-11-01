@@ -186,10 +186,13 @@ impl Edit {
         if t < c.start + MIN_CUT || t > c.end - MIN_CUT {
             return false;
         }
+        // Each half keeps the sound fade at its own outer end.
         let mut second = c.clone();
         second.start = t;
         second.crossfade = 0.0;
+        second.sound_fade_in = 0.0;
         self.cuts[i].end = t;
+        self.cuts[i].sound_fade_out = 0.0;
         self.cuts.insert(i + 1, second);
         crate::project::settle_crossfades(&mut self.cuts);
         true
@@ -365,6 +368,16 @@ mod tests {
         assert_eq!(e.cuts.len(), 2);
         assert!(e.redo());
         assert_eq!(e.cuts.len(), 3);
+    }
+
+    #[test]
+    fn a_split_keeps_each_sound_fade_at_its_outer_end() {
+        let mut e = edit();
+        e.cuts[0].sound_fade_in = 0.5;
+        e.cuts[0].sound_fade_out = 1.0;
+        assert!(e.split(0, 12.0));
+        assert_eq!((e.cuts[0].sound_fade_in, e.cuts[0].sound_fade_out), (0.5, 0.0));
+        assert_eq!((e.cuts[1].sound_fade_in, e.cuts[1].sound_fade_out), (0.0, 1.0));
     }
 
     #[test]

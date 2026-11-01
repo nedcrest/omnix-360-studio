@@ -44,8 +44,8 @@ impl App {
             c.playback.set_volume(v);
         }
         if let (Some((_, theirs)), Some((i, inc))) = (shares, &self.partner) {
-            let (own, points) = self.edit.cuts.get(*i).map_or((0.0, 0.0), |c| (c.sound_db(), crate::project::volume_at(&c.volume, inc.playback.now())));
-            let v = cut_gain(self.edit.sound.volume, own, points) * quarter(theirs);
+            let (own, points, fade) = self.edit.cuts.get(*i).map_or((0.0, 0.0, 1.0), |c| (c.sound_db(), crate::project::volume_at(&c.volume, inc.playback.now()), c.sound_fade(inc.playback.now())));
+            let v = cut_gain(self.edit.sound.volume, own, points) * fade as f32 * quarter(theirs);
             if let Some((_, inc)) = &mut self.partner {
                 inc.playback.set_volume(v);
             }
@@ -169,14 +169,14 @@ impl App {
     }
 
     /// The clips' sound in the mix: its level, the playing cut's own level
-    /// (normalized, lowered or muted) and its volume points where it is
+    /// (normalized, lowered or muted), its fades and volume points where it is
     /// (the listening volume is `audio::set_listening`'s).
     pub(super) fn clip_volume(&self) -> f32 {
-        let (own, points) = match (&self.clip, self.edit.cuts.get(self.current)) {
-            (Some(c), Some(cut)) => (cut.sound_db(), crate::project::volume_at(&cut.volume, c.playback.now())),
-            _ => (0.0, 0.0),
+        let (own, points, fade) = match (&self.clip, self.edit.cuts.get(self.current)) {
+            (Some(c), Some(cut)) => (cut.sound_db(), crate::project::volume_at(&cut.volume, c.playback.now()), cut.sound_fade(c.playback.now())),
+            _ => (0.0, 0.0, 1.0),
         };
-        cut_gain(self.edit.sound.volume, own, points)
+        cut_gain(self.edit.sound.volume, own, points) * fade as f32
     }
 
     pub(super) fn with_playback(&mut self, f: impl FnOnce(&mut Playback)) {

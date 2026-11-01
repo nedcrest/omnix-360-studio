@@ -21,6 +21,10 @@ pub struct Sound<'a> {
     pub even: bool,
     /// Seconds it crossfades with the stretch before, only in a mix.
     pub crossfade: f64,
+    /// Its own fades in and out, seconds (`Cut::sound_fade_in`/`_out`),
+    /// only in a mix; the fade out needs `duration`.
+    pub fade_in: f64,
+    pub fade_out: f64,
 }
 
 /// The mix's last stage: peaks held under −1.2 dBFS (0.87), so cuts raised
@@ -108,7 +112,15 @@ pub(super) fn mixed(cmd: &mut Command, audio: &[Sound<'_>], mix: &Mix<'_>) -> Re
                 format!(",{}", level_filter(sound.gain, sound.volume, &format!("(t+{})", sound.start)))
             };
             let even = if sound.even { format!(",{}", crate::loudness::LEVELER) } else { String::new() };
-            graph += &format!("[{i}:a:0]{stereo}{even}{}{level}[c{i}];", pad(sound));
+            // Straight, as the player's `Cut::sound_fade`.
+            let mut fades = String::new();
+            if sound.fade_in > 0.0 {
+                fades += &format!(",afade=t=in:st=0:d={}", sound.fade_in);
+            }
+            if let (true, Some(d)) = (sound.fade_out > 0.0, sound.duration) {
+                fades += &format!(",afade=t=out:st={}:d={}", (d - sound.fade_out).max(0.0), sound.fade_out.min(d));
+            }
+            graph += &format!("[{i}:a:0]{stereo}{even}{}{level}{fades}[c{i}];", pad(sound));
         }
         // Joined in turn: a crossfade overlaps a stretch's end with the
         // next's start (equal power, as the music's), else end to end.
@@ -176,7 +188,7 @@ mod tests {
     use super::*;
 
     fn stretch<'a>(input: &'a Path, gain: f64, volume: &'a [crate::project::VolumeKey]) -> Sound<'a> {
-        Sound { input, start: 2.0, duration: Some(4.0), volume, gain, even: false, crossfade: 0.0 }
+        Sound { input, start: 2.0, duration: Some(4.0), volume, gain, even: false, crossfade: 0.0, fade_in: 0.0, fade_out: 0.0 }
     }
 
     #[test]
@@ -190,5 +202,17 @@ mod tests {
         assert!(graph.contains("[1:a:0]") && graph.split("[c1]").next().unwrap().contains("volume=0"), "{graph}");
         assert!(graph.contains(&format!("volume={}", crate::project::gain(3.0))), "{graph}");
         assert!(graph.ends_with(&format!("{LIMITER}[a]")), "{graph}");
+    }
+
+    #[test]
+    fn a_cuts_sound_fades_in_and_out_over_its_own_stretch() {
+        let music = crate::project::Music::default();
+        let mix = Mix { sound_db: 0.0, tracks: vec![&music], length: 4.0, fades: Default::default() };
+        let a = Path::new("a.mp4");
+        let sound = Sound { fade_in: 0.5, fade_out: 1.5, ..stretch(a, 0.0, &[]) };
+        let graph = mixed(&mut tool("ffmpeg"), &[sound], &mix).unwrap();
+        // The 4 s stretch: in over its first 0.5 s, out over its last 1.5.
+        let c1 = graph.split("[c1]").next().unwrap();
+        assert!(c1.contains("afade=t=in:st=0:d=0.5") && c1.contains("afade=t=out:st=2.5:d=1.5"), "{graph}");
     }
 }

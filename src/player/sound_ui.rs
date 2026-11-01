@@ -17,7 +17,7 @@
 //! levels myself"; a modal with Start and a progress bar.
 
 use super::{App, Message, blocking};
-use crate::project::{Own, SoundTrack};
+use crate::project::{Line, Own, SoundTrack};
 use iced::widget::{button, checkbox, column, container, mouse_area, opaque, pin, progress_bar, radio, row, rule, space, stack, text};
 use iced::{Element, Length, Point, Task};
 
@@ -44,12 +44,6 @@ pub enum Menu {
     Line(Line),
 }
 
-/// A volume line: a cut's or sound clip's own, or a sound track's.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Line {
-    Own(Own),
-    Track(SoundTrack),
-}
 
 /// The dialog: before it starts, while it runs, when it's done.
 #[derive(Debug)]
@@ -183,9 +177,9 @@ impl App {
                 self.sound_menu = None;
                 self.selected_sound = None;
                 self.selected_volume = None;
-                if self.line_keys(line).is_some_and(|keys| i < keys.len()) {
+                if self.edit.line_mut(line).is_some_and(|(keys, _)| i < keys.len()) {
                     self.edit.checkpoint();
-                    if let Some(keys) = self.line_keys(line) {
+                    if let Some((keys, _)) = self.edit.line_mut(line) {
                         keys.remove(i);
                     }
                 }
@@ -194,9 +188,9 @@ impl App {
                 self.sound_menu = None;
                 self.selected_sound = None;
                 self.selected_volume = None;
-                if self.line_keys(line).is_some_and(|keys| !keys.is_empty()) {
+                if self.edit.line_mut(line).is_some_and(|(keys, _)| !keys.is_empty()) {
                     self.edit.checkpoint();
-                    if let Some(keys) = self.line_keys(line) {
+                    if let Some((keys, _)) = self.edit.line_mut(line) {
                         keys.clear();
                     }
                 }
@@ -370,13 +364,6 @@ impl App {
         stack![below, close, pin(opaque(menu)).position(Point::new(at.x, top))].into()
     }
 
-    /// A volume line's points: a cut's or sound clip's own, or a track's.
-    fn line_keys(&mut self, line: Line) -> Option<&mut Vec<crate::project::VolumeKey>> {
-        match line {
-            Line::Own(own) => self.edit.own_line_mut(own).map(|(keys, _)| keys),
-            Line::Track(which) => Some(&mut self.edit.track_mut(which).keyframes),
-        }
-    }
 }
 
 /// The level a cut's sound or a sound clip has when nothing has lowered

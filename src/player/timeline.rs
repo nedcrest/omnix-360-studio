@@ -1201,7 +1201,8 @@ impl canvas::Program<Message> for Marks {
             // clip: its menu, where the pointer is (Info is in it); a sound
             // lane's empty stretch: the track's menu.
             Mouse(mouse::Event::ButtonPressed(mouse::Button::Right)) => {
-                use super::sound_ui::{Line, Menu, SoundMsg};
+                use super::sound_ui::{Menu, SoundMsg};
+                use crate::project::Line;
                 let p = cursor.position_in(bounds)?;
                 // A point or a line first: each has a menu of its own.
                 let track = self.rows.sound_at_y(p.y).map(|lane| (lane, self.sounds[lane].which));
@@ -1247,9 +1248,9 @@ impl canvas::Program<Message> for Marks {
                     Message::Select(cut)
                 } else if state.ctrl && let Some((own, key)) = self.sound_at(p, bounds) {
                     // Ctrl+click on a point takes it away, on any lane.
-                    Message::Sound(super::sound_ui::SoundMsg::DeletePoint(super::sound_ui::Line::Own(own), key))
+                    Message::Sound(super::sound_ui::SoundMsg::DeletePoint(crate::project::Line::Own(own), key))
                 } else if state.ctrl && let Some(lane) = self.rows.sound_at_y(p.y) && let Some(key) = self.volume_at(lane, p, bounds) {
-                    Message::Sound(super::sound_ui::SoundMsg::DeletePoint(super::sound_ui::Line::Track(self.sounds[lane].which), key))
+                    Message::Sound(super::sound_ui::SoundMsg::DeletePoint(crate::project::Line::Track(self.sounds[lane].which), key))
                 } else if self.rows.on_clip_sound(p.y) && let Some((own, key)) = self.sound_at(p, bounds) {
                     *drag = Drag::Sound { own, key };
                     Message::SoundKeySelect(own, key)

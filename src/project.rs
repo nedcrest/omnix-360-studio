@@ -915,9 +915,15 @@ impl Project {
     }
 
     pub fn own_line_mut(&mut self, own: Own) -> Option<(&mut Vec<VolumeKey>, (f64, f64))> {
-        match own {
-            Own::Cut(i) => self.cuts.get_mut(i).map(|c| (&mut c.volume, (c.start, c.end))),
-            Own::Clip(which, i) => self.track_mut(which).clips.get_mut(i).map(|c| (&mut c.volume, (c.start, c.end))),
+        self.own_sound(own).map(|s| (s.volume, s.range))
+    }
+
+    /// A volume line's points, a cut's or sound clip's own or a track's,
+    /// and the stretch they apply in (a track's: the whole edit).
+    pub fn line_mut(&mut self, line: Line) -> Option<(&mut Vec<VolumeKey>, (f64, f64))> {
+        match line {
+            Line::Own(own) => self.own_line_mut(own),
+            Line::Track(which) => Some((&mut self.track_mut(which).keyframes, (0.0, f64::INFINITY))),
         }
     }
 }
@@ -949,6 +955,15 @@ impl OwnSound<'_> {
     fn db_at(&self, t: f64) -> f64 {
         crate::mixdown::own_level(if *self.mute { OFF_DB } else { *self.gain }, volume_at(self.volume, t))
     }
+}
+
+/// A volume line: a cut's or sound clip's own, or a sound track's over
+/// the whole edit. One address for both kinds, so removing, moving and
+/// (later) automating points is written once (`CORE-API.md`, B).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Line {
+    Own(Own),
+    Track(SoundTrack),
 }
 
 /// Whose own volume line: a cut's sound or a sound clip's. Both are points

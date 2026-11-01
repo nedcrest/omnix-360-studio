@@ -783,6 +783,12 @@ out at its end. Optional `Cut.sound_fade_in/out` (seconds, absent = 0);
 the player's clip volume and the export's mix both apply it (CPU = export
 rule), and a crossfade's own sound blend stays as it is.
 
+**Built 2026-11-01** (`a8d9e6f`), waiting for the check. Straight fades, as
+the sound clips'; handles shown only where the cut has sound; a split
+keeps each fade at its half's outer end; the waveform shows the fade.
+Export checked: 2 s fades on the talk cut measured −50 dB at its start,
+full 2 s in, down again at its end.
+
 ### 33e. A sound clip's own volume line, apart from the track's — medium (user, 2026-11-01)
 
 User (screenshot of the Voice lane: the yellow volume line starts at the

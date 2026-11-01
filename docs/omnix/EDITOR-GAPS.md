@@ -827,6 +827,35 @@ clip, the track's line over the whole edit):
 - Player and export apply clip line × track line × track level (CPU =
   export rule, tested on the mix graph strings).
 
+### 33f. Normalize and even out sound clips, the voice-over above all — medium (user, 2026-11-01)
+
+User: "I'd add a context menu and normalizing for the voice-over (one
+take may be further from the mic, another closer, so they need to be made
+even). And as before, normalize and level up all the sound clips on the
+track: it would fit here."
+
+What it is: what Clip sound got in gaps 11, 12 and 33, for the clips on
+Music, SFX and Voice.
+- **Data:** `MusicClip.gain` (dB), `.even` (through `LEVELER`), `.mute`,
+  `.loudness` (what normalizing measured), all optional, as on a cut.
+  They join 33e's own volume line on the clip.
+- **The clip's menu** (33e's, right-click a sound clip): «Normalize»,
+  «Even out», «Lower −12 dB», «Back to normal», «Mute», plus 33e's
+  «Show volume line», «Continue from the previous clip», «Back to the
+  original».
+- **The track's name menu** (right-click the lane's name tag): «Normalize
+  every clip» with «Even out first», the same dialog with progress as for
+  cuts (`sound_ui.rs`, one undo step, one clip at a time).
+- **Target.** Voice and SFX to −16 LUFS like the cuts, so a take recorded
+  further from the mic comes up to the closer one. Music too when asked,
+  but the music's level stays the track slider's job (normalized music
+  under speech is then lowered by auto-duck or the slider).
+- **Player and export:** the clip's gain and evening in the music player's
+  stream (decoded through the leveler when evened) and in the export's
+  per-clip chain, before its fades and the track's level; the waveform
+  drawn as heard, as 33d does for cuts.
+- Built together with 33e: one menu, one per-clip level model.
+
 ### 33d. Waveforms drawn as they're heard — small (user, 2026-11-01)
 
 User, after normalizing the scooter cut and lowering it for voice-over:

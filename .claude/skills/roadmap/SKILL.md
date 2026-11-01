@@ -52,6 +52,10 @@ One or two plain sentences: what it gives the user, not how it's built.
 - Anything before the first `##` is a note for readers, not drawn.
 - Card titles are their identity: rename only on purpose (a renamed card
   flashes as new).
+- Moving a card by script: it ends at the next `### ` **or** `## `,
+  whichever comes first. Cut only to the next card and a column heading
+  between goes with it (lost twice, 2026-11-01: «Далі» vanished and its
+  cards fell into «Зараз»). Check the four headings after every move.
 
 ## Language
 

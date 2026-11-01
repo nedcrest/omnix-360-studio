@@ -4,19 +4,18 @@
 
 use super::*;
 
-/// A cut's own sound level as the clip sound lane tags it: "muted", its
-/// gain, "even" when evened out; none at the clip's own level.
-pub(super) fn cut_level_tag(cut: &Cut) -> Option<String> {
-    let mut parts = Vec::new();
-    if cut.mute {
-        parts.push("muted".to_owned());
-    } else if cut.gain != 0.0 {
-        parts.push(format!("{:+.1}", cut.gain));
-    }
-    if cut.even {
+/// The most a level tag turns a clip up, dB: as far as normalizing goes.
+const LEVEL_MOST: f64 = crate::loudness::MOST_GAIN;
+
+/// A cut's or a sound clip's own level as its lane tags it ("0 dB",
+/// "+1.4 · even", "muted"): always shown, as it is the knob a drag up or
+/// down turns (gap 44).
+pub(super) fn level_tag(gain: f64, mute: bool, even: bool) -> String {
+    let mut parts = vec![if mute { "muted".to_owned() } else if gain == 0.0 { "0 dB".to_owned() } else { format!("{gain:+.1}") }];
+    if even {
         parts.push("even".to_owned());
     }
-    (!parts.is_empty()).then(|| parts.join(" · "))
+    parts.join(" · ")
 }
 
 /// The file to draw cut `cut`'s waveform from (`Cut::sound_file`).
@@ -194,6 +193,14 @@ impl App {
                 // The file's length comes with its waveform.
                 let song = self.waveforms.get(&self.edit.track(which).clips[i].input).map_or(f64::INFINITY, |w| w.duration);
                 self.edit.track_mut(which).trim(i, in_edge, t, overlap, song, edit::MIN_CUT);
+            }
+            Message::Level(own, db) => {
+                if self.edit.own_line(own).is_some() {
+                    self.begin_drag();
+                    if let Some(s) = self.edit.own_sound(own) {
+                        *s.gain = db.clamp(crate::project::OFF_DB, LEVEL_MOST);
+                    }
+                }
             }
             Message::Fade(own, in_edge, seconds) => {
                 if self.edit.own_line(own).is_some() {

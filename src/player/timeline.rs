@@ -138,6 +138,8 @@ const SNAP: f32 = 8.0;
 const VOLUME_TOP: f64 = 6.0;
 const VOLUME_BOTTOM: f64 = crate::project::OFF_DB;
 const POINT: f32 = 4.0;
+/// Two presses on a level tag this close are a double-click.
+const DOUBLE_CLICK: std::time::Duration = std::time::Duration::from_millis(400);
 /// A level dragged this close to 0 dB is 0 dB.
 const SNAP_DB: f64 = 1.0;
 const EFFECT_MARK: iced::Color = iced::Color::from_rgb(0.78, 0.55, 1.0);
@@ -198,12 +200,14 @@ pub struct Block {
     pub even_wave: Option<Arc<music::Waveform>>,
     /// Its own level, dB (`Cut::sound_db`: `OFF_DB` when muted).
     pub own_db: f64,
+    /// Its own level, dB, muted or not (what its level tag turns).
+    pub gain: f64,
     /// Its sound's fades in and out, seconds.
     pub fade_in: f64,
     pub fade_out: f64,
-    /// Its own sound level as a short tag ("+16.1", "−12 · even", "muted"),
-    /// shown on the clip sound lane.
-    pub level: Option<String>,
+    /// Its own sound level as a short tag ("0 dB", "−12 · even", "muted"),
+    /// the knob a drag turns.
+    pub level: String,
     /// How long it overlaps the cut before, dissolving in.
     pub crossfade: f64,
     /// Its effect keyframes' clip times.
@@ -248,6 +252,8 @@ pub struct MusicBlock {
     pub volume: Vec<crate::project::VolumeKey>,
     /// Its waveform through the leveler, if it's evened out (and read).
     pub even_wave: Option<Arc<music::Waveform>>,
+    /// Its own level as a tag, the knob a drag turns (`Block::level`).
+    pub level: String,
 }
 
 pub struct Timeline {
@@ -308,6 +314,8 @@ pub enum Drag {
     Fade { own: Own, in_edge: bool, x0: f32, from: f64, per_px: f64 },
     /// A point on a cut's or a sound clip's own volume line.
     Point { own: Own, key: usize },
+    /// A level tag dragged up or down from `y0`, the level `from` then.
+    Level { own: Own, y0: f32, from: f64 },
     /// Dragging cut `cut`'s effect keyframe `key` to another time.
     Effect { cut: usize, key: usize },
 }
@@ -315,6 +323,8 @@ pub enum Drag {
 #[derive(Default)]
 pub struct State {
     drag: Drag,
+    /// The last press on a level tag, for a double-click.
+    tag_click: Option<(std::time::Instant, Own)>,
     /// Shift held: the wheel pans instead of zooming, and music may
     /// overlap. Ctrl held: a click on the music lane adds a volume point.
     shift: bool,
@@ -675,6 +685,9 @@ impl Timeline {
         for (i, m) in blocks.iter().enumerate() {
             self.draw_own_line(frame, b, Own::Clip(*which, i), self.rows.sound_lane(li), m.from, m.start, m.len, &m.volume);
         }
+        for i in 0..blocks.len() {
+            draw_tag(frame, self.level_tag_at(Own::Clip(*which, i), b), &blocks[i].level);
+        }
         lane_tag(frame, which.name(), colour, top + h / 2.0);
     }
 
@@ -726,18 +739,11 @@ impl Timeline {
             }
             draw_fades(frame, (l, r), top, h, c.len, (c.fade_in, c.fade_out));
         }
-        // Each cut's level, where there's room: a tag at its left, so
-        // a lowered or muted cut shows in words, not colour alone.
-        for c in &self.blocks {
-            let (l, r) = self.block_x(c, b);
-            let Some(label) = &c.level else { continue };
-            let w = label.chars().count() as f32 * 6.0 + 8.0;
-            if r - l < w + 12.0 || r < 0.0 || l > b.width {
-                continue;
-            }
-            let x = l.max(PICK + 80.0).min(r - w - 4.0);
-            frame.fill(&Path::rounded_rectangle(Point::new(x, top + h / 2.0 - 7.0), Size::new(w, 14.0), 3.0.into()), iced::Color::from_rgba(0.0, 0.0, 0.0, 0.7));
-            frame.fill_text(Text { content: label.clone(), position: Point::new(x + 4.0, top + h / 2.0), color: iced::Color::WHITE, size: 10.0.into(), align_y: Vertical::Center, ..Default::default() });
+        // Each cut's level, where there's room: a tag at its left, so a
+        // lowered or muted cut shows in words, not colour alone; dragged up
+        // or down, the knob for its level.
+        for (i, c) in self.blocks.iter().enumerate() {
+            draw_tag(frame, self.level_tag_at(Own::Cut(i), b), &c.level);
         }
         // Through a crossfade the two cuts' sounds overlap, as their
         // pictures do.
@@ -754,6 +760,64 @@ impl Timeline {
     fn draw_sound(&self, frame: &mut Frame, b: Rectangle) {
         for (ci, c) in self.blocks.iter().enumerate() {
             self.draw_own_line(frame, b, Own::Cut(ci), self.rows.cut_lane(), c.from, c.start, c.len, &c.sound);
+        }
+    }
+
+    /// Where `own`'s level tag sits, if its block has room for it: at its
+    /// left, past the lane's name, in the middle of its lane.
+    fn level_tag_at(&self, own: Own, b: Rectangle) -> Option<Rectangle> {
+        let (label, from, len, top, h) = match own {
+            Own::Cut(i) => {
+                let c = self.blocks.get(i)?;
+                (&c.level, c.from, c.len, self.rows.cuts + 1.0, self.rows.clip_sound - 2.0)
+            }
+            Own::Clip(which, i) => {
+                let li = self.sounds.iter().position(|l| l.which == which)?;
+                let m = self.sounds[li].blocks.get(i)?;
+                (&m.level, m.from, m.len, self.rows.sound_top(li) + 2.0, self.rows.music - 4.0)
+            }
+        };
+        let (l, r) = (self.x(from, b) + GAP / 2.0, self.x(from + len, b) - GAP / 2.0);
+        let w = label.chars().count() as f32 * 6.0 + 8.0;
+        if r - l < w + 12.0 || r < 0.0 || l > b.width {
+            return None;
+        }
+        let x = l.max(PICK + 80.0).min(r - w - 4.0);
+        Some(Rectangle::new(Point::new(x, top + h / 2.0 - 7.0), Size::new(w, 14.0)))
+    }
+
+    /// The level tag under `p`: whose it is.
+    fn level_tag_hit(&self, p: Point, b: Rectangle) -> Option<Own> {
+        let tag = |own: Own| self.level_tag_at(own, b).is_some_and(|r| r.expand(2.0).contains(p)).then_some(own);
+        if self.rows.on_clip_sound(p.y) {
+            (0..self.blocks.len()).find_map(|i| tag(Own::Cut(i)))
+        } else {
+            let li = self.rows.sound_at_y(p.y)?;
+            let which = self.sounds[li].which;
+            (0..self.sounds[li].blocks.len()).find_map(|i| tag(Own::Clip(which, i)))
+        }
+    }
+
+    /// A press on `own`'s level tag: a second within `DOUBLE_CLICK` puts it
+    /// back to its normal level; else a drag of the level starts.
+    fn tag_press(&self, drag: &mut Drag, last: &mut Option<(std::time::Instant, Own)>, own: Own, p: Point) -> Option<Message> {
+        let now = std::time::Instant::now();
+        if last.take().is_some_and(|(at, o)| o == own && now - at < DOUBLE_CLICK) {
+            return Some(Message::Sound(super::sound_ui::SoundMsg::Restore(own)));
+        }
+        *last = Some((now, own));
+        *drag = Drag::Level { own, y0: p.y, from: self.level_of(own)? };
+        Some(match own {
+            Own::Cut(i) => Message::Select(i),
+            Own::Clip(which, i) => Message::SelectMusic(which, i),
+        })
+    }
+
+    /// The level `own` has now, dB.
+    fn level_of(&self, own: Own) -> Option<f64> {
+        match own {
+            Own::Cut(i) => self.blocks.get(i).map(|c| c.gain),
+            Own::Clip(which, i) => self.sounds.iter().find(|l| l.which == which)?.track.clips.get(i).map(|c| c.gain),
         }
     }
 
@@ -1215,6 +1279,9 @@ impl canvas::Program<Message> for Marks {
                 } else if self.rows.on_clip_sound(p.y) && let Some((own, key)) = self.sound_at(p, bounds) {
                     *drag = Drag::Point { own, key };
                     Message::PointSelect(own, key)
+                } else if let Some(own) = self.level_tag_hit(p, bounds).filter(|_| self.sound_at(p, bounds).is_none()) {
+                    // A level tag, on any sound lane: the clip's level knob.
+                    self.tag_press(drag, &mut state.tag_click, own, p)?
                 } else if self.rows.on_clip_sound(p.y) && let Some(own) = self.on_sound_line(p, bounds).or_else(|| state.ctrl.then(|| self.block_at(p.x, bounds).map(Own::Cut)).flatten()) {
                     // A sound point on the cut where clicked (Ctrl, or on
                     // its line once it shows), dragged on.
@@ -1316,6 +1383,13 @@ impl canvas::Program<Message> for Marks {
                         let (t, db) = self.own_point(*own, Point::new(x, position.y - bounds.y), bounds)?;
                         Message::PointMove(*own, *key, t, db)
                     }
+                    Drag::Level { own, y0, from } => {
+                        // Up is louder: 0.25 dB a pixel in 0.5 dB steps,
+                        // Shift a fifth of that in 0.1 dB steps.
+                        let (per_px, step) = if state.shift { (0.05, 0.1) } else { (0.25, 0.5) };
+                        let db = *from + ((*y0 - (position.y - bounds.y)) as f64 * per_px / step).round() * step;
+                        Message::Level(*own, db)
+                    }
                     Drag::MusicTrim { lane, clip, start, x0, from, per_px } => {
                         // File time to edit time is fixed while trimming:
                         // either edge moves, the sound stays put.
@@ -1331,7 +1405,7 @@ impl canvas::Program<Message> for Marks {
                 Drag::None => None,
                 Drag::Move { cut, moved: true, to, .. } => Some(canvas::Action::publish(Message::MoveCut(cut, to)).and_capture()),
                 Drag::Move { .. } | Drag::Scroll { .. } => Some(canvas::Action::request_redraw().and_capture()),
-                Drag::Playhead | Drag::Key { .. } | Drag::Effect { .. } | Drag::Trim { .. } | Drag::MusicMove { .. } | Drag::MusicTrim { .. } | Drag::Fade { .. } | Drag::Point { .. } | Drag::Crossfade { .. } => {
+                Drag::Playhead | Drag::Key { .. } | Drag::Effect { .. } | Drag::Trim { .. } | Drag::MusicMove { .. } | Drag::MusicTrim { .. } | Drag::Fade { .. } | Drag::Point { .. } | Drag::Level { .. } | Drag::Crossfade { .. } => {
                     Some(canvas::Action::publish(Message::ScrubDone).and_capture())
                 }
             },
@@ -1444,8 +1518,12 @@ impl canvas::Program<Message> for Marks {
     fn mouse_interaction(&self, state: &State, bounds: Rectangle, cursor: mouse::Cursor) -> mouse::Interaction {
         match state.drag {
             Drag::Trim { .. } | Drag::MusicTrim { .. } | Drag::Fade { .. } | Drag::Crossfade { .. } => mouse::Interaction::ResizingHorizontally,
+            Drag::Level { .. } => mouse::Interaction::ResizingVertically,
             Drag::None => {
                 let Some(p) = cursor.position_in(bounds) else { return mouse::Interaction::default() };
+                if self.level_tag_hit(p, bounds).is_some() && self.sound_at(p, bounds).is_none() {
+                    return mouse::Interaction::ResizingVertically;
+                }
                 if p.y >= self.rows.height - SCROLL {
                     return if self.zoomed() { mouse::Interaction::Grab } else { mouse::Interaction::default() };
                 }
@@ -1569,7 +1647,7 @@ mod tests {
     fn block(from: f64, len: f64, crossfade: f64) -> Block {
         Block {
             labels: vec![], from, len, start: 0.0, keys: vec![], thumbs: vec![], sound: vec![], wave: None, even_wave: None,
-            own_db: 0.0, fade_in: 0.0, fade_out: 0.0, level: None, crossfade, effects: vec![],
+            own_db: 0.0, gain: 0.0, fade_in: 0.0, fade_out: 0.0, level: "0 dB".into(), crossfade, effects: vec![],
         }
     }
 
@@ -1578,7 +1656,8 @@ mod tests {
     fn timeline() -> (Timeline, Rectangle) {
         let mut sounds: Vec<SoundLane> = SoundTrack::ALL.iter().map(|&which| SoundLane { which, track: Default::default(), blocks: vec![] }).collect();
         let voice = sounds.iter_mut().find(|l| l.which == SoundTrack::Voice).unwrap();
-        voice.blocks.push(MusicBlock { label: "take".into(), from: 2.0, start: 1.0, len: 4.0, wave: None, fade_in: 1.0, fade_out: 0.0, volume: vec![VolumeKey { t: 3.0, volume: 0.0 }], even_wave: None });
+        voice.track.clips.push(crate::project::MusicClip { input: "take.wav".into(), at: 2.0, start: 1.0, end: 5.0, fade_in: 1.0, volume: vec![VolumeKey { t: 3.0, volume: 0.0 }], ..Default::default() });
+        voice.blocks.push(MusicBlock { label: "take".into(), from: 2.0, start: 1.0, len: 4.0, wave: None, fade_in: 1.0, fade_out: 0.0, volume: vec![VolumeKey { t: 3.0, volume: 0.0 }], even_wave: None, level: "0 dB".into() });
         let t = Timeline {
             blocks: vec![block(0.0, 4.0, 0.0), block(3.0, 4.0, 1.0), block(7.0, 3.0, 0.0)],
             sounds,
@@ -1653,8 +1732,24 @@ mod tests {
         let on_clip = t.add_point(&mut drag, own, Point::new(x(5.0), y), b);
         assert!(matches!(on_clip, Some(Message::PointAdd(o, at, db)) if o == own && (at - 4.0).abs() < 0.02 && (db + 6.0).abs() < 0.2));
         assert!(matches!(drag, Drag::Point { key: 1, .. }), "after its point at 3 s");
+        // Its level tag: a press starts a drag of its level, a second
+        // within a double-click's time puts it back to normal.
+        let tag = t.level_tag_at(own, b).expect("room for the tag");
+        let on_tag = Point::new(tag.x + 2.0, tag.y + 7.0);
+        assert_eq!(t.level_tag_hit(on_tag, b), Some(own));
+        let (mut drag, mut last) = (Drag::None, None);
+        assert!(matches!(t.tag_press(&mut drag, &mut last, own, on_tag), Some(Message::SelectMusic(SoundTrack::Voice, 0))));
+        assert!(matches!(drag, Drag::Level { from: 0.0, .. }));
+        assert!(matches!(t.tag_press(&mut drag, &mut last, own, on_tag), Some(Message::Sound(super::super::sound_ui::SoundMsg::Restore(o))) if o == own));
         // Off the clips there's no clip, and its edges are its edges.
         assert_eq!(t.music_at(li, x(8.0), b), None);
         assert_eq!(t.music_edge_at(li, 0, x(6.0) - 1.0, b), Some(false));
     }
+}
+
+/// A level tag at `at` (if there's room): dark, white text, as on the cuts.
+fn draw_tag(frame: &mut Frame, at: Option<Rectangle>, label: &str) {
+    let Some(r) = at else { return };
+    frame.fill(&Path::rounded_rectangle(r.position(), r.size(), 3.0.into()), iced::Color::from_rgba(0.0, 0.0, 0.0, 0.7));
+    frame.fill_text(Text { content: label.to_owned(), position: Point::new(r.x + 4.0, r.y + r.height / 2.0), color: iced::Color::WHITE, size: 10.0.into(), align_y: Vertical::Center, ..Default::default() });
 }

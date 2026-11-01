@@ -139,6 +139,23 @@ enum Target {
     Overlay(crate::overlay::ItemRef),
 }
 
+/// Where one drag of a control writes: the target and its time, taken
+/// when the drag starts and kept until it's let go. Read afresh at each
+/// step, a drag during playback made a key per frame (gap 38).
+#[derive(Default)]
+pub(super) struct Pin(Option<(Target, f64)>);
+
+impl Pin {
+    /// The drag's target: `now` if it is `starting` (or nothing was
+    /// pinned yet), else the one it started with.
+    fn at(&mut self, starting: bool, now: Option<(Target, f64)>) -> Option<(Target, f64)> {
+        if starting || self.0.is_none() {
+            self.0 = now;
+        }
+        self.0
+    }
+}
+
 /// Where an overlay is, as sliders: its name, range and what it does.
 const PLACE: [(&str, f64, f64, &str); 4] = [
     ("Across", 0.0, 1.0, "Where its centre is, from the left edge to the right"),
@@ -189,10 +206,23 @@ impl App {
         self.edit.item(i)?.motion.iter().position(|k| (k.t - t).abs() <= tolerance)
     }
 
-    /// Sets `target`'s effects at the playhead with `change`: in the
-    /// keyframe there, made from the look so far if there's none.
-    fn change_effects(&mut self, change: impl FnOnce(&mut Grade)) {
-        let Some((target, t)) = self.effect_target() else { return };
+    /// The target and time a drag writes to (`Pin`), if it's still there:
+    /// an undo mid-drag can take the overlay or cut away.
+    fn pinned(&mut self, starting: bool) -> Option<(Target, f64)> {
+        let now = self.effect_target();
+        let (target, t) = self.effect_pin.at(starting, now)?;
+        let there = match target {
+            Target::Cut(i) => i < self.edit.cuts.len(),
+            Target::Overlay(i) => self.edit.item(i).is_some(),
+        };
+        there.then_some((target, t))
+    }
+
+    /// Sets `target`'s effects with `change`, at the playhead the drag
+    /// started at: in the keyframe there, made from the look so far if
+    /// there's none.
+    fn change_effects(&mut self, starting: bool, change: impl FnOnce(&mut Grade)) {
+        let Some((target, t)) = self.pinned(starting) else { return };
         let at = self.effect_key_at(target, t);
         let keys = self.effects_mut(target);
         let k = match at {
@@ -206,10 +236,11 @@ impl App {
         change(&mut keys[k].grade);
     }
 
-    /// Sets the selected overlay's place at the playhead with `change`, in
-    /// the motion keyframe there, made from where it is if there's none.
-    fn change_place(&mut self, change: impl FnOnce(&mut Place)) {
-        let Some((Target::Overlay(i), t)) = self.effect_target() else { return };
+    /// Sets the selected overlay's place with `change`, at the playhead the
+    /// drag started at: in the motion keyframe there, made from where it is
+    /// if there's none.
+    fn change_place(&mut self, starting: bool, change: impl FnOnce(&mut Place)) {
+        let Some((Target::Overlay(i), t)) = self.pinned(starting) else { return };
         let at = self.motion_key_at(i, t);
         let Some(item) = self.edit.item_mut(i) else { return };
         let keys = &mut item.motion;
@@ -229,24 +260,27 @@ impl App {
         match m {
             EffectMsg::Toggle => self.toggle_side(super::Side::Effects),
             EffectMsg::Set(p, v) => {
+                let starting = !self.dragging;
                 self.begin_drag();
-                self.change_effects(|g| {
+                self.change_effects(starting, |g| {
                     let mut values = g.values();
                     values[p] = v;
                     *g = Grade::from_values(values);
                 });
             }
             EffectMsg::Place(p, v) => {
+                let starting = !self.dragging;
                 self.begin_drag();
-                self.change_place(|place| {
+                self.change_place(starting, |place| {
                     let mut values = place.values();
                     values[p] = v;
                     *place = Place::from_values(values);
                 });
             }
             EffectMsg::Drag(to) => {
+                let starting = !self.dragging;
                 self.begin_drag();
-                self.change_place(|place| *place = to);
+                self.change_place(starting, |place| *place = to);
             }
             EffectMsg::Done => self.dragging = false,
             EffectMsg::Lut(choice) => {
@@ -300,8 +334,8 @@ impl App {
             // On an overlay a keyframe holds both where it is and its look.
             EffectMsg::Key => {
                 self.edit.checkpoint();
-                self.change_effects(|_| {});
-                self.change_place(|_| {});
+                self.change_effects(true, |_| {});
+                self.change_place(true, |_| {});
             }
             EffectMsg::DeleteKey => {
                 let Some((target, t)) = target else { return };
@@ -335,7 +369,7 @@ impl App {
             }
             EffectMsg::Reset(Some(p)) => {
                 self.edit.checkpoint();
-                self.change_effects(|g| {
+                self.change_effects(true, |g| {
                     let mut values = g.values();
                     values[p] = crate::grade::NEUTRAL[p];
                     *g = Grade::from_values(values);
@@ -343,7 +377,7 @@ impl App {
             }
             EffectMsg::ResetPlace(p) => {
                 self.edit.checkpoint();
-                self.change_place(|place| {
+                self.change_place(true, |place| {
                     let mut values = place.values();
                     values[p] = Place::default().values()[p];
                     *place = Place::from_values(values);
@@ -485,7 +519,7 @@ impl App {
         self.edit.checkpoint();
         // The picked colour is the cut's, whatever the panel shows.
         self.selected_overlay = None;
-        self.change_effects(|g| {
+        self.change_effects(true, |g| {
             g.temperature = temperature;
             g.tint = tint;
         });
@@ -656,5 +690,31 @@ struct FontChoice(String);
 impl std::fmt::Display for FontChoice {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if crate::text::BUILT_IN.contains(&self.0.as_str()) { write!(f, "{} · built in", self.0) } else { f.write_str(&self.0) }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_drag_during_playback_writes_one_key() {
+        let mut pin = Pin::default();
+        // The playhead moves a frame on between the slider's steps.
+        let step = |pin: &mut Pin, starting: bool, t: f64| pin.at(starting, Some((Target::Cut(0), t)));
+        assert!(step(&mut pin, true, 4.90) == Some((Target::Cut(0), 4.90)));
+        for t in [4.93, 4.97, 5.00, 5.03] {
+            assert!(step(&mut pin, false, t) == Some((Target::Cut(0), 4.90)), "still the drag's start at {t}");
+        }
+        // The next drag starts where the playhead is then.
+        assert!(step(&mut pin, true, 8.50) == Some((Target::Cut(0), 8.50)));
+    }
+
+    #[test]
+    fn a_drag_begun_off_any_cut_pins_once_one_is_there() {
+        let mut pin = Pin::default();
+        assert!(pin.at(true, None).is_none());
+        assert!(pin.at(false, Some((Target::Cut(1), 2.0))) == Some((Target::Cut(1), 2.0)));
+        assert!(pin.at(false, Some((Target::Cut(1), 2.1))) == Some((Target::Cut(1), 2.0)));
     }
 }

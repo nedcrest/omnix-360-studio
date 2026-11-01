@@ -527,6 +527,8 @@ struct App {
     exporting: Option<(Arc<std::sync::atomic::AtomicBool>, f32)>,
     /// A trim or keyframe drag has saved the edit for undo already.
     dragging: bool,
+    /// Where an effect or overlay drag writes its key (gap 38).
+    effect_pin: effects::Pin,
     /// Timeline zoom (1 shows the whole edit) and the edit time at its left
     /// edge; `timeline_window` keeps them in range.
     timeline_zoom: f64,
@@ -648,6 +650,7 @@ impl App {
             current: 0,
             selected: None,
             dragging: false,
+            effect_pin: effects::Pin::default(),
             timeline_zoom: 1.0,
             timeline_start: 0.0,
             queue: Default::default(),

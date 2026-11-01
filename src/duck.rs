@@ -1,7 +1,8 @@
 //! Auto-duck: the music lowered under speech (gap 3). The user's design
 //! (2026-10-23): one action and one «how much»; where speech is comes from
 //! the cleaned voice; the result is ordinary volume points on the Music
-//! track's line, to be edited by hand like any.
+//! clips' own lines, to be edited by hand like any (the track's own line
+//! went, gap 33i).
 //!
 //! Speech is found in the waveforms of what certainly is speech: cuts with a
 //! cleaned voice (`Cut::audio`, footage-agent's denoised talk) and the
@@ -100,12 +101,25 @@ pub fn run(path: &std::path::Path, depth: f64, output: Option<&std::path::Path>)
     if spans.is_empty() {
         println!("no speech found: it's looked for in cleaned voices and on the Voice lane");
     }
-    project.music.keyframes = duck(&project.music.keyframes, &spans, depth);
+    duck_music(&mut project.music, &spans, depth);
     if let Some(out) = output {
         project.save(out)?;
         eprintln!("wrote {}", out.display());
     }
     Ok(())
+}
+
+/// The music lowered under `speech` (edit time): each clip's own line, in
+/// its file's time, ducked where speech falls on it or within a ramp of it.
+pub fn duck_music(music: &mut crate::project::Music, speech: &[(f64, f64)], depth: f64) {
+    for c in &mut music.clips {
+        let to_file = |t: f64| c.start + t - c.at;
+        let reach = ATTACK + RELEASE;
+        let on: Vec<(f64, f64)> = speech.iter().filter(|&&(a, b)| b > c.at - reach && a < c.ends() + reach).map(|&(a, b)| (to_file(a), to_file(b))).collect();
+        if !on.is_empty() {
+            c.volume = duck(&c.volume, &on, depth);
+        }
+    }
 }
 
 /// Stretches from several sources as one sorted list, overlapping or near
@@ -122,7 +136,7 @@ pub fn merge(mut spans: Vec<(f64, f64)>) -> Vec<(f64, f64)> {
     out
 }
 
-/// The track's line with the music `depth` dB lower over each speech
+/// A volume line with the music `depth` dB lower over each speech
 /// stretch, ramped down `ATTACK` before it and up over `RELEASE` after:
 /// the duck added to what the line already says, so a hand-drawn line
 /// keeps its shape. Ramps that would meet between two stretches keep it
@@ -152,7 +166,9 @@ pub fn duck(line: &[VolumeKey], speech: &[(f64, f64)], depth: f64) -> Vec<Volume
     // between them in dB, as `volume_at` reads them.
     let mut times: Vec<f64> = line.iter().map(|k| k.t).chain(bends.iter().map(|b| b.0)).collect();
     times.sort_by(f64::total_cmp);
-    times.dedup_by(|a, b| (*a - *b).abs() < 1e-6);
+    // Points closer than a hundredth of a second are one (as `volume_key_at`
+    // has it): a bend on an existing point doesn't make a second.
+    times.dedup_by(|a, b| (*a - *b).abs() < 0.01);
     times.into_iter().map(|t| VolumeKey { t, volume: volume_at(line, t) + duck_at(t) }).collect()
 }
 
@@ -210,6 +226,21 @@ mod tests {
         assert!((volume_at(&close, 6.2) + 10.0).abs() < 1e-9);
         // No speech, no change.
         assert_eq!(duck(&line, &[], 12.0), line.to_vec());
+    }
+
+    #[test]
+    fn each_song_is_lowered_on_its_own_line_where_speech_falls_on_it() {
+        let mut music = crate::project::Music::default();
+        let song = |at: f64, start: f64| crate::project::MusicClip { input: "s.wav".into(), at, start, end: start + 10.0, ..Default::default() };
+        // Song A plays its 20..30 s at edit 0..10; song B its 0..10 at 10..20.
+        music.clips = vec![song(0.0, 20.0), song(10.0, 0.0), song(40.0, 0.0)];
+        duck_music(&mut music, &[(4.0, 6.0), (12.0, 13.0)], 10.0);
+        let at = |i: usize, file_t: f64| volume_at(&music.clips[i].volume, file_t);
+        // Edit 5 s is A's 25 s; edit 12.5 s is B's 2.5 s.
+        assert!((at(0, 25.0) + 10.0).abs() < 1e-9 && (at(0, 21.0)).abs() < 1e-9);
+        assert!((at(1, 2.5) + 10.0).abs() < 1e-9 && (at(1, 6.0)).abs() < 1e-9);
+        // The song no speech falls on is left alone.
+        assert!(music.clips[2].volume.is_empty());
     }
 
     #[test]

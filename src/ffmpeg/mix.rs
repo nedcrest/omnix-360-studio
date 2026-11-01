@@ -187,7 +187,7 @@ pub(super) fn mixed(cmd: &mut Command, audio: &[Sound<'_>], mix: &Mix<'_>) -> Re
             chain += &format!(",volume=eval=frame:volume='clip(({len}-t)/{},0,1)'", crate::project::END_FADE);
         }
         let delay = (clip.at * 1000.0).round();
-        graph += &format!("{chain},adelay=delays={delay}:all=1,{}[m{input}];", level_filter(track.volume, &track.keyframes, "t"));
+        graph += &format!("{chain},adelay=delays={delay}:all=1,{}[m{input}];", level_filter(track.volume, &[], "t"));
         parts.push(format!("[m{input}]"));
     }
     let mut fades = String::new();

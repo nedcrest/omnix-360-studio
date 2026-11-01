@@ -109,27 +109,26 @@ impl App {
                 "0" if mods.command() => return self.update(Message::TimelineZoomTo(0.0)),
                 "0" => self.free_look().reset(),
                 // A sound clip or a point selected: a volume point at the
-                // playhead on that line: a track's, the playing cut's own, or
-                // the same sound clip's own (within it).
+                // playhead on that clip's own line (within it), or the
+                // playing cut's.
                 "k" | "K" if self.selected_music.is_some() || self.selected_point.is_some() => {
-                    let line = self.selected_point.map(|(l, _)| l).or(self.selected_music.map(|(w, _)| Line::Track(w)));
-                    let at = match line {
-                        Some(Line::Track(which)) => Some((Line::Track(which), self.position())),
-                        Some(Line::Own(Own::Cut(_))) => self.playing_cut().map(|(_, t)| (Line::Own(Own::Cut(self.current)), t)),
-                        Some(Line::Own(own @ Own::Clip(which, c))) => self.edit.track(which).clips.get(c).map(|m| (Line::Own(own), m.start + self.position() - m.at)).filter(|(_, t)| self.edit.own_line(own).is_some_and(|(_, (s, e))| *t >= s && *t <= e)),
+                    let own = self.selected_point.map(|(o, _)| o).or(self.selected_music.map(|(w, i)| Own::Clip(w, i)));
+                    let at = match own {
+                        Some(Own::Cut(_)) => self.playing_cut().map(|(_, t)| (Own::Cut(self.current), t)),
+                        Some(own @ Own::Clip(which, c)) => self.edit.track(which).clips.get(c).map(|m| (own, m.start + self.position() - m.at)).filter(|(_, t)| self.edit.own_line(own).is_some_and(|(_, (s, e))| *t >= s && *t <= e)),
                         None => None,
                     };
-                    let Some((line, t)) = at else { return Task::none() };
+                    let Some((own, t)) = at else { return Task::none() };
                     // An undo step only if a point is added, not when one is
                     // just selected.
                     let mut i = 0;
                     self.edit.attempt(|e| {
-                        let Some((keys, _)) = e.line_mut(line) else { return false };
+                        let Some((keys, _)) = e.own_line_mut(own) else { return false };
                         let n = keys.len();
                         i = crate::project::volume_key_at(keys, t);
                         keys.len() > n
                     });
-                    self.select_point(line, i);
+                    self.select_point(own, i);
                 }
                 "k" | "K" => return self.update(Message::KeyAdd),
                 "j" | "J" => {

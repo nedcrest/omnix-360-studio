@@ -144,7 +144,6 @@ const EFFECT_MARK: iced::Color = iced::Color::from_rgb(0.78, 0.55, 1.0);
 /// Where a volume line runs: its top and height. A sound track's over its
 /// lane, a cut's over the clip sound lane under it.
 type Lane = (f32, f32);
-const MUSIC_LINE: iced::Color = iced::Color::from_rgb(1.0, 0.78, 0.25);
 /// The sound effects' clips; the music's are the theme's green. From the
 /// colour-blind-safe Okabe-Ito set, and every lane is named as well.
 /// How far down from a sound clip's top its fade handles take the mouse.
@@ -255,11 +254,11 @@ pub struct Timeline {
     pub blocks: Vec<Block>,
     /// The sound lanes, in `SoundTrack::ALL`'s order.
     pub sounds: Vec<SoundLane>,
-    /// The sound clip selected, and the sound track's volume point.
+    /// The sound clip selected.
     pub selected_music: Option<(SoundTrack, usize)>,
 
-    /// A point on a volume line, selected.
-    pub selected_point: Option<(crate::project::Line, usize)>,
+    /// A point on a cut's or a sound clip's own volume line, selected.
+    pub selected_point: Option<(Own, usize)>,
     /// Where the video ends; `duration` runs on to the music's end if later.
     pub video: f64,
     /// The clips' sound level in the mix (the Audio panel's «Clip sound»).
@@ -307,8 +306,8 @@ pub enum Drag {
     /// sound lane `lane`; the fade was `from` seconds when pressed at `x0`.
     /// A fade handle, on a sound clip or a cut's sound.
     Fade { own: Own, in_edge: bool, x0: f32, from: f64, per_px: f64 },
-    /// A point on a volume line.
-    Point { line: crate::project::Line, key: usize },
+    /// A point on a cut's or a sound clip's own volume line.
+    Point { own: Own, key: usize },
     /// Dragging cut `cut`'s effect keyframe `key` to another time.
     Effect { cut: usize, key: usize },
 }
@@ -478,18 +477,6 @@ impl Timeline {
         })
     }
 
-    /// Whether `p` is on sound lane `lane`'s track line, where it's drawn
-    /// (the track has points).
-    fn on_track_line(&self, lane: usize, p: Point, b: Rectangle) -> bool {
-        let keys = &self.sounds[lane].track.keyframes;
-        !keys.is_empty() && (Self::volume_y(self.rows.sound_lane(lane), crate::project::volume_at(keys, self.t(p.x, b))) - p.y).abs() <= PICK
-    }
-
-    /// Sound lane `lane`'s volume point under `p`, if any.
-    fn volume_at(&self, lane: usize, p: Point, b: Rectangle) -> Option<usize> {
-        self.sounds[lane].track.keyframes.iter().position(|k| (self.x(k.t, b) - p.x).abs() <= PICK && (Self::volume_y(self.rows.sound_lane(lane), k.volume) - p.y).abs() <= PICK)
-    }
-
     /// Where `own` is drawn: its lane, where it starts on the edit, its in
     /// point in its file, its length and its points.
     fn own_place(&self, own: Own) -> Option<(Lane, f64, f64, f64, &[crate::project::VolumeKey])> {
@@ -534,27 +521,12 @@ impl Timeline {
         })
     }
 
-    /// A point on `line` at `p`: its time (edit time on a track's line,
-    /// file time on an own line) and level.
-    fn line_point(&self, line: crate::project::Line, p: Point, b: Rectangle) -> Option<(f64, f64)> {
-        match line {
-            crate::project::Line::Own(own) => self.own_point(own, p, b),
-            crate::project::Line::Track(which) => {
-                let li = self.sounds.iter().position(|l| l.which == which)?;
-                Some((self.t(p.x, b), Self::volume_db(self.rows.sound_lane(li), p.y)))
-            }
-        }
-    }
-
-    /// Adds a point to `line` at `p` and drags it on from there.
-    fn add_point(&self, drag: &mut Drag, line: crate::project::Line, p: Point, b: Rectangle) -> Option<Message> {
-        let (t, db) = self.line_point(line, p, b)?;
-        let keys = match line {
-            crate::project::Line::Own(own) => self.own_place(own)?.4,
-            crate::project::Line::Track(which) => &self.sounds.iter().find(|l| l.which == which)?.track.keyframes[..],
-        };
-        *drag = Drag::Point { line, key: keys.partition_point(|k| k.t <= t) };
-        Some(Message::PointAdd(line, t, db))
+    /// Adds a point to `own`'s line at `p` and drags it on from there.
+    fn add_point(&self, drag: &mut Drag, own: Own, p: Point, b: Rectangle) -> Option<Message> {
+        let (t, db) = self.own_point(own, p, b)?;
+        let keys = self.own_place(own)?.4;
+        *drag = Drag::Point { own, key: keys.partition_point(|k| k.t <= t) };
+        Some(Message::PointAdd(own, t, db))
     }
 
     /// A new point on `own` at `p`: its file time and level.
@@ -699,25 +671,11 @@ impl Timeline {
             frame.fill(&Path::rectangle(Point::new(x, top), Size::new((to - x).max(0.0), h)), iced::Color::from_rgba(0.0, 0.0, 0.0, 0.55));
             frame.fill(&Path::rectangle(Point::new(x - 1.0, self.rows.sound_top(li)), Size::new(2.0, self.rows.music)), palette.background.base.text.scale_alpha(0.8));
         }
-        // Each clip's own line, inside it; the track's over the whole lane.
+        // Each clip's own line, inside it.
         for (i, m) in blocks.iter().enumerate() {
             self.draw_own_line(frame, b, Own::Clip(*which, i), self.rows.sound_lane(li), m.from, m.start, m.len, &m.volume);
         }
-        self.draw_volume(frame, b, li);
         lane_tag(frame, which.name(), colour, top + h / 2.0);
-    }
-
-    /// A sound lane's volume line over it, once there are points: a flat
-    /// line along every lane would only be in the way.
-    fn draw_volume(&self, frame: &mut Frame, b: Rectangle, li: usize) {
-        let lane = &self.sounds[li];
-        let keys = &lane.track.keyframes;
-        let (Some(first), Some(last)) = (keys.first(), keys.last()) else { return };
-        let points: Vec<_> = keys.iter().map(|k| (self.x(k.t, b), k.volume)).collect();
-        let ends = ((self.x(0.0, b), first.volume), (self.x(self.duration, b), last.volume));
-        let selected = self.selected_point.filter(|p| p.0 == crate::project::Line::Track(lane.which)).map(|p| p.1);
-        // Dimmer than a clip's own line: it belongs to the whole track.
-        draw_line(frame, b, self.rows.sound_lane(li), MUSIC_LINE.scale_alpha(0.55), ends, &points, selected);
     }
 
     /// An own volume line (a cut's or a sound clip's) inside its block on
@@ -733,7 +691,7 @@ impl Timeline {
         let end = start + len;
         let at = |t: f64| crate::project::volume_at(keys, t);
         let points: Vec<_> = keys.iter().map(|k| if k.t >= start && k.t <= end { (x(k.t), k.volume) } else { (f32::NAN, k.volume) }).collect();
-        let selected = self.selected_point.filter(|p| p.0 == crate::project::Line::Own(own)).map(|p| p.1);
+        let selected = self.selected_point.filter(|p| p.0 == own).map(|p| p.1);
         let (l, r) = (x(start) + GAP / 2.0, x(end) - GAP / 2.0);
         draw_line(frame, b, lane, SOUND_LINE, ((l, at(start)), (r, at(end))), &points, selected);
     }
@@ -1213,18 +1171,12 @@ impl canvas::Program<Message> for Marks {
             // lane's empty stretch: the track's menu.
             Mouse(mouse::Event::ButtonPressed(mouse::Button::Right)) => {
                 use super::sound_ui::{Menu, SoundMsg};
-                use crate::project::Line;
                 let p = cursor.position_in(bounds)?;
                 // A point or a line first: each has a menu of its own.
-                let track = self.rows.sound_at_y(p.y).map(|lane| (lane, self.sounds[lane].which));
                 let menu = if let Some((own, i)) = self.sound_at(p, bounds) {
-                    Menu::Point(Line::Own(own), i)
-                } else if let Some((i, which)) = track.and_then(|(lane, which)| Some((self.volume_at(lane, p, bounds)?, which))) {
-                    Menu::Point(Line::Track(which), i)
+                    Menu::Point(own, i)
                 } else if let Some(own) = self.on_sound_line(p, bounds) {
-                    Menu::Line(Line::Own(own))
-                } else if let Some((_, which)) = track.filter(|&(lane, _)| self.on_track_line(lane, p, bounds)) {
-                    Menu::Line(Line::Track(which))
+                    Menu::Line(own)
                 } else if self.rows.on_clip_sound(p.y) {
                     Menu::Own(Own::Cut(self.block_at(p.x, bounds)?))
                 } else if let Some(lane) = self.rows.sound_at_y(p.y) {
@@ -1259,17 +1211,14 @@ impl canvas::Program<Message> for Marks {
                     Message::Select(cut)
                 } else if state.ctrl && let Some((own, key)) = self.sound_at(p, bounds) {
                     // Ctrl+click on a point takes it away, on any lane.
-                    Message::Sound(super::sound_ui::SoundMsg::DeletePoint(crate::project::Line::Own(own), key))
-                } else if state.ctrl && let Some(lane) = self.rows.sound_at_y(p.y) && let Some(key) = self.volume_at(lane, p, bounds) {
-                    Message::Sound(super::sound_ui::SoundMsg::DeletePoint(crate::project::Line::Track(self.sounds[lane].which), key))
+                    Message::Sound(super::sound_ui::SoundMsg::DeletePoint(own, key))
                 } else if self.rows.on_clip_sound(p.y) && let Some((own, key)) = self.sound_at(p, bounds) {
-                    let line = crate::project::Line::Own(own);
-                    *drag = Drag::Point { line, key };
-                    Message::PointSelect(line, key)
+                    *drag = Drag::Point { own, key };
+                    Message::PointSelect(own, key)
                 } else if self.rows.on_clip_sound(p.y) && let Some(own) = self.on_sound_line(p, bounds).or_else(|| state.ctrl.then(|| self.block_at(p.x, bounds).map(Own::Cut)).flatten()) {
                     // A sound point on the cut where clicked (Ctrl, or on
                     // its line once it shows), dragged on.
-                    self.add_point(drag, crate::project::Line::Own(own), p, bounds)?
+                    self.add_point(drag, own, p, bounds)?
                 } else if self.rows.on_clip_sound(p.y) {
                     // Elsewhere on the lane: that cut, as a click on it.
                     Message::Select(self.block_at(p.x, bounds)?)
@@ -1301,18 +1250,16 @@ impl canvas::Program<Message> for Marks {
                         let per_px = self.span / Timeline::width(bounds) as f64;
                         *drag = Drag::Fade { own: Own::Clip(which, clip), in_edge, x0: p.x, from: if in_edge { m.fade_in } else { m.fade_out }, per_px };
                         Message::SelectMusic(which, clip)
-                    } else if let Some(line) = self.sound_at(p, bounds).map(|(own, k)| (crate::project::Line::Own(own), k)).or_else(|| Some((crate::project::Line::Track(which), self.volume_at(lane, p, bounds)?))) {
-                        // A point, a clip's own first: drag it.
-                        let (line, key) = line;
-                        *drag = Drag::Point { line, key };
-                        Message::PointSelect(line, key)
+                    } else if let Some((own, key)) = self.sound_at(p, bounds) {
+                        *drag = Drag::Point { own, key };
+                        Message::PointSelect(own, key)
                     } else if let Some(own) = self.on_sound_line(p, bounds) {
-                        self.add_point(drag, crate::project::Line::Own(own), p, bounds)?
+                        self.add_point(drag, own, p, bounds)?
                     } else if state.ctrl {
-                        // Ctrl on a clip: a point on its own line; off the
-                        // clips, on the track's. Dragged on from there.
-                        let line = self.music_at(lane, p.x, bounds).map_or(crate::project::Line::Track(which), |clip| crate::project::Line::Own(Own::Clip(which, clip)));
-                        self.add_point(drag, line, p, bounds)?
+                        // Ctrl on a clip: a point on its own line, dragged
+                        // on from there.
+                        let clip = self.music_at(lane, p.x, bounds)?;
+                        self.add_point(drag, Own::Clip(which, clip), p, bounds)?
                     } else {
                         let clip = self.music_at(lane, p.x, bounds)?;
                         let m = &self.sounds[lane].blocks[clip];
@@ -1365,9 +1312,9 @@ impl canvas::Program<Message> for Marks {
                         let dx = (x - *x0) as f64 * *per_px;
                         Message::Fade(*own, *in_edge, *from + if *in_edge { dx } else { -dx })
                     }
-                    Drag::Point { line, key } => {
-                        let (t, db) = self.line_point(*line, Point::new(x, position.y - bounds.y), bounds)?;
-                        Message::PointMove(*line, *key, t, db)
+                    Drag::Point { own, key } => {
+                        let (t, db) = self.own_point(*own, Point::new(x, position.y - bounds.y), bounds)?;
+                        Message::PointMove(*own, *key, t, db)
                     }
                     Drag::MusicTrim { lane, clip, start, x0, from, per_px } => {
                         // File time to edit time is fixed while trimming:
@@ -1506,7 +1453,7 @@ impl canvas::Program<Message> for Marks {
                     if self.fade_at(lane, p, bounds).is_some() {
                         return mouse::Interaction::ResizingHorizontally;
                     }
-                    if self.sound_at(p, bounds).is_some() || self.volume_at(lane, p, bounds).is_some() {
+                    if self.sound_at(p, bounds).is_some() {
                         return mouse::Interaction::Grab;
                     }
                     if state.ctrl || self.on_sound_line(p, bounds).is_some() {
@@ -1617,7 +1564,7 @@ fn draw_fades(frame: &mut Frame, (l, r): (f32, f32), top: f32, h: f32, len: f64,
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::project::{Line, VolumeKey};
+    use crate::project::VolumeKey;
 
     fn block(from: f64, len: f64, crossfade: f64) -> Block {
         Block {
@@ -1700,15 +1647,12 @@ mod tests {
         // A new point there: the file's own time.
         let (at, db) = t.own_point(own, Point::new(x(5.0), Timeline::volume_y(lane, -6.0)), b).unwrap();
         assert!((at - 4.0).abs() < 0.02 && (db + 6.0).abs() < 0.2, "{at} {db}");
-        // A new point: on the clip, its own line, in file time; off the
-        // clips, the track's line, in edit time; both dragged on.
+        // A new point on the clip's own line, in file time, dragged on.
         let mut drag = Drag::None;
         let y = Timeline::volume_y(lane, -6.0);
-        let on_clip = t.add_point(&mut drag, Line::Own(own), Point::new(x(5.0), y), b);
-        assert!(matches!(on_clip, Some(Message::PointAdd(Line::Own(o), at, _)) if o == own && (at - 4.0).abs() < 0.02));
-        assert!(matches!(drag, Drag::Point { line: Line::Own(_), key: 1 }), "after its point at 3 s");
-        let off = t.add_point(&mut drag, Line::Track(SoundTrack::Voice), Point::new(x(8.0), y), b);
-        assert!(matches!(off, Some(Message::PointAdd(Line::Track(SoundTrack::Voice), at, db)) if (at - 8.0).abs() < 0.02 && (db + 6.0).abs() < 0.2));
+        let on_clip = t.add_point(&mut drag, own, Point::new(x(5.0), y), b);
+        assert!(matches!(on_clip, Some(Message::PointAdd(o, at, db)) if o == own && (at - 4.0).abs() < 0.02 && (db + 6.0).abs() < 0.2));
+        assert!(matches!(drag, Drag::Point { key: 1, .. }), "after its point at 3 s");
         // Off the clips there's no clip, and its edges are its edges.
         assert_eq!(t.music_at(li, x(8.0), b), None);
         assert_eq!(t.music_edge_at(li, 0, x(6.0) - 1.0, b), Some(false));

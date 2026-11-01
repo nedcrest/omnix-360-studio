@@ -153,11 +153,12 @@ pub struct Music {
     pub volume: f64,
     #[serde(default)]
     pub clips: Vec<MusicClip>,
-    /// Volume points at edit times, in time order: dB on top of `volume`,
-    /// so the track's level still trims the whole line. They stay where
-    /// they are when songs move.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub keyframes: Vec<VolumeKey>,
+    /// The track's own volume line of older projects (edit times), read
+    /// and folded into its clips' lines on load (`fold_track_line`), never
+    /// written: it lay over the clips' own lines and the two got in each
+    /// other's way (user, 2026-11-01, gap 33i).
+    #[serde(default, rename = "keyframes", skip_serializing)]
+    old_line: Vec<VolumeKey>,
 }
 
 /// A straight fade's level `into` seconds after a start and `left` before
@@ -225,12 +226,28 @@ pub fn move_volume_key(keys: &mut [VolumeKey], i: usize, t: f64, db: f64, range:
 
 impl Music {
     pub fn is_empty(&self) -> bool {
-        self.clips.is_empty() && self.volume == 0.0 && self.keyframes.is_empty()
+        self.clips.is_empty() && self.volume == 0.0
     }
 
-    /// The track's level at edit time `t`, dB: its own and its points'.
-    pub fn level_at(&self, t: f64) -> f64 {
-        self.volume + volume_at(&self.keyframes, t)
+    /// An older project's track line moved into its clips' own lines, so
+    /// they sound as before: each clip that the line changes gets points at
+    /// its in and out and at every track point inside it, each its own
+    /// level there plus the track line's.
+    fn fold_track_line(&mut self) {
+        let line = std::mem::take(&mut self.old_line);
+        if line.is_empty() {
+            return;
+        }
+        for c in &mut self.clips {
+            let edit = |file_t: f64| c.at + file_t - c.start;
+            let mut times: Vec<f64> = [c.start, c.end].into_iter().chain(line.iter().map(|k| c.start + k.t - c.at).filter(|&t| t > c.start && t < c.end)).chain(c.volume.iter().map(|k| k.t)).collect();
+            times.sort_by(f64::total_cmp);
+            times.dedup_by(|a, b| (*a - *b).abs() < SAME_POINT);
+            if times.iter().all(|&t| volume_at(&line, edit(t)).abs() < 1e-9) {
+                continue;
+            }
+            c.volume = times.into_iter().map(|t| VolumeKey { t, volume: volume_at(&c.volume, t) + volume_at(&line, edit(t)) }).collect();
+        }
     }
 
     /// Where the last clip ends on the edit, in seconds.
@@ -692,7 +709,6 @@ impl Project {
                     bail!("{} clip {} is empty or starts before the edit", which.file_word(), n + 1);
                 }
                 clip.input = dir.join(&clip.input);
-                clip.volume.sort_by(|a, b| a.t.total_cmp(&b.t));
             }
         }
         for (n, item) in project.overlays.iter_mut().chain(&mut project.text).flat_map(|l| &mut l.items).enumerate() {
@@ -718,12 +734,16 @@ impl Project {
             bail!("a crossfade isn't a number");
         }
         settle_crossfades(&mut project.cuts);
-        let keys = project.cuts.iter_mut().map(|c| &mut c.volume).chain([&mut project.music.keyframes, &mut project.sfx.keyframes]);
+        let tracks = [&mut project.music, &mut project.sfx, &mut project.voice];
+        let keys = project.cuts.iter_mut().map(|c| &mut c.volume).chain(tracks.into_iter().flat_map(|t| std::iter::once(&mut t.old_line).chain(t.clips.iter_mut().map(|c| &mut c.volume))));
         for keys in keys {
             if keys.iter().any(|k| !k.t.is_finite() || !k.volume.is_finite()) {
                 bail!("a volume point isn't a number");
             }
             keys.sort_by(|a, b| a.t.total_cmp(&b.t));
+        }
+        for which in SoundTrack::ALL {
+            project.track_mut(which).fold_track_line();
         }
         for cut in &mut project.cuts {
             if cut.effects.iter().any(|k| !k.t.is_finite() || k.grade.values().iter().any(|v| !v.is_finite())) {
@@ -894,15 +914,6 @@ impl Project {
     pub fn own_line_mut(&mut self, own: Own) -> Option<(&mut Vec<VolumeKey>, (f64, f64))> {
         self.own_sound(own).map(|s| (s.volume, s.range))
     }
-
-    /// A volume line's points, a cut's or sound clip's own or a track's,
-    /// and the stretch they apply in (a track's: the whole edit).
-    pub fn line_mut(&mut self, line: Line) -> Option<(&mut Vec<VolumeKey>, (f64, f64))> {
-        match line {
-            Line::Own(own) => self.own_line_mut(own),
-            Line::Track(which) => Some((&mut self.track_mut(which).keyframes, (0.0, f64::INFINITY))),
-        }
-    }
 }
 
 /// The sound settings a cut and a sound clip share, borrowed to change
@@ -941,15 +952,6 @@ impl OwnSound<'_> {
     fn db_at(&self, t: f64) -> f64 {
         crate::mixdown::own_level(if *self.mute { OFF_DB } else { *self.gain }, volume_at(self.volume, t))
     }
-}
-
-/// A volume line: a cut's or sound clip's own, or a sound track's over
-/// the whole edit. One address for both kinds, so removing, moving and
-/// (later) automating points is written once (`CORE-API.md`, B).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Line {
-    Own(Own),
-    Track(SoundTrack),
 }
 
 /// Whose own volume line: a cut's sound or a sound clip's. Both are points
@@ -1124,18 +1126,23 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("edit.json");
         // Sound effects alone are a start, as music is; their files load
-        // relative to the project and their points in time order.
+        // relative to the project, and an old track line's points (out of
+        // order) go into the clip's own line.
         let json = r#"{"sfx": {"volume": -6, "clips": [{"input": "sfx/whoosh.wav", "at": 4, "in": 0, "out": 1.5}],
                        "keyframes": [{"t": 5, "volume": -3}, {"t": 4, "volume": 0}]}}"#;
         std::fs::write(&path, json).unwrap();
         let p = Project::load(&path).unwrap();
         assert!(p.music.is_empty());
         assert_eq!(p.sfx.clips[0].input, dir.join("sfx/whoosh.wav"));
-        assert_eq!(p.sfx.keyframes.iter().map(|k| k.t).collect::<Vec<_>>(), [4.0, 5.0]);
+        // The clip plays 0..1.5 s of its file at 4..5.5 s: the line's 4 s
+        // (0 dB) and 5 s (−3 dB) are its 0 and 1 s.
+        let line: Vec<_> = p.sfx.clips[0].volume.iter().map(|k| (k.t, k.volume)).collect();
+        assert_eq!(line, [(0.0, 0.0), (1.0, -3.0), (1.5, -3.0)]);
         assert_eq!(p.track(SoundTrack::Sfx).end(), 5.5);
         p.save(&dir.join("again.json")).unwrap();
         let text = std::fs::read_to_string(dir.join("again.json")).unwrap();
         assert!(text.contains(r#""input": "sfx/whoosh.wav""#) && !text.contains("music"));
+        assert!(!text.contains("keyframes"), "the track line isn't written back");
         assert_eq!(Project::load(&dir.join("again.json")).unwrap(), p);
         // An older project has no "sfx", and saving it writes none.
         assert!(!serde_json::to_string(&Project::default()).unwrap().contains("sfx"));
@@ -1413,7 +1420,11 @@ mod tests {
         assert_eq!(p.cuts[0].effects[0].grade.lut, 0.6, "lut_strength moved into the effects");
         assert_eq!(p.cuts[1].audio, Some(dir.join("voice/phone.flac")));
         assert_eq!((p.overlays[0].items.len(), p.text[0].items.len(), p.fades.fade_out), (1, 1, 2.0));
-        assert_eq!(p.music.keyframes.len(), 2);
+        // The music's old track line (0 dB at 2 s, −12 dB at 5 s) is now the
+        // song's own (it plays its 12..24 s from 0 s), sounding the same.
+        let song = &p.music.clips[0];
+        assert_eq!(song.volume.iter().map(|k| (k.t, k.volume)).collect::<Vec<_>>(), [(12.0, 0.0), (14.0, 0.0), (17.0, -12.0), (24.0, -12.0)]);
+        assert_eq!(song.own_db_at(3.5), -6.0);
         // Omnix, October 2026: normalized cuts, SFX, a muted cut.
         let p = load("omnix-2026-10.json", include_str!("../tests/fixtures/omnix-2026-10.json"));
         assert_eq!((p.cuts[0].gain, p.cuts[0].even, p.cuts[1].mute), (2.6, true, true));

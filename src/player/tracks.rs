@@ -92,8 +92,8 @@ impl App {
     }
 
     /// Selects point `i` of a volume line, and nothing else.
-    pub(super) fn select_point(&mut self, line: Line, i: usize) {
-        self.selected_point = Some((line, i));
+    pub(super) fn select_point(&mut self, own: Own, i: usize) {
+        self.selected_point = Some((own, i));
         self.selected_music = None;
         self.selected = None;
     }
@@ -162,23 +162,23 @@ impl App {
                 self.selected = None;
                 self.selected_point = None;
             }
-            Message::PointAdd(line, t, db) => {
-                if self.edit.line_mut(line).is_none() {
+            Message::PointAdd(own, t, db) => {
+                if self.edit.own_line(own).is_none() {
                     return Task::none();
                 }
                 self.begin_drag();
-                let Some((keys, (start, end))) = self.edit.line_mut(line) else { return Task::none() };
+                let Some((keys, (start, end))) = self.edit.own_line_mut(own) else { return Task::none() };
                 let i = crate::project::add_volume_key(keys, t.clamp(start, end), db);
-                self.select_point(line, i);
+                self.select_point(own, i);
             }
-            Message::PointSelect(line, i) => self.select_point(line, i),
+            Message::PointSelect(own, i) => self.select_point(own, i),
             // A point gone mid-drag (an undo) is no undo step, nor an index panic.
-            Message::PointMove(line, i, ..) if self.edit.line_mut(line).is_none_or(|(keys, _)| i >= keys.len()) => {}
-            Message::PointMove(line, i, t, db) => {
+            Message::PointMove(own, i, ..) if self.edit.own_line(own).is_none_or(|(keys, _)| i >= keys.len()) => {}
+            Message::PointMove(own, i, t, db) => {
                 self.begin_drag();
-                // Within its stretch and between its neighbours: points
-                // keep their order.
-                if let Some((keys, range)) = self.edit.line_mut(line) {
+                // Within its stretch of its file and between its
+                // neighbours: points keep their order.
+                if let Some((keys, range)) = self.edit.own_line_mut(own) {
                     crate::project::move_volume_key(keys, i, t, db, range);
                 }
             }
@@ -220,8 +220,7 @@ impl App {
                     Ok(spans) => {
                         // One undo step; the line stays editable point by point.
                         self.edit.checkpoint();
-                        let line = crate::duck::duck(&self.edit.music.keyframes, &spans, self.duck_db);
-                        self.edit.music.keyframes = line;
+                        crate::duck::duck_music(&mut self.edit.music, &spans, self.duck_db);
                         self.selected_point = None;
                     }
                 }

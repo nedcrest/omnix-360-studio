@@ -17,7 +17,7 @@
 //! levels myself"; a modal with Start and a progress bar.
 
 use super::{App, Message, blocking};
-use crate::project::{Line, Own, SoundTrack};
+use crate::project::{Own, SoundTrack};
 use iced::widget::{button, checkbox, column, container, mouse_area, opaque, pin, progress_bar, radio, row, rule, space, stack, text};
 use iced::{Element, Length, Point, Task};
 
@@ -40,8 +40,8 @@ pub enum Scope {
 pub enum Menu {
     Own(Own),
     Track(SoundTrack),
-    Point(Line, usize),
-    Line(Line),
+    Point(Own, usize),
+    Line(Own),
 }
 
 
@@ -88,9 +88,9 @@ pub enum SoundMsg {
     /// Back to the file as it is (`OwnSound::original`).
     Original(Own),
     /// A volume line's point `i` removed (Ctrl+click on it, or its menu).
-    DeletePoint(Line, usize),
+    DeletePoint(Own, usize),
     /// A volume line removed, all its points.
-    DeleteLine(Line),
+    DeleteLine(Own),
 }
 
 impl App {
@@ -173,22 +173,22 @@ impl App {
                 self.sound_menu = None;
                 self.edit.attempt(|e| e.continue_level(own));
             }
-            SoundMsg::DeletePoint(line, i) => {
+            SoundMsg::DeletePoint(own, i) => {
                 self.sound_menu = None;
                 self.selected_point = None;
-                if self.edit.line_mut(line).is_some_and(|(keys, _)| i < keys.len()) {
+                if self.edit.own_line_mut(own).is_some_and(|(keys, _)| i < keys.len()) {
                     self.edit.checkpoint();
-                    if let Some((keys, _)) = self.edit.line_mut(line) {
+                    if let Some((keys, _)) = self.edit.own_line_mut(own) {
                         keys.remove(i);
                     }
                 }
             }
-            SoundMsg::DeleteLine(line) => {
+            SoundMsg::DeleteLine(own) => {
                 self.sound_menu = None;
                 self.selected_point = None;
-                if self.edit.line_mut(line).is_some_and(|(keys, _)| !keys.is_empty()) {
+                if self.edit.own_line_mut(own).is_some_and(|(keys, _)| !keys.is_empty()) {
                     self.edit.checkpoint();
-                    if let Some((keys, _)) = self.edit.line_mut(line) {
+                    if let Some((keys, _)) = self.edit.own_line_mut(own) {
                         keys.clear();
                     }
                 }
@@ -342,13 +342,10 @@ impl App {
                 if which == SoundTrack::Music && !track.clips.is_empty() {
                     items.push(item(format!("Lower under speech (−{:.0} dB)", self.duck_db), Message::Duck));
                 }
-                if !track.keyframes.is_empty() {
-                    items.push(sound("Delete the track's volume line".into(), SoundMsg::DeleteLine(Line::Track(which))));
-                }
             }
             // On their own, so a misplaced right-click only opens a menu.
-            Menu::Point(line, i) => items.push(sound("Delete point".into(), SoundMsg::DeletePoint(line, i))),
-            Menu::Line(line) => items.push(sound("Delete the whole line".into(), SoundMsg::DeleteLine(line))),
+            Menu::Point(own, i) => items.push(sound("Delete point".into(), SoundMsg::DeletePoint(own, i))),
+            Menu::Line(own) => items.push(sound("Delete the whole line".into(), SoundMsg::DeleteLine(own))),
         }
         if items.is_empty() {
             return below;

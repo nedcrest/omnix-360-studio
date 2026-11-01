@@ -45,10 +45,10 @@ pub fn envelope(clip: &MusicClip, (cross_in, cross_out): (f64, f64), t: f64, vid
 }
 
 /// Sound clip `i` of `track` at edit time `t`, as the speakers get it: the
-/// track's level and line, the clip's own level and line, its envelope.
+/// track's level, the clip's own level and line, its envelope.
 pub fn clip_gain(track: &Music, i: usize, t: f64, video_end: f64) -> f64 {
     let clip = &track.clips[i];
-    gain(track.level_at(t)) * gain(clip.own_db_at(t)) * envelope(clip, track.crossfades(i), t, video_end)
+    gain(track.volume) * gain(clip.own_db_at(t)) * envelope(clip, track.crossfades(i), t, video_end)
 }
 
 #[cfg(test)]

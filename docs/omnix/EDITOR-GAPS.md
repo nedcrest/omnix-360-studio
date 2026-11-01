@@ -988,7 +988,7 @@ of many steps with the time moving between them leaves one key.
 
 **Built 2026-11-01** (`b070d97`): `effects::Pin` keeps the drag's target
 and time from its first step; one-shot changes (reset, white balance, key)
-take the playhead as before. Two tests. Waiting for the user's check.
+take the playhead as before. Two tests. Confirmed by the user 2026-11-01.
 
 Recording a control's moves during playback as a curve (FL Studio's
 «record automation») goes to the automation lanes, gap 39 (user,

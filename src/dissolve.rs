@@ -101,3 +101,67 @@ impl Drop for Dissolve<'_> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Collects what comes out.
+    struct Collect(Vec<Frame>);
+
+    impl FrameSink for Collect {
+        fn write(&mut self, frame: &Frame) -> Result<()> {
+            self.0.push(Frame { width: frame.width, height: frame.height, rgb: frame.rgb.clone(), deep: frame.deep });
+            Ok(())
+        }
+    }
+
+    fn grey(v: u8) -> Frame {
+        Frame { width: 2, height: 1, rgb: vec![v; 6], deep: false }
+    }
+
+    fn deep(v: u16) -> Frame {
+        Frame { width: 2, height: 1, rgb: v.to_le_bytes().repeat(6), deep: true }
+    }
+
+    /// Two 10-frame cuts crossfading over 4: what comes out, and whether
+    /// the held frames' files are gone once it's done.
+    fn run(a: Frame, b: Frame) -> (Vec<Frame>, bool) {
+        let mut out = Collect(Vec::new());
+        let pid = format!("rosmo360-dissolve-{}-", std::process::id());
+        let files = {
+            let mut d = Dissolve::new(&mut out);
+            let files = d.files.clone();
+            d.cut(10, 0, 4).unwrap();
+            for _ in 0..10 {
+                d.write(&a).unwrap();
+            }
+            d.cut(10, 4, 0).unwrap();
+            for _ in 0..10 {
+                d.write(&b).unwrap();
+            }
+            files
+        };
+        assert!(files.iter().all(|f| f.to_string_lossy().contains(&pid)));
+        (out.0, files.iter().all(|f| !f.exists()))
+    }
+
+    #[test]
+    fn the_outgoing_tail_blends_into_the_incoming_head() {
+        let (frames, cleaned) = run(grey(0), grey(200));
+        // 10 + 10 frames, 4 shared: 16, the shared ones by frame centres.
+        assert_eq!(frames.len(), 16);
+        let values: Vec<u8> = frames.iter().map(|f| f.rgb[0]).collect();
+        assert_eq!(values, [0, 0, 0, 0, 0, 0, 25, 75, 125, 175, 200, 200, 200, 200, 200, 200]);
+        assert!(cleaned, "no held frames left in the temp folder");
+    }
+
+    #[test]
+    fn sixteen_bit_frames_blend_at_their_own_depth() {
+        let (frames, _) = run(deep(0), deep(40000));
+        let first = |f: &Frame| u16::from_le_bytes([f.rgb[0], f.rgb[1]]);
+        assert_eq!(frames.len(), 16);
+        assert_eq!((first(&frames[6]), first(&frames[9]), first(&frames[15])), (5000, 35000, 40000));
+        assert!(frames.iter().all(|f| f.deep && f.rgb.len() == 12));
+    }
+}

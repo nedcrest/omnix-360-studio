@@ -586,7 +586,7 @@ impl Timeline {
             // The waveform as it's heard: the track's level and points, the
             // clip's fades.
             if let Some(w) = &m.wave {
-                let clip = crate::project::MusicClip { input: Default::default(), at: m.from, start: m.start, end: m.start + m.len, fade_in: m.fade_in, fade_out: m.fade_out };
+                let clip = crate::project::MusicClip { at: m.from, start: m.start, end: m.start + m.len, fade_in: m.fade_in, fade_out: m.fade_out, ..Default::default() };
                 let heard = |t: f64| {
                     let on_edit = m.from + t - m.start;
                     music::gain(*level + crate::project::volume_at(volume, on_edit)) * music::envelope(&clip, (0.0, 0.0), on_edit, self.video) as f32

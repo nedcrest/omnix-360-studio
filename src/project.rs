@@ -371,7 +371,7 @@ impl Music {
     /// Adds the file's `start`..`end` as a clip as near `at` as fits: a
     /// recorded take, its lead-in before the playback started left out.
     pub fn append_part(&mut self, input: PathBuf, at: f64, start: f64, end: f64) -> usize {
-        self.clips.push(MusicClip { input, at, start, end, fade_in: 0.0, fade_out: 0.0 });
+        self.clips.push(MusicClip { input, at, start, end, ..Default::default() });
         let i = self.clips.len() - 1;
         self.clips[i].at = self.place(i, at);
         i
@@ -395,7 +395,7 @@ impl Music {
 }
 
 /// A stretch of a song at a place on the edit.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct MusicClip {
     /// The file; a relative path is relative to the project file.
@@ -412,6 +412,23 @@ pub struct MusicClip {
     pub fade_in: f64,
     #[serde(default, skip_serializing_if = "is_zero")]
     pub fade_out: f64,
+    /// Its own level, dB, as a cut's (`Cut::gain`): set by normalizing or
+    /// from its menu. 0 is as the file is.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub gain: f64,
+    /// Evened out (`loudness::LEVELER`) before its level, as a cut's.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub even: bool,
+    /// Off; `gain` kept for when it's back on.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub mute: bool,
+    /// What normalizing measured of its stretch, LUFS.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub loudness: Option<f64>,
+    /// Its own volume points, in the file's time, so they move and trim
+    /// with it; on top of its level, under the track's line (gap 33e).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub volume: Vec<VolumeKey>,
 }
 
 /// How long the spans `a0..a1` and `b0..b1` share.
@@ -423,6 +440,19 @@ impl MusicClip {
     /// Where it ends on the edit.
     pub fn ends(&self) -> f64 {
         self.at + self.end - self.start
+    }
+
+    /// Its own level, dB: `OFF_DB` when muted.
+    pub fn sound_db(&self) -> f64 {
+        if self.mute { OFF_DB } else { self.gain }
+    }
+
+    /// Its own level at edit time `t`, dB: its level and its volume
+    /// points (in the file's time), off at `OFF_DB` whatever the points
+    /// say, as a cut's (`cut_gain`'s rule).
+    pub fn own_db_at(&self, t: f64) -> f64 {
+        let own = self.sound_db();
+        if own <= OFF_DB { OFF_DB } else { own + volume_at(&self.volume, self.start + t - self.at) }
     }
 }
 
@@ -678,6 +708,7 @@ impl Project {
                     bail!("{} clip {} is empty or starts before the edit", which.file_word(), n + 1);
                 }
                 clip.input = dir.join(&clip.input);
+                clip.volume.sort_by(|a, b| a.t.total_cmp(&b.t));
             }
         }
         for (n, item) in project.overlays.iter_mut().chain(&mut project.text).flat_map(|l| &mut l.items).enumerate() {
@@ -959,7 +990,7 @@ mod tests {
     fn saving_holds_what_was_looked_at_by_hand_and_no_more() {
         let flat = |name: &str| Cut { flat: true, ..Cut::new(name.into(), 0.0, 5.0) };
         let mut p = Project { cuts: vec![Cut::new("a.osv".into(), 0.0, 5.0), Cut::new("b.osv".into(), 0.0, 5.0), flat("c.mp4"), flat("d.mp4")], ..Default::default() };
-        p.music.clips = ["late.wav", "early.wav"].iter().zip([9.0, 1.0]).map(|(n, at)| MusicClip { input: n.into(), at, start: 0.0, end: 2.0, fade_in: 0.0, fade_out: 0.0 }).collect();
+        p.music.clips = ["late.wav", "early.wav"].iter().zip([9.0, 1.0]).map(|(n, at)| MusicClip { input: n.into(), at, start: 0.0, end: 2.0, ..Default::default() }).collect();
         let home = View::home(Projection::Perspective);
         let turned = View { yaw: 40.0, ..home };
         // Nothing looked at: nothing held; sound clips in edit order.
@@ -1001,7 +1032,7 @@ mod tests {
 
     #[test]
     fn sound_clips_drag_and_trim_without_overlapping_unless_asked() {
-        let clip = |at: f64, start: f64, end: f64| MusicClip { input: "s.wav".into(), at, start, end, fade_in: 0.0, fade_out: 0.0 };
+        let clip = |at: f64, start: f64, end: f64| MusicClip { input: "s.wav".into(), at, start, end, ..Default::default() };
         let mut m = Music { clips: vec![clip(0.0, 0.0, 10.0), clip(12.0, 0.0, 10.0)], ..Default::default() };
         // Dragged into the second, nearer its start: stops edge to edge.
         m.drag_to(0, 4.0, false);
@@ -1082,6 +1113,22 @@ mod tests {
     }
 
     #[test]
+    fn a_sound_clips_own_level_follows_its_file() {
+        let mut c = MusicClip { input: "take.wav".into(), at: 10.0, start: 2.0, end: 8.0, gain: 3.0, ..Default::default() };
+        c.volume = vec![VolumeKey { t: 4.0, volume: 0.0 }, VolumeKey { t: 6.0, volume: -6.0 }];
+        // Edit 13 s is the file's 5 s, half way down the points' ramp.
+        assert_eq!(c.own_db_at(13.0), 0.0);
+        // Moved, its points go with it.
+        c.at = 20.0;
+        assert_eq!(c.own_db_at(23.0), 0.0);
+        c.mute = true;
+        assert_eq!(c.own_db_at(23.0), OFF_DB);
+        // Old projects' clips load with none of it.
+        let old: MusicClip = serde_json::from_str(r#"{"input": "s.wav", "at": 0, "in": 0, "out": 2}"#).unwrap();
+        assert_eq!((old.gain, old.even, old.mute, old.volume.len()), (0.0, false, false, 0));
+    }
+
+    #[test]
     fn a_take_lands_without_its_lead_in() {
         let mut m = Music::default();
         m.append("song.wav".into(), 10.0, 2.0);
@@ -1096,7 +1143,7 @@ mod tests {
 
     #[test]
     fn music_clips_split_in_place_and_never_overlap() {
-        let clip = |at: f64, start: f64, end: f64| MusicClip { input: "song.mp3".into(), at, start, end, fade_in: 1.0, fade_out: 2.0 };
+        let clip = |at: f64, start: f64, end: f64| MusicClip { input: "song.mp3".into(), at, start, end, fade_in: 1.0, fade_out: 2.0, ..Default::default() };
         let mut m = Music { clips: vec![clip(0.0, 0.0, 30.0)], ..Default::default() };
         assert!(m.split(0, 10.0, 0.1));
         assert_eq!((m.clips[0].end, m.clips[0].fade_out), (10.0, 0.0));

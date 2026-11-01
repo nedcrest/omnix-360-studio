@@ -1,5 +1,7 @@
-//! A cut's sound by hand: the «Normalize» dialog and the menu a right-click
-//! on the Clip sound lane opens.
+//! Sound by hand: the «Normalize» dialog, and the menu a right-click opens
+//! on a cut's sound (the Clip sound lane), on a sound clip, or on a sound
+//! lane's empty stretch (the track's own menu). A cut's sound and a sound
+//! clip's are changed alike, through `project::Own` (gap 33f).
 //!
 //! Normalizing measures what each cut plays (`loudness::measure_cut`) and
 //! gives it the level that brings it to −16 LUFS, optionally evening it out
@@ -15,6 +17,7 @@
 //! levels myself"; a modal with Start and a progress bar.
 
 use super::{App, Message, blocking};
+use crate::project::{Own, SoundTrack};
 use iced::widget::{button, checkbox, column, container, mouse_area, opaque, pin, progress_bar, radio, row, rule, space, stack, text};
 use iced::{Element, Length, Point, Task};
 
@@ -22,11 +25,21 @@ use iced::{Element, Length, Point, Task};
 /// dip under speech.
 pub const VOICE_OVER_DIP: f64 = -12.0;
 
-/// Which cuts the dialog works on.
+/// What the dialog works on: every cut, one cut's sound or sound clip, or
+/// every clip on a sound track.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Scope {
     All,
-    Cut(usize),
+    Own(Own),
+    Track(SoundTrack),
+}
+
+/// What a right-click menu is for: a cut's sound or a sound clip, or a
+/// sound track as a whole.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Menu {
+    Own(Own),
+    Track(SoundTrack),
 }
 
 /// The dialog: before it starts, while it runs, when it's done.
@@ -40,7 +53,7 @@ pub struct Dialog {
 #[derive(Debug)]
 enum State {
     Ready,
-    Running { todo: Vec<usize>, total: usize, done: usize, gains: Vec<f64>, silent: usize, failed: Vec<String>, cancelled: bool },
+    Running { todo: Vec<Own>, total: usize, done: usize, gains: Vec<f64>, silent: usize, failed: Vec<String>, cancelled: bool },
     Done(String),
 }
 
@@ -51,21 +64,28 @@ pub enum SoundMsg {
     Scope(Scope),
     Even(bool),
     Start,
-    /// Cut `i` measured: its loudness and gain, `None` if silent.
-    Measured(usize, Result<Option<(f64, f64)>, String>),
+    /// One measured: its loudness and gain, `None` if silent.
+    Measured(Own, Result<Option<(f64, f64)>, String>),
     Cancel,
     Close,
-    /// The right-click menu for cut `i`, where the pointer is (window
-    /// coordinates), or closed.
-    Menu(Option<(usize, Point)>),
-    /// Cut `i`'s level down for a voice-over; back to its normal level.
-    Lower(usize),
-    Restore(usize),
-    Mute(usize, bool),
-    /// Cut `i`'s volume line shown: points at its in and out at 0 dB, so
-    /// nothing sounds different until one is moved.
-    ShowLine(usize),
-    Even1(usize, bool),
+    /// A right-click menu, where the pointer is (window coordinates), or
+    /// closed.
+    Menu(Option<(Menu, Point)>),
+    /// Its level down for a voice-over; back to its normal level.
+    Lower(Own),
+    Restore(Own),
+    Mute(Own, bool),
+    /// Its volume line shown: points at its in and out at 0 dB, so nothing
+    /// sounds different until one is moved.
+    ShowLine(Own),
+    Even1(Own, bool),
+    /// Its line started where what plays before it ends
+    /// (`Project::continue_level`).
+    Continue(Own),
+    /// Back to the file as it is (`OwnSound::original`).
+    Original(Own),
+    /// A sound track's own volume line removed.
+    ClearTrackLine(SoundTrack),
 }
 
 impl App {
@@ -90,10 +110,11 @@ impl App {
             }
             SoundMsg::Start => {
                 let Some(d) = self.normalize.as_mut() else { return Task::none() };
-                let todo: Vec<usize> = match d.scope {
-                    Scope::All => (0..self.edit.cuts.len()).collect(),
-                    Scope::Cut(i) if i < self.edit.cuts.len() => vec![i],
-                    Scope::Cut(_) => Vec::new(),
+                let todo: Vec<Own> = match d.scope {
+                    Scope::All => (0..self.edit.cuts.len()).map(Own::Cut).collect(),
+                    Scope::Own(own) if self.edit.own_file(own).is_some() => vec![own],
+                    Scope::Own(_) => Vec::new(),
+                    Scope::Track(which) => (0..self.edit.track(which).clips.len()).map(|i| Own::Clip(which, i)).collect(),
                 };
                 // One undo step for the whole run, before the first change.
                 // Each cut is evened out (or not) as it's measured, so a
@@ -103,21 +124,18 @@ impl App {
                 d.state = State::Running { todo: todo.into_iter().rev().collect(), total, done: 0, gains: Vec::new(), silent: 0, failed: Vec::new(), cancelled: false };
                 return self.measure_next();
             }
-            SoundMsg::Measured(i, result) => {
+            SoundMsg::Measured(own, result) => {
                 let even = self.normalize.as_ref().is_some_and(|d| d.even);
-                if let Some(cut) = self.edit.cuts.get_mut(i) {
+                if let Some(s) = self.edit.own_sound(own) {
                     if result.is_ok() {
-                        cut.even = even;
+                        *s.even = even;
                     }
-                    match &result {
-                        Ok(Some((lufs, gain))) => {
-                            cut.gain = *gain;
-                            cut.loudness = Some(*lufs);
-                        }
-                        Ok(None) | Err(_) => {}
+                    if let Ok(Some((lufs, gain))) = &result {
+                        *s.gain = *gain;
+                        *s.loudness = Some(*lufs);
                     }
                 }
-                let name = self.edit.cuts.get(i).map(|c| super::clip_name(&c.input)).unwrap_or_default();
+                let name = self.edit.own_file(own).map(|(f, ..)| super::clip_name(&f)).unwrap_or_default();
                 if let Some(Dialog { state: State::Running { done, gains, silent, failed, .. }, .. }) = self.normalize.as_mut() {
                     *done += 1;
                     match result {
@@ -137,34 +155,46 @@ impl App {
             SoundMsg::Menu(at) => self.sound_menu = at,
             // Twice at most: further down it would be as good as muted,
             // without saying so.
-            SoundMsg::Lower(i) => self.set_cut_sound(i, |c| c.gain = (c.gain + VOICE_OVER_DIP).max(normal_gain(c) + 2.0 * VOICE_OVER_DIP)),
-            SoundMsg::Restore(i) => self.set_cut_sound(i, |c| c.gain = normal_gain(c)),
-            SoundMsg::Mute(i, on) => self.set_cut_sound(i, |c| c.mute = on),
-            SoundMsg::ShowLine(i) => self.set_cut_sound(i, |c| {
-                for t in [c.start, c.end] {
-                    crate::project::add_volume_key(&mut c.volume, t, 0.0);
+            SoundMsg::Lower(own) => self.set_sound(own, |s| *s.gain = (*s.gain + VOICE_OVER_DIP).max(normal_gain(*s.loudness) + 2.0 * VOICE_OVER_DIP)),
+            SoundMsg::Restore(own) => self.set_sound(own, |s| *s.gain = normal_gain(*s.loudness)),
+            SoundMsg::Mute(own, on) => self.set_sound(own, |s| *s.mute = on),
+            SoundMsg::ShowLine(own) => self.set_sound(own, |s| {
+                for t in [s.range.0, s.range.1] {
+                    crate::project::add_volume_key(s.volume, t, 0.0);
                 }
             }),
-            SoundMsg::Even1(i, on) => {
+            SoundMsg::Original(own) => self.set_sound(own, |mut s| s.original()),
+            SoundMsg::Continue(own) => {
+                self.sound_menu = None;
+                self.edit.attempt(|e| e.continue_level(own));
+            }
+            SoundMsg::ClearTrackLine(which) => {
+                self.sound_menu = None;
+                self.edit.attempt(|e| !std::mem::take(&mut e.track_mut(which).keyframes).is_empty());
+            }
+            SoundMsg::Even1(own, on) => {
                 // Evening out changes how loud it is: measured again, as
                 // normalizing would.
-                if on || self.edit.cuts.get(i).is_some_and(|c| c.loudness.is_some()) {
+                if on || self.edit.own_sound(own).is_some_and(|s| s.loudness.is_some()) {
                     self.sound_menu = None;
-                    self.normalize = Some(Dialog { scope: Scope::Cut(i), even: on, state: State::Ready });
+                    self.normalize = Some(Dialog { scope: Scope::Own(own), even: on, state: State::Ready });
                     return self.sound_ui(SoundMsg::Start);
                 }
-                self.set_cut_sound(i, |c| c.even = on);
+                self.set_sound(own, |s| *s.even = on);
             }
         }
         Task::none()
     }
 
-    /// Changes cut `i`'s sound as one undo step, closing the menu.
-    fn set_cut_sound(&mut self, i: usize, change: impl FnOnce(&mut crate::project::Cut)) {
+    /// Changes a cut's sound or a sound clip's as one undo step, closing
+    /// the menu.
+    fn set_sound(&mut self, own: Own, change: impl FnOnce(crate::project::OwnSound<'_>)) {
         self.sound_menu = None;
-        if i < self.edit.cuts.len() {
+        if self.edit.own_line(own).is_some() {
             self.edit.checkpoint();
-            change(&mut self.edit.cuts[i]);
+            if let Some(s) = self.edit.own_sound(own) {
+                change(s);
+            }
             self.reload_cut_sound();
         }
     }
@@ -175,28 +205,33 @@ impl App {
         let even = *even;
         let State::Running { todo, total, gains, silent, failed, cancelled, done } = state else { return Task::none() };
         let next = if *cancelled { None } else { todo.pop() };
-        let Some(i) = next else {
+        let Some(own) = next else {
             *state = State::Done(summary(*done, *total, gains, *silent, failed, *cancelled));
             return Task::none();
         };
-        let Some(mut cut) = self.edit.cuts.get(i).cloned() else { return Task::none() };
-        // Measured as it will sound.
-        cut.even = even;
-        Task::perform(blocking(move || crate::loudness::measure_cut(&cut).map_err(|e| format!("{e:#}"))), move |r| Message::Sound(SoundMsg::Measured(i, r)))
+        // Measured as it will sound: evened out or not as asked.
+        let Some((file, range, _)) = self.edit.own_file(own) else { return Task::none() };
+        Task::perform(blocking(move || crate::loudness::measure_stretch(&file, range, even).map_err(|e| format!("{e:#}"))), move |r| Message::Sound(SoundMsg::Measured(own, r)))
     }
 
     /// The dialog over the window, if open.
     pub(super) fn normalize_dialog<'a>(&'a self, below: Element<'a, Message>) -> Element<'a, Message> {
         let Some(d) = &self.normalize else { return below };
-        let selected = self.selected.filter(|&i| i < self.edit.cuts.len());
+        let pick = |label: String, scope: Scope| radio(label, scope, Some(d.scope), |s| Message::Sound(SoundMsg::Scope(s)));
         let body: Element<'_, Message> = match &d.state {
             State::Ready => {
-                let mut choices = column![radio(format!("All cuts ({})", self.edit.cuts.len()), Scope::All, Some(d.scope), |s| Message::Sound(SoundMsg::Scope(s)))].spacing(8);
-                if let Some(i) = selected.or(match d.scope {
-                    Scope::Cut(i) => Some(i),
-                    Scope::All => None,
-                }) {
-                    choices = choices.push(radio(format!("Cut {}: {}", i + 1, super::clip_name(&self.edit.cuts[i].input)), Scope::Cut(i), Some(d.scope), |s| Message::Sound(SoundMsg::Scope(s))));
+                // Every cut always; then the one asked about (a cut or a
+                // sound clip), or the selected cut, and a track's clips.
+                let mut choices = column![pick(format!("All cuts ({})", self.edit.cuts.len()), Scope::All)].spacing(8);
+                let one = match d.scope {
+                    Scope::Own(own) => Some(own),
+                    _ => self.selected.filter(|&i| i < self.edit.cuts.len()).map(Own::Cut),
+                };
+                if let Some(own) = one.filter(|&o| self.edit.own_line(o).is_some()) {
+                    choices = choices.push(pick(self.own_name(own), Scope::Own(own)));
+                }
+                if let Scope::Track(which) = d.scope {
+                    choices = choices.push(pick(format!("Every clip on {} ({})", which.name(), self.edit.track(which).clips.len()), d.scope));
                 }
                 column![
                     choices,
@@ -213,7 +248,7 @@ impl App {
                 .into()
             }
             State::Running { total, done, cancelled, .. } => column![
-                text(if *cancelled { "Stopping…".to_owned() } else { format!("Cut {} of {total}", (*done + 1).min(*total)) }),
+                text(if *cancelled { "Stopping…".to_owned() } else { format!("{} of {total}", (*done + 1).min(*total)) }),
                 progress_bar(0.0..=(*total).max(1) as f32, *done as f32).girth(10),
                 row![space().width(Length::Fill), button(text("Cancel")).style(button::secondary).on_press_maybe((!*cancelled).then_some(Message::Sound(SoundMsg::Cancel)))],
             ]
@@ -232,43 +267,81 @@ impl App {
         stack![below, opaque(shade)].into()
     }
 
-    /// The menu for a cut's sound at the pointer, if open: a click outside
-    /// or Esc closes it.
+    /// How the dialog names a cut's sound or a sound clip.
+    fn own_name(&self, own: Own) -> String {
+        let file = self.edit.own_file(own).map(|(f, ..)| super::clip_name(&f)).unwrap_or_default();
+        match own {
+            Own::Cut(i) => format!("Cut {}: {file}", i + 1),
+            Own::Clip(which, _) => format!("{}: {file}", which.name()),
+        }
+    }
+
+    /// A right-click menu at the pointer, if open: a click outside or Esc
+    /// closes it.
     pub(super) fn sound_menu_layer<'a>(&'a self, below: Element<'a, Message>) -> Element<'a, Message> {
-        let Some((i, at)) = self.sound_menu else { return below };
-        let Some(cut) = self.edit.cuts.get(i) else { return below };
-        let item = |label: String, msg: SoundMsg| button(text(label).size(13)).style(button::text).width(Length::Fill).padding([5, 10]).on_press(Message::Sound(msg));
-        let mut items = column![item(format!("Lower for voice-over ({VOICE_OVER_DIP:+.0} dB)"), SoundMsg::Lower(i))];
-        if (cut.gain - normal_gain(cut)).abs() > 0.05 {
-            items = items.push(item(format!("Back to normal level ({:+.1} dB)", normal_gain(cut)), SoundMsg::Restore(i)));
-        }
-        // The line shows once the cut has points; then a click on it adds one.
-        if cut.volume.is_empty() {
-            items = items.push(item("Show volume line".into(), SoundMsg::ShowLine(i)));
-        }
-        items = items
-            .push(item(if cut.mute { "Unmute".into() } else { "Mute".into() }, SoundMsg::Mute(i, !cut.mute)))
-            .push(item(if cut.even { "Stop evening out".into() } else { "Even out quiet and loud".into() }, SoundMsg::Even1(i, !cut.even)))
-            .push(item("Normalize…".into(), SoundMsg::Open(Scope::Cut(i))))
-            .push(rule::horizontal(1))
-            .push(button(text("Info").size(13)).style(button::text).width(Length::Fill).padding([5, 10]).on_press(Message::Info(super::info::Of::Cut(i))));
-        let menu = container(items.width(240)).padding(4).style(container::rounded_box);
+        let Some((menu, at)) = self.sound_menu else { return below };
+        let item = |label: String, msg: Message| button(text(label).size(13)).style(button::text).width(Length::Fill).padding([5, 10]).on_press(msg);
+        let sound = |label: String, msg: SoundMsg| item(label, Message::Sound(msg));
+        let items = match menu {
+            Menu::Own(own) => {
+                let Some((keys, _)) = self.edit.own_line(own) else { return below };
+                let (gain, mute, even, loudness) = match own {
+                    Own::Cut(i) => self.edit.cuts.get(i).map(|c| (c.gain, c.mute, c.even, c.loudness)),
+                    Own::Clip(which, i) => self.edit.track(which).clips.get(i).map(|c| (c.gain, c.mute, c.even, c.loudness)),
+                }
+                .unwrap_or_default();
+                let mut items = column![sound(format!("Lower for voice-over ({VOICE_OVER_DIP:+.0} dB)"), SoundMsg::Lower(own))];
+                if (gain - normal_gain(loudness)).abs() > 0.05 {
+                    items = items.push(sound(format!("Back to normal level ({:+.1} dB)", normal_gain(loudness)), SoundMsg::Restore(own)));
+                }
+                // The line shows once it has points; then a click on it adds one.
+                if keys.is_empty() {
+                    items = items.push(sound("Show volume line".into(), SoundMsg::ShowLine(own)));
+                }
+                if self.edit.before(own).is_some() {
+                    items = items.push(sound("Continue the level of the one before".into(), SoundMsg::Continue(own)));
+                }
+                items = items
+                    .push(sound(if mute { "Unmute".into() } else { "Mute".into() }, SoundMsg::Mute(own, !mute)))
+                    .push(sound(if even { "Stop evening out".into() } else { "Even out quiet and loud".into() }, SoundMsg::Even1(own, !even)))
+                    .push(sound("Normalize…".into(), SoundMsg::Open(Scope::Own(own))))
+                    .push(sound("Back to the original".into(), SoundMsg::Original(own)))
+                    .push(rule::horizontal(1));
+                let info = match own {
+                    Own::Cut(i) => super::info::Of::Cut(i),
+                    Own::Clip(which, i) => super::info::Of::Music(which, i),
+                };
+                items.push(item("Info".into(), Message::Info(info)))
+            }
+            Menu::Track(which) => {
+                let track = self.edit.track(which);
+                let mut items = column![];
+                if !track.clips.is_empty() {
+                    items = items.push(sound(format!("Normalize every clip on {}…", which.name()), SoundMsg::Open(Scope::Track(which))));
+                }
+                if !track.keyframes.is_empty() {
+                    items = items.push(sound("Remove the track's volume line".into(), SoundMsg::ClearTrackLine(which)));
+                }
+                items
+            }
+        };
+        let menu = container(items.width(260)).padding(4).style(container::rounded_box);
         // Above the pointer when it's low in the window: the timeline is.
-        let top = (at.y - 200.0).max(0.0);
+        let top = (at.y - 240.0).max(0.0);
         let close = mouse_area(container(space()).width(Length::Fill).height(Length::Fill)).on_press(Message::Sound(SoundMsg::Menu(None))).on_right_press(Message::Sound(SoundMsg::Menu(None)));
         stack![below, close, pin(opaque(menu)).position(Point::new(at.x, top))].into()
     }
 }
 
-/// The level a cut has when nothing has lowered it: what normalizing gave
-/// it, or as recorded.
-fn normal_gain(cut: &crate::project::Cut) -> f64 {
-    cut.loudness.map_or(0.0, crate::loudness::normalizing_gain)
+/// The level a cut's sound or a sound clip has when nothing has lowered
+/// it: what normalizing gave it (from what it measured), or as recorded.
+fn normal_gain(loudness: Option<f64>) -> f64 {
+    loudness.map_or(0.0, crate::loudness::normalizing_gain)
 }
 
 /// What a run changed, in a sentence or two.
 fn summary(done: usize, total: usize, gains: &[f64], silent: usize, failed: &[String], cancelled: bool) -> String {
-    let cuts = |n: usize| if n == 1 { "cut" } else { "cuts" };
+    let cuts = |n: usize| if n == 1 { "clip" } else { "clips" };
     let mut s = if cancelled { format!("Stopped after {done} of {total} {}.", cuts(total)) } else { format!("{done} {} done.", cuts(done)) };
     if let (Some(lo), Some(hi)) = (gains.iter().copied().reduce(f64::min), gains.iter().copied().reduce(f64::max)) {
         s += &if (hi - lo).abs() < 0.05 { format!(" Level {lo:+.1} dB.") } else { format!(" Levels from {lo:+.1} to {hi:+.1} dB.") };
@@ -288,8 +361,8 @@ mod tests {
 
     #[test]
     fn says_what_changed() {
-        assert_eq!(summary(3, 3, &[2.6, 7.7, 0.7], 0, &[], false), "3 cuts done. Levels from +0.7 to +7.7 dB.");
-        assert_eq!(summary(1, 1, &[16.1], 0, &[], false), "1 cut done. Level +16.1 dB.");
-        assert_eq!(summary(2, 39, &[1.0, 2.0], 1, &[], true), "Stopped after 2 of 39 cuts. Levels from +1.0 to +2.0 dB. 1 without sound, left as they were.");
+        assert_eq!(summary(3, 3, &[2.6, 7.7, 0.7], 0, &[], false), "3 clips done. Levels from +0.7 to +7.7 dB.");
+        assert_eq!(summary(1, 1, &[16.1], 0, &[], false), "1 clip done. Level +16.1 dB.");
+        assert_eq!(summary(2, 39, &[1.0, 2.0], 1, &[], true), "Stopped after 2 of 39 clips. Levels from +1.0 to +2.0 dB. 1 without sound, left as they were.");
     }
 }

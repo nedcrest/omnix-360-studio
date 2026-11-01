@@ -247,6 +247,8 @@ pub struct MusicBlock {
     /// file's time (gap 33e).
     pub own_db: f64,
     pub volume: Vec<crate::project::VolumeKey>,
+    /// Its waveform through the leveler, if it's evened out (and read).
+    pub even_wave: Option<Arc<music::Waveform>>,
 }
 
 pub struct Timeline {
@@ -635,7 +637,7 @@ impl Timeline {
                     music::gain(*level + crate::project::volume_at(volume, on_edit)) * music::gain(own) * music::envelope(&clip, (0.0, 0.0), on_edit, self.video) as f32
                 };
                 let wave = Wave { left: l, right: r, top, height: h, start: m.start, len: m.len };
-                wave.draw(frame, b, w, w, heard, palette.background.base.text.scale_alpha(0.7));
+                wave.draw(frame, b, w, m.even_wave.as_ref().unwrap_or(w), heard, palette.background.base.text.scale_alpha(0.7));
             }
             draw_fades(frame, (l, r), top, h, m.len, (m.fade_in, m.fade_out));
             if selected {
@@ -1193,23 +1195,23 @@ impl canvas::Program<Message> for Marks {
                 };
                 Some(canvas::Action::publish(message).and_capture())
             }
-            // Right-click a cut or a song: what file it is; a cut's sound:
-            // its menu, where the pointer is.
+            // Right-click a cut: what file it is; a cut's sound or a sound
+            // clip: its menu, where the pointer is (Info is in it); a sound
+            // lane's empty stretch: the track's menu.
             Mouse(mouse::Event::ButtonPressed(mouse::Button::Right)) => {
+                use super::sound_ui::{Menu, SoundMsg};
                 let p = cursor.position_in(bounds)?;
-                if self.rows.on_clip_sound(p.y) {
-                    let cut = self.block_at(p.x, bounds)?;
-                    let at = cursor.position()?;
-                    return Some(canvas::Action::publish(Message::Sound(super::sound_ui::SoundMsg::Menu(Some((cut, at))))).and_capture());
-                }
-                let of = if p.y < self.rows.effects_top {
-                    super::info::Of::Cut(self.block_at(p.x, bounds)?)
+                let menu = if self.rows.on_clip_sound(p.y) {
+                    Menu::Own(Own::Cut(self.block_at(p.x, bounds)?))
                 } else if let Some(lane) = self.rows.sound_at_y(p.y) {
-                    super::info::Of::Music(self.sounds[lane].which, self.music_at(lane, p.x, bounds)?)
+                    let which = self.sounds[lane].which;
+                    self.music_at(lane, p.x, bounds).map_or(Menu::Track(which), |i| Menu::Own(Own::Clip(which, i)))
+                } else if p.y < self.rows.effects_top {
+                    return Some(canvas::Action::publish(Message::Info(super::info::Of::Cut(self.block_at(p.x, bounds)?))).and_capture());
                 } else {
                     return None;
                 };
-                Some(canvas::Action::publish(Message::Info(of)).and_capture())
+                Some(canvas::Action::publish(Message::Sound(SoundMsg::Menu(Some((menu, cursor.position()?))))).and_capture())
             }
             Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
                 let p = cursor.position_in(bounds)?;

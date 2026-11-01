@@ -66,11 +66,13 @@ impl App {
         const AT_ONCE: usize = 2;
         // Each file once, however many cuts use it.
         let mut seen = std::collections::HashSet::new();
-        // The plain waveform of each, and the evened one of those evened.
+        // The plain waveform of each, and the evened one of those evened;
+        // a sound clip's plain one comes when it's added (`load_waveform`).
         let wants = self.edit.cuts.iter().flat_map(|c| {
             let file = cut_wave_file(c);
             std::iter::once((file.clone(), false)).chain(c.even.then_some((file, true)))
         });
+        let wants = wants.chain(self.edit.sound_clips().filter(|c| c.even).map(|c| (c.input.clone(), true)));
         let mut wanted: Vec<(PathBuf, bool)> = wants
             .filter(|(p, even)| !(if *even { &self.even_waves } else { &self.waveforms }).contains_key(p))
             .filter(|w| !self.cut_waves_asked.contains(w) && seen.insert(w.clone()))

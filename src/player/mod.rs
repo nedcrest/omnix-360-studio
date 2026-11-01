@@ -477,7 +477,7 @@ struct App {
     /// The Normalize dialog, while open.
     normalize: Option<sound_ui::Dialog>,
     /// The right-click menu on a cut's sound: which cut, where.
-    sound_menu: Option<(usize, iced::Point)>,
+    sound_menu: Option<(sound_ui::Menu, iced::Point)>,
     /// The clip selected on a sound track.
     selected_music: Option<(SoundTrack, usize)>,
     /// A sound track's volume point selected, and the cut sound point:

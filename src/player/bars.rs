@@ -261,6 +261,7 @@ impl App {
                         fade_out: c.fade_out,
                         own_db: c.sound_db(),
                         volume: c.volume.clone(),
+                        even_wave: if c.even { self.even_waves.get(&c.input).cloned() } else { None },
                     })
                     .collect();
                 timeline::SoundLane { which, level: track.volume, blocks, volume: track.keyframes.clone() }

@@ -1397,7 +1397,10 @@ reaches for (the user's question «what else may be missing for sound?»):
   The limiter's −1.2 dBFS holds sample peaks; true peak may land ~0.2 dB
   higher (as the limiter note says), under −1 dBTP in the tests so far.
 - **Two sound effects at once** (46e): a second SFX lane (gap 3's «not
-  yet»).
+  yet»). **Built 2026-11-01** (`aee68c1`), waiting for the check:
+  `SoundTrack::Sfx2`; an SFX added over one already playing goes there by
+  itself; «Move to SFX 2 / SFX» in the menu. The lane always shows, empty
+  or not (rows are fixed per track).
 - **The duck's depth** (46f): its 12 dB default against the 15–20 dB the
   guides give; to set with the mix check's measurements.
 

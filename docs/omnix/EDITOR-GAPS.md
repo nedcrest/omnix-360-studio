@@ -1213,6 +1213,34 @@ Where it stands (answered 2026-11-01, not planned):
 - What keeps the door open now: the edit API (`ARCHITECTURE.md` step 5)
   and no new Linux-only code without a stub.
 
+### 41. Core, functions and API: what to unify and separate — analysis (user, 2026-11-01)
+
+User: "run a check and put into a separate file the possibilities of
+unifying and separating out the core / functionality / API, which will
+make further building simpler for us and divide the architecture
+nicely." The second pass after gap 35's refactor, now that sound clips,
+recording and the shared sound model (`project::Own`) are in. The result
+goes to `CORE-API.md`; the steps it proposes become commits here.
+
+### 42. Unit and integration tests — analysis and adding them (user, 2026-11-01)
+
+User: "in parallel, an analysis for unit and integration testing; where
+we don't have such tests, add them, so refactoring and improving happen
+more calmly." An inventory and a plan in `TESTING.md`, then the tests
+in small commits, riskiest first (time mapping, project load/save and
+old JSON, the export's sound graph, an end-to-end CLI export on tiny
+generated clips).
+
+### 43. Editing-software best practices, colours, a switchable UI palette — research (user, 2026-11-01)
+
+User: "analyse best practices for editing software, look at colour
+schemes, theoretically add the ability to change the UI's colour
+palette; the result can go to a separate file too." Research and a
+proposal in `UI-COLOUR.md`: neutral surround around the picture,
+semantic colour tokens instead of hard-coded colours, lane colours per
+kind, a colour-blind-safe preset, palette presets in Settings with
+per-lane overrides (iced's `Theme::custom`).
+
 ## Format rule for all of these
 
 New fields only, each `#[serde(default, skip_serializing_if = …)]`, so every

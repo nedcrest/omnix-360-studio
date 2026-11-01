@@ -1388,6 +1388,9 @@ reaches for (the user's question «what else may be missing for sound?»):
   chain with evening, in playback, export and measuring; on the scooter
   −6.5 dB under 150 Hz, −3.4 LUFS overall; cleaning does nothing for wind.
   The waveform isn't drawn through them (only through the leveler).
+- **46b built 2026-11-01** (`0a09f3c`), waiting for the check: BS.1770 in
+  `player/lufs.rs`, fed every played frame; short-term in the top bar,
+  integrated in its tip; within 0.3 LU of ffmpeg on pink noise.
 - **Two sound effects at once** (46e): a second SFX lane (gap 3's «not
   yet»).
 - **The duck's depth** (46f): its 12 dB default against the 15–20 dB the

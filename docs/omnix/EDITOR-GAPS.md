@@ -1211,3 +1211,6 @@ whenever a better grouping shows. `ROADMAP.md` shows the same as cards (field
    last on purpose (user, 2026-10-23: "I wouldn't do AI functions yet:
    Omnix doesn't have its full working functionality"). The design stays
    ready. The pieces it needs arrive with the milestones above.
+11. **Інші платформи** (gap 40, user's question 2026-11-01): Mac and
+   Windows realistic (upstream builds both), Android a new UI over the
+   same core. Not planned; no new Linux-only code without a stub.

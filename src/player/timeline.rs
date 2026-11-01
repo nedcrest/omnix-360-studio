@@ -305,9 +305,8 @@ pub enum Drag {
     Crossfade { cut: usize, x0: f32, from: f64, per_px: f64 },
     /// Dragging the fade handle at clip `clip`'s start (`in_edge`) or end on
     /// sound lane `lane`; the fade was `from` seconds when pressed at `x0`.
-    Fade { lane: usize, clip: usize, in_edge: bool, x0: f32, from: f64, per_px: f64 },
-    /// A cut's sound fade handle, on the clip sound lane.
-    CutFade { cut: usize, in_edge: bool, x0: f32, from: f64, per_px: f64 },
+    /// A fade handle, on a sound clip or a cut's sound.
+    Fade { own: Own, in_edge: bool, x0: f32, from: f64, per_px: f64 },
     /// Dragging sound lane `lane`'s volume point `key`.
     Volume { lane: usize, key: usize },
     /// Dragging cut `cut`'s sound point `key`.
@@ -1244,7 +1243,7 @@ impl canvas::Program<Message> for Marks {
                     Message::Effect(super::effects::EffectMsg::Jump(cut, t))
                 } else if self.rows.on_clip_sound(p.y) && let Some((cut, in_edge)) = self.cut_fade_at(p, bounds) {
                     let c = &self.blocks[cut];
-                    *drag = Drag::CutFade { cut, in_edge, x0: p.x, from: if in_edge { c.fade_in } else { c.fade_out }, per_px: self.span / Timeline::width(bounds) as f64 };
+                    *drag = Drag::Fade { own: Own::Cut(cut), in_edge, x0: p.x, from: if in_edge { c.fade_in } else { c.fade_out }, per_px: self.span / Timeline::width(bounds) as f64 };
                     Message::Select(cut)
                 } else if state.ctrl && let Some((own, key)) = self.sound_at(p, bounds) {
                     // Ctrl+click on a point takes it away, on any lane.
@@ -1287,7 +1286,7 @@ impl canvas::Program<Message> for Marks {
                     if let Some((clip, in_edge)) = self.fade_at(lane, p, bounds) {
                         let m = &self.sounds[lane].blocks[clip];
                         let per_px = self.span / Timeline::width(bounds) as f64;
-                        *drag = Drag::Fade { lane, clip, in_edge, x0: p.x, from: if in_edge { m.fade_in } else { m.fade_out }, per_px };
+                        *drag = Drag::Fade { own: Own::Clip(which, clip), in_edge, x0: p.x, from: if in_edge { m.fade_in } else { m.fade_out }, per_px };
                         Message::SelectMusic(which, clip)
                     } else if let Some((own, key)) = self.sound_at(p, bounds) {
                         *drag = Drag::Sound { own, key };
@@ -1352,14 +1351,10 @@ impl canvas::Program<Message> for Marks {
                         Message::MusicMove(self.sounds[*lane].which, *clip, at + self.snap(*lane, *clip, &[at, at + len], *per_px), state.shift)
                     }
                     Drag::Crossfade { cut, x0, from, per_px } => Message::Crossfade(*cut, *from + (*x0 - x) as f64 * *per_px),
-                    Drag::Fade { lane, clip, in_edge, x0, from, per_px } => {
+                    Drag::Fade { own, in_edge, x0, from, per_px } => {
                         // Rightwards lengthens a fade in, leftwards a fade out.
                         let dx = (x - *x0) as f64 * *per_px;
-                        Message::MusicFade(self.sounds[*lane].which, *clip, *in_edge, *from + if *in_edge { dx } else { -dx })
-                    }
-                    Drag::CutFade { cut, in_edge, x0, from, per_px } => {
-                        let dx = (x - *x0) as f64 * *per_px;
-                        Message::SoundFade(*cut, *in_edge, *from + if *in_edge { dx } else { -dx })
+                        Message::Fade(*own, *in_edge, *from + if *in_edge { dx } else { -dx })
                     }
                     Drag::Volume { lane, key } => Message::VolumeMove(self.sounds[*lane].which, *key, self.t(x, bounds), Timeline::volume_db(self.rows.sound_lane(*lane), position.y - bounds.y)),
                     Drag::Sound { own, key } => {
@@ -1381,7 +1376,7 @@ impl canvas::Program<Message> for Marks {
                 Drag::None => None,
                 Drag::Move { cut, moved: true, to, .. } => Some(canvas::Action::publish(Message::MoveCut(cut, to)).and_capture()),
                 Drag::Move { .. } | Drag::Scroll { .. } => Some(canvas::Action::request_redraw().and_capture()),
-                Drag::Playhead | Drag::Key { .. } | Drag::Effect { .. } | Drag::Trim { .. } | Drag::MusicMove { .. } | Drag::MusicTrim { .. } | Drag::Fade { .. } | Drag::CutFade { .. } | Drag::Volume { .. } | Drag::Sound { .. } | Drag::Crossfade { .. } => {
+                Drag::Playhead | Drag::Key { .. } | Drag::Effect { .. } | Drag::Trim { .. } | Drag::MusicMove { .. } | Drag::MusicTrim { .. } | Drag::Fade { .. } | Drag::Volume { .. } | Drag::Sound { .. } | Drag::Crossfade { .. } => {
                     Some(canvas::Action::publish(Message::ScrubDone).and_capture())
                 }
             },
@@ -1493,7 +1488,7 @@ impl canvas::Program<Message> for Marks {
 
     fn mouse_interaction(&self, state: &State, bounds: Rectangle, cursor: mouse::Cursor) -> mouse::Interaction {
         match state.drag {
-            Drag::Trim { .. } | Drag::MusicTrim { .. } | Drag::Fade { .. } | Drag::CutFade { .. } | Drag::Crossfade { .. } => mouse::Interaction::ResizingHorizontally,
+            Drag::Trim { .. } | Drag::MusicTrim { .. } | Drag::Fade { .. } | Drag::Crossfade { .. } => mouse::Interaction::ResizingHorizontally,
             Drag::None => {
                 let Some(p) = cursor.position_in(bounds) else { return mouse::Interaction::default() };
                 if p.y >= self.rows.height - SCROLL {

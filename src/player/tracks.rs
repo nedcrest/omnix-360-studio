@@ -216,16 +216,12 @@ impl App {
                 let song = self.waveforms.get(&self.edit.track(which).clips[i].input).map_or(f64::INFINITY, |w| w.duration);
                 self.edit.track_mut(which).trim(i, in_edge, t, overlap, song, edit::MIN_CUT);
             }
-            Message::MusicFade(which, i, in_edge, seconds) => {
-                if i < self.edit.track(which).clips.len() {
+            Message::Fade(own, in_edge, seconds) => {
+                if self.edit.own_line(own).is_some() {
                     self.begin_drag();
-                    self.edit.track_mut(which).set_fade(i, in_edge, seconds);
-                }
-            }
-            Message::SoundFade(i, in_edge, seconds) => {
-                if i < self.edit.cuts.len() {
-                    self.begin_drag();
-                    self.edit.cuts[i].set_sound_fade(in_edge, seconds);
+                    if let Some(mut s) = self.edit.own_sound(own) {
+                        s.set_fade(in_edge, seconds);
+                    }
                 }
             }
             Message::DuckDepth(db) => self.duck_db = db,

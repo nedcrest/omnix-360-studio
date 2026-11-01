@@ -349,18 +349,6 @@ impl Music {
         }
     }
 
-    /// Clip `i`'s fade at its start (`in_edge`) or end set to `seconds`:
-    /// from 0 to what the clip has left beside its other fade.
-    pub fn set_fade(&mut self, i: usize, in_edge: bool, seconds: f64) {
-        let Some(c) = self.clips.get_mut(i) else { return };
-        let len = c.end - c.start;
-        if in_edge {
-            c.fade_in = seconds.clamp(0.0, (len - c.fade_out).max(0.0));
-        } else {
-            c.fade_out = seconds.clamp(0.0, (len - c.fade_in).max(0.0));
-        }
-    }
-
     /// Adds `len` seconds of `input` from its start, nearest `at` where it
     /// fits (`place`), and returns its index.
     pub fn append(&mut self, input: PathBuf, at: f64, len: f64) -> usize {
@@ -613,17 +601,6 @@ impl Cut {
     /// How loud its sound is at clip time `t` from its fades, 0..1.
     pub fn sound_fade(&self, t: f64) -> f64 {
         fade_ramp(t - self.start, self.end - t, self.sound_fade_in, self.sound_fade_out)
-    }
-
-    /// Sets its sound's fade in (`in_edge`) or out, seconds, within what
-    /// the other fade leaves of it.
-    pub fn set_sound_fade(&mut self, in_edge: bool, seconds: f64) {
-        let len = self.len();
-        if in_edge {
-            self.sound_fade_in = seconds.clamp(0.0, (len - self.sound_fade_out).max(0.0));
-        } else {
-            self.sound_fade_out = seconds.clamp(0.0, (len - self.sound_fade_in).max(0.0));
-        }
     }
 
     pub fn len(&self) -> f64 {
@@ -943,6 +920,15 @@ pub struct OwnSound<'a> {
 }
 
 impl OwnSound<'_> {
+    /// Its fade in (`in_edge`) or out set to `seconds`: from 0 to what
+    /// its length leaves beside the other fade. A cut's sound and a sound
+    /// clip's alike.
+    pub fn set_fade(&mut self, in_edge: bool, seconds: f64) {
+        let len = self.range.1 - self.range.0;
+        let (this, other) = if in_edge { (&mut *self.fade_in, *self.fade_out) } else { (&mut *self.fade_out, *self.fade_in) };
+        *this = seconds.clamp(0.0, (len - other).max(0.0));
+    }
+
     /// Back to the file as it is: no level, evening, mute, points or fades.
     pub fn original(&mut self) {
         (*self.gain, *self.even, *self.mute, *self.loudness) = (0.0, false, false, None);
@@ -1185,14 +1171,15 @@ mod tests {
 
     #[test]
     fn fades_stay_within_the_clip() {
-        let mut m = Music::default();
-        m.append("a.wav".into(), 0.0, 10.0);
-        m.set_fade(0, true, 3.0);
-        m.set_fade(0, false, 9.0);
-        assert_eq!((m.clips[0].fade_in, m.clips[0].fade_out), (3.0, 7.0));
-        m.set_fade(0, true, -2.0);
-        assert_eq!(m.clips[0].fade_in, 0.0);
-        m.set_fade(4, true, 1.0);
+        let mut p = Project::default();
+        p.music.append("a.wav".into(), 0.0, 10.0);
+        let song = Own::Clip(SoundTrack::Music, 0);
+        p.own_sound(song).unwrap().set_fade(true, 3.0);
+        p.own_sound(song).unwrap().set_fade(false, 9.0);
+        assert_eq!((p.music.clips[0].fade_in, p.music.clips[0].fade_out), (3.0, 7.0));
+        p.own_sound(song).unwrap().set_fade(true, -2.0);
+        assert_eq!(p.music.clips[0].fade_in, 0.0);
+        assert!(p.own_sound(Own::Clip(SoundTrack::Music, 4)).is_none());
     }
 
     #[test]
@@ -1229,9 +1216,11 @@ mod tests {
 
     #[test]
     fn a_cuts_sound_fades_within_its_length() {
-        let mut c = Cut::new("a.mp4".into(), 10.0, 14.0);
-        c.set_sound_fade(true, 1.0);
-        c.set_sound_fade(false, 9.0);
+        let mut p = Project::default();
+        p.cuts.push(Cut::new("a.mp4".into(), 10.0, 14.0));
+        p.own_sound(Own::Cut(0)).unwrap().set_fade(true, 1.0);
+        p.own_sound(Own::Cut(0)).unwrap().set_fade(false, 9.0);
+        let c = &p.cuts[0];
         // The fade out takes what the fade in leaves of the 4 s.
         assert_eq!((c.sound_fade_in, c.sound_fade_out), (1.0, 3.0));
         assert_eq!(c.sound_fade(10.5), 0.5);
@@ -1396,13 +1385,13 @@ mod tests {
         assert_eq!(fade_ramp(0.0, 0.0, 0.0, 0.0), 1.0);
         assert_eq!(fade_ramp(1.0, 1.0, 4.0, 4.0), 0.0625, "fades that meet multiply");
         assert_eq!(fade_ramp(-1.0, 5.0, 2.0, 0.0), 0.0);
-        let mut c = Cut::new("a.mp4".into(), 0.0, 2.0);
-        c.set_sound_fade(true, -3.0);
-        assert_eq!(c.sound_fade_in, 0.0);
-        c.set_sound_fade(true, 5.0);
-        assert_eq!(c.sound_fade_in, 2.0);
-        c.set_sound_fade(false, 1.0);
-        assert_eq!(c.sound_fade_out, 0.0, "nothing left after the fade in");
+        let mut p = Project::default();
+        p.cuts.push(Cut::new("a.mp4".into(), 0.0, 2.0));
+        let mut fade = |in_edge: bool, s: f64| p.own_sound(Own::Cut(0)).unwrap().set_fade(in_edge, s);
+        fade(true, -3.0);
+        fade(true, 5.0);
+        fade(false, 1.0);
+        assert_eq!((p.cuts[0].sound_fade_in, p.cuts[0].sound_fade_out), (2.0, 0.0), "nothing left after the fade in");
     }
 
     /// Old project files, one per shape the format has had, in

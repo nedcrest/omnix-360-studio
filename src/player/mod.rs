@@ -283,8 +283,9 @@ enum Message {
     Waveform(PathBuf, Result<Arc<music::Waveform>, String>),
     /// The waveform of what a cut plays, if it has sound.
     CutWave(PathBuf, bool, Option<Arc<music::Waveform>>),
-    /// Cut `i`'s sound fade in (`true`) or out dragged to this many seconds.
-    SoundFade(usize, bool, f64),
+    /// A cut's sound's or a sound clip's fade in (`true`) or out dragged to
+    /// this many seconds.
+    Fade(Own, bool, f64),
     /// An overlay's picture ready (by `Item::key`), and the font its text
     /// missed.
     OverlayPicture(String, Result<(Arc<crate::overlay::Picture>, Option<String>), String>),
@@ -311,8 +312,6 @@ enum Message {
     /// Clip `i`'s in (`true`) or out edge dragged to this time in its file,
     /// with Shift held or not.
     MusicTrim(SoundTrack, usize, bool, f64, bool),
-    /// Clip `i`'s fade at its start (`true`) or end dragged to this length.
-    MusicFade(SoundTrack, usize, bool, f64),
     /// A track's volume point added at this edit time and level (dB).
     VolumeAdd(SoundTrack, f64, f64),
     VolumeSelect(SoundTrack, usize),
@@ -854,7 +853,7 @@ impl App {
             m @ (Message::Select { .. } | Message::Trim { .. } | Message::MoveCut { .. } | Message::Crossfade { .. } | Message::ToggleCrossfade { .. } | Message::Split { .. } | Message::DeleteCut { .. } | Message::Undo { .. } | Message::Redo { .. }) => self.on_cuts(m),
             m @ (Message::LookDone { .. } | Message::Framing { .. } | Message::KeyMove { .. } | Message::KeyAdd { .. } | Message::KeyDelete { .. } | Message::KeyEase { .. } | Message::KeyFollow { .. } | Message::Stab { .. } | Message::Projection { .. } | Message::KeyJump { .. } | Message::Look { .. } | Message::Zoom { .. } | Message::Fov { .. } | Message::AngleInput { .. } | Message::AngleDone { .. } | Message::AngleScrubStart { .. } | Message::AngleScrubDone { .. } | Message::AngleScrub { .. } | Message::AngleNudge { .. } | Message::AngleArrow { .. } | Message::Source { .. } | Message::RollingShutter { .. } | Message::FullOnPause { .. } | Message::ResetView { .. }) => self.on_framing(m),
             m @ (Message::AddOverlay { .. } | Message::OverlayPicked { .. } | Message::OverlaySelect { .. } | Message::OverlayMove { .. } | Message::OverlayTrim { .. } | Message::OverlayJump { .. } | Message::OverlayKeyMove { .. } | Message::OverlayPicture { .. } | Message::AddText { .. }) => self.on_overlay_ui(m),
-            m @ (Message::AddSound { .. } | Message::SoundPicked { .. } | Message::SoundProbed { .. } | Message::Waveform { .. } | Message::CutWave { .. } | Message::SelectMusic { .. } | Message::VolumeAdd { .. } | Message::VolumeSelect { .. } | Message::SoundKeyAdd { .. } | Message::SoundKeySelect { .. } | Message::VolumeMove { .. } | Message::SoundKeyMove { .. } | Message::MusicMove { .. } | Message::MusicTrim { .. } | Message::MusicFade { .. } | Message::SoundFade { .. } | Message::SoundLevel { .. } | Message::TrackLevel { .. } | Message::DuckDepth { .. } | Message::Duck { .. } | Message::Ducked { .. } | Message::LevelDone { .. }) => self.on_tracks(m),
+            m @ (Message::AddSound { .. } | Message::SoundPicked { .. } | Message::SoundProbed { .. } | Message::Waveform { .. } | Message::CutWave { .. } | Message::SelectMusic { .. } | Message::VolumeAdd { .. } | Message::VolumeSelect { .. } | Message::SoundKeyAdd { .. } | Message::SoundKeySelect { .. } | Message::VolumeMove { .. } | Message::SoundKeyMove { .. } | Message::MusicMove { .. } | Message::MusicTrim { .. } | Message::Fade { .. } | Message::SoundLevel { .. } | Message::TrackLevel { .. } | Message::DuckDepth { .. } | Message::Duck { .. } | Message::Ducked { .. } | Message::LevelDone { .. }) => self.on_tracks(m),
             Message::Effect(e) => {
                 self.effect_message(e);
                 Task::none()

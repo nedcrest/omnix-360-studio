@@ -347,6 +347,9 @@ impl App {
                 if !track.clips.is_empty() {
                     items.push(sound(format!("Normalize every clip on {}…", which.name()), SoundMsg::Open(Scope::Track(which))));
                 }
+                if which == SoundTrack::Music && !track.clips.is_empty() {
+                    items.push(item(format!("Lower under speech (−{:.0} dB)", self.duck_db), Message::Duck));
+                }
                 if !track.keyframes.is_empty() {
                     items.push(sound("Delete the track's volume line".into(), SoundMsg::DeleteLine(Line::Track(which))));
                 }

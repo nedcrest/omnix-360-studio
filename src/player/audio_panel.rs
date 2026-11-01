@@ -42,6 +42,17 @@ impl App {
             text("Mix").size(16),
             level("Clip sound", self.edit.sound.volume, Message::SoundLevel, "The clips' own sound, in playback and the export."),
             level("Music", self.edit.music.volume, |db| Message::TrackLevel(SoundTrack::Music, db), "The music track, in playback and the export."),
+            tip(
+                row![
+                    iced::widget::button(text(if self.ducking { "Lowering…" } else { "Lower under speech" }).size(13)).on_press_maybe((!self.ducking && !self.edit.music.clips.is_empty()).then_some(Message::Duck)),
+                    slider(3.0..=30.0, self.duck_db, Message::DuckDepth).step(1.0),
+                    text(format!("−{:.0} dB", self.duck_db)).size(13).width(48),
+                ]
+                .spacing(8)
+                .align_y(Alignment::Center),
+                text("Auto-duck: volume points on the music's line, this far down wherever a cleaned voice or a Voice take speaks. Ctrl+Z undoes it"),
+                tooltip::Position::Bottom,
+            ),
             level("SFX", self.edit.sfx.volume, |db| Message::TrackLevel(SoundTrack::Sfx, db), "The sound effects track, in playback and the export."),
             level("Voice", self.edit.voice.volume, |db| Message::TrackLevel(SoundTrack::Voice, db), "The voice-over track, in playback and the export."),
             iced::widget::button(text("Normalize sound…"))

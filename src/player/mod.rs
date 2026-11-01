@@ -327,6 +327,11 @@ enum Message {
     /// The mix: the clips' sound and each sound track, in dB.
     SoundLevel(f64),
     TrackLevel(SoundTrack, f64),
+    /// Auto-duck: how far, dB; lower the music under speech now; the
+    /// speech found (edit time), read off the UI thread.
+    DuckDepth(f64),
+    Duck,
+    Ducked(Result<Vec<(f64, f64)>, String>),
     /// A level slider let go.
     LevelDone,
     /// Start an empty edit (asking first if there are unsaved changes).
@@ -611,6 +616,9 @@ struct App {
     side: Option<Side>,
     /// The Record panel's choices and recorders.
     record: record_ui::Panel,
+    /// Auto-duck's depth, dB, and whether it's reading the voices now.
+    duck_db: f64,
+    ducking: bool,
     /// The Info panel (at the left, in the Text panel's place).
     info: Option<info::Info>,
     /// A running colour track: its cancel flag and progress, 0..1.
@@ -692,6 +700,8 @@ impl App {
             split_kept: saved.timeline_scale,
             angles_shown: saved.view_angles,
             ui_scale: saved.ui_scale.clamp(*settings::UI_SCALE.start(), *settings::UI_SCALE.end()),
+            duck_db: saved.duck_db.clamp(3.0, 30.0),
+            ducking: false,
             angle_draft: None,
             modifiers: keyboard::Modifiers::default(),
             scrubbing: None,
@@ -742,6 +752,7 @@ impl App {
             record_channel: self.record.channel,
             record_countdown: self.record.countdown,
             record_play: self.record.play,
+            duck_db: self.duck_db,
         }
     }
 
@@ -843,7 +854,7 @@ impl App {
             m @ (Message::Select { .. } | Message::Trim { .. } | Message::MoveCut { .. } | Message::Crossfade { .. } | Message::ToggleCrossfade { .. } | Message::Split { .. } | Message::DeleteCut { .. } | Message::Undo { .. } | Message::Redo { .. }) => self.on_cuts(m),
             m @ (Message::LookDone { .. } | Message::Framing { .. } | Message::KeyMove { .. } | Message::KeyAdd { .. } | Message::KeyDelete { .. } | Message::KeyEase { .. } | Message::KeyFollow { .. } | Message::Stab { .. } | Message::Projection { .. } | Message::KeyJump { .. } | Message::Look { .. } | Message::Zoom { .. } | Message::Fov { .. } | Message::AngleInput { .. } | Message::AngleDone { .. } | Message::AngleScrubStart { .. } | Message::AngleScrubDone { .. } | Message::AngleScrub { .. } | Message::AngleNudge { .. } | Message::AngleArrow { .. } | Message::Source { .. } | Message::RollingShutter { .. } | Message::FullOnPause { .. } | Message::ResetView { .. }) => self.on_framing(m),
             m @ (Message::AddOverlay { .. } | Message::OverlayPicked { .. } | Message::OverlaySelect { .. } | Message::OverlayMove { .. } | Message::OverlayTrim { .. } | Message::OverlayJump { .. } | Message::OverlayKeyMove { .. } | Message::OverlayPicture { .. } | Message::AddText { .. }) => self.on_overlay_ui(m),
-            m @ (Message::AddSound { .. } | Message::SoundPicked { .. } | Message::SoundProbed { .. } | Message::Waveform { .. } | Message::CutWave { .. } | Message::SelectMusic { .. } | Message::VolumeAdd { .. } | Message::VolumeSelect { .. } | Message::SoundKeyAdd { .. } | Message::SoundKeySelect { .. } | Message::VolumeMove { .. } | Message::SoundKeyMove { .. } | Message::MusicMove { .. } | Message::MusicTrim { .. } | Message::MusicFade { .. } | Message::SoundFade { .. } | Message::SoundLevel { .. } | Message::TrackLevel { .. } | Message::LevelDone { .. }) => self.on_tracks(m),
+            m @ (Message::AddSound { .. } | Message::SoundPicked { .. } | Message::SoundProbed { .. } | Message::Waveform { .. } | Message::CutWave { .. } | Message::SelectMusic { .. } | Message::VolumeAdd { .. } | Message::VolumeSelect { .. } | Message::SoundKeyAdd { .. } | Message::SoundKeySelect { .. } | Message::VolumeMove { .. } | Message::SoundKeyMove { .. } | Message::MusicMove { .. } | Message::MusicTrim { .. } | Message::MusicFade { .. } | Message::SoundFade { .. } | Message::SoundLevel { .. } | Message::TrackLevel { .. } | Message::DuckDepth { .. } | Message::Duck { .. } | Message::Ducked { .. } | Message::LevelDone { .. }) => self.on_tracks(m),
             Message::Effect(e) => {
                 self.effect_message(e);
                 Task::none()

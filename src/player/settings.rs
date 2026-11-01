@@ -51,6 +51,8 @@ pub struct Settings {
     pub record_countdown: bool,
     /// The edit plays while recording.
     pub record_play: bool,
+    /// How far auto-duck lowers the music under speech, dB.
+    pub duck_db: f64,
 }
 
 /// The interface's size range and steps (A− / A+ in the top bar), and its
@@ -86,6 +88,7 @@ impl Default for Settings {
             record_channel: crate::capture::Channel::First,
             record_countdown: true,
             record_play: true,
+            duck_db: 12.0,
         }
     }
 }

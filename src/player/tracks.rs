@@ -228,6 +228,29 @@ impl App {
                     self.edit.cuts[i].set_sound_fade(in_edge, seconds);
                 }
             }
+            Message::DuckDepth(db) => self.duck_db = db,
+            Message::Duck if !self.ducking => {
+                self.sound_menu = None;
+                self.ducking = true;
+                // Each voice's waveform (cached, or read once), off the UI thread.
+                let project = (*self.edit).clone();
+                return Task::perform(blocking(move || crate::duck::find_speech(&project).map_err(|e| format!("{e:#}"))), Message::Ducked);
+            }
+            Message::Duck => {}
+            Message::Ducked(result) => {
+                self.ducking = false;
+                match result {
+                    Err(e) => self.error = Some(format!("Can't find the speech: {e}")),
+                    Ok(spans) if spans.is_empty() => self.error = Some("No speech to lower the music under: it's found in cleaned voices and on the Voice lane.".into()),
+                    Ok(spans) => {
+                        // One undo step; the line stays editable point by point.
+                        self.edit.checkpoint();
+                        let line = crate::duck::duck(&self.edit.music.keyframes, &spans, self.duck_db);
+                        self.edit.music.keyframes = line;
+                        self.selected_volume = None;
+                    }
+                }
+            }
             Message::SoundLevel(db) => {
                 self.begin_drag();
                 self.edit.sound.volume = db;

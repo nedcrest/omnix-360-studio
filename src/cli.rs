@@ -70,6 +70,17 @@ pub(crate) enum Cmd {
         #[arg(short, long)]
         output: Option<PathBuf>,
     },
+    /// Lower the music under speech (auto-duck): find where cleaned voices
+    /// and Voice takes speak and put volume points on the music's line, this
+    /// far down there. Prints where; writes the project with -o.
+    Duck {
+        project: PathBuf,
+        /// How far down, dB.
+        #[arg(long, default_value_t = 12.0)]
+        depth: f64,
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+    },
     /// Stitch one frame to an equirectangular PNG.
     Stitch {
         input: PathBuf,
@@ -551,6 +562,7 @@ pub(crate) fn run() -> Result<()> {
         Cmd::Info { input } => info(&input)?,
         Cmd::Check { project, fast_pan, opts } => check::check(&project, &opts, fast_pan)?,
         Cmd::Normalize { project, cuts, even, output } => loudness::normalize(&project, &cuts, even, output.as_deref())?,
+        Cmd::Duck { project, depth, output } => crate::duck::run(&project, depth, output.as_deref())?,
         Cmd::Play { input, osv_size, hwaccel, stabilize, imu_axes, world_z_down } => {
             player::run(input, player::Launch { osv_size, hw: hwaccel, stabilize, imu_axes, world_z_down })?;
         }

@@ -849,6 +849,17 @@ clip, the track's line over the whole edit):
 - Player and export apply clip line × track line × track level (CPU =
   export rule, tested on the mix graph strings).
 
+**Built 2026-11-01 with 33f** (`4e0411b`, `37da672`, `d3902f0`, `23fee09`,
+`9bc8478`, `8046051`), waiting for the user's check. As designed, with
+these defaults: the clip's line is cyan like a cut's (both «own» lines),
+the track's line stays shown when it has points but dimmer (no separate
+«Show track volume» switch: hiding it would hide existing points); the
+lane's empty stretch has the track's menu with «Remove the track's
+volume line». Ctrl+click on a clip adds a clip point, off the clips a
+track point. «Continue the level of the one before» counts the one
+before's own level and points, not the track line. One set of
+operations serves cuts and sound clips (`project::Own`, `OwnSound`).
+
 ### 33f. Normalize and even out sound clips, the voice-over above all — medium (user, 2026-11-01)
 
 User: "I'd add a context menu and normalizing for the voice-over (one
@@ -877,6 +888,10 @@ Music, SFX and Voice.
   per-clip chain, before its fades and the track's level; the waveform
   drawn as heard, as 33d does for cuts.
 - Built together with 33e: one menu, one per-clip level model.
+- **Built 2026-11-01** (see 33e's commits), waiting for the check.
+  Right-click a sound clip for its menu; a sound lane's empty stretch for
+  «Normalize every clip on …». Same −16 LUFS target and dialog as cuts.
+  Export checked: a take at −20 dB, evened, peaked at −20 dB.
 
 ### 33d. Waveforms drawn as they're heard — small (user, 2026-11-01)
 

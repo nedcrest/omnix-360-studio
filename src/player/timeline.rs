@@ -146,11 +146,13 @@ const EFFECT_MARK: iced::Color = iced::Color::from_rgb(0.78, 0.55, 1.0);
 /// Where a volume line runs: its top and height. A sound track's over its
 /// lane, a cut's over the clip sound lane under it.
 type Lane = (f32, f32);
-/// The sound effects' clips; the music's are the theme's green. From the
-/// colour-blind-safe Okabe-Ito set, and every lane is named as well.
 /// How far down from a sound clip's top its fade handles take the mouse.
 const FADE_BAND: f32 = 12.0;
+/// The sound effects' clips (the second lane's a shade deeper); the
+/// music's are the theme's green. From the colour-blind-safe Okabe-Ito
+/// set, and every lane is named as well.
 const SFX_COLOUR: iced::Color = iced::Color::from_rgb(0.80, 0.47, 0.65);
+const SFX2_COLOUR: iced::Color = iced::Color::from_rgb(0.66, 0.36, 0.56);
 const VOICE_COLOUR: iced::Color = iced::Color::from_rgb(0.34, 0.71, 0.91);
 /// Waveform bars a gain pushes past full scale: the export's limiter
 /// holds them, but loud enough to look at.
@@ -615,6 +617,7 @@ impl Timeline {
         let colour = match which {
             SoundTrack::Music => palette.success.base.color,
             SoundTrack::Sfx => SFX_COLOUR,
+            SoundTrack::Sfx2 => SFX2_COLOUR,
             SoundTrack::Voice => VOICE_COLOUR,
         };
         let (top, h) = (self.rows.sound_top(li) + 2.0, self.rows.music - 4.0);

@@ -41,6 +41,9 @@ pub struct Project {
     /// Sound effects: a track like the music's, mixed in beside it.
     #[serde(default, skip_serializing_if = "Music::is_empty")]
     pub sfx: Music,
+    /// More sound effects, playing over those on `sfx`.
+    #[serde(default, skip_serializing_if = "Music::is_empty")]
+    pub sfx2: Music,
     /// A voice-over: a track like the music's.
     #[serde(default, skip_serializing_if = "Music::is_empty")]
     pub voice: Music,
@@ -106,18 +109,21 @@ impl Sound {
 pub enum SoundTrack {
     Music,
     Sfx,
+    /// A second lane of sound effects, for two at once (gap 46e).
+    Sfx2,
     Voice,
 }
 
 impl SoundTrack {
     /// Top to bottom, as the timeline shows them and the export mixes them.
-    pub const ALL: [SoundTrack; 3] = [SoundTrack::Music, SoundTrack::Sfx, SoundTrack::Voice];
+    pub const ALL: [SoundTrack; 4] = [SoundTrack::Music, SoundTrack::Sfx, SoundTrack::Sfx2, SoundTrack::Voice];
 
     /// The lane's name on the timeline.
     pub fn name(self) -> &'static str {
         match self {
             SoundTrack::Music => "Music",
             SoundTrack::Sfx => "SFX",
+            SoundTrack::Sfx2 => "SFX 2",
             SoundTrack::Voice => "Voice",
         }
     }
@@ -128,7 +134,7 @@ impl SoundTrack {
     pub const fn folder(self) -> &'static str {
         match self {
             SoundTrack::Music => "02_audio/music",
-            SoundTrack::Sfx => "07_sfx",
+            SoundTrack::Sfx | SoundTrack::Sfx2 => "07_sfx",
             SoundTrack::Voice => "02_audio/voiceover",
         }
     }
@@ -138,6 +144,7 @@ impl SoundTrack {
         match self {
             SoundTrack::Music => "music",
             SoundTrack::Sfx => "sfx",
+            SoundTrack::Sfx2 => "sfx2",
             SoundTrack::Voice => "voice",
         }
     }
@@ -757,7 +764,7 @@ impl Project {
             bail!("a crossfade isn't a number");
         }
         settle_crossfades(&mut project.cuts);
-        let tracks = [&mut project.music, &mut project.sfx, &mut project.voice];
+        let tracks = [&mut project.music, &mut project.sfx, &mut project.sfx2, &mut project.voice];
         let keys = project.cuts.iter_mut().map(|c| &mut c.volume).chain(tracks.into_iter().flat_map(|t| std::iter::once(&mut t.old_line).chain(t.clips.iter_mut().map(|c| &mut c.volume))));
         for keys in keys {
             if keys.iter().any(|k| !k.t.is_finite() || !k.volume.is_finite()) {
@@ -860,6 +867,7 @@ impl Project {
         match which {
             SoundTrack::Music => &self.music,
             SoundTrack::Sfx => &self.sfx,
+            SoundTrack::Sfx2 => &self.sfx2,
             SoundTrack::Voice => &self.voice,
         }
     }
@@ -868,6 +876,7 @@ impl Project {
         match which {
             SoundTrack::Music => &mut self.music,
             SoundTrack::Sfx => &mut self.sfx,
+            SoundTrack::Sfx2 => &mut self.sfx2,
             SoundTrack::Voice => &mut self.voice,
         }
     }
@@ -897,6 +906,23 @@ impl Project {
             Own::Cut(i) => self.cuts.get(i).map(|c| (c.sound_file(), (c.start, c.end), crate::loudness::sound_filter(even, c.low_cut, c.clean))),
             Own::Clip(which, i) => self.track(which).clips.get(i).map(|c| (c.input.clone(), (c.start, c.end), crate::loudness::sound_filter(even, c.low_cut, c.clean))),
         }
+    }
+
+    /// Sound clip `i` of `from` moved to track `to`, everything of it kept,
+    /// nearest its place where it fits there (`Music::place`): a sound
+    /// effect onto the other SFX lane, to play over another. Its index on
+    /// `to`, or `None` if there's no such clip.
+    pub fn move_clip(&mut self, from: SoundTrack, i: usize, to: SoundTrack) -> Option<usize> {
+        if i >= self.track(from).clips.len() || from == to {
+            return None;
+        }
+        let clip = self.track_mut(from).clips.remove(i);
+        let want = clip.at;
+        let track = self.track_mut(to);
+        track.clips.push(clip);
+        let j = track.clips.len() - 1;
+        track.clips[j].at = track.place(j, want);
+        Some(j)
     }
 
     /// What plays before `own` on its lane: the cut before, or the sound
@@ -1476,6 +1502,22 @@ mod tests {
         }
         assert!(!text.contains(dir.to_str().unwrap()), "no absolute path inside the folder");
         assert_eq!(again, p);
+    }
+
+    #[test]
+    fn a_sound_effect_moves_to_the_other_lane_whole() {
+        let mut p = Project::default();
+        p.sfx.clips.push(MusicClip { input: "bell.wav".into(), at: 3.0, start: 0.5, end: 2.0, gain: -4.0, fade_in: 0.2, ..Default::default() });
+        p.sfx2.clips.push(MusicClip { input: "boom.wav".into(), at: 0.0, start: 0.0, end: 3.5, ..Default::default() });
+        // Onto SFX 2, where a boom plays till 3.5 s: right after it.
+        assert_eq!(p.move_clip(SoundTrack::Sfx, 0, SoundTrack::Sfx2), Some(1));
+        let bell = &p.sfx2.clips[1];
+        assert_eq!((bell.at, bell.start, bell.gain, bell.fade_in), (3.5, 0.5, -4.0, 0.2));
+        assert!(p.sfx.clips.is_empty());
+        assert_eq!(p.move_clip(SoundTrack::Sfx, 0, SoundTrack::Sfx2), None);
+        // Saved and read back, the second lane is there.
+        let json = serde_json::to_string(&p).unwrap();
+        assert!(json.contains("\"sfx2\"") && !json.contains("\"sfx\":"), "{json}");
     }
 
     #[test]

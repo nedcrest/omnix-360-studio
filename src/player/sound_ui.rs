@@ -91,6 +91,8 @@ pub enum SoundMsg {
     /// noise cleaned (`loudness::CLEAN`).
     LowCut(Own, bool),
     Clean(Own, bool),
+    /// A sound effect moved to the other SFX lane.
+    OtherSfx(SoundTrack, usize),
     /// A volume line's point `i` removed (Ctrl+click on it, or its menu).
     DeletePoint(Own, usize),
     /// A volume line removed, all its points.
@@ -175,6 +177,15 @@ impl App {
             SoundMsg::Original(own) => self.set_sound(own, |mut s| s.original()),
             SoundMsg::LowCut(own, on) => self.set_sound(own, |s| *s.low_cut = on),
             SoundMsg::Clean(own, on) => self.set_sound(own, |s| *s.clean = on),
+            SoundMsg::OtherSfx(from, i) => {
+                self.sound_menu = None;
+                let to = if from == SoundTrack::Sfx { SoundTrack::Sfx2 } else { SoundTrack::Sfx };
+                self.edit.checkpoint();
+                if let Some(j) = self.edit.move_clip(from, i, to) {
+                    self.selected_music = Some((to, j));
+                    self.selected_point = None;
+                }
+            }
             SoundMsg::Continue(own) => {
                 self.sound_menu = None;
                 self.edit.attempt(|e| e.continue_level(own));
@@ -335,6 +346,10 @@ impl App {
                 items.push(sound(if clean { "Stop cleaning up the noise".into() } else { "Clean up steady noise".into() }, SoundMsg::Clean(own, !clean)));
                 items.push(sound("Normalize…".into(), SoundMsg::Open(Scope::Own(own))));
                 items.push(sound("Back to the original".into(), SoundMsg::Original(own)));
+                if let Own::Clip(which @ (SoundTrack::Sfx | SoundTrack::Sfx2), i) = own {
+                    let to = if which == SoundTrack::Sfx { "SFX 2" } else { "SFX" };
+                    items.push(sound(format!("Move to {to}"), SoundMsg::OtherSfx(which, i)));
+                }
                 // Auto-duck where a song is right-clicked too, not only on
                 // the lane's empty stretch or in the Audio panel.
                 if let Own::Clip(SoundTrack::Music, _) = own {

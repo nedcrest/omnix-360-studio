@@ -54,6 +54,7 @@ impl App {
                 tooltip::Position::Bottom,
             ),
             level("SFX", self.edit.sfx.volume, |db| Message::TrackLevel(SoundTrack::Sfx, db), "The sound effects track, in playback and the export."),
+            level("SFX 2", self.edit.sfx2.volume, |db| Message::TrackLevel(SoundTrack::Sfx2, db), "The second sound effects track, for effects over effects."),
             level("Voice", self.edit.voice.volume, |db| Message::TrackLevel(SoundTrack::Voice, db), "The voice-over track, in playback and the export."),
             iced::widget::button(text("Normalize sound…"))
                 .on_press_maybe((!self.edit.cuts.is_empty()).then(|| {

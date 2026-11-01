@@ -114,7 +114,7 @@ impl App {
                 });
                 let (title, filter) = match which {
                     SoundTrack::Music => ("Add music", "Music"),
-                    SoundTrack::Sfx => ("Add a sound effect", "Sounds"),
+                    SoundTrack::Sfx | SoundTrack::Sfx2 => ("Add a sound effect", "Sounds"),
                     SoundTrack::Voice => ("Add a voice-over", "Sounds"),
                 };
                 return Task::perform(
@@ -134,7 +134,7 @@ impl App {
                 // effect or a voice-over at the playhead, where it's wanted.
                 let at = match which {
                     SoundTrack::Music => None,
-                    SoundTrack::Sfx | SoundTrack::Voice => Some(self.position()),
+                    SoundTrack::Sfx | SoundTrack::Sfx2 | SoundTrack::Voice => Some(self.position()),
                 };
                 return probe_sound(which, path, at);
             }
@@ -142,6 +142,10 @@ impl App {
             Message::SoundProbed(which, path, at, Ok(len)) => {
                 self.edit.checkpoint();
                 let at = at.unwrap_or_else(|| self.edit.track(which).end());
+                // A sound effect where one already plays goes on the second
+                // lane, so the two sound together (gap 46e).
+                let busy = |t: SoundTrack| self.edit.track(t).clips.iter().any(|c| at < c.ends() - 1e-6 && at + len > c.at + 1e-6);
+                let which = if which == SoundTrack::Sfx && busy(SoundTrack::Sfx) && !busy(SoundTrack::Sfx2) { SoundTrack::Sfx2 } else { which };
                 let i = self.edit.track_mut(which).append(path.clone(), at, len);
                 self.selected_music = Some((which, i));
                 self.selected = None;

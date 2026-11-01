@@ -1381,7 +1381,7 @@ reaches for (the user's question «what else may be missing for sound?»):
   noise; footage-agent's cleaner already makes the cleaned voices.
 - **Solo and mute per lane** (46d): hear the Voice alone, or everything
   but the music, while mixing.
-- **Built 2026-11-01, waiting for the check:** 46d solo and mute
+- **Built 2026-11-01, confirmed by the user:** 46d solo and mute
   (`2a085c0`): «S»/«M» by each sound lane's name, for listening only (not
   saved, not exported). 46c rumble cut and cleaning: `loudness::LOW_CUT`
   (highpass 120 Hz, 2 poles) and `CLEAN` (afftdn nr 12, nf −40, tn), one
@@ -1392,6 +1392,22 @@ reaches for (the user's question «what else may be missing for sound?»):
   yet»).
 - **The duck's depth** (46f): its 12 dB default against the 15–20 dB the
   guides give; to set with the mix check's measurements.
+
+### 47. The sound menus in groups — idea (user, 2026-11-01)
+
+User, after 46c/46d (confirmed): "group the action buttons in the sound
+lanes' context menus into specific groups". The menu on a cut's sound or
+a sound clip has grown to ten items in one list. Proposed: sections with
+a thin rule and a small dim heading each:
+- **Level:** lower for voice-over, back to normal, mute, normalize…;
+- **Volume line:** show it, continue the level of the one before, back to
+  the original;
+- **Clean up:** even out, cut the low rumble, clean up steady noise;
+- **Music** (songs only): lower the music under speech;
+- **Info.**
+Items that toggle show their state (a tick) instead of changing their
+words. The lane's own menu (empty stretch) and the point and line menus
+keep their one or two items.
 
 ## Format rule for all of these
 

@@ -34,10 +34,19 @@ pub enum Scope {
     Track(SoundTrack),
 }
 
-/// What a right-click menu is for: a cut's sound or a sound clip, or a
-/// sound track as a whole.
+/// What a right-click menu is for: a cut's sound or a sound clip, a sound
+/// track as a whole, or a volume line's point or the line.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Menu {
+    Own(Own),
+    Track(SoundTrack),
+    Point(Line, usize),
+    Line(Line),
+}
+
+/// A volume line: a cut's or sound clip's own, or a sound track's.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Line {
     Own(Own),
     Track(SoundTrack),
 }
@@ -84,8 +93,10 @@ pub enum SoundMsg {
     Continue(Own),
     /// Back to the file as it is (`OwnSound::original`).
     Original(Own),
-    /// A sound track's own volume line removed.
-    ClearTrackLine(SoundTrack),
+    /// A volume line's point `i` removed (Ctrl+click on it, or its menu).
+    DeletePoint(Line, usize),
+    /// A volume line removed, all its points.
+    DeleteLine(Line),
 }
 
 impl App {
@@ -168,9 +179,27 @@ impl App {
                 self.sound_menu = None;
                 self.edit.attempt(|e| e.continue_level(own));
             }
-            SoundMsg::ClearTrackLine(which) => {
+            SoundMsg::DeletePoint(line, i) => {
                 self.sound_menu = None;
-                self.edit.attempt(|e| !std::mem::take(&mut e.track_mut(which).keyframes).is_empty());
+                self.selected_sound = None;
+                self.selected_volume = None;
+                if self.line_keys(line).is_some_and(|keys| i < keys.len()) {
+                    self.edit.checkpoint();
+                    if let Some(keys) = self.line_keys(line) {
+                        keys.remove(i);
+                    }
+                }
+            }
+            SoundMsg::DeleteLine(line) => {
+                self.sound_menu = None;
+                self.selected_sound = None;
+                self.selected_volume = None;
+                if self.line_keys(line).is_some_and(|keys| !keys.is_empty()) {
+                    self.edit.checkpoint();
+                    if let Some(keys) = self.line_keys(line) {
+                        keys.clear();
+                    }
+                }
             }
             SoundMsg::Even1(own, on) => {
                 // Evening out changes how loud it is: measured again, as
@@ -280,9 +309,10 @@ impl App {
     /// closes it.
     pub(super) fn sound_menu_layer<'a>(&'a self, below: Element<'a, Message>) -> Element<'a, Message> {
         let Some((menu, at)) = self.sound_menu else { return below };
-        let item = |label: String, msg: Message| button(text(label).size(13)).style(button::text).width(Length::Fill).padding([5, 10]).on_press(msg);
+        let item = |label: String, msg: Message| -> Element<'a, Message> { button(text(label).size(13)).style(button::text).width(Length::Fill).padding([5, 10]).on_press(msg).into() };
         let sound = |label: String, msg: SoundMsg| item(label, Message::Sound(msg));
-        let items = match menu {
+        let mut items: Vec<Element<'a, Message>> = Vec::new();
+        match menu {
             Menu::Own(own) => {
                 let Some((keys, _)) = self.edit.own_line(own) else { return below };
                 let (gain, mute, even, loudness) = match own {
@@ -290,46 +320,59 @@ impl App {
                     Own::Clip(which, i) => self.edit.track(which).clips.get(i).map(|c| (c.gain, c.mute, c.even, c.loudness)),
                 }
                 .unwrap_or_default();
-                let mut items = column![sound(format!("Lower for voice-over ({VOICE_OVER_DIP:+.0} dB)"), SoundMsg::Lower(own))];
+                items.push(sound(format!("Lower for voice-over ({VOICE_OVER_DIP:+.0} dB)"), SoundMsg::Lower(own)));
                 if (gain - normal_gain(loudness)).abs() > 0.05 {
-                    items = items.push(sound(format!("Back to normal level ({:+.1} dB)", normal_gain(loudness)), SoundMsg::Restore(own)));
+                    items.push(sound(format!("Back to normal level ({:+.1} dB)", normal_gain(loudness)), SoundMsg::Restore(own)));
                 }
                 // The line shows once it has points; then a click on it adds one.
                 if keys.is_empty() {
-                    items = items.push(sound("Show volume line".into(), SoundMsg::ShowLine(own)));
+                    items.push(sound("Show volume line".into(), SoundMsg::ShowLine(own)));
                 }
                 if self.edit.before(own).is_some() {
-                    items = items.push(sound("Continue the level of the one before".into(), SoundMsg::Continue(own)));
+                    items.push(sound("Continue the level of the one before".into(), SoundMsg::Continue(own)));
                 }
-                items = items
-                    .push(sound(if mute { "Unmute".into() } else { "Mute".into() }, SoundMsg::Mute(own, !mute)))
-                    .push(sound(if even { "Stop evening out".into() } else { "Even out quiet and loud".into() }, SoundMsg::Even1(own, !even)))
-                    .push(sound("Normalize…".into(), SoundMsg::Open(Scope::Own(own))))
-                    .push(sound("Back to the original".into(), SoundMsg::Original(own)))
-                    .push(rule::horizontal(1));
+                items.push(sound(if mute { "Unmute".into() } else { "Mute".into() }, SoundMsg::Mute(own, !mute)));
+                items.push(sound(if even { "Stop evening out".into() } else { "Even out quiet and loud".into() }, SoundMsg::Even1(own, !even)));
+                items.push(sound("Normalize…".into(), SoundMsg::Open(Scope::Own(own))));
+                items.push(sound("Back to the original".into(), SoundMsg::Original(own)));
+                items.push(rule::horizontal(1).into());
                 let info = match own {
                     Own::Cut(i) => super::info::Of::Cut(i),
                     Own::Clip(which, i) => super::info::Of::Music(which, i),
                 };
-                items.push(item("Info".into(), Message::Info(info)))
+                items.push(item("Info".into(), Message::Info(info)));
             }
             Menu::Track(which) => {
                 let track = self.edit.track(which);
-                let mut items = column![];
                 if !track.clips.is_empty() {
-                    items = items.push(sound(format!("Normalize every clip on {}…", which.name()), SoundMsg::Open(Scope::Track(which))));
+                    items.push(sound(format!("Normalize every clip on {}…", which.name()), SoundMsg::Open(Scope::Track(which))));
                 }
                 if !track.keyframes.is_empty() {
-                    items = items.push(sound("Remove the track's volume line".into(), SoundMsg::ClearTrackLine(which)));
+                    items.push(sound("Delete the track's volume line".into(), SoundMsg::DeleteLine(Line::Track(which))));
                 }
-                items
             }
-        };
-        let menu = container(items.width(260)).padding(4).style(container::rounded_box);
-        // Above the pointer when it's low in the window: the timeline is.
-        let top = (at.y - 240.0).max(0.0);
+            // On their own, so a misplaced right-click only opens a menu.
+            Menu::Point(line, i) => items.push(sound("Delete point".into(), SoundMsg::DeletePoint(line, i))),
+            Menu::Line(line) => items.push(sound("Delete the whole line".into(), SoundMsg::DeleteLine(line))),
+        }
+        if items.is_empty() {
+            return below;
+        }
+        // Its bottom at the pointer (the timeline is low in the window),
+        // by its own height: a row is 13 pt text, 5 px above and below.
+        let height = items.len() as f32 * 26.0 + 8.0;
+        let top = (at.y - height).max(0.0);
+        let menu = container(column(items).width(260)).padding(4).style(container::rounded_box);
         let close = mouse_area(container(space()).width(Length::Fill).height(Length::Fill)).on_press(Message::Sound(SoundMsg::Menu(None))).on_right_press(Message::Sound(SoundMsg::Menu(None)));
         stack![below, close, pin(opaque(menu)).position(Point::new(at.x, top))].into()
+    }
+
+    /// A volume line's points: a cut's or sound clip's own, or a track's.
+    fn line_keys(&mut self, line: Line) -> Option<&mut Vec<crate::project::VolumeKey>> {
+        match line {
+            Line::Own(own) => self.edit.own_line_mut(own).map(|(keys, _)| keys),
+            Line::Track(which) => Some(&mut self.edit.track_mut(which).keyframes),
+        }
     }
 }
 

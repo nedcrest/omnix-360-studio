@@ -483,6 +483,13 @@ impl Timeline {
         })
     }
 
+    /// Whether `p` is on sound lane `lane`'s track line, where it's drawn
+    /// (the track has points).
+    fn on_track_line(&self, lane: usize, p: Point, b: Rectangle) -> bool {
+        let keys = &self.sounds[lane].volume;
+        !keys.is_empty() && (Self::volume_y(self.rows.sound_lane(lane), crate::project::volume_at(keys, self.t(p.x, b))) - p.y).abs() <= PICK
+    }
+
     /// Sound lane `lane`'s volume point under `p`, if any.
     fn volume_at(&self, lane: usize, p: Point, b: Rectangle) -> Option<usize> {
         self.sounds[lane].volume.iter().position(|k| (self.x(k.t, b) - p.x).abs() <= PICK && (Self::volume_y(self.rows.sound_lane(lane), k.volume) - p.y).abs() <= PICK)
@@ -1199,9 +1206,19 @@ impl canvas::Program<Message> for Marks {
             // clip: its menu, where the pointer is (Info is in it); a sound
             // lane's empty stretch: the track's menu.
             Mouse(mouse::Event::ButtonPressed(mouse::Button::Right)) => {
-                use super::sound_ui::{Menu, SoundMsg};
+                use super::sound_ui::{Line, Menu, SoundMsg};
                 let p = cursor.position_in(bounds)?;
-                let menu = if self.rows.on_clip_sound(p.y) {
+                // A point or a line first: each has a menu of its own.
+                let track = self.rows.sound_at_y(p.y).map(|lane| (lane, self.sounds[lane].which));
+                let menu = if let Some((own, i)) = self.sound_at(p, bounds) {
+                    Menu::Point(Line::Own(own), i)
+                } else if let Some((i, which)) = track.and_then(|(lane, which)| Some((self.volume_at(lane, p, bounds)?, which))) {
+                    Menu::Point(Line::Track(which), i)
+                } else if let Some(own) = self.on_sound_line(p, bounds) {
+                    Menu::Line(Line::Own(own))
+                } else if let Some((_, which)) = track.filter(|&(lane, _)| self.on_track_line(lane, p, bounds)) {
+                    Menu::Line(Line::Track(which))
+                } else if self.rows.on_clip_sound(p.y) {
                     Menu::Own(Own::Cut(self.block_at(p.x, bounds)?))
                 } else if let Some(lane) = self.rows.sound_at_y(p.y) {
                     let which = self.sounds[lane].which;
@@ -1233,6 +1250,11 @@ impl canvas::Program<Message> for Marks {
                     let c = &self.blocks[cut];
                     *drag = Drag::CutFade { cut, in_edge, x0: p.x, from: if in_edge { c.fade_in } else { c.fade_out }, per_px: self.span / Timeline::width(bounds) as f64 };
                     Message::Select(cut)
+                } else if state.ctrl && let Some((own, key)) = self.sound_at(p, bounds) {
+                    // Ctrl+click on a point takes it away, on any lane.
+                    Message::Sound(super::sound_ui::SoundMsg::DeletePoint(super::sound_ui::Line::Own(own), key))
+                } else if state.ctrl && let Some(lane) = self.rows.sound_at_y(p.y) && let Some(key) = self.volume_at(lane, p, bounds) {
+                    Message::Sound(super::sound_ui::SoundMsg::DeletePoint(super::sound_ui::Line::Track(self.sounds[lane].which), key))
                 } else if self.rows.on_clip_sound(p.y) && let Some((own, key)) = self.sound_at(p, bounds) {
                     *drag = Drag::Sound { own, key };
                     Message::SoundKeySelect(own, key)

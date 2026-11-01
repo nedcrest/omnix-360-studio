@@ -165,9 +165,9 @@ One commit each, behaviour unchanged unless the step says so. Tests
 | # | Step | Size | Risk |
 |---|---|---|---|
 | 1 | **Done 2026-11-01** (`03e1d5b`; fixes `528a622` timeline crossfades, `55d2755` contact sheet): `src/mixdown.rs` (`equal_power`, `own_level`, `cut_gain`, `envelope`, `clip_gain`), every level site calls it | S | low |
-| 2 | `Line` into the model, `line_mut`; `own_line_mut` from `own_sound` | S | low |
-| 3 | One `set_fade(Own, …)`: `MusicFade`/`SoundFade` and `Drag::CutFade` go | S | low |
-| 4 | One family of point messages, `Drag::Point`, one selected point | M | medium: drags, Ctrl+click, K; the user checks by hand |
+| 2 | **Done 2026-11-01** (`787aa8a`): `project::Line`, `line_mut`; `own_line_mut` from `own_sound` | S | low |
+| 3 | **Done 2026-11-01** (`2c49a99`): `OwnSound::set_fade`, one `Message::Fade`, one `Drag::Fade` | S | low |
+| 4 | **Done 2026-11-01** (`61b6a5a`), waiting for the user's hand check: `PointAdd/Select/Move(Line, …)`, `Drag::Point`, one `selected_point`, one Del, one K | M | medium: drags, Ctrl+click, K |
 | 5 | `Selection` enum and `Edit::delete` | M | medium: ten files; removes a known source of bugs |
 | 6 | Normalize in the core: `OwnSound::{apply_measure, lower, restore}`, one runner with the measuring passed in; the CLI gains `--track` | S | low |
 | 7 | Moves: `edit.rs` → `model/`, `config_dir` → `fsutil`, `Waveform` → media, `gpu`/`render`/shaders → `src/gpu/`, `Cut::sound_file` → media | M | low logic risk |

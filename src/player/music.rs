@@ -112,12 +112,13 @@ impl Player {
     /// it otherwise): the clips under `t`, each at the track's level there
     /// (with its volume points), its own level and points, times the clip's
     /// envelope.
-    pub fn follow(&mut self, track: &project::Music, t: f64, video_end: f64, playing: bool) {
+    /// `heard`: 0 when the lane is muted or another soloed (`listen`).
+    pub fn follow(&mut self, track: &project::Music, t: f64, video_end: f64, playing: bool, heard: f32) {
         if !playing {
             self.open.clear();
             return;
         }
-        let level = |i: usize, t: f64| crate::mixdown::clip_gain(track, i, t, video_end) as f32;
+        let level = |i: usize, t: f64| crate::mixdown::clip_gain(track, i, t, video_end) as f32 * heard;
         let mut old = std::mem::take(&mut self.open);
         let now: Vec<usize> = (0..track.clips.len()).filter(|&i| t >= track.clips[i].at && t < track.clips[i].ends() && t < video_end).collect();
         for &i in &now {

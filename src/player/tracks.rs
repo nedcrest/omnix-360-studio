@@ -194,6 +194,11 @@ impl App {
                 let song = self.waveforms.get(&self.edit.track(which).clips[i].input).map_or(f64::INFINITY, |w| w.duration);
                 self.edit.track_mut(which).trim(i, in_edge, t, overlap, song, edit::MIN_CUT);
             }
+            Message::Listen(lane, solo) => {
+                let l = &mut self.listen;
+                let flag = if solo { &mut l.solo[lane] } else { &mut l.muted[lane] };
+                *flag = !*flag;
+            }
             Message::Level(own, db) => {
                 if self.edit.own_line(own).is_some() {
                     self.begin_drag();

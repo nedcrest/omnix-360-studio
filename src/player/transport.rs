@@ -25,7 +25,7 @@ impl App {
             _ => (false, 0.0),
         };
         for (player, which) in self.music.iter_mut().zip(SoundTrack::ALL) {
-            player.follow(self.edit.track(which), t, self.edit.duration(), playing);
+            player.follow(self.edit.track(which), t, self.edit.duration(), playing, self.listen.heard(listen::lane_of(which)));
         }
         self.meter.follow(playing);
         // The cut's own volume points move its level as it plays, and
@@ -37,7 +37,7 @@ impl App {
         }
         if let (Some((_, theirs)), Some((i, inc))) = (shares, &self.partner) {
             let (own, points, fade) = self.edit.cuts.get(*i).map_or((0.0, 0.0, 1.0), |c| (c.sound_db(), crate::project::volume_at(&c.volume, inc.playback.now()), c.sound_fade(inc.playback.now())));
-            let v = (crate::mixdown::cut_gain(self.edit.sound.volume, own, points, fade) * crate::mixdown::equal_power(theirs)) as f32;
+            let v = (crate::mixdown::cut_gain(self.edit.sound.volume, own, points, fade) * crate::mixdown::equal_power(theirs)) as f32 * self.listen.heard(listen::CLIP_SOUND);
             if let Some((_, inc)) = &mut self.partner {
                 inc.playback.set_volume(v);
             }
@@ -168,7 +168,7 @@ impl App {
             (Some(c), Some(cut)) => (cut.sound_db(), crate::project::volume_at(&cut.volume, c.playback.now()), cut.sound_fade(c.playback.now())),
             _ => (0.0, 0.0, 1.0),
         };
-        crate::mixdown::cut_gain(self.edit.sound.volume, own, points, fade) as f32
+        crate::mixdown::cut_gain(self.edit.sound.volume, own, points, fade) as f32 * self.listen.heard(listen::CLIP_SOUND)
     }
 
     pub(super) fn with_playback(&mut self, f: impl FnOnce(&mut Playback)) {

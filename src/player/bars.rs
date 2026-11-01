@@ -273,6 +273,7 @@ impl App {
             sounds,
             selected_music: self.selected_music,
             selected_point: self.selected_point,
+            listen: self.listen,
             video: self.edit.duration(),
             clips_db: self.edit.sound.volume,
             duration: self.edit.frame(),

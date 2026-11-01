@@ -284,6 +284,8 @@ pub struct Timeline {
     pub selected_overlay: Option<crate::overlay::ItemRef>,
     /// The rows' heights, from the divider's scale.
     pub rows: Rows,
+    /// Which sound lanes are soloed or muted, for listening.
+    pub listen: super::listen::Listen,
 }
 
 #[derive(Default)]
@@ -689,6 +691,7 @@ impl Timeline {
             draw_tag(frame, self.level_tag_at(Own::Clip(*which, i), b), &blocks[i].level);
         }
         lane_tag(frame, which.name(), colour, top + h / 2.0);
+        draw_listen(frame, which.name(), top + h / 2.0, &self.listen, super::listen::lane_of(*which));
     }
 
     /// An own volume line (a cut's or a sound clip's) inside its block on
@@ -753,6 +756,7 @@ impl Timeline {
         }
         self.draw_sound(frame, b);
         lane_tag(frame, "Clip sound", SOUND_LINE, top + h / 2.0);
+        draw_listen(frame, "Clip sound", top + h / 2.0, &self.listen, super::listen::CLIP_SOUND);
     }
 
     /// Each cut's sound line on the clip sound lane, for cuts with points:
@@ -782,8 +786,27 @@ impl Timeline {
         if r - l < w + 12.0 || r < 0.0 || l > b.width {
             return None;
         }
-        let x = l.max(PICK + 80.0).min(r - w - 4.0);
+        // Past the lane's name and its solo and mute buttons.
+        let x = l.max(PICK + 125.0).min(r - w - 4.0);
         Some(Rectangle::new(Point::new(x, top + h / 2.0 - 7.0), Size::new(w, 14.0)))
+    }
+
+    /// A sound lane's solo (`true`) or mute button under `p`: the lane
+    /// (`listen::lane_of`) and which.
+    fn listen_button_at(&self, p: Point) -> Option<(usize, bool)> {
+        let (name, mid, lane) = if self.rows.on_clip_sound(p.y) {
+            ("Clip sound", self.rows.cuts + self.rows.clip_sound / 2.0, super::listen::CLIP_SOUND)
+        } else {
+            let li = self.rows.sound_at_y(p.y)?;
+            let which = self.sounds[li].which;
+            (which.name(), self.rows.sound_top(li) + self.rows.music / 2.0, super::listen::lane_of(which))
+        };
+        let [solo, mute] = listen_buttons(name, mid);
+        if solo.expand(1.0).contains(p) {
+            Some((lane, true))
+        } else {
+            mute.expand(1.0).contains(p).then_some((lane, false))
+        }
     }
 
     /// The level tag under `p`: whose it is.
@@ -1265,6 +1288,8 @@ impl canvas::Program<Message> for Marks {
                     let start = if p.x >= l && p.x <= r { self.start } else { self.start + (p.x - (l + r) / 2.0) as f64 * per_px };
                     *drag = Drag::Scroll { x0: p.x, start };
                     Message::TimelinePan(start)
+                } else if let Some((lane, solo)) = self.listen_button_at(p) {
+                    Message::Listen(lane, solo)
                 } else if let Some((cut, key, t)) = self.effect_at(p, bounds) {
                     // A jump there, and a drag retimes it.
                     *drag = Drag::Effect { cut, key };
@@ -1521,6 +1546,9 @@ impl canvas::Program<Message> for Marks {
             Drag::Level { .. } => mouse::Interaction::ResizingVertically,
             Drag::None => {
                 let Some(p) = cursor.position_in(bounds) else { return mouse::Interaction::default() };
+                if self.listen_button_at(p).is_some() {
+                    return mouse::Interaction::Pointer;
+                }
                 if self.level_tag_hit(p, bounds).is_some() && self.sound_at(p, bounds).is_none() {
                     return mouse::Interaction::ResizingVertically;
                 }
@@ -1665,8 +1693,25 @@ mod tests {
             video: 10.0, clips_db: 0.0, duration: 10.0, start: 0.0, span: 10.0, position: 0.0,
             selected: None, current: None, overlays: vec![], texts: vec![], selected_overlay: None,
             rows: Rows::new(1.0, false),
+            listen: Default::default(),
         };
         (t, Rectangle::new(Point::ORIGIN, Size::new(1000.0 + 2.0 * PICK, 300.0)))
+    }
+
+    #[test]
+    fn solo_and_mute_sit_beside_each_sound_lanes_name() {
+        let (t, _) = timeline();
+        let li = t.sounds.iter().position(|l| l.which == SoundTrack::Voice).unwrap();
+        let mid = t.rows.sound_top(li) + t.rows.music / 2.0;
+        let [solo, mute] = listen_buttons("Voice", mid);
+        let voice = super::super::listen::lane_of(SoundTrack::Voice);
+        assert_eq!(t.listen_button_at(solo.center()), Some((voice, true)));
+        assert_eq!(t.listen_button_at(mute.center()), Some((voice, false)));
+        let [solo, _] = listen_buttons("Clip sound", t.rows.cuts + t.rows.clip_sound / 2.0);
+        assert_eq!(t.listen_button_at(solo.center()), Some((super::super::listen::CLIP_SOUND, true)));
+        // Past them, and the level tags start beyond.
+        assert_eq!(t.listen_button_at(Point::new(mute.x + 40.0, mid)), None);
+        assert!(mute.x + mute.width < PICK + 125.0);
     }
 
     #[test]
@@ -1752,4 +1797,21 @@ fn draw_tag(frame: &mut Frame, at: Option<Rectangle>, label: &str) {
     let Some(r) = at else { return };
     frame.fill(&Path::rounded_rectangle(r.position(), r.size(), 3.0.into()), iced::Color::from_rgba(0.0, 0.0, 0.0, 0.7));
     frame.fill_text(Text { content: label.to_owned(), position: Point::new(r.x + 4.0, r.y + r.height / 2.0), color: iced::Color::WHITE, size: 10.0.into(), align_y: Vertical::Center, ..Default::default() });
+}
+
+/// A lane's solo and mute buttons, after its name tag (`lane_tag`).
+fn listen_buttons(name: &str, mid: f32) -> [Rectangle; 2] {
+    let x = PICK + 2.0 + name.chars().count() as f32 * 6.0 + 22.0 + 3.0;
+    let b = |x: f32| Rectangle::new(Point::new(x, mid - 7.0), Size::new(14.0, 14.0));
+    [b(x), b(x + 16.0)]
+}
+
+/// Lane `lane`'s «S» and «M», lit when on: yellow solo, red mute.
+fn draw_listen(frame: &mut Frame, name: &str, mid: f32, listen: &super::listen::Listen, lane: usize) {
+    let [solo, mute] = listen_buttons(name, mid);
+    for (r, label, on, lit) in [(solo, "S", listen.solo[lane], iced::Color::from_rgb(0.95, 0.79, 0.3)), (mute, "M", listen.muted[lane], iced::Color::from_rgb(1.0, 0.3, 0.3))] {
+        frame.fill(&Path::rounded_rectangle(r.position(), r.size(), 3.0.into()), if on { lit } else { iced::Color::from_rgba(0.0, 0.0, 0.0, 0.7) });
+        let ink = if on { iced::Color::BLACK } else { iced::Color::from_rgba(1.0, 1.0, 1.0, 0.75) };
+        frame.fill_text(Text { content: label.into(), position: Point::new(r.x + 3.5, r.y + r.height / 2.0), color: ink, size: 10.0.into(), align_y: Vertical::Center, ..Default::default() });
+    }
 }

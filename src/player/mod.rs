@@ -38,6 +38,7 @@ mod tracks;
 mod overlay_ui;
 mod cuts;
 mod record_ui;
+mod listen;
 
 use crate::ffmpeg::{self, Hwaccel};
 use crate::stab::{ImuAxes, Mode, Stabilizer};
@@ -289,6 +290,9 @@ enum Message {
     /// A cut's sound's or a sound clip's own level dragged to this, dB
     /// (its level tag, gap 44).
     Level(Own, f64),
+    /// Sound lane `i` (`listen::lane_of`) soloed (`true`) or muted,
+    /// toggled: for listening only.
+    Listen(usize, bool),
     /// An overlay's picture ready (by `Item::key`), and the font its text
     /// missed.
     OverlayPicture(String, Result<(Arc<crate::overlay::Picture>, Option<String>), String>),
@@ -610,6 +614,8 @@ struct App {
     side: Option<Side>,
     /// The Record panel's choices and recorders.
     record: record_ui::Panel,
+    /// Solo and mute per sound lane: what's heard while mixing.
+    listen: listen::Listen,
     /// Auto-duck's depth, dB, and whether it's reading the voices now.
     duck_db: f64,
     ducking: bool,
@@ -695,6 +701,7 @@ impl App {
             ui_scale: saved.ui_scale.clamp(*settings::UI_SCALE.start(), *settings::UI_SCALE.end()),
             duck_db: saved.duck_db.clamp(3.0, 30.0),
             ducking: false,
+            listen: Default::default(),
             angle_draft: None,
             modifiers: keyboard::Modifiers::default(),
             scrubbing: None,
@@ -847,7 +854,7 @@ impl App {
             m @ (Message::Select { .. } | Message::Trim { .. } | Message::MoveCut { .. } | Message::Crossfade { .. } | Message::ToggleCrossfade { .. } | Message::Split { .. } | Message::DeleteCut { .. } | Message::Undo { .. } | Message::Redo { .. }) => self.on_cuts(m),
             m @ (Message::LookDone { .. } | Message::Framing { .. } | Message::KeyMove { .. } | Message::KeyAdd { .. } | Message::KeyDelete { .. } | Message::KeyEase { .. } | Message::KeyFollow { .. } | Message::Stab { .. } | Message::Projection { .. } | Message::KeyJump { .. } | Message::Look { .. } | Message::Zoom { .. } | Message::Fov { .. } | Message::AngleInput { .. } | Message::AngleDone { .. } | Message::AngleScrubStart { .. } | Message::AngleScrubDone { .. } | Message::AngleScrub { .. } | Message::AngleNudge { .. } | Message::AngleArrow { .. } | Message::Source { .. } | Message::RollingShutter { .. } | Message::FullOnPause { .. } | Message::ResetView { .. }) => self.on_framing(m),
             m @ (Message::AddOverlay { .. } | Message::OverlayPicked { .. } | Message::OverlaySelect { .. } | Message::OverlayMove { .. } | Message::OverlayTrim { .. } | Message::OverlayJump { .. } | Message::OverlayKeyMove { .. } | Message::OverlayPicture { .. } | Message::AddText { .. }) => self.on_overlay_ui(m),
-            m @ (Message::AddSound { .. } | Message::SoundPicked { .. } | Message::SoundProbed { .. } | Message::Waveform { .. } | Message::CutWave { .. } | Message::SelectMusic { .. } | Message::PointAdd { .. } | Message::PointSelect { .. } | Message::PointMove { .. } | Message::MusicMove { .. } | Message::MusicTrim { .. } | Message::Fade { .. } | Message::Level { .. } | Message::SoundLevel { .. } | Message::TrackLevel { .. } | Message::DuckDepth { .. } | Message::Duck { .. } | Message::Ducked { .. } | Message::LevelDone { .. }) => self.on_tracks(m),
+            m @ (Message::AddSound { .. } | Message::SoundPicked { .. } | Message::SoundProbed { .. } | Message::Waveform { .. } | Message::CutWave { .. } | Message::SelectMusic { .. } | Message::PointAdd { .. } | Message::PointSelect { .. } | Message::PointMove { .. } | Message::MusicMove { .. } | Message::MusicTrim { .. } | Message::Fade { .. } | Message::Level { .. } | Message::Listen { .. } | Message::SoundLevel { .. } | Message::TrackLevel { .. } | Message::DuckDepth { .. } | Message::Duck { .. } | Message::Ducked { .. } | Message::LevelDone { .. }) => self.on_tracks(m),
             Message::Effect(e) => {
                 self.effect_message(e);
                 Task::none()

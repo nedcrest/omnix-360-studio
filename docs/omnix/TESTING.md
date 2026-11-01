@@ -153,6 +153,29 @@ Pure tests for all but 4, 5 and 8–10, which make media.
 
 ## Added
 
-| Test | Commit |
-|---|---|
-| (none yet) | |
+Tests: 84 → 103 (100 in the library, 3 end to end), 2026-11-01.
+
+| Plan | Test | Commit |
+|---|---|---|
+| 1 | `a_project_saved_elsewhere_still_finds_its_clips`, with the fix | `cf7dbc2` |
+| 2, 3 | `old_project_files_still_load` (`tests/fixtures/`), `save_names_paths_from_the_project_and_reads_back_the_same` | |
+| 4 | `the_exports_volume_line_sounds_as_the_player_draws_it` [ff] | `005e8af` |
+| 5 | `the_export_fades_sound_clips_as_the_player_does`, `the_export_cuts_a_clip_off_at_the_edits_end_as_the_player_does` [ff], with the fix | `5e97aa8` |
+| 8–10 | `tests/cli.rs`: export with crossfade and music, a file per cut with handles, `check` | `83a1ac4` |
+| 11, 12, 16, 17, 24 | sound clip placement, `reach`, volume points, `continue_level`, fades at their edges | `73033da` |
+| 13–15 | crossfades after remove and insert, edit time round trip, `moved_index` | `fce56dc` |
+
+**Bugs the tests found and fixed:**
+- A project opened by a relative path, saved elsewhere, lost its clips
+  (`cf7dbc2`).
+- Sound clips cut off by the edit's end sounded different in the export
+  than in the player: the export dropped their own fade-out and crossfade
+  out, squeezed the end fade into what was left of the clip and shortened
+  fades in (up to 6 dB apart). Now fades keep their length and place,
+  multiply where they meet in both, and the end fade covers the edit's
+  last 3 s (`5e97aa8`).
+
+**Left from the plan:** 6 (the export's frame plan, after taking it out
+of `export()`), 7 (`Dissolve`), 18–19 (timeline hits and `Rows`), 20
+(cache), 21 (`replace_file`), 22 (the normalize dialog), 23 (the cut mix
+graph).

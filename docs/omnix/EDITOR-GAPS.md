@@ -1220,7 +1220,9 @@ unifying and separating out the core / functionality / API, which will
 make further building simpler for us and divide the architecture
 nicely." The second pass after gap 35's refactor, now that sound clips,
 recording and the shared sound model (`project::Own`) are in. The result
-goes to `CORE-API.md`; the steps it proposes become commits here.
+goes to `CORE-API.md`; the steps it proposes become commits here. Analysis
+done 2026-11-01 (`95a6be7`): ten steps, tests first; it also found the
+contact sheet leaving a sound clip's own level out.
 
 ### 42. Unit and integration tests — analysis and adding them (user, 2026-11-01)
 
@@ -1231,6 +1233,11 @@ in small commits, riskiest first (time mapping, project load/save and
 old JSON, the export's sound graph, an end-to-end CLI export on tiny
 generated clips).
 
+**Done so far (2026-11-01):** analysis in `TESTING.md` (`95a6be7`), 19
+tests added (84 → 103), two bugs found and fixed: paths of a project
+saved elsewhere, and sound clips cut off by the edit's end sounding
+different in the export. What's left is listed there.
+
 ### 43. Editing-software best practices, colours, a switchable UI palette — research (user, 2026-11-01)
 
 User: "analyse best practices for editing software, look at colour
@@ -1239,7 +1246,10 @@ palette; the result can go to a separate file too." Research and a
 proposal in `UI-COLOUR.md`: neutral surround around the picture,
 semantic colour tokens instead of hard-coded colours, lane colours per
 kind, a colour-blind-safe preset, palette presets in Settings with
-per-lane overrides (iced's `Theme::custom`).
+per-lane overrides (iced's `Theme::custom`). Research done 2026-11-01 (`UI-COLOUR.md`):
+also found two colours with two meanings (orange: overlays and «over full
+scale»; cyan: the clip sound lane and a clip's own line) and Music's
+colour following the theme.
 
 ## Format rule for all of these
 

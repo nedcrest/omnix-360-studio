@@ -225,10 +225,10 @@ impl Block {
 /// (edit time, dB on top of the track's level).
 pub struct SoundLane {
     pub which: SoundTrack,
-    /// The track's level, dB.
-    pub level: f64,
+    /// The track itself: its level, its line, its clips as they sound
+    /// (`mixdown::clip_gain`).
+    pub track: crate::project::Music,
     pub blocks: Vec<MusicBlock>,
-    pub volume: Vec<crate::project::VolumeKey>,
 }
 
 /// A clip on a sound lane (a song, a sound effect) as it shows.
@@ -243,9 +243,7 @@ pub struct MusicBlock {
     /// Its fades in and out, seconds: a handle at each top corner.
     pub fade_in: f64,
     pub fade_out: f64,
-    /// Its own level, dB (`MusicClip::sound_db`), and volume points in the
-    /// file's time (gap 33e).
-    pub own_db: f64,
+    /// Its own volume points in the file's time (gap 33e).
     pub volume: Vec<crate::project::VolumeKey>,
     /// Its waveform through the leveler, if it's evened out (and read).
     pub even_wave: Option<Arc<music::Waveform>>,
@@ -486,13 +484,13 @@ impl Timeline {
     /// Whether `p` is on sound lane `lane`'s track line, where it's drawn
     /// (the track has points).
     fn on_track_line(&self, lane: usize, p: Point, b: Rectangle) -> bool {
-        let keys = &self.sounds[lane].volume;
+        let keys = &self.sounds[lane].track.keyframes;
         !keys.is_empty() && (Self::volume_y(self.rows.sound_lane(lane), crate::project::volume_at(keys, self.t(p.x, b))) - p.y).abs() <= PICK
     }
 
     /// Sound lane `lane`'s volume point under `p`, if any.
     fn volume_at(&self, lane: usize, p: Point, b: Rectangle) -> Option<usize> {
-        self.sounds[lane].volume.iter().position(|k| (self.x(k.t, b) - p.x).abs() <= PICK && (Self::volume_y(self.rows.sound_lane(lane), k.volume) - p.y).abs() <= PICK)
+        self.sounds[lane].track.keyframes.iter().position(|k| (self.x(k.t, b) - p.x).abs() <= PICK && (Self::volume_y(self.rows.sound_lane(lane), k.volume) - p.y).abs() <= PICK)
     }
 
     /// Where `own` is drawn: its lane, where it starts on the edit, its in
@@ -617,7 +615,7 @@ impl Timeline {
 
     fn draw_sound_lane(&self, frame: &mut Frame, theme: &Theme, b: Rectangle, li: usize) {
         let palette = theme.extended_palette();
-        let SoundLane { which, blocks, level, volume } = &self.sounds[li];
+        let SoundLane { which, blocks, track } = &self.sounds[li];
         let colour = match which {
             SoundTrack::Music => palette.success.base.color,
             SoundTrack::Sfx => SFX_COLOUR,
@@ -634,15 +632,10 @@ impl Timeline {
             let block = Path::rounded_rectangle(Point::new(l, top), Size::new((r - l).max(1.0), h), 4.0.into());
             let selected = Some((*which, i)) == self.selected_music;
             frame.fill(&block, if selected { colour } else { colour.scale_alpha(0.55) });
-            // The waveform as it's heard: the track's level and points, the
-            // clip's fades.
+            // The waveform as it's heard: the track's level and line, the
+            // clip's own, its fades and crossfades (`mixdown::clip_gain`).
             if let Some(w) = &m.wave {
-                let clip = crate::project::MusicClip { at: m.from, start: m.start, end: m.start + m.len, fade_in: m.fade_in, fade_out: m.fade_out, ..Default::default() };
-                let heard = |t: f64| {
-                    let on_edit = m.from + t - m.start;
-                    let own = if m.own_db <= crate::project::OFF_DB { crate::project::OFF_DB } else { m.own_db + crate::project::volume_at(&m.volume, t) };
-                    music::gain(*level + crate::project::volume_at(volume, on_edit)) * music::gain(own) * crate::mixdown::envelope(&clip, (0.0, 0.0), on_edit, self.video) as f32
-                };
+                let heard = |t: f64| crate::mixdown::clip_gain(track, i, m.from + t - m.start, self.video) as f32;
                 let wave = Wave { left: l, right: r, top, height: h, start: m.start, len: m.len };
                 wave.draw(frame, b, w, m.even_wave.as_ref().unwrap_or(w), heard, palette.background.base.text.scale_alpha(0.7));
             }
@@ -706,8 +699,9 @@ impl Timeline {
     /// line along every lane would only be in the way.
     fn draw_volume(&self, frame: &mut Frame, b: Rectangle, li: usize) {
         let lane = &self.sounds[li];
-        let (Some(first), Some(last)) = (lane.volume.first(), lane.volume.last()) else { return };
-        let points: Vec<_> = lane.volume.iter().map(|k| (self.x(k.t, b), k.volume)).collect();
+        let keys = &lane.track.keyframes;
+        let (Some(first), Some(last)) = (keys.first(), keys.last()) else { return };
+        let points: Vec<_> = keys.iter().map(|k| (self.x(k.t, b), k.volume)).collect();
         let ends = ((self.x(0.0, b), first.volume), (self.x(self.duration, b), last.volume));
         let selected = self.selected_volume.filter(|v| v.0 == lane.which).map(|v| v.1);
         // Dimmer than a clip's own line: it belongs to the whole track.
@@ -1307,7 +1301,7 @@ impl canvas::Program<Message> for Marks {
                     } else if state.ctrl {
                         // A new point where clicked, dragged on from there.
                         let t = self.t(p.x, bounds);
-                        *drag = Drag::Volume { lane, key: self.sounds[lane].volume.partition_point(|k| k.t <= t) };
+                        *drag = Drag::Volume { lane, key: self.sounds[lane].track.keyframes.partition_point(|k| k.t <= t) };
                         Message::VolumeAdd(which, t, Timeline::volume_db(self.rows.sound_lane(lane), p.y))
                     } else {
                         let clip = self.music_at(lane, p.x, bounds)?;

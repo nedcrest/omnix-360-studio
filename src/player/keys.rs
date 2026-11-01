@@ -124,17 +124,22 @@ impl App {
                     self.select_volume(which, i);
                 }
                 // A cut's sound point selected: another at the playhead.
-                "k" | "K" if self.selected_sound.is_some() => {
-                    let Some((_, t)) = self.playing_cut() else { return Task::none() };
-                    let cut = self.current;
+                // An own line's point selected: another at the playhead, on
+                // the playing cut's line or on the same sound clip's.
+                "k" | "K" if let Some((own, _)) = self.selected_sound => {
+                    let at = match own {
+                        Own::Cut(_) => self.playing_cut().map(|(_, t)| (Own::Cut(self.current), t)),
+                        Own::Clip(which, c) => self.edit.track(which).clips.get(c).map(|m| (own, m.start + self.position() - m.at)).filter(|(_, t)| self.edit.own_line(own).is_some_and(|(_, (s, e))| *t >= s && *t <= e)),
+                    };
+                    let Some((own, t)) = at else { return Task::none() };
                     let mut i = 0;
                     self.edit.attempt(|e| {
-                        let keys = &mut e.cuts[cut].volume;
+                        let Some((keys, _)) = e.own_line_mut(own) else { return false };
                         let n = keys.len();
                         i = crate::project::volume_key_at(keys, t);
                         keys.len() > n
                     });
-                    self.select_sound(cut, i);
+                    self.select_sound(own, i);
                 }
                 "k" | "K" => return self.update(Message::KeyAdd),
                 "j" | "J" => {

@@ -41,7 +41,7 @@ mod record_ui;
 
 use crate::ffmpeg::{self, Hwaccel};
 use crate::stab::{ImuAxes, Mode, Stabilizer};
-use crate::project::{Cut, Project, SoundTrack};
+use crate::project::{Cut, Own, Project, SoundTrack};
 use crate::stitch::M3;
 use crate::view::{Camera, Ease, Follow, Keyframes, Projection, View};
 use anyhow::{Context, Result};
@@ -318,11 +318,12 @@ enum Message {
     VolumeSelect(SoundTrack, usize),
     /// A track's volume point `i` dragged to this edit time and level.
     VolumeMove(SoundTrack, usize, f64, f64),
-    /// A sound point on cut `cut` at this clip time and level (dB).
-    SoundKeyAdd(usize, f64, f64),
-    SoundKeySelect(usize, usize),
-    /// Cut `cut`'s sound point dragged to this clip time and level.
-    SoundKeyMove(usize, usize, f64, f64),
+    /// A point on a cut's or a sound clip's own volume line, at this time
+    /// in its file and level (dB).
+    SoundKeyAdd(Own, f64, f64),
+    SoundKeySelect(Own, usize),
+    /// An own line's point dragged to this file time and level.
+    SoundKeyMove(Own, usize, f64, f64),
     /// The mix: the clips' sound and each sound track, in dB.
     SoundLevel(f64),
     TrackLevel(SoundTrack, f64),
@@ -482,7 +483,7 @@ struct App {
     /// A sound track's volume point selected, and the cut sound point:
     /// (cut, point).
     selected_volume: Option<(SoundTrack, usize)>,
-    selected_sound: Option<(usize, usize)>,
+    selected_sound: Option<(Own, usize)>,
     /// Each sound track's streams, in `SoundTrack::ALL`'s order.
     music: [music::Player; SoundTrack::ALL.len()],
     /// Through a crossfade, the other cut of it alongside: its index and

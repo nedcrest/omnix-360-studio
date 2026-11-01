@@ -147,10 +147,12 @@ impl App {
                 }
             }
             Message::DeleteCut if self.selected_sound.is_some() => {
-                let (cut, i) = self.selected_sound.take().unwrap();
-                if self.edit.cuts.get(cut).is_some_and(|c| i < c.volume.len()) {
+                let (own, i) = self.selected_sound.take().unwrap();
+                if self.edit.own_line(own).is_some_and(|(keys, _)| i < keys.len()) {
                     self.edit.checkpoint();
-                    self.edit.cuts[cut].volume.remove(i);
+                    if let Some((keys, _)) = self.edit.own_line_mut(own) {
+                        keys.remove(i);
+                    }
                 }
             }
             Message::DeleteCut if self.selected_volume.is_some() => {

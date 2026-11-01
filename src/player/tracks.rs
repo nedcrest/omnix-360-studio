@@ -98,8 +98,8 @@ impl App {
     }
 
     /// Selects cut `cut`'s sound point `i`, and nothing else.
-    pub(super) fn select_sound(&mut self, cut: usize, i: usize) {
-        self.selected_sound = Some((cut, i));
+    pub(super) fn select_sound(&mut self, own: Own, i: usize) {
+        self.selected_sound = Some((own, i));
         self.selected_volume = None;
         self.selected_music = None;
         self.selected = None;
@@ -176,23 +176,25 @@ impl App {
                 self.select_volume(which, i);
             }
             Message::VolumeSelect(which, i) => self.select_volume(which, i),
-            Message::SoundKeyAdd(cut, t, db) => {
-                let Some(c) = self.edit.cuts.get(cut) else { return Task::none() };
-                let t = t.clamp(c.start, c.end);
+            Message::SoundKeyAdd(own, t, db) => {
+                if self.edit.own_line(own).is_none() {
+                    return Task::none();
+                }
                 self.begin_drag();
-                let i = crate::project::add_volume_key(&mut self.edit.cuts[cut].volume, t, db);
-                self.select_sound(cut, i);
+                let Some((keys, (start, end))) = self.edit.own_line_mut(own) else { return Task::none() };
+                let i = crate::project::add_volume_key(keys, t.clamp(start, end), db);
+                self.select_sound(own, i);
             }
-            Message::SoundKeySelect(cut, i) => self.select_sound(cut, i),
+            Message::SoundKeySelect(own, i) => self.select_sound(own, i),
             // A point gone mid-drag (an undo) is no undo step, nor an index panic.
             Message::VolumeMove(which, i, ..) if i >= self.edit.track(which).keyframes.len() => {}
-            Message::SoundKeyMove(cut, i, ..) if self.edit.cuts.get(cut).is_none_or(|c| i >= c.volume.len()) => {}
-            Message::SoundKeyMove(cut, i, t, db) => {
-                let Some(c) = self.edit.cuts.get(cut) else { return Task::none() };
-                let (start, end) = (c.start, c.end);
+            Message::SoundKeyMove(own, i, ..) if self.edit.own_line(own).is_none_or(|(keys, _)| i >= keys.len()) => {}
+            Message::SoundKeyMove(own, i, t, db) => {
                 self.begin_drag();
-                // Within the cut and between its neighbours.
-                crate::project::move_volume_key(&mut self.edit.cuts[cut].volume, i, t, db, (start, end));
+                // Within its stretch of the file and between its neighbours.
+                if let Some((keys, range)) = self.edit.own_line_mut(own) {
+                    crate::project::move_volume_key(keys, i, t, db, range);
+                }
             }
             Message::VolumeMove(which, i, t, db) => {
                 self.begin_drag();

@@ -844,6 +844,30 @@ impl Project {
             SoundTrack::Voice => &mut self.voice,
         }
     }
+
+    /// `own`'s volume points and the stretch of its file they apply in
+    /// (a cut's in to out, a sound clip's), if it's there.
+    pub fn own_line(&self, own: Own) -> Option<(&[VolumeKey], (f64, f64))> {
+        match own {
+            Own::Cut(i) => self.cuts.get(i).map(|c| (&c.volume[..], (c.start, c.end))),
+            Own::Clip(which, i) => self.track(which).clips.get(i).map(|c| (&c.volume[..], (c.start, c.end))),
+        }
+    }
+
+    pub fn own_line_mut(&mut self, own: Own) -> Option<(&mut Vec<VolumeKey>, (f64, f64))> {
+        match own {
+            Own::Cut(i) => self.cuts.get_mut(i).map(|c| (&mut c.volume, (c.start, c.end))),
+            Own::Clip(which, i) => self.track_mut(which).clips.get_mut(i).map(|c| (&mut c.volume, (c.start, c.end))),
+        }
+    }
+}
+
+/// Whose own volume line: a cut's sound or a sound clip's. Both are points
+/// in the file's time, so one set of operations serves both (gap 33e).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Own {
+    Cut(usize),
+    Clip(SoundTrack, usize),
 }
 
 /// The keyframes that frame cut `n` of `cuts` (in edit order) at clip time
@@ -1126,6 +1150,20 @@ mod tests {
         // Old projects' clips load with none of it.
         let old: MusicClip = serde_json::from_str(r#"{"input": "s.wav", "at": 0, "in": 0, "out": 2}"#).unwrap();
         assert_eq!((old.gain, old.even, old.mute, old.volume.len()), (0.0, false, false, 0));
+    }
+
+    #[test]
+    fn a_cut_and_a_sound_clip_share_one_kind_of_own_line() {
+        let mut p = Project::default();
+        p.cuts.push(Cut::new("a.mp4".into(), 2.0, 6.0));
+        p.voice.clips.push(MusicClip { input: "take.wav".into(), at: 1.0, start: 0.5, end: 3.0, ..Default::default() });
+        for (own, range) in [(Own::Cut(0), (2.0, 6.0)), (Own::Clip(SoundTrack::Voice, 0), (0.5, 3.0))] {
+            let (keys, r) = p.own_line_mut(own).unwrap();
+            assert_eq!(r, range);
+            add_volume_key(keys, range.0 + 1.0, -6.0);
+            assert_eq!(p.own_line(own).unwrap().0.len(), 1);
+        }
+        assert!(p.own_line(Own::Clip(SoundTrack::Sfx, 0)).is_none());
     }
 
     #[test]

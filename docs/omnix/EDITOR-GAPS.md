@@ -1365,6 +1365,11 @@ viewer's place:
   view, to fix it by hand (its level knob, gap 44);
 - the whole mix's loudness and true peak against the preset, at the top.
 
+**Built in three steps** (started 2026-11-01): (1) the rules, pure and
+tested, from measured numbers to findings; (2) the measuring: each lane
+rendered alone through the export's own mix graph (so «as heard» is the
+export's), its clips measured, plus `rosmo360 mixcheck`; (3) the view.
+
 ### 46. More for the sound: what the review found — ideas (2026-11-01)
 
 From going through what's there against what an editor of home video
@@ -1397,7 +1402,7 @@ reaches for (the user's question «what else may be missing for sound?»):
   The limiter's −1.2 dBFS holds sample peaks; true peak may land ~0.2 dB
   higher (as the limiter note says), under −1 dBTP in the tests so far.
 - **Two sound effects at once** (46e): a second SFX lane (gap 3's «not
-  yet»). **Built 2026-11-01** (`aee68c1`), waiting for the check:
+  yet»). **Built 2026-11-01** (`aee68c1`), confirmed by the user:
   `SoundTrack::Sfx2`; an SFX added over one already playing goes there by
   itself; «Move to SFX 2 / SFX» in the menu. The lane always shows, empty
   or not (rows are fixed per track).

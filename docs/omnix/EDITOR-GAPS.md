@@ -1388,10 +1388,10 @@ reaches for (the user's question «what else may be missing for sound?»):
   chain with evening, in playback, export and measuring; on the scooter
   −6.5 dB under 150 Hz, −3.4 LUFS overall; cleaning does nothing for wind.
   The waveform isn't drawn through them (only through the leveler).
-- **46b built 2026-11-01** (`0a09f3c`), waiting for the check: BS.1770 in
+- **46b built 2026-11-01** (`0a09f3c`), confirmed by the user: BS.1770 in
   `player/lufs.rs`, fed every played frame; short-term in the top bar,
   integrated in its tip; within 0.3 LU of ffmpeg on pink noise.
-- **46a built 2026-11-01** (`31fb3bf`), waiting for the check: Export panel
+- **46a built 2026-11-01** (`31fb3bf`), confirmed by the user (Apple and social exports differ in loudness as they should): Export panel
   «Loudness» and `export --loudness`; measured after the export, the sound
   re-encoded alone with the gain and the limiter (`loudness::bring_to`).
   The limiter's −1.2 dBFS holds sample peaks; true peak may land ~0.2 dB

@@ -613,6 +613,65 @@ To work out before building:
   instead of one row of marks. A UI question, together with gap 9's action
   bar and the effects panel.
 
+### 31b–31e. Speed: the pitch choice, a speed editor window, keyframes by right-click — large (user, 2026-11-01)
+
+User: "changing the speed of a video, with and without keeping the
+sound's timbre. I don't much like Kdenlive's variable speed: I'd like it
+in a separate window, with a speed curve and a seconds–milliseconds ruler
+on top (the scale changes with the speed of that part of the video). And
+right-click on the timeline in the one-clip editor should insert
+keyframes too. We keep both: Kdenlive's way and the kind of speed editing
+I want."
+
+- **31b. Keep the timbre, or not.** A per-cut switch, «Keep the voice's
+  pitch», on by default:
+  - on: the sound is stretched in time, the pitch stays (`atempo`, or
+    `rubberband` for ramps);
+  - off: like tape or a record, slower is lower (`asetrate` + resample).
+    Good for effect: a slowed-down fall, a sped-up silly walk.
+  - Optional field `Cut.keep_pitch` (absent = on), so old projects load.
+  - This machine's ffmpeg 6.1.1 has `rubberband` with runtime commands
+    (`C` in `ffmpeg -filters`), so its `tempo` can follow a ramp through
+    `sendcmd`. Not every build has it: check at start-up and fall back to
+    constant-tempo pieces with `atempo`.
+- **31c. The speed editor, a window of its own.** Opened from a cut (its
+  menu, or a double-click on the speed lane).
+  - The cut's picture at the top, as in the one-clip editor.
+  - Under it, a **speed curve**: speed up the side (0.1× to 4×, a log
+    scale so 0.5× and 2× sit at the same distance from 1×), time across.
+    Points are dragged; the segment between two points eases (the same
+    easings as the view keyframes, gap 17).
+  - Above the curve, a **ruler in the footage's own seconds and
+    milliseconds**, its ticks spaced by how long each stretch plays: at
+    0.5× a second of footage takes twice the width, at 2× half. So you see
+    at a glance where the time is stretched and where it is squeezed.
+  - A second, plain ruler of the edit's time below it, so both clocks show.
+  - The cut's resulting length is shown live; the cuts after it move as it
+    changes, as the magnetic timeline does now.
+  - Presets: «slow in the middle» (ramp down and up), «speed up to the
+    cut», «freeze» (0× for N seconds: a held frame, the sound silent).
+- **31d. Keyframes by right-click on the one-clip timeline.** In the
+  editor of one video (and in the speed window), a right-click on the
+  timeline opens a menu: «Add a speed point here», «Add a view
+  keyframe», «Add an effect keyframe», «Add a volume point». Today these
+  are added with Ctrl+click and buttons; the menu makes them findable.
+- **31e. Kdenlive's way stays too.** Speed keyframes right on the cut in
+  the main timeline (its speed lane folding open under the cut, like
+  volume points), for a quick change without the window. Both edit the
+  same data: one list of speed points per cut, in the footage's time.
+- **Data.** `Cut.speed_keys: Vec<SpeedKey>` (footage time, speed, ease),
+  optional; a constant speed is one point. The edit's time is the
+  integral of 1/speed over the footage (31's mapping, every place that
+  converts edit ↔ clip time), computed once per change and cached as a
+  table, so the player's clock and both exports read the same numbers.
+- **Video.** Frames are picked by time already. Slower than the clip's
+  frame rate allows (30 fps at 0.3×): repeat frames, blend them, or
+  `minterpolate` (motion-interpolated, slow to render; export only). The
+  choice per cut, default repeat.
+- **Order.** 31 (constant speed) and 31b first; then the data of ramps
+  and 31e on the main timeline; then the window 31c; 31d whenever the
+  one-clip editor gets its menu.
+
 ### 32. A blank stretch on the main lane — idea (user, 2026-10-23)
 
 A button that puts a blank (black) cut of a chosen length at the playhead
@@ -813,6 +872,34 @@ Shotcut is the warning: no device picker, no meter, and users get lost.
   - «Clean up voice» (footage-agent's cleaner, or `afftdn`);
   - enabling a disabled built-in card's profile.
 
+### 37. Object tracking — large (user, 2026-11-01)
+
+User: "object tracking" (recalled with the speed ideas; no detail yet).
+
+What exists: `rosmo360 track` and the colour-track picker follow one
+**colour** in a 360 clip and key the view to it (`src/track.rs`). It
+works on a jacket or a tent; it loses a subject in a crowd of similar
+colours, and does nothing for a flat video.
+
+What tracking would add, in the order it seems most useful:
+1. **Framing follows an object on any video.** Draw a box on the subject;
+   the box is followed frame by frame (a template / optical-flow tracker:
+   KLT or a correlation tracker written in Rust, no OpenCV dependency) and
+   the view keys to it. On a flat video that is a moving crop: 16:9 → 9:16
+   for a phone, the subject kept in the frame.
+2. **Things stuck to an object:** text, a picture, an arrow, or a blur
+   (a face, a number plate) following it. The overlay's position keys
+   come from the track.
+3. **Correcting a track by hand:** the track shown as a path; a wrong
+   stretch re-done from a point, or keyed by hand.
+
+Open questions for the user: which of these is meant first; is it for
+360 clips, flat ones, or both. Default if not answered: 1 on flat video
+first, since the colour tracker already covers the simple 360 case.
+Heavy computing goes off the UI thread with progress, as the colour
+track does; a face or person detector (footage-agent's gap 30 models)
+could seed the box later.
+
 ## Format rule for all of these
 
 New fields only, each `#[serde(default, skip_serializing_if = …)]`, so every
@@ -855,7 +942,10 @@ whenever a better grouping shows. `ROADMAP.md` shows the same as cards (field
    its sound following (atempo), measured for drift → speed ramps →
    automation lanes per value (the user's FL Studio idea). Large and
    careful; after B-roll and groups, since it touches the same time
-   mapping.
+   mapping. With it: 31b keep-the-pitch switch, 31e speed points on the
+   main timeline, 31c the speed editor window, 31d right-click keyframes,
+   and 37 object tracking (it makes keyframes for the view and overlays,
+   the same automation idea).
 9. **Якість 360** (from `OPENOSV.md`, mostly needs 360 footage: one public
    sample now, the user's camera ~2027-02): 17 easing presets and 18 bundled
    LUT any time (small, useful now) → 24 file facts → 19 lens protectors →

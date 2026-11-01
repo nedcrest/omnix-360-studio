@@ -854,11 +854,93 @@ impl Project {
         }
     }
 
+    /// `own`'s sound settings, to change.
+    pub fn own_sound(&mut self, own: Own) -> Option<OwnSound<'_>> {
+        match own {
+            Own::Cut(i) => self.cuts.get_mut(i).map(|c| OwnSound { range: (c.start, c.end), gain: &mut c.gain, even: &mut c.even, mute: &mut c.mute, loudness: &mut c.loudness, volume: &mut c.volume, fade_in: &mut c.sound_fade_in, fade_out: &mut c.sound_fade_out }),
+            Own::Clip(which, i) => self.track_mut(which).clips.get_mut(i).map(|c| OwnSound { range: (c.start, c.end), gain: &mut c.gain, even: &mut c.even, mute: &mut c.mute, loudness: &mut c.loudness, volume: &mut c.volume, fade_in: &mut c.fade_in, fade_out: &mut c.fade_out }),
+        }
+    }
+
+    /// The file `own`'s sound comes from (a cut's cleaned voice or proxy,
+    /// as `Cut::sound_file`), its stretch of it and whether it's evened.
+    pub fn own_file(&self, own: Own) -> Option<(PathBuf, (f64, f64), bool)> {
+        match own {
+            Own::Cut(i) => self.cuts.get(i).map(|c| (c.sound_file(), (c.start, c.end), c.even)),
+            Own::Clip(which, i) => self.track(which).clips.get(i).map(|c| (c.input.clone(), (c.start, c.end), c.even)),
+        }
+    }
+
+    /// What plays before `own` on its lane: the cut before, or the sound
+    /// clip on the same track ending nearest before it starts.
+    pub fn before(&self, own: Own) -> Option<Own> {
+        match own {
+            Own::Cut(i) => i.checked_sub(1).filter(|&j| j < self.cuts.len()).map(Own::Cut),
+            Own::Clip(which, i) => {
+                let clips = &self.track(which).clips;
+                let at = clips.get(i)?.at;
+                (0..clips.len()).filter(|&j| j != i && clips[j].ends() <= at + 1e-6).max_by(|&a, &b| clips[a].ends().total_cmp(&clips[b].ends())).map(|j| Own::Clip(which, j))
+            }
+        }
+    }
+
+    /// Starts `own`'s volume line at the level what plays before it ends
+    /// at (its own level and points; the track's line is the track's), so
+    /// a second take or a split carries on without a jump. A line with no
+    /// points becomes flat at that level; otherwise its first point is set
+    /// at its start. False if there's nothing before it, or it's silent.
+    pub fn continue_level(&mut self, own: Own) -> bool {
+        let Some(end) = self.before(own).and_then(|prev| self.own_sound(prev)).map(|p| p.db_at(p.range.1)) else { return false };
+        if end <= OFF_DB {
+            return false;
+        }
+        let Some(s) = self.own_sound(own) else { return false };
+        let (start, stop) = s.range;
+        let v = end - *s.gain;
+        if s.volume.is_empty() {
+            add_volume_key(s.volume, start, v);
+            add_volume_key(s.volume, stop, v);
+        } else {
+            let i = volume_key_at(s.volume, start);
+            s.volume[i].volume = v;
+        }
+        true
+    }
+
     pub fn own_line_mut(&mut self, own: Own) -> Option<(&mut Vec<VolumeKey>, (f64, f64))> {
         match own {
             Own::Cut(i) => self.cuts.get_mut(i).map(|c| (&mut c.volume, (c.start, c.end))),
             Own::Clip(which, i) => self.track_mut(which).clips.get_mut(i).map(|c| (&mut c.volume, (c.start, c.end))),
         }
+    }
+}
+
+/// The sound settings a cut and a sound clip share, borrowed to change
+/// them alike (the menu, normalizing: gap 33f).
+pub struct OwnSound<'a> {
+    pub gain: &'a mut f64,
+    pub even: &'a mut bool,
+    pub mute: &'a mut bool,
+    pub loudness: &'a mut Option<f64>,
+    pub volume: &'a mut Vec<VolumeKey>,
+    pub fade_in: &'a mut f64,
+    pub fade_out: &'a mut f64,
+    /// Its stretch of its file.
+    pub range: (f64, f64),
+}
+
+impl OwnSound<'_> {
+    /// Back to the file as it is: no level, evening, mute, points or fades.
+    pub fn original(&mut self) {
+        (*self.gain, *self.even, *self.mute, *self.loudness) = (0.0, false, false, None);
+        self.volume.clear();
+        (*self.fade_in, *self.fade_out) = (0.0, 0.0);
+    }
+
+    /// Its level at file time `t`, dB: its own and its points', `OFF_DB`
+    /// when muted.
+    fn db_at(&self, t: f64) -> f64 {
+        if *self.mute { OFF_DB } else { *self.gain + volume_at(self.volume, t) }
     }
 }
 
@@ -1164,6 +1246,28 @@ mod tests {
             assert_eq!(p.own_line(own).unwrap().0.len(), 1);
         }
         assert!(p.own_line(Own::Clip(SoundTrack::Sfx, 0)).is_none());
+    }
+
+    #[test]
+    fn a_second_take_carries_on_at_the_first_ones_level() {
+        let mut p = Project::default();
+        let take = |at: f64| MusicClip { input: "take.wav".into(), at, start: 0.0, end: 4.0, ..Default::default() };
+        p.voice.clips = vec![take(10.0), take(0.0), take(20.0)];
+        // Clip 0 (at 10) follows clip 1 (at 0, ending at 4), not clip 2.
+        assert_eq!(p.before(Own::Clip(SoundTrack::Voice, 0)), Some(Own::Clip(SoundTrack::Voice, 1)));
+        assert_eq!(p.before(Own::Clip(SoundTrack::Voice, 1)), None);
+        // The first take normalized up 5 dB and pulled down 2 at its end.
+        p.voice.clips[1].gain = 5.0;
+        p.voice.clips[1].volume = vec![VolumeKey { t: 3.0, volume: 0.0 }, VolumeKey { t: 4.0, volume: -2.0 }];
+        p.voice.clips[0].gain = 1.0;
+        assert!(p.continue_level(Own::Clip(SoundTrack::Voice, 0)));
+        // It starts at 3 dB in all, flat: 1 of its own and +2 of points.
+        let c = &p.voice.clips[0];
+        assert_eq!(c.volume, vec![VolumeKey { t: 0.0, volume: 2.0 }, VolumeKey { t: 4.0, volume: 2.0 }]);
+        // And back to the file as it is.
+        p.own_sound(Own::Clip(SoundTrack::Voice, 0)).unwrap().original();
+        assert_eq!((p.voice.clips[0].gain, p.voice.clips[0].volume.len()), (0.0, 0));
+        assert!(!p.continue_level(Own::Clip(SoundTrack::Voice, 1)));
     }
 
     #[test]

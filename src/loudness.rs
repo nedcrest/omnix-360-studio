@@ -71,11 +71,17 @@ pub fn normalizing_gain(lufs: f64) -> f64 {
 /// the gain that normalizes it, or `None` where it's silent (a picture, a
 /// clip without sound).
 pub fn measure_cut(cut: &crate::project::Cut) -> Result<Option<(f64, f64)>> {
-    let file = cut.sound_file();
-    if !crate::ffmpeg::has_audio(&file).unwrap_or(false) {
+    measure_stretch(&cut.sound_file(), (cut.start, cut.end), cut.even)
+}
+
+/// Measures `file` from `start` to `end`, evened out first if `even`: its
+/// loudness and the gain that normalizes it, or `None` where it's silent.
+/// A cut's sound and a sound clip's alike.
+pub fn measure_stretch(file: &std::path::Path, (start, end): (f64, f64), even: bool) -> Result<Option<(f64, f64)>> {
+    if !crate::ffmpeg::has_audio(file).unwrap_or(false) {
         return Ok(None);
     }
-    Ok(measure(&file, cut.start, cut.end - cut.start, cut.even.then_some(LEVELER))?.map(|lufs| (lufs, normalizing_gain(lufs))))
+    Ok(measure(file, start, end - start, even.then_some(LEVELER))?.map(|lufs| (lufs, normalizing_gain(lufs))))
 }
 
 /// `rosmo360 normalize`: measures each cut (all, or those numbered in

@@ -93,6 +93,46 @@ pub fn inputs() -> Result<Vec<Input>> {
     parse_sources(&String::from_utf8_lossy(&list.stdout), &default)
 }
 
+/// The most an input's volume goes: 200 % is PipeWire's cubic volume ×8,
+/// +18 dB, enough to bring a webcam mic peaking at −12 dB up; above 100 %
+/// it is digital and raises the noise as much as the voice.
+pub const MOST_VOLUME: u32 = 200;
+
+/// An input's own volume in the system, percent (what the system's sound
+/// settings show).
+#[cfg(target_os = "linux")]
+pub fn input_volume(input: &Input) -> Result<u32> {
+    let out = std::process::Command::new("pactl").args(["get-source-volume", &input.name]).output().context("running pactl")?;
+    parse_volume(&String::from_utf8_lossy(&out.stdout)).context("reading pactl's volume")
+}
+
+/// Sets an input's own volume in the system, percent: the take and the
+/// meter both get it, as from the system's sound settings.
+#[cfg(target_os = "linux")]
+pub fn set_input_volume(input: &Input, percent: u32) -> Result<()> {
+    let ok = std::process::Command::new("pactl").args(["set-source-volume", &input.name, &format!("{}%", percent.min(MOST_VOLUME))]).status().context("running pactl")?.success();
+    if !ok {
+        bail!("pactl couldn't set {}'s volume", input.description);
+    }
+    Ok(())
+}
+
+#[cfg(not(target_os = "linux"))]
+pub fn input_volume(_: &Input) -> Result<u32> {
+    bail!("an input's volume is set on Linux only so far")
+}
+
+#[cfg(not(target_os = "linux"))]
+pub fn set_input_volume(_: &Input, _: u32) -> Result<()> {
+    bail!("an input's volume is set on Linux only so far")
+}
+
+/// The first channel's percent in `pactl get-source-volume`'s
+/// "Volume: front-left: 65536 / 100% / 0.00 dB, …".
+fn parse_volume(text: &str) -> Option<u32> {
+    text.split('/').find_map(|part| part.trim().strip_suffix('%')?.trim().parse().ok())
+}
+
 /// `pactl -f json list sources` as inputs: real sources only (not the
 /// monitors of outputs), the default first.
 fn parse_sources(json: &str, default: &str) -> Result<Vec<Input>> {
@@ -310,6 +350,13 @@ fn parse_level(line: &str) -> Option<(Measure, f64)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reads_an_inputs_volume() {
+        assert_eq!(parse_volume("Volume: mono: 65536 / 100% / 0.00 dB\n        balance 0.00"), Some(100));
+        assert_eq!(parse_volume("Volume: front-left: 98304 / 150% / 10.57 dB,   front-right: 98304 / 150% / 10.57 dB"), Some(150));
+        assert_eq!(parse_volume("No such entity"), None);
+    }
 
     #[test]
     fn lists_real_inputs_with_their_kinds_default_first() {

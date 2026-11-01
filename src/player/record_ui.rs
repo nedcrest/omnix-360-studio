@@ -20,7 +20,7 @@
 use super::{App, Message, Side, bin, tip};
 use crate::capture::{Channel, Input, Kind, Level, Recorder};
 use crate::project::SoundTrack;
-use iced::widget::{button, checkbox, column, container, pick_list, progress_bar, row, rule, scrollable, text, tooltip};
+use iced::widget::{button, checkbox, column, container, pick_list, progress_bar, row, rule, scrollable, slider, text, tooltip};
 use iced::{Alignment, Element, Length, Task};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -58,6 +58,9 @@ pub struct Panel {
     pub channel: Channel,
     pub countdown: bool,
     pub play: bool,
+    /// The chosen input's own volume in the system, percent, as read when
+    /// it was chosen; `None` if it couldn't be.
+    volume: Option<u32>,
     /// Listening for the meter, between takes.
     meter: Option<Recorder>,
     take: Option<Take>,
@@ -88,6 +91,8 @@ pub enum RecordMsg {
     Inputs(Result<Vec<Input>, String>),
     Pick(Input),
     Channel(Channel),
+    /// The input's own volume, percent.
+    Volume(u32),
     Countdown(bool),
     Play(bool),
     Record,
@@ -125,12 +130,14 @@ impl Panel {
         self.take.as_ref().map(|t| &t.rec).or(self.meter.as_ref())
     }
 
-    /// Listens to the chosen input for the meter (again, after a change).
+    /// Listens to the chosen input for the meter (again, after a change),
+    /// and reads its volume.
     fn listen(&mut self) {
         self.meter = None;
         if self.take.is_some() || self.stopping {
             return;
         }
+        self.volume = self.chosen().and_then(|i| crate::capture::input_volume(i).ok());
         if let Some(input) = self.chosen() {
             match Recorder::start(input, self.channel, None) {
                 Ok(rec) => self.meter = Some(rec),
@@ -178,6 +185,14 @@ impl App {
             RecordMsg::Channel(c) => {
                 self.record.channel = c;
                 self.record.listen();
+            }
+            RecordMsg::Volume(percent) => {
+                if let Some(input) = self.record.chosen() {
+                    match crate::capture::set_input_volume(input, percent) {
+                        Ok(()) => self.record.volume = Some(percent),
+                        Err(e) => self.record.error = Some(format!("{e:#}")),
+                    }
+                }
             }
             RecordMsg::Countdown(on) => self.record.countdown = on,
             RecordMsg::Play(on) => self.record.play = on,
@@ -353,6 +368,19 @@ impl App {
             body = body.push(tip(
                 row![text("Channel").size(13).width(Length::Fill)].extend(Channel::ALL.map(|c| pick(c).into())).spacing(4).align_y(Alignment::Center),
                 text("Which of the input's two channels the mic is on: an interface's mic input is usually 1"),
+                tooltip::Position::Bottom,
+            ));
+        }
+        if let Some(volume) = p.volume {
+            body = body.push(tip(
+                row![
+                    text("Gain").size(13).width(48),
+                    slider(0.0..=crate::capture::MOST_VOLUME as f64, volume as f64, |v| Message::Record(RecordMsg::Volume(v.round() as u32))).step(1.0),
+                    text(format!("{volume}%")).size(13).width(44),
+                ]
+                .spacing(8)
+                .align_y(Alignment::Center),
+                text("The input's own volume, as in the system's sound settings. Above 100% it's digital: the noise rises with the voice"),
                 tooltip::Position::Bottom,
             ));
         }

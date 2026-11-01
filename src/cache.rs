@@ -413,8 +413,11 @@ mod tests {
         write_telemetry(&mut w, &t).unwrap();
         let back = read_telemetry(&mut w.as_slice()).unwrap();
         assert_eq!((back.rig, back.quats, back.color_mode), (None, t.quats, color_mode));
-        // Cut short, it is a miss rather than a wrong answer.
-        assert!(read_telemetry(&mut &w[..w.len() - 1]).is_none());
+        // Cut short anywhere, it is a miss rather than a wrong answer or a
+        // panic (a crash mid-write, a full disk).
+        for n in 0..w.len() {
+            assert!(read_telemetry(&mut &w[..n]).is_none(), "cut at {n} of {}", w.len());
+        }
     }
 
     #[test]
@@ -424,5 +427,8 @@ mod tests {
         write_thumbs(&mut w, (3, 2), &thumbs).unwrap();
         assert_eq!(read_thumbs(&mut w.as_slice(), 3, 2), Some(thumbs));
         assert_eq!(read_thumbs(&mut w.as_slice(), 2, 3), None);
+        for n in 0..w.len() {
+            assert_eq!(read_thumbs(&mut &w[..n], 3, 2), None, "cut at {n}");
+        }
     }
 }

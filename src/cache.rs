@@ -33,7 +33,7 @@ use telemetry_parser::rig::CameraRig;
 const FORMAT: u32 = 2;
 const MAGIC: &[u8; 8] = b"rOsmo360";
 /// What entries are named, after the fingerprint.
-const KINDS: [&str; 3] = ["telemetry", "thumbs", "wave"];
+const KINDS: [&str; 4] = ["telemetry", "thumbs", "wave", "wave-even"];
 
 static OFF: AtomicBool = AtomicBool::new(false);
 
@@ -117,8 +117,8 @@ pub fn store_thumbs(input: &Path, size: (usize, usize), thumbs: &[Thumb]) {
 
 /// `song`'s cached waveform, if it was made with peaks `step` seconds apart:
 /// the peaks and the song's length.
-pub fn waveform(song: &Path, step: f64) -> Option<(Vec<f32>, f64)> {
-    hit(&entry(song, "wave")?, |r| {
+pub fn waveform(song: &Path, kind: &str, step: f64) -> Option<(Vec<f32>, f64)> {
+    hit(&entry(song, kind)?, |r| {
         if f64::from_le_bytes(take(r)?) != step {
             return None;
         }
@@ -129,8 +129,8 @@ pub fn waveform(song: &Path, step: f64) -> Option<(Vec<f32>, f64)> {
     })
 }
 
-pub fn store_waveform(song: &Path, step: f64, peaks: &[f32], duration: f64) {
-    if let Some(e) = entry(song, "wave") {
+pub fn store_waveform(song: &Path, kind: &str, step: f64, peaks: &[f32], duration: f64) {
+    if let Some(e) = entry(song, kind) {
         store(&e, |w| {
             w.extend(step.to_le_bytes());
             w.extend(duration.to_le_bytes());

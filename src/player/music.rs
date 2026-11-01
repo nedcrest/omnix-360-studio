@@ -36,16 +36,21 @@ pub struct Waveform {
 impl Waveform {
     /// From the clip cache, else decoded from `path` to mono at 8 kHz, which
     /// is plenty for a picture of its loudness: a 6-minute song takes about
-    /// a second.
-    pub fn read(path: &Path) -> Result<Waveform> {
-        if let Some((peaks, duration)) = crate::cache::waveform(path, WAVE_STEP) {
+    /// a second. `even`: as the leveler gives it (`loudness::LEVELER`), so an
+    /// evened-out cut is drawn as it's heard.
+    pub fn read(path: &Path, even: bool) -> Result<Waveform> {
+        let kind = if even { "wave-even" } else { "wave" };
+        if let Some((peaks, duration)) = crate::cache::waveform(path, kind, WAVE_STEP) {
             return Ok(Waveform { peaks, duration });
         }
         const RATE: usize = 8000;
-        let mut child = crate::ffmpeg::tool("ffmpeg")
-            .args(["-v", "error", "-nostdin", "-i"])
-            .arg(path)
-            .args(["-map", "0:a:0", "-ac", "1", "-ar", &RATE.to_string(), "-f", "f32le", "-"])
+        let mut cmd = crate::ffmpeg::tool("ffmpeg");
+        cmd.args(["-v", "error", "-nostdin", "-i"]).arg(path).args(["-map", "0:a:0"]);
+        if even {
+            cmd.args(["-af", crate::loudness::LEVELER]);
+        }
+        let mut child = cmd
+            .args(["-ac", "1", "-ar", &RATE.to_string(), "-f", "f32le", "-"])
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
             .spawn()
@@ -60,7 +65,7 @@ impl Waveform {
         }
         let peaks: Vec<f32> = samples.chunks(per).map(|c| c.iter().fold(0.0f32, |m, &v| m.max(v)).min(1.0)).collect();
         let duration = samples.len() as f64 / RATE as f64;
-        crate::cache::store_waveform(path, WAVE_STEP, &peaks, duration);
+        crate::cache::store_waveform(path, kind, WAVE_STEP, &peaks, duration);
         Ok(Waveform { peaks, duration })
     }
 }
@@ -199,6 +204,23 @@ impl Player {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_evened_waveform_is_read_through_the_leveler() {
+        crate::cache::disable();
+        let dir = std::env::temp_dir().join(format!("omnix-wave-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let quiet = dir.join("quiet.wav");
+        let ok = crate::ffmpeg::tool("ffmpeg").args(["-v", "error", "-y", "-f", "lavfi", "-i", "sine=f=440:d=6,volume=-30dB", "-ar", "48000"]).arg(&quiet).status().unwrap().success();
+        assert!(ok);
+        let (plain, even) = (Waveform::read(&quiet, false).unwrap(), Waveform::read(&quiet, true).unwrap());
+        std::fs::remove_dir_all(&dir).unwrap();
+        let middle = |w: &Waveform| w.peaks[w.peaks.len() / 2];
+        // −30 dB is 0.03 of full scale; the leveler lifts a steady tone
+        // well up (as `loudness`'s test measures it).
+        assert!(middle(&plain) < 0.04, "{}", middle(&plain));
+        assert!(middle(&even) > 2.0 * middle(&plain), "{} vs {}", middle(&even), middle(&plain));
+    }
 
     #[test]
     fn fades_in_out_and_before_the_video_ends() {

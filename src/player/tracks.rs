@@ -50,7 +50,7 @@ impl App {
         Task::perform(
             blocking({
                 let path = path.clone();
-                move || music::Waveform::read(&path).map(Arc::new).map_err(|e| format!("{e:#}"))
+                move || music::Waveform::read(&path, false).map(Arc::new).map_err(|e| format!("{e:#}"))
             }),
             move |r| Message::Waveform(path.clone(), r),
         )
@@ -66,17 +66,25 @@ impl App {
         const AT_ONCE: usize = 2;
         // Each file once, however many cuts use it.
         let mut seen = std::collections::HashSet::new();
-        let mut wanted: Vec<PathBuf> = self.edit.cuts.iter().map(cut_wave_file).filter(|p| !self.waveforms.contains_key(p) && !self.cut_waves_asked.contains(p) && seen.insert(p.clone())).collect();
+        // The plain waveform of each, and the evened one of those evened.
+        let wants = self.edit.cuts.iter().flat_map(|c| {
+            let file = cut_wave_file(c);
+            std::iter::once((file.clone(), false)).chain(c.even.then_some((file, true)))
+        });
+        let mut wanted: Vec<(PathBuf, bool)> = wants
+            .filter(|(p, even)| !(if *even { &self.even_waves } else { &self.waveforms }).contains_key(p))
+            .filter(|w| !self.cut_waves_asked.contains(w) && seen.insert(w.clone()))
+            .collect();
         wanted.truncate(AT_ONCE.saturating_sub(self.cut_waves_reading));
         self.cut_waves_reading += wanted.len();
-        Task::batch(wanted.into_iter().map(|path| {
-            self.cut_waves_asked.insert(path.clone());
+        Task::batch(wanted.into_iter().map(|(path, even)| {
+            self.cut_waves_asked.insert((path.clone(), even));
             Task::perform(
                 blocking({
                     let path = path.clone();
-                    move || music::Waveform::read(&path).map(Arc::new).ok()
+                    move || music::Waveform::read(&path, even).map(Arc::new).ok()
                 }),
-                move |wave| Message::CutWave(path.clone(), wave),
+                move |wave| Message::CutWave(path.clone(), even, wave),
             )
         }))
     }
@@ -149,10 +157,10 @@ impl App {
                 self.waveforms.insert(path, wave);
             }
             Message::Waveform(path, Err(e)) => self.error = Some(format!("Can't read {}: {e}", path.display())),
-            Message::CutWave(path, wave) => {
+            Message::CutWave(path, even, wave) => {
                 self.cut_waves_reading = self.cut_waves_reading.saturating_sub(1);
                 if let Some(wave) = wave {
-                    self.waveforms.insert(path, wave);
+                    (if even { &mut self.even_waves } else { &mut self.waveforms }).insert(path, wave);
                 }
             }
             Message::SelectMusic(which, i) => {

@@ -149,6 +149,9 @@ const MUSIC_LINE: iced::Color = iced::Color::from_rgb(1.0, 0.78, 0.25);
 const FADE_BAND: f32 = 12.0;
 const SFX_COLOUR: iced::Color = iced::Color::from_rgb(0.80, 0.47, 0.65);
 const VOICE_COLOUR: iced::Color = iced::Color::from_rgb(0.34, 0.71, 0.91);
+/// Waveform bars a gain pushes past full scale: the export's limiter
+/// holds them, but loud enough to look at.
+const OVER_COLOUR: iced::Color = iced::Color::from_rgb(1.0, 0.55, 0.2);
 const SOUND_LINE: iced::Color = iced::Color::from_rgb(0.35, 0.85, 1.0);
 
 /// An overlay lane's height at scale 1, above the cuts.
@@ -190,10 +193,13 @@ pub struct Block {
     /// The waveform of the sound it plays (its cleaned voice, else its
     /// clip's), by clip time, once read; none for a silent clip.
     pub wave: Option<Arc<music::Waveform>>,
-    /// Its own sound level as a short tag ("+16.1", "−12 · even"), and
-    /// whether it's muted: shown on the clip sound lane.
+    /// The same through the leveler, if the cut is evened out (and read).
+    pub even_wave: Option<Arc<music::Waveform>>,
+    /// Its own level, dB (`Cut::sound_db`: `OFF_DB` when muted).
+    pub own_db: f64,
+    /// Its own sound level as a short tag ("+16.1", "−12 · even", "muted"),
+    /// shown on the clip sound lane.
     pub level: Option<String>,
-    pub muted: bool,
     /// How long it overlaps the cut before, dissolving in.
     pub crossfade: f64,
     /// Its effect keyframes' clip times.
@@ -216,6 +222,8 @@ impl Block {
 /// (edit time, dB on top of the track's level).
 pub struct SoundLane {
     pub which: SoundTrack,
+    /// The track's level, dB.
+    pub level: f64,
     pub blocks: Vec<MusicBlock>,
     pub volume: Vec<crate::project::VolumeKey>,
 }
@@ -245,6 +253,8 @@ pub struct Timeline {
     pub selected_sound: Option<(usize, usize)>,
     /// Where the video ends; `duration` runs on to the music's end if later.
     pub video: f64,
+    /// The clips' sound level in the mix (the Audio panel's «Clip sound»).
+    pub clips_db: f64,
     pub duration: f64,
     /// The stretch of edit time shown: from `start`, `span` seconds.
     pub start: f64,
@@ -529,7 +539,7 @@ impl Timeline {
 
     fn draw_sound_lane(&self, frame: &mut Frame, theme: &Theme, b: Rectangle, li: usize) {
         let palette = theme.extended_palette();
-        let SoundLane { which, blocks, .. } = &self.sounds[li];
+        let SoundLane { which, blocks, level, volume } = &self.sounds[li];
         let colour = match which {
             SoundTrack::Music => palette.success.base.color,
             SoundTrack::Sfx => SFX_COLOUR,
@@ -546,21 +556,16 @@ impl Timeline {
             let block = Path::rounded_rectangle(Point::new(l, top), Size::new((r - l).max(1.0), h), 4.0.into());
             let selected = Some((*which, i)) == self.selected_music;
             frame.fill(&block, if selected { colour } else { colour.scale_alpha(0.55) });
-            // The waveform: per two pixels, the loudest peak under them.
+            // The waveform as it's heard: the track's level and points, the
+            // clip's fades.
             if let Some(w) = &m.wave {
-                let per_px = m.len / (r - l).max(1.0) as f64;
-                let bars = Path::new(|p| {
-                    let mut x = l.max(0.0);
-                    while x < r.min(b.width) {
-                        let (t0, t1) = (m.start + (x - l) as f64 * per_px, m.start + (x + 2.0 - l) as f64 * per_px);
-                        let (i0, i1) = ((t0 / music::WAVE_STEP) as usize, ((t1 / music::WAVE_STEP) as usize).max((t0 / music::WAVE_STEP) as usize + 1));
-                        let peak = w.peaks.get(i0..i1.min(w.peaks.len())).map_or(0.0, |s| s.iter().fold(0.0f32, |a, &v| a.max(v)));
-                        let bh = (peak * (h - 4.0)).max(1.0);
-                        p.rectangle(Point::new(x, top + h / 2.0 - bh / 2.0), Size::new(1.5, bh));
-                        x += 2.0;
-                    }
-                });
-                frame.fill(&bars, palette.background.base.text.scale_alpha(0.7));
+                let clip = crate::project::MusicClip { input: Default::default(), at: m.from, start: m.start, end: m.start + m.len, fade_in: m.fade_in, fade_out: m.fade_out };
+                let heard = |t: f64| {
+                    let on_edit = m.from + t - m.start;
+                    music::gain(*level + crate::project::volume_at(volume, on_edit)) * music::envelope(&clip, (0.0, 0.0), on_edit, self.video) as f32
+                };
+                let wave = Wave { left: l, right: r, top, height: h, start: m.start, len: m.len };
+                wave.draw(frame, b, w, w, heard, palette.background.base.text.scale_alpha(0.7));
             }
             // Fades: the clip shaded above a line from its corner to where
             // the fade ends, a handle there along the top.
@@ -658,19 +663,11 @@ impl Timeline {
             let block = Path::rounded_rectangle(Point::new(l, top), Size::new((r - l).max(1.0), h), 3.0.into());
             frame.fill(&block, SOUND_LINE.scale_alpha(if Some(i) == self.selected { 0.35 } else { 0.18 }));
             let Some(w) = &c.wave else { continue };
-            let per_px = c.len / (r - l).max(1.0) as f64;
-            let bars = Path::new(|p| {
-                let mut x = l.max(0.0);
-                while x < r.min(b.width) {
-                    let (t0, t1) = (c.start + (x - l) as f64 * per_px, c.start + (x + 2.0 - l) as f64 * per_px);
-                    let (i0, i1) = ((t0 / music::WAVE_STEP) as usize, ((t1 / music::WAVE_STEP) as usize).max((t0 / music::WAVE_STEP) as usize + 1));
-                    let peak = w.peaks.get(i0..i1.min(w.peaks.len())).map_or(0.0, |s| s.iter().fold(0.0f32, |a, &v| a.max(v)));
-                    let bh = (peak * (h - 4.0)).max(1.0);
-                    p.rectangle(Point::new(x, top + h / 2.0 - bh / 2.0), Size::new(1.5, bh));
-                    x += 2.0;
-                }
-            });
-            frame.fill(&bars, palette.background.base.text.scale_alpha(if c.muted { 0.2 } else { 0.6 }));
+            // As it's heard: evened out (once that's read), its level and
+            // points, the clips' level; what the file holds faint behind.
+            let heard = |t: f64| super::transport::cut_gain(self.clips_db, c.own_db, crate::project::volume_at(&c.sound, t));
+            let wave = Wave { left: l, right: r, top, height: h, start: c.start, len: c.len };
+            wave.draw(frame, b, w, c.even_wave.as_ref().unwrap_or(w), heard, palette.background.base.text.scale_alpha(0.6));
         }
         // Each cut's level, where there's room: a tag at its left, so
         // a lowered or muted cut shows in words, not colour alone.
@@ -1437,5 +1434,47 @@ impl canvas::Program<Message> for Marks {
             }
             _ => mouse::Interaction::Grabbing,
         }
+    }
+}
+
+/// Where a clip's waveform goes: its block's sides, top and height, and
+/// the stretch of the file it shows (in point and length, file time).
+struct Wave {
+    left: f32,
+    right: f32,
+    top: f32,
+    height: f32,
+    start: f64,
+    len: f64,
+}
+
+impl Wave {
+    /// Per two pixels, the loudest peak under them: `heard`'s peaks scaled
+    /// by `gain` at that file time, drawn in `colour`; what goes over full
+    /// scale (the limiter will hold it) in orange; and `file`'s own peaks
+    /// faint behind, so a level change shows against what was there.
+    fn draw(&self, frame: &mut Frame, b: Rectangle, file: &music::Waveform, heard: &music::Waveform, gain: impl Fn(f64) -> f32, colour: iced::Color) {
+        let (l, r, h) = (self.left, self.right, self.height - 4.0);
+        let per_px = self.len / (r - l).max(1.0) as f64;
+        let mid = self.top + self.height / 2.0;
+        let peak = |w: &music::Waveform, t0: f64, t1: f64| {
+            let (i0, i1) = ((t0 / music::WAVE_STEP) as usize, ((t1 / music::WAVE_STEP) as usize).max((t0 / music::WAVE_STEP) as usize + 1));
+            w.peaks.get(i0..i1.min(w.peaks.len())).map_or(0.0, |s| s.iter().fold(0.0f32, |a, &v| a.max(v)))
+        };
+        let (mut behind, mut bars, mut over) = (canvas::path::Builder::new(), canvas::path::Builder::new(), canvas::path::Builder::new());
+        let mut x = l.max(0.0);
+        while x < r.min(b.width) {
+            let (t0, t1) = (self.start + (x - l) as f64 * per_px, self.start + (x + 2.0 - l) as f64 * per_px);
+            let raw = peak(file, t0, t1);
+            let bh = (raw * h).max(1.0);
+            behind.rectangle(Point::new(x, mid - bh / 2.0), Size::new(1.5, bh));
+            let loud = peak(heard, t0, t1) * gain((t0 + t1) / 2.0);
+            let bh = (loud.min(1.0) * h).max(1.0);
+            (if loud > 1.0 { &mut over } else { &mut bars }).rectangle(Point::new(x, mid - bh / 2.0), Size::new(1.5, bh));
+            x += 2.0;
+        }
+        frame.fill(&behind.build(), colour.scale_alpha(0.2));
+        frame.fill(&bars.build(), colour);
+        frame.fill(&over.build(), OVER_COLOUR);
     }
 }

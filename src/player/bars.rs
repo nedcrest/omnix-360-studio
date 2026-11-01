@@ -239,8 +239,9 @@ impl App {
                     all[from..to].to_vec()
                 });
                 let wave = self.waveforms.get(&cut_wave_file(c)).cloned();
+                let even_wave = if c.even { self.even_waves.get(&cut_wave_file(c)).cloned() } else { None };
                 let level = cut_level_tag(c);
-                timeline::Block { labels: cut_labels(c, self.opts.stabilize), from, len: c.end - c.start, start: c.start, keys, sound: c.volume.clone(), wave, level, muted: c.mute, thumbs, crossfade: c.crossfade, effects: c.effects.iter().map(|k| k.t).collect() }
+                timeline::Block { labels: cut_labels(c, self.opts.stabilize), from, len: c.end - c.start, start: c.start, keys, sound: c.volume.clone(), wave, even_wave, own_db: c.sound_db(), level, thumbs, crossfade: c.crossfade, effects: c.effects.iter().map(|k| k.t).collect() }
             })
             .collect();
         let (timeline_start, timeline_span) = self.timeline_window();
@@ -260,7 +261,7 @@ impl App {
                         fade_out: c.fade_out,
                     })
                     .collect();
-                timeline::SoundLane { which, blocks, volume: track.keyframes.clone() }
+                timeline::SoundLane { which, level: track.volume, blocks, volume: track.keyframes.clone() }
             })
             .into_iter()
             .collect();
@@ -271,6 +272,7 @@ impl App {
             selected_volume: self.selected_volume,
             selected_sound: self.selected_sound,
             video: self.edit.duration(),
+            clips_db: self.edit.sound.volume,
             duration: self.edit.frame(),
             start: timeline_start,
             span: timeline_span,

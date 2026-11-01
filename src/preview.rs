@@ -101,7 +101,7 @@ pub(crate) fn sheet_music(project: &project::Project) -> Option<impl Fn(f64) -> 
     }
     let waves: Vec<Vec<_>> = tracks
         .iter()
-        .map(|track| track.clips.iter().map(|c| player::music::Waveform::read(&c.input).inspect_err(|e| eprintln!("no waveform for {}: {e:#}", c.input.display())).ok()).collect())
+        .map(|track| track.clips.iter().map(|c| player::music::Waveform::read(&c.input, false).inspect_err(|e| eprintln!("no waveform for {}: {e:#}", c.input.display())).ok()).collect())
         .collect();
     let end = project::edit_length(&project.cuts);
     Some(move |t: f64| {

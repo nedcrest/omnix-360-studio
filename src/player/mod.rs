@@ -282,7 +282,7 @@ enum Message {
     /// A song's waveform, read off the UI thread.
     Waveform(PathBuf, Result<Arc<music::Waveform>, String>),
     /// The waveform of what a cut plays, if it has sound.
-    CutWave(PathBuf, Option<Arc<music::Waveform>>),
+    CutWave(PathBuf, bool, Option<Arc<music::Waveform>>),
     /// An overlay's picture ready (by `Item::key`), and the font its text
     /// missed.
     OverlayPicture(String, Result<(Arc<crate::overlay::Picture>, Option<String>), String>),
@@ -447,9 +447,11 @@ struct App {
     thumbs: std::collections::HashMap<PathBuf, Vec<(f64, image::Handle)>>,
     /// Waveforms of sound clips and of what cuts play, by file.
     waveforms: std::collections::HashMap<PathBuf, Arc<music::Waveform>>,
-    /// The cuts' sound files whose waveforms were asked for: each once, a
-    /// silent one too (pictures, clips without sound).
-    cut_waves_asked: std::collections::HashSet<PathBuf>,
+    /// The same through the leveler, for cuts evened out.
+    even_waves: std::collections::HashMap<PathBuf, Arc<music::Waveform>>,
+    /// The cuts' sound files whose waveforms were asked for, plain or
+    /// evened: each once, a silent one too (pictures, clips without sound).
+    cut_waves_asked: std::collections::HashSet<(PathBuf, bool)>,
     /// How many of them are being read now.
     cut_waves_reading: usize,
     /// The mix's level as it plays.
@@ -642,6 +644,7 @@ impl App {
             selected_music: None,
             selected_volume: None,
             cut_waves_asked: Default::default(),
+            even_waves: Default::default(),
             cut_waves_reading: 0,
             selected_sound: None,
             music: Default::default(),

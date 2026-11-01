@@ -31,15 +31,11 @@ not edited.
   sine twice (`transport.rs`, `music.rs`); the cut and clip `afade`
   chains in `ffmpeg/mix.rs` nearly the same.
 
-**B. Two families for volume lines.** A track's line and an own line
-(cut's or clip's) are handled side by side: messages `VolumeAdd/Select/
-Move` and `SoundKeyAdd/Select/Move`; drags `Drag::Volume` and
-`Drag::Sound`; selections `selected_volume` and `selected_sound`; two
-delete arms; two K-key arms; `draw_volume` and `draw_own_line`. The enum
-that unites them already exists, `sound_ui::Line {Own, Track}` with
-`line_keys`, but in the GUI. In `project.rs` the same `match own` is
-written five times (`own_line`, `own_line_mut`, `own_sound`, `own_file`,
-`before`).
+**B. Two families for volume lines** (a track's line and an own line,
+handled side by side everywhere). **Resolved 2026-11-01:** steps 2 and 4
+made them one family, then the track's line was removed altogether at
+the user's ask (gap 33i): every point is on a cut's or a sound clip's own
+line (`project::Own`).
 
 **C. Fades, a third copy of the same split:** `Music::set_fade` and
 `Cut::set_sound_fade`, `MusicFade` and `SoundFade`, `Drag::Fade` and
@@ -111,8 +107,7 @@ pub fn drag<K: Key>(keys: &mut [K], i: usize, t: f64, v: K::V, range: (f64, f64)
 
 ```rust
 // model/params.rs: one address for whatever the UI or an agent automates
-pub enum Line { Track(SoundTrack), Own(Own) }        // moved from sound_ui
-pub enum Param { Volume(Line), Effect(Target, usize), Place(ItemRef, usize), Speed(usize) }
+pub enum Param { Volume(Own), Effect(Target, usize), Place(ItemRef, usize), Speed(usize) }
 ```
 
 ```rust
@@ -125,7 +120,7 @@ pub fn clip_gain(track: &Music, i: usize, t: f64, video_end: f64) -> f64;
 
 ```rust
 // model/selection.rs
-pub enum Selection { None, Cut(usize), Clip(SoundTrack, usize), Point(Line, usize), Item(ItemRef) }
+pub enum Selection { None, Cut(usize), Clip(SoundTrack, usize), Point(Own, usize), Item(ItemRef) }
 impl Selection {
     pub fn still_valid(self, p: &Project) -> Self;
     pub fn after_move(self, from: usize, to: usize) -> Self;
@@ -135,7 +130,7 @@ impl Edit { pub fn delete(&mut self, s: Selection) -> bool; } // the delete arms
 
 ```rust
 // model/ops.rs: for the CLI and the AI editor (`AUTO-EDIT.md`)
-pub enum Op { AddPoint(Line, f64, f64), MovePoint(Line, usize, f64, f64), Fade(Own, bool, f64),
+pub enum Op { AddPoint(Own, f64, f64), MovePoint(Own, usize, f64, f64), Fade(Own, bool, f64),
               Trim { .. }, Move { .. }, Split { .. }, SetSound(Own, SoundChange), Delete(Selection), .. }
 impl Edit { pub fn apply(&mut self, op: Op) -> Result<Outcome>; } // takes its own undo step
 ```
@@ -150,7 +145,7 @@ trait LaneView {
     fn draw(&self, tl: &Timeline, f: &mut Frame, b: Rectangle);
     fn hit(&self, tl: &Timeline, p: Point, b: Rectangle) -> Option<Hit>;
 }
-enum Hit { Block(usize), Edge(usize, bool), Fade(Own, bool), Point(Line, usize), Line(Line) }
+enum Hit { Block(usize), Edge(usize, bool), Fade(Own, bool), Point(Own, usize), Line(Own) }
 ```
 
 Before speed ramps (gap 31): `offsets`, `len()`, `locate`, `edit_time`

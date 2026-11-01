@@ -138,6 +138,8 @@ const SNAP: f32 = 8.0;
 const VOLUME_TOP: f64 = 6.0;
 const VOLUME_BOTTOM: f64 = crate::project::OFF_DB;
 const POINT: f32 = 4.0;
+/// A level dragged this close to 0 dB is 0 dB.
+const SNAP_DB: f64 = 1.0;
 const EFFECT_MARK: iced::Color = iced::Color::from_rgb(0.78, 0.55, 1.0);
 /// Where a volume line runs: its top and height. A sound track's over its
 /// lane, a cut's over the clip sound lane under it.
@@ -256,8 +258,7 @@ pub struct Timeline {
     /// The sound clip selected, and the sound track's volume point.
     pub selected_music: Option<(SoundTrack, usize)>,
     pub selected_volume: Option<(SoundTrack, usize)>,
-    /// The cut sound point selected: (cut, point).
-    /// A point on a cut's or a sound clip's own volume line.
+    /// A point on a cut's or a sound clip's own volume line, selected.
     pub selected_sound: Option<(Own, usize)>,
     /// Where the video ends; `duration` runs on to the music's end if later.
     pub video: f64,
@@ -430,12 +431,12 @@ impl Timeline {
         lane.0 + ((VOLUME_TOP - db.clamp(VOLUME_BOTTOM, VOLUME_TOP)) / (VOLUME_TOP - VOLUME_BOTTOM)) as f32 * lane.1
     }
 
-    /// y on `lane` to dB, snapping to 0 within a few pixels.
+    /// y on `lane` to dB, snapping to 0 within `SNAP_DB`. In dB, not
+    /// pixels: on the 24 px clip sound lane 3 px were ±5.7 dB, and −3 dB
+    /// couldn't be set at all (found by the tests, 2026-11-01).
     fn volume_db(lane: Lane, y: f32) -> f64 {
-        if (y - Self::volume_y(lane, 0.0)).abs() < 3.0 {
-            return 0.0;
-        }
-        (VOLUME_TOP - ((y - lane.0) / lane.1) as f64 * (VOLUME_TOP - VOLUME_BOTTOM)).clamp(VOLUME_BOTTOM, VOLUME_TOP)
+        let db = (VOLUME_TOP - ((y - lane.0) / lane.1) as f64 * (VOLUME_TOP - VOLUME_BOTTOM)).clamp(VOLUME_BOTTOM, VOLUME_TOP);
+        if db.abs() < SNAP_DB { 0.0 } else { db }
     }
 
     /// A fade handle under `p` on sound lane `lane`: (clip, at its start).
@@ -1606,5 +1607,97 @@ fn draw_fades(frame: &mut Frame, (l, r): (f32, f32), top: f32, h: f32, len: f64,
         let knob = Path::circle(Point::new(end, top + 4.0), 3.5);
         frame.fill(&knob, iced::Color::WHITE);
         frame.stroke(&knob, Stroke::default().with_width(1.0).with_color(iced::Color::from_rgba(0.0, 0.0, 0.0, 0.7)));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::project::VolumeKey;
+
+    fn block(from: f64, len: f64, crossfade: f64) -> Block {
+        Block {
+            labels: vec![], from, len, start: 0.0, keys: vec![], thumbs: vec![], sound: vec![], wave: None, even_wave: None,
+            own_db: 0.0, fade_in: 0.0, fade_out: 0.0, level: None, crossfade, effects: vec![],
+        }
+    }
+
+    /// Cuts a 0..4 and b 3..7 (crossfading 3..4), a 7..10; on Voice a clip
+    /// 2..6 with a point; on a 1000 px window showing 0..10 s.
+    fn timeline() -> (Timeline, Rectangle) {
+        let mut sounds: Vec<SoundLane> = SoundTrack::ALL.iter().map(|&which| SoundLane { which, track: Default::default(), blocks: vec![] }).collect();
+        let voice = sounds.iter_mut().find(|l| l.which == SoundTrack::Voice).unwrap();
+        voice.blocks.push(MusicBlock { label: "take".into(), from: 2.0, start: 1.0, len: 4.0, wave: None, fade_in: 1.0, fade_out: 0.0, volume: vec![VolumeKey { t: 3.0, volume: 0.0 }], even_wave: None });
+        let t = Timeline {
+            blocks: vec![block(0.0, 4.0, 0.0), block(3.0, 4.0, 1.0), block(7.0, 3.0, 0.0)],
+            sounds,
+            selected_music: None, selected_volume: None, selected_sound: None,
+            video: 10.0, clips_db: 0.0, duration: 10.0, start: 0.0, span: 10.0, position: 0.0,
+            selected: None, current: None, overlays: vec![], texts: vec![], selected_overlay: None,
+            rows: Rows::new(1.0, false),
+        };
+        (t, Rectangle::new(Point::ORIGIN, Size::new(1000.0 + 2.0 * PICK, 300.0)))
+    }
+
+    #[test]
+    fn the_rows_stack_top_to_bottom_at_every_scale() {
+        for scale in [0.5, 0.75, 1.0, 2.0, 3.0, 5.0] {
+            for framing in [false, true] {
+                let r = Rows::new(scale, framing);
+                assert!(r.cuts < r.effects_top && r.effects_top < r.seek_top && r.seek_top < r.sounds_top && r.sounds_top < r.height, "{scale} {framing}: {r:?}");
+                assert_eq!(r.keys > 0.0, framing, "the View row only while framing");
+                for i in 0..SOUND_LANES {
+                    let middle = r.sound_top(i) + r.music / 2.0;
+                    assert_eq!(r.sound_at_y(middle), Some(i));
+                }
+                assert_eq!(r.sound_at_y(r.sounds_top - 1.0), None);
+                assert_eq!(r.sound_at_y(r.height - SCROLL + 1.0), None, "the scrollbar isn't a lane");
+                assert!(r.on_clip_sound(r.cuts + 1.0) && !r.on_clip_sound(r.effects_top));
+            }
+        }
+        // Scaled outside its range, it holds at the ends.
+        assert_eq!(Rows::new(10.0, false).cuts, Rows::new(3.0, false).cuts);
+    }
+
+    #[test]
+    fn a_press_finds_the_cut_the_edge_and_the_level_under_it() {
+        let (t, b) = timeline();
+        let x = |s: f64| t.x(s, b);
+        // In the crossfade the incoming cut lies on top.
+        assert_eq!(t.block_at(x(3.5), b), Some(1));
+        assert_eq!(t.block_at(x(1.0), b), Some(0));
+        assert_eq!(t.block_at(x(8.0), b), Some(2));
+        // The join at 7 s: the later cut's in edge.
+        assert_eq!(t.edge_hit(x(7.0) + 1.0, b), Some((2, true)));
+        assert_eq!(t.edge_hit(x(5.0), b), None);
+        // The level line: y back to dB, every level outside 0 dB's ±1 dB
+        // reachable on the narrow clip sound lane too.
+        let lane = t.rows.cut_lane();
+        for db in [-30.0, -12.0, -3.0, 4.5] {
+            assert!((Timeline::volume_db(lane, Timeline::volume_y(lane, db)) - db).abs() < 0.2, "{db}");
+        }
+        assert_eq!(Timeline::volume_db(lane, Timeline::volume_y(lane, 0.5)), 0.0, "0 dB caught");
+        assert_eq!(Timeline::volume_db(lane, lane.0 + lane.1 + 50.0), VOLUME_BOTTOM, "below the lane is off");
+    }
+
+    #[test]
+    fn a_press_on_a_sound_clip_finds_its_fade_its_point_and_its_line() {
+        let (t, b) = timeline();
+        let li = t.sounds.iter().position(|l| l.which == SoundTrack::Voice).unwrap();
+        let x = |s: f64| t.x(s, b);
+        let lane = t.rows.sound_lane(li);
+        // Its fade-in handle along the top, where the 1 s fade ends.
+        assert_eq!(t.fade_at(li, Point::new(x(3.0), t.rows.sound_top(li) + 4.0), b), Some((0, true)));
+        // Its point (file time 3 s is edit time 4 s), and its line.
+        let own = Own::Clip(SoundTrack::Voice, 0);
+        assert_eq!(t.sound_at(Point::new(x(4.0), Timeline::volume_y(lane, 0.0)), b), Some((own, 0)));
+        assert_eq!(t.on_sound_line(Point::new(x(5.0), Timeline::volume_y(lane, 0.0)), b), Some(own));
+        assert_eq!(t.on_sound_line(Point::new(x(5.0), Timeline::volume_y(lane, -20.0)), b), None);
+        // A new point there: the file's own time.
+        let (at, db) = t.own_point(own, Point::new(x(5.0), Timeline::volume_y(lane, -6.0)), b).unwrap();
+        assert!((at - 4.0).abs() < 0.02 && (db + 6.0).abs() < 0.2, "{at} {db}");
+        // Off the clips there's no clip, and its edges are its edges.
+        assert_eq!(t.music_at(li, x(8.0), b), None);
+        assert_eq!(t.music_edge_at(li, 0, x(6.0) - 1.0, b), Some(false));
     }
 }

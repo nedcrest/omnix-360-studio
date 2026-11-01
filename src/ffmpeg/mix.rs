@@ -335,6 +335,28 @@ mod tests {
     }
 
     #[test]
+    fn cuts_join_end_to_end_or_crossfade_and_pad_to_their_pictures() {
+        let music = crate::project::Music::default();
+        let mix = Mix { sound_db: -6.0, tracks: vec![&music], length: 6.0, fades: Default::default() };
+        let (a, b, c) = (Path::new("a.mp4"), Path::new("b.mp4"), Path::new("c.mp4"));
+        let mut faded = stretch(b, 0.0, &[]);
+        faded.crossfade = 0.5;
+        // Lengths known: each padded to its pictures' length, the second
+        // crossfading in, the third end to end; the clips' level last.
+        let graph = mixed(&mut tool("ffmpeg"), &[stretch(a, 0.0, &[]), faded, stretch(c, 0.0, &[])], &mix).unwrap();
+        assert!(graph.matches("apad=whole_dur=4").count() == 3, "{graph}");
+        assert!(graph.contains("[c1][c2]acrossfade=d=0.5:c1=qsin:c2=qsin[j2]"), "{graph}");
+        assert!(graph.contains("[j2][c3]concat=n=2:v=0:a=1[j3]"), "{graph}");
+        assert!(graph.contains(&format!("[j3]volume={}[s]", crate::project::gain(-6.0))), "{graph}");
+        // A clip of unknown length without sound: silence in place of the
+        // whole edit's clip sound, the music still mixed.
+        let mut silent = stretch(Path::new("no-such-file.mp4"), 0.0, &[]);
+        silent.duration = None;
+        let graph = mixed(&mut tool("ffmpeg"), &[silent], &mix).unwrap();
+        assert!(graph.starts_with("anullsrc=r=48000:cl=stereo,atrim=duration=6[s];"), "{graph}");
+    }
+
+    #[test]
     fn a_cuts_sound_fades_in_and_out_over_its_own_stretch() {
         let music = crate::project::Music::default();
         let mix = Mix { sound_db: 0.0, tracks: vec![&music], length: 4.0, fades: Default::default() };

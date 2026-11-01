@@ -1,0 +1,18 @@
+{
+  "aspect": "16:9",
+  "cuts": [
+    {"input": "0037.OSV", "in": 28, "out": 37, "stabilize": "level", "note": "summit",
+     "keyframes": [{"t": 28, "yaw": -20, "fov": 100}, {"t": 37, "projection": "little-planet"}],
+     "volume": [{"t": 30, "volume": -6}],
+     "effects": [{"t": 28, "exposure": 0.5, "vignette": 0.2}],
+     "lut": "DJI D-Log M", "lut_strength": 0.6},
+    {"input": "phone.mp4", "in": 0, "out": 4, "crossfade": 1, "audio": "voice/phone.flac"}
+  ],
+  "sound": {"volume": -3},
+  "music": {"volume": -10, "clips": [{"input": "song.mp3", "at": 0, "in": 12, "out": 24, "fade_in": 1.5}],
+            "keyframes": [{"t": 2, "volume": 0}, {"t": 5, "volume": -12}]},
+  "fades": {"in": 1, "out": 2},
+  "overlays": [{"items": [{"input": "logo.png", "at": 1, "in": 0, "out": 5,
+                "motion": [{"t": 0, "x": 0.8, "y": 0.2, "size": 0.3}], "effects": [{"t": 0, "opacity": 0.8}]}]}],
+  "text": [{"items": [{"text": {"content": "Kyrkja", "font": "Inter", "size": 0.08, "colour": "#ffffff"}, "at": 0, "in": 0, "out": 3}]}]
+}

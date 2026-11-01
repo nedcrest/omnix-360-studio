@@ -1392,6 +1392,52 @@ mod tests {
         assert_eq!(c.sound_fade_out, 0.0, "nothing left after the fade in");
     }
 
+    /// Old project files, one per shape the format has had, in
+    /// `tests/fixtures/`: `deny_unknown_fields` makes a renamed field break
+    /// them loudly, so a format change that would shows here first.
+    #[test]
+    fn old_project_files_still_load() {
+        let dir = std::env::temp_dir().join(format!("omnix-fixtures-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let load = |name: &str, json: &str| {
+            let path = dir.join(name);
+            std::fs::write(&path, json).unwrap();
+            Project::load(&path).unwrap_or_else(|e| panic!("{name}: {e:#}"))
+        };
+        // rOsmo360 0.7: 360 and flat cuts, music, effects, the old LUT
+        // strength, overlays, text, fades.
+        let p = load("rosmo360-0.7.json", include_str!("../tests/fixtures/rosmo360-0.7.json"));
+        assert_eq!((p.cuts.len(), p.cuts[1].crossfade, p.sound.volume, p.music.clips[0].start), (2, 1.0, -3.0, 12.0));
+        assert_eq!(p.cuts[0].effects[0].grade.lut, 0.6, "lut_strength moved into the effects");
+        assert_eq!(p.cuts[1].audio, Some(dir.join("voice/phone.flac")));
+        assert_eq!((p.overlays[0].items.len(), p.text[0].items.len(), p.fades.fade_out), (1, 1, 2.0));
+        assert_eq!(p.music.keyframes.len(), 2);
+        // Omnix, October 2026: normalized cuts, SFX, a muted cut.
+        let p = load("omnix-2026-10.json", include_str!("../tests/fixtures/omnix-2026-10.json"));
+        assert_eq!((p.cuts[0].gain, p.cuts[0].even, p.cuts[1].mute), (2.6, true, true));
+        assert_eq!((p.sfx.clips.len(), p.voice.clips.len()), (1, 0));
+        assert_eq!(p.sfx.clips[0].input, dir.join("07_sfx/bell.wav"));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn save_names_paths_from_the_project_and_reads_back_the_same() {
+        let dir = std::env::temp_dir().join(format!("omnix-roundtrip-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("old.json"), include_str!("../tests/fixtures/rosmo360-0.7.json")).unwrap();
+        let p = Project::load(&dir.join("old.json")).unwrap();
+        p.save(&dir.join("new.json")).unwrap();
+        let text = std::fs::read_to_string(dir.join("new.json")).unwrap();
+        let again = Project::load(&dir.join("new.json")).unwrap();
+        std::fs::remove_dir_all(&dir).unwrap();
+        // Every kind of path inside the folder is written relative to it.
+        for name in ["\"0037.OSV\"", "\"voice/phone.flac\"", "\"song.mp3\"", "\"logo.png\""] {
+            assert!(text.contains(name), "{name} in {text}");
+        }
+        assert!(!text.contains(dir.to_str().unwrap()), "no absolute path inside the folder");
+        assert_eq!(again, p);
+    }
+
     #[test]
     fn a_take_lands_without_its_lead_in() {
         let mut m = Music::default();

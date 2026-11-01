@@ -1,0 +1,6 @@
+{
+  "cuts": [{"input": "DJI_0001.MP4", "in": 0, "out": 44.4, "note": "talk", "audio": "voice/dnn6.flac", "gain": 2.6, "even": true, "loudness": -18.6},
+           {"input": "DJI_0003.MP4", "in": 0, "out": 11, "mute": true}],
+  "sfx": {"clips": [{"input": "07_sfx/bell.wav", "at": 5.7, "in": 0, "out": 4.098}]},
+  "music": {"volume": -6, "clips": [{"input": "02_audio/music/travel.wav", "at": 0, "in": 0, "out": 26.7, "fade_out": 0.66}]}
+}

@@ -946,6 +946,10 @@ Shotcut is the warning: no device picker, no meter, and users get lost.
   system's sound settings change, so the meter shows it at once and the
   take is recorded with it; a boost above 100 % is digital and raises the
   noise too.
+  **Built 2026-11-01** (`93365ce`), waiting for the check. Range 0–200 %
+  (not 150: the webcam was already at 100 % when it peaked at −12 dB, and
+  PipeWire's 200 % is ×8, +18 dB). Read again when the input changes; the
+  slider stays usable while recording, like a knob on an interface.
 - **Later:**
   - takes stacked as alternates, and a takes list;
   - «Clean up voice» (footage-agent's cleaner, or `afftdn`);

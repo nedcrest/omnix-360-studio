@@ -164,7 +164,7 @@ One commit each, behaviour unchanged unless the step says so. Tests
 
 | # | Step | Size | Risk |
 |---|---|---|---|
-| 1 | `model/mixdown.rs`, the five level sites call it; then, as its own labelled fix, the contact sheet's own level and the timeline's crossfades | S | low |
+| 1 | **Done 2026-11-01** (`03e1d5b`; fixes `528a622` timeline crossfades, `55d2755` contact sheet): `src/mixdown.rs` (`equal_power`, `own_level`, `cut_gain`, `envelope`, `clip_gain`), every level site calls it | S | low |
 | 2 | `Line` into the model, `line_mut`; `own_line_mut` from `own_sound` | S | low |
 | 3 | One `set_fade(Own, …)`: `MusicFade`/`SoundFade` and `Drag::CutFade` go | S | low |
 | 4 | One family of point messages, `Drag::Point`, one selected point | M | medium: drags, Ctrl+click, K; the user checks by hand |

@@ -72,7 +72,9 @@ code as it is, not its history.
 | 8. Timeline lanes | not started: changes drawing and the mouse everywhere, wants the user's eyes after | — |
 | 9. Docs | the code's docs and CLAUDE.md's Layout; the user guide not yet | `e0b4bbf` |
 
-Tests: 63 → 68 at the refactor, 84 by 2026-11-01. Still to do from step 5:
+Tests: 63 → 68 at the refactor, 106 by 2026-11-01 (`TESTING.md`). The
+second pass's plan is `CORE-API.md`; its step 1 is done: the level rules
+in one module, `src/mixdown.rs`. Still to do from step 5:
 - one `Selection` enum instead of five loose `Option`s;
 - overlay append and key retime;
 - normalize through one function shared by the dialog and the CLI.

@@ -1249,10 +1249,11 @@ in small commits, riskiest first (time mapping, project load/save and
 old JSON, the export's sound graph, an end-to-end CLI export on tiny
 generated clips).
 
-**Done so far (2026-11-01):** analysis in `TESTING.md` (`95a6be7`), 19
-tests added (84 → 103), two bugs found and fixed: paths of a project
-saved elsewhere, and sound clips cut off by the edit's end sounding
-different in the export. What's left is listed there.
+**Done 2026-11-01:** the whole plan in `TESTING.md` (84 → 117 tests,
+three of them end to end on generated clips). Three bugs found and
+fixed: paths of a project saved elsewhere; sound clips cut off by the
+edit's end sounding different in the export; levels near 0 dB that
+couldn't be set on narrow lanes.
 
 ### 43. Editing-software best practices, colours, a switchable UI palette — research (user, 2026-11-01)
 

@@ -774,6 +774,30 @@ Built (see the commit): «Show volume line» puts points at the cut's in and
 out at 0 dB. A click on the drawn line adds a point and drags it, without
 Ctrl. Later, the same for the music and SFX clips' menus.
 
+### 33c. Fade handles on a cut's own sound — small-medium (user, 2026-11-01)
+
+User, checking the fade handles: "the fade handles work; missing: fade
+handles on the video's sound." The same white corner handles as on sound
+clips, on the Clip sound lane: the cut's sound fades in at its start and
+out at its end. Optional `Cut.sound_fade_in/out` (seconds, absent = 0);
+the player's clip volume and the export's mix both apply it (CPU = export
+rule), and a crossfade's own sound blend stays as it is.
+
+### 33d. Waveforms drawn as they're heard — small (user, 2026-11-01)
+
+User, after normalizing the scooter cut and lowering it for voice-over:
+"I don't know whether the leveler changed anything." The lane draws the
+file's raw waveform, so −14.4 dB and «even» look the same as before.
+Draw it scaled by the cut's gain and volume points (and its mute), and,
+when evened, from the evened sound (the waveform read through
+`LEVELER`, cached beside the raw one). Then the change is visible.
+
+Why the leveler didn't seem to change the scooter: its sound is wind,
+loud all the time. The leveler lifts quiet stretches toward loud ones;
+with no quiet stretch, there is nothing to lift. It helps on talk cuts
+with near and far voices. Wind needs noise reduction instead (a later
+«Clean up sound» switch, gap 36's «later» list).
+
 ### 36. Record a voice-over inside Omnix — medium-large (user, 2026-10-29)
 
 User: "for the voice-over there should be a way to record right here in
@@ -867,6 +891,13 @@ Shotcut is the warning: no device picker, no meter, and users get lost.
 - **Found while building:** ffmpeg's `ametadata=file=/dev/stderr` sits in
   a 32 KB buffer, so the meter got nothing for minutes. The levels come
   through ffmpeg's log (`-loglevel info`) instead, live.
+- **Checked by the user 2026-11-01** with the webcam's mic: works. They
+  asked for a manual gain (36b): the webcam peaks at −12 dB at most.
+- **36b. Input gain.** A slider in the panel setting the input's own
+  volume in PipeWire (`pactl set-source-volume`, 0–150 %), the same the
+  system's sound settings change, so the meter shows it at once and the
+  take is recorded with it; a boost above 100 % is digital and raises the
+  noise too.
 - **Later:**
   - takes stacked as alternates, and a takes list;
   - «Clean up voice» (footage-agent's cleaner, or `afftdn`);

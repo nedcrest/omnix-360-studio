@@ -16,11 +16,14 @@ mirrored GPU/CPU, is already solved. Transitions generalise the blend.
 
 ## Interaction
 
-- **T** (free key; check again before binding) toggles transition mode, plus a
-  button in the transport row.
-- In transition mode, the end of one cut and the start of the next get
-  handles; drag them to mark a transition zone, in **0.25 s steps**. The zone
-  is drawn **semi-transparent orange**.
+- **A Transitions lane** (user, 2026-11-01; gap 25f): a thin lane above the
+  Effects row, folding open and closed like the automation groups (gap 39).
+  Drag a rectangle across a join on it, in **0.25 s steps**: it's filled at
+  once with the default template (the last used, or a favourite), drawn
+  **semi-transparent orange** (a stinger **yellow**). No separate transition
+  mode: the cut row stays as it is.
+- A stinger's sound goes onto the SFX lane at the same time, linked to it
+  (moved and deleted with it, levelled and faded there like any clip).
 - Dragging one video over another (overlap, as the crossfade does today)
   marks the overlap orange automatically.
 - **Click an orange zone** → a side panel (right, like Effects) with transition
@@ -44,8 +47,8 @@ one action, with the default transition (or the last template used):
   template («автоматичні склейки»). One undo step. Joins too short for it
   are skipped and named.
 The same three work for stingers («перебивки»), placed in their insert or
-cover mode. This answers the open question about T below: T adds; the zone
-handles are there for fine-tuning.
+cover mode. All of them fill the Transitions lane; the rectangle's edges
+are there for fine-tuning.
 
 ## Two kinds, detected automatically
 

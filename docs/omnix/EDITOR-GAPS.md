@@ -517,6 +517,28 @@ Split into steps so each can be tried on Kos on its own:
   project's `06_external` / `07_sfx`. Needs the overlay lane to take video
   (milestone 4's first card) and sound lanes (milestone 1).
 - **25e. 360 looks:** whip pan, little-planet zoom, sphere roll.
+- **25f. A Transitions lane** (user, 2026-11-01): "transitions could also
+  be our own collapsible field somewhere above the effects. Why: on the
+  transition line you draw a rectangle (over the join of one video and the
+  next) and the program fills it with a transition we like: either a video
+  manipulation (out-in) or a video insert (white-video-noise), whose sound
+  goes straight onto the SFX lane."
+  - A thin lane of its own, folding like gap 39's groups, above Effects.
+    It replaces `TRANSITIONS.md`'s «transition mode» (T toggling handles
+    on the cut row): the zones live on this lane, so the cut row stays as
+    it is.
+  - Drag a rectangle across a join → it's filled at once with the
+    default template (the last used, or a chosen favourite); the rectangle's
+    width is the transition's length, snapped to 0.25 s. A click on it
+    opens the presets panel to change it.
+  - Kinds as `TRANSITIONS.md` has them, chosen by what the template is:
+    an overlap or edge transition (out-in, dissolve, wipe…) or a stinger
+    (an inserted clip: white noise, film burn).
+  - A stinger's sound is placed on the SFX lane at the same time and
+    length, linked to it: moving or deleting the stinger moves or deletes
+    its sound; on SFX it can still be levelled and faded like any clip.
+  - The three quick ways (T at the playhead, between two selected cuts,
+    on every join) fill the same lane.
 
 ### 26. Glow and blur — small-medium (Kos TODO, 2026-10-23)
 
@@ -1106,6 +1128,33 @@ contract covers it so View lanes arrive with that work.
 **Order.** The generic `Curve` and lane first (moving volume onto it, no
 change seen), then Effects lanes (data A with conversion), then View
 lanes with gap 37, then speed (31) as one more `Param`.
+
+### 40. Other platforms: Mac, Windows, an Android tablet or phone — question (user, 2026-11-01)
+
+User: "could this program move to Android (a tablet), or to Mac/Windows if
+needed? Or an Android phone (we have the functions, only a separate
+minimal phone UI to write)."
+
+Where it stands (answered 2026-11-01, not planned):
+- **Mac and Windows: realistic.** Upstream builds both (`CLAUDE.md`
+  item 3: an arm64 `.app` tested on the user's MacBook, a Windows zip
+  with its own ffmpeg). Omnix's own Linux-only parts each have a stub
+  that says so: the voice-over inputs and gain (`capture.rs`, PipeWire's
+  `pactl`; Windows/macOS would list ffmpeg's dshow / avfoundation
+  devices). Everything else is portable by the project's rule.
+- **Android tablet: possible, large.** The library crate (gap 35's
+  refactor) is the part that carries over: the project format, the edit
+  API, the export's maths, the GPU stitch (wgpu runs on Android's
+  Vulkan). What doesn't: iced has no maintained Android target, so the
+  UI would be a new shell (Kotlin/Compose over the Rust core, or a
+  touch-first Rust UI); ffmpeg as a separate program is awkward there
+  (an app ships it as a library, which brings back the licence choice
+  upstream avoided); file access goes through Android's storage rules.
+- **Android phone, minimal UI:** the same core and the same costs, plus
+  a small screen: a «trim, order, music, export» editor rather than the
+  full one. Cheapest of the three on UI, same price on the plumbing.
+- What keeps the door open now: the edit API (`ARCHITECTURE.md` step 5)
+  and no new Linux-only code without a stub.
 
 ## Format rule for all of these
 

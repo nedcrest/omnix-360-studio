@@ -913,6 +913,12 @@ pub mod testmedia {
 
     /// A steady 1 kHz tone, `secs` long, 48 kHz mono WAV at `path`.
     pub fn tone(path: &Path, secs: f64) {
-        ffmpeg(&["-f", "lavfi", "-i", &format!("sine=f=1000:d={secs}:sample_rate=48000"), path.to_str().unwrap()]);
+        tone_at(path, secs, 1000);
+    }
+
+    /// The same at `hz`: tones of different pitches add up by power, so
+    /// two sounds over each other can be told apart in a level.
+    pub fn tone_at(path: &Path, secs: f64, hz: u32) {
+        ffmpeg(&["-f", "lavfi", "-i", &format!("sine=f={hz}:d={secs}:sample_rate=48000"), path.to_str().unwrap()]);
     }
 }

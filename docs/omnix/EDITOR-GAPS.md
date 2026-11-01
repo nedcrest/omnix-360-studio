@@ -907,7 +907,7 @@ take recorded without manual gain):
   the pointer whatever its height. Fix: its bottom at the pointer, by its
   own height (items × row height), kept inside the window.
 
-Built 2026-11-01, waiting for the check. A right-click near a cut's or
+Built 2026-11-01 (`4f50a2e`), confirmed by the user the same day. A right-click near a cut's or
 clip's drawn line now opens the line's menu; elsewhere on it, its sound
 menu as before.
 
@@ -932,6 +932,8 @@ shape, not only its ends.
 - **Everywhere lines are:** a cut's and a sound clip's own lines, the
   track lines, and later every automation lane (gap 39's generic `Curve`
   gets it once, so effects and speed curves bend the same way).
+- **Approved by the user 2026-11-01** ("like in FL, nice, approved"):
+  built with the automation lanes, volume lines first.
 
 ### 33d. Waveforms drawn as they're heard — small (user, 2026-11-01)
 

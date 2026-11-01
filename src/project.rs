@@ -163,14 +163,13 @@ pub struct Music {
 /// A straight fade's level `into` seconds after a start and `left` before
 /// an end, with fades of `fade_in` and `fade_out` seconds there, 0..1.
 pub fn fade_ramp(into: f64, left: f64, fade_in: f64, fade_out: f64) -> f64 {
-    let mut g: f64 = 1.0;
-    if fade_in > 0.0 {
-        g = g.min(into / fade_in);
-    }
-    if fade_out > 0.0 {
-        g = g.min(left / fade_out);
-    }
-    g.clamp(0.0, 1.0)
+    ramp(into, fade_in) * ramp(left, fade_out)
+}
+
+/// One straight fade `secs` long, `x` seconds into it, 0..1 (1 with none).
+/// Fades that meet multiply, as the export's chained `afade`s do.
+pub fn ramp(x: f64, secs: f64) -> f64 {
+    if secs > 0.0 { (x / secs).clamp(0.0, 1.0) } else { 1.0 }
 }
 
 /// A volume point: `volume` dB at time `t`, straight lines (in dB) between
@@ -1382,7 +1381,7 @@ mod tests {
     fn fades_at_their_bounds() {
         // No fades: always full; fades longer than the clip: they meet, never above 1.
         assert_eq!(fade_ramp(0.0, 0.0, 0.0, 0.0), 1.0);
-        assert_eq!(fade_ramp(1.0, 1.0, 4.0, 4.0), 0.25);
+        assert_eq!(fade_ramp(1.0, 1.0, 4.0, 4.0), 0.0625, "fades that meet multiply");
         assert_eq!(fade_ramp(-1.0, 5.0, 2.0, 0.0), 0.0);
         let mut c = Cut::new("a.mp4".into(), 0.0, 2.0);
         c.set_sound_fade(true, -3.0);

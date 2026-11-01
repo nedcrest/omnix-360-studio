@@ -157,24 +157,34 @@ pub(super) fn mixed(cmd: &mut Command, audio: &[Sound<'_>], mix: &Mix<'_>) -> Re
         if clip.gain != 0.0 || !clip.volume.is_empty() {
             chain += &format!(",{}", level_filter(clip.gain, &clip.volume, &format!("(t+{})", clip.start)));
         }
+        // Fades in at their own length, even where the edit's end cuts the
+        // clip shorter: shortened, they'd rise faster than the player's.
         if clip.fade_in > 0.0 {
-            chain += &format!(",afade=t=in:st=0:d={}", clip.fade_in.min(len));
+            chain += &format!(",afade=t=in:st=0:d={}", clip.fade_in);
         }
-        // Cut off by the edit's end: fade out there instead of its own fade.
-        let cut_off = clip.end - clip.start > room;
-        let fade_out = if cut_off { crate::project::END_FADE } else { clip.fade_out };
-        if fade_out > 0.0 {
-            let d = fade_out.min(len);
-            chain += &format!(",afade=t=out:st={}:d={d}", len - d);
-        }
-        // Crossfades with the clips either side, equal power as the player
-        // has them (a quarter sine each way).
+        // Its own fade-out and its crossfade out keep their place at its
+        // own end, past `len` when the edit cuts it off; the edit's end
+        // fade comes on top. Chained fades multiply, as the player's
+        // `envelope` does.
+        let whole = clip.end - clip.start;
+        let mut fade_out = |d: f64, curve: &str| {
+            let d = d.min(whole);
+            if d > 0.0 && whole - d < len {
+                chain += &format!(",afade=t=out:st={}:d={d}{curve}", whole - d);
+            }
+        };
         let (cross_in, cross_out) = track.crossfades(i);
+        fade_out(clip.fade_out, "");
+        // Equal power, as the player has them (a quarter sine each way).
+        fade_out(cross_out, ":curve=qsin");
         if cross_in > 0.0 {
-            chain += &format!(",afade=t=in:st=0:d={}:curve=qsin", cross_in.min(len));
+            chain += &format!(",afade=t=in:st=0:d={cross_in}:curve=qsin");
         }
-        if cross_out > 0.0 && !cut_off {
-            chain += &format!(",afade=t=out:st={}:d={cross_out}:curve=qsin", len - cross_out);
+        // The edit's end fade runs over its last `END_FADE` seconds whatever
+        // the clip: one starting inside it starts already lowered, as the
+        // player's `envelope` has it (an `afade` can't start part-way).
+        if whole > room {
+            chain += &format!(",volume=eval=frame:volume='clip(({len}-t)/{},0,1)'", crate::project::END_FADE);
         }
         let delay = (clip.at * 1000.0).round();
         graph += &format!("{chain},adelay=delays={delay}:all=1,{}[m{input}];", level_filter(track.volume, &track.keyframes, "t"));
@@ -248,6 +258,81 @@ mod tests {
         }
         // At or below OFF_DB: silence, as the player has it.
         assert!(level_filter(crate::project::OFF_DB, &[], "t").ends_with("volume=0"));
+    }
+
+    /// Renders `track` through the export's mix over `length` seconds and
+    /// compares its level every 0.1 s with the player's: the track's level
+    /// times each clip's own level and envelope, clips adding by power.
+    fn export_matches_player(name: &str, track: &mut crate::project::Music, length: f64) -> Vec<String> {
+        use crate::ffmpeg::testmedia;
+        let dir = testmedia::dir(name);
+        for (k, clip) in track.clips.iter_mut().enumerate() {
+            clip.input = dir.join(format!("{k}.wav"));
+            testmedia::tone_at(&clip.input, clip.end + 1.0, 500 + 400 * k as u32);
+        }
+        let plain = dir.join("plain.wav");
+        testmedia::tone(&plain, 1.0);
+        let base = crate::ffmpeg::audio_levels(&plain, 0.5).unwrap()[0].0;
+        let mix = Mix { sound_db: 0.0, tracks: vec![track], length, fades: Default::default() };
+        // Input 0 stands for the picture, as in an export.
+        let mut cmd = tool("ffmpeg");
+        cmd.args(["-v", "error", "-nostdin", "-y", "-f", "lavfi", "-t", &length.to_string(), "-i", "anullsrc=r=48000:cl=stereo"]);
+        let graph = mixed(&mut cmd, &[], &mix).unwrap();
+        let out = dir.join("out.wav");
+        assert!(cmd.args(["-filter_complex", &graph, "-map", "[a]"]).arg(&out).status().unwrap().success(), "{graph}");
+        let got = crate::ffmpeg::audio_levels(&out, 0.1).unwrap();
+        std::fs::remove_dir_all(&dir).unwrap();
+        let mut wrong = Vec::new();
+        for (k, (db, _)) in got.iter().enumerate() {
+            let t = k as f64 * 0.1 + 0.05;
+            if t >= length - 0.05 {
+                break;
+            }
+            // The player's power averaged over the same 0.1 s the level is
+            // measured on, so steep fades compare fairly.
+            let power_at = |t: f64| -> f64 {
+                (0..track.clips.len())
+                    .map(|i| {
+                        let c = &track.clips[i];
+                        let g = crate::project::gain(track.level_at(t)) * crate::project::gain(c.own_db_at(t)) * crate::player::music::envelope(c, track.crossfades(i), t, length);
+                        g * g
+                    })
+                    .sum()
+            };
+            let power = (0..20).map(|j| power_at(k as f64 * 0.1 + (j as f64 + 0.5) * 0.005)).sum::<f64>() / 20.0;
+            let want = base + 10.0 * power.max(1e-12).log10();
+            // Clearly audible levels only: the export steps a level once per
+            // audio frame (~21 ms), which tells near silence.
+            if want > base - 20.0 && (db - want).abs() > 0.7 {
+                wrong.push(format!("{t:.2} s: export {db:.1} dB, player {want:.1}"));
+            }
+        }
+        wrong
+    }
+
+    #[test]
+    fn the_export_fades_sound_clips_as_the_player_does() {
+        use crate::project::MusicClip;
+        let clip = |at: f64, end: f64| MusicClip { at, start: 0.0, end, ..Default::default() };
+        // Fades in and out, a crossfade, a clip at its own level.
+        let mut track = crate::project::Music::default();
+        track.clips = vec![MusicClip { fade_in: 1.0, ..clip(0.0, 3.0) }, MusicClip { fade_out: 1.0, gain: -6.0, ..clip(2.5, 3.0) }];
+        let wrong = export_matches_player("mix-fades", &mut track, 6.0);
+        assert!(wrong.is_empty(), "{wrong:#?}");
+    }
+
+    #[test]
+    fn the_export_cuts_a_clip_off_at_the_edits_end_as_the_player_does() {
+        use crate::project::MusicClip;
+        // A long fade-out of its own, cut off by the edit's end (and so
+        // its end fade too), and a crossfade the end cuts into.
+        let mut track = crate::project::Music::default();
+        track.clips = vec![MusicClip { at: 0.0, start: 0.0, end: 6.0, fade_out: 6.0, ..Default::default() }];
+        let mut wrong = export_matches_player("mix-cut-off", &mut track, 5.0);
+        let mut track = crate::project::Music::default();
+        track.clips = vec![MusicClip { at: 0.0, start: 0.0, end: 4.0, ..Default::default() }, MusicClip { at: 3.0, start: 0.0, end: 3.0, ..Default::default() }];
+        wrong.extend(export_matches_player("mix-cross-cut-off", &mut track, 3.6));
+        assert!(wrong.is_empty(), "{wrong:#?}");
     }
 
     #[test]

@@ -82,11 +82,12 @@ pub fn gain(db: f64) -> f32 {
 pub fn envelope(clip: &MusicClip, (cross_in, cross_out): (f64, f64), t: f64, video_end: f64) -> f64 {
     let into = t - clip.at;
     let left = clip.ends() - t;
+    // Its own fades, and the edit's end fade over them where it runs on
+    // past the video: all multiply, as the export's chained fades do.
     let mut g = project::fade_ramp(into, left, clip.fade_in, clip.fade_out);
     if clip.ends() > video_end {
-        g = g.min((video_end - t) / project::END_FADE);
+        g *= project::ramp(video_end - t, project::END_FADE);
     }
-    let g = g.clamp(0.0, 1.0);
     let quarter_sine = |x: f64| (x.clamp(0.0, 1.0) * std::f64::consts::FRAC_PI_2).sin();
     let mut x = 1.0;
     if cross_in > 0.0 {

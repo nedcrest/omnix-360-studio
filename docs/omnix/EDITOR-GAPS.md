@@ -830,6 +830,16 @@ Draw it scaled by the cut's gain and volume points (and its mute), and,
 when evened, from the evened sound (the waveform read through
 `LEVELER`, cached beside the raw one). Then the change is visible.
 
+**Built 2026-11-01** (`ded823b`), waiting for the user's check. Defaults
+taken: the file's own waveform stays faint behind the heard one, so a
+change shows against what was there; bars a gain pushes past full scale
+are orange (the export's limiter holds them); linear height as before
+(not dB), so −14 dB shows as a fifth of the height. The evened waveform
+is the whole file read through `LEVELER`, cached as `wave-even`; the mix
+evens each cut's stretch, so the very start of a cut may differ a little.
+Sound clips (Music, SFX, Voice) are drawn with their track's level,
+points and fades too.
+
 Why the leveler didn't seem to change the scooter: its sound is wind,
 loud all the time. The leveler lifts quiet stretches toward loud ones;
 with no quiet stretch, there is nothing to lift. It helps on talk cuts

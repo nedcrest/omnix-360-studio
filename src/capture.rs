@@ -213,17 +213,23 @@ impl Default for Level {
 /// Over this, dBFS, a take has clipped.
 const CLIP_DB: f64 = -0.1;
 
+/// What the thread reading ffmpeg's log has heard so far.
+#[derive(Default)]
+struct Heard {
+    level: Level,
+    /// When ffmpeg's first level arrived: the take's first sound, near
+    /// enough (within the 50 ms a level covers).
+    first: Option<Instant>,
+    /// ffmpeg's last words that weren't levels: why it stopped, if it did.
+    said: Vec<String>,
+}
+
 /// An input being listened to: for the meter alone, or recorded to a file.
 pub struct Recorder {
     child: Child,
     stdin: Option<ChildStdin>,
-    level: Arc<Mutex<Level>>,
-    /// When ffmpeg's first level arrived: the take's first sound, near
-    /// enough (to a tenth of a second at most).
-    first: Arc<Mutex<Option<Instant>>>,
+    heard: Arc<Mutex<Heard>>,
     file: Option<PathBuf>,
-    /// ffmpeg's last words that weren't levels: why it stopped, if it did.
-    said: Arc<Mutex<Vec<String>>>,
 }
 
 impl Recorder {
@@ -245,49 +251,49 @@ impl Recorder {
         }
         let mut child = cmd.stdin(Stdio::piped()).stdout(Stdio::null()).stderr(Stdio::piped()).spawn().context("running ffmpeg")?;
         let stdin = child.stdin.take();
-        let (level, first) = (Arc::new(Mutex::new(Level::default())), Arc::new(Mutex::new(None)));
         let err = child.stderr.take().unwrap();
-        let said = Arc::new(Mutex::new(Vec::new()));
-        let (l, f, s) = (level.clone(), first.clone(), said.clone());
+        let heard = Arc::new(Mutex::new(Heard::default()));
+        let h = heard.clone();
         std::thread::spawn(move || {
             for line in BufReader::new(err).lines().map_while(Result::ok) {
-                let Some(db) = parse_peak(&line) else {
-                    if !line.contains("frame:") {
-                        let mut s = s.lock().unwrap();
-                        s.push(line);
-                        let n = s.len();
-                        s.drain(..n.saturating_sub(4));
+                let mut h = h.lock().unwrap();
+                match parse_peak(&line) {
+                    Some(db) => {
+                        h.first.get_or_insert_with(Instant::now);
+                        h.level.peak = db;
+                        h.level.clipped |= db >= CLIP_DB;
                     }
-                    continue;
-                };
-                f.lock().unwrap().get_or_insert_with(Instant::now);
-                let mut level = l.lock().unwrap();
-                level.peak = db;
-                level.clipped |= db >= CLIP_DB;
+                    None if !line.contains("frame:") => {
+                        h.said.push(line);
+                        let n = h.said.len();
+                        h.said.drain(..n.saturating_sub(4));
+                    }
+                    None => {}
+                }
             }
         });
-        Ok(Recorder { child, stdin, level, first, file: file.map(Path::to_owned), said })
+        Ok(Recorder { child, stdin, heard, file: file.map(Path::to_owned) })
     }
 
     pub fn level(&self) -> Level {
-        *self.level.lock().unwrap()
+        self.heard.lock().unwrap().level
     }
 
     /// Clears the clip light.
     pub fn clear_clip(&self) {
-        self.level.lock().unwrap().clipped = false;
+        self.heard.lock().unwrap().level.clipped = false;
     }
 
     /// What ffmpeg said that wasn't a level, if it stopped: the reason.
     pub fn problem(&mut self) -> Option<String> {
         let ended = self.child.try_wait().ok().flatten().is_some();
-        let said = self.said.lock().unwrap().join("; ");
+        let said = self.heard.lock().unwrap().said.join("; ");
         (ended && !said.is_empty()).then_some(said)
     }
 
     /// When the first sound came in, once it has.
     pub fn first_sound(&self) -> Option<Instant> {
-        *self.first.lock().unwrap()
+        self.heard.lock().unwrap().first
     }
 
     /// Stops it and returns the take's file (finished: ffmpeg was asked to

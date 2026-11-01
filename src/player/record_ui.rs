@@ -147,11 +147,6 @@ impl Panel {
     }
 }
 
-/// Seconds from `a` to `b`, negative if `b` is first.
-fn between(a: Instant, b: Instant) -> f64 {
-    if b >= a { (b - a).as_secs_f64() } else { -(a - b).as_secs_f64() }
-}
-
 /// The next take's file in `dir`: `VO_<date>_<time>_take<NN>.wav`, NN one
 /// more than the takes already there.
 fn take_file(dir: &Path) -> PathBuf {
@@ -326,7 +321,9 @@ impl App {
         }
         // The file's time where the edit was at the playhead.
         let start = match take.rec.first_sound() {
-            Some(first) => (between(first, take.anchor.unwrap_or(take.rolls)) + LEVEL_WINDOW + latency(take.kind)).max(0.0),
+            // The playhead's moment before the first sound (no countdown)
+            // counts as none.
+            Some(first) => take.anchor.unwrap_or(take.rolls).saturating_duration_since(first).as_secs_f64() + LEVEL_WINDOW + latency(take.kind),
             None => 0.0,
         };
         let at = take.at;
@@ -435,13 +432,5 @@ mod tests {
         let name = take_file(&dir).file_name().unwrap().to_string_lossy().into_owned();
         std::fs::remove_dir_all(&dir).unwrap();
         assert!(name.starts_with("VO_") && name.ends_with("_take02.wav"), "{name}");
-    }
-
-    #[test]
-    fn the_lead_in_is_the_time_between_the_first_sound_and_the_playhead() {
-        let first = Instant::now();
-        let anchor = first + Duration::from_millis(3200);
-        assert!((between(first, anchor) - 3.2).abs() < 1e-9);
-        assert!((between(anchor, first) + 3.2).abs() < 1e-9);
     }
 }

@@ -10,12 +10,14 @@ const LEVEL_MOST: f64 = crate::loudness::MOST_GAIN;
 /// A cut's or a sound clip's own level as its lane tags it ("0 dB",
 /// "+1.4 · even", "muted"): always shown, as it is the knob a drag up or
 /// down turns (gap 44).
-pub(super) fn level_tag(gain: f64, mute: bool, even: bool) -> String {
-    let mut parts = vec![if mute { "muted".to_owned() } else if gain == 0.0 { "0 dB".to_owned() } else { format!("{gain:+.1}") }];
-    if even {
-        parts.push("even".to_owned());
-    }
-    parts.join(" · ")
+pub(super) fn level_tag(gain: f64, mute: bool, filters: [(bool, &str); 3]) -> String {
+    let level = if mute { "muted".to_owned() } else if gain == 0.0 { "0 dB".to_owned() } else { format!("{gain:+.1}") };
+    std::iter::once(level).chain(filters.into_iter().filter(|f| f.0).map(|f| f.1.to_owned())).collect::<Vec<_>>().join(" · ")
+}
+
+/// What a level tag says of a sound's filters, in the order they run.
+pub(super) fn filter_tags(low_cut: bool, clean: bool, even: bool) -> [(bool, &'static str); 3] {
+    [(low_cut, "low cut"), (clean, "clean"), (even, "even")]
 }
 
 /// The file to draw cut `cut`'s waveform from (`Cut::sound_file`).

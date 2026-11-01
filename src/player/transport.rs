@@ -82,7 +82,7 @@ impl App {
             return;
         };
         match &mut self.partner {
-            Some((j, inc)) if *j == i && inc.playback.media.input == input && inc.playback.media.audio == heard_audio(&self.edit.cuts[i]) && inc.playback.media.even == self.edit.cuts[i].even => {
+            Some((j, inc)) if *j == i && inc.playback.media.input == input && inc.playback.media.audio == heard_audio(&self.edit.cuts[i]) && inc.playback.media.filter == self.edit.cuts[i].sound_filter() => {
                 let p = &mut inc.playback;
                 // Primed to catch up: started as the edit gets there.
                 if let Some(at) = p.go_at {
@@ -205,7 +205,7 @@ impl App {
         let loaded = |input: &PathBuf| self.library.iter().find(|m| &m.input == input);
         // A next cut that starts where this one ends in the same clip (after
         // a split) just plays on: no seek, nothing to prime.
-        let carries_on = next_cut.is_some_and(|n| n.input == cut.input && n.audio == cut.audio && n.even == cut.even && (n.start - cut.end).abs() < 1.5 / p.media.fps && n.crossfade == 0.0);
+        let carries_on = next_cut.is_some_and(|n| n.input == cut.input && n.audio == cut.audio && n.sound_filter() == cut.sound_filter() && (n.start - cut.end).abs() < 1.5 / p.media.fps && n.crossfade == 0.0);
         // Where the next cut comes in: this one's end, or before it by the
         // crossfade.
         let change = self.edit.crossfade_from(self.current).unwrap_or(cut.end);
@@ -299,7 +299,7 @@ impl App {
         let Some(cut) = self.edit.cuts.get(i) else { return };
         let t = t.clamp(cut.start, cut.end);
         // Another clip, or the same clip heard through another audio file.
-        let other_clip = self.clip.as_ref().is_none_or(|c| c.playback.media.input != cut.input || c.playback.media.audio != heard_audio(cut) || c.playback.media.even != cut.even);
+        let other_clip = self.clip.as_ref().is_none_or(|c| c.playback.media.input != cut.input || c.playback.media.audio != heard_audio(cut) || c.playback.media.filter != cut.sound_filter());
         if (i != self.current || other_clip) && self.held.is_none() {
             self.held = self.sphere();
         }
@@ -418,7 +418,7 @@ impl App {
     pub(super) fn reload_cut_sound(&mut self) {
         let Some(cut) = self.edit.cuts.get(self.current) else { return };
         let Some(c) = &self.clip else { return };
-        if c.playback.media.even == cut.even {
+        if c.playback.media.filter == cut.sound_filter() {
             return;
         }
         let playing = c.playback.playing;

@@ -578,7 +578,7 @@ pub(crate) fn run() -> Result<()> {
             let p = Pipeline::new(&input, &opts, stab::Mode::Off)?;
             let start = p.snap(start);
             let total = duration.map(|d| (d * p.fps).round() as usize);
-            let mut encoder = ffmpeg::Encoder::new(&output, (width, width / 2), p.fps, &[ffmpeg::Sound { input: &input, start, duration, volume: &[], crossfade: 0.0, gain: 0.0, even: false, fade_in: 0.0, fade_out: 0.0 }], None, ffmpeg::Format::Mp4, false)?;
+            let mut encoder = ffmpeg::Encoder::new(&output, (width, width / 2), p.fps, &[ffmpeg::Sound { input: &input, start, duration, volume: &[], crossfade: 0.0, gain: 0.0, filter: None, fade_in: 0.0, fade_out: 0.0 }], None, ffmpeg::Format::Mp4, false)?;
             let began = Instant::now();
             let mut tick = |n: usize| {
                 if n.is_multiple_of(10) {

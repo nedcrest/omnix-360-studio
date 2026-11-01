@@ -72,26 +72,27 @@ impl Waveform {
 
 /// A clip's sound, open: its song, where the clip sits on the edit, from
 /// where in the song the stream started (so it's at `from + elapsed` once
-/// let through), whether it has been, and whether it's evened out (decoded
-/// through the leveler).
+/// let through), whether it has been, and the filters it's decoded through
+/// (`MusicClip::sound_filter`; a stream with others isn't reused).
 struct Open {
     input: PathBuf,
     at: f64,
     from: f64,
     audio: Audio,
     started: bool,
-    even: bool,
+    filter: Option<String>,
 }
 
 impl Open {
     fn is(&self, clip: &MusicClip) -> bool {
-        self.input == clip.input && self.at == clip.at && self.from == clip.start && self.even == clip.even
+        self.input == clip.input && self.at == clip.at && self.from == clip.start && self.filter == clip.sound_filter()
     }
 
     /// `clip`'s sound from `from` in its file, evened out if it is.
     fn new(clip: &MusicClip, from: f64, volume: f32) -> Result<Open> {
-        let audio = Audio::prepare(&clip.input, from, volume, clip.even.then_some(crate::loudness::LEVELER))?;
-        Ok(Open { input: clip.input.clone(), at: clip.at, from, audio, started: false, even: clip.even })
+        let filter = clip.sound_filter();
+        let audio = Audio::prepare(&clip.input, from, volume, filter.as_deref())?;
+        Ok(Open { input: clip.input.clone(), at: clip.at, from, audio, started: false, filter })
     }
 
     fn play(&mut self) {
@@ -126,7 +127,7 @@ impl Player {
             let want = clip.start + (t - clip.at);
             // Playing and in step (a split song's second half plays on in its
             // first half's stream), else made ready for it, else started.
-            let in_step = old.iter().position(|o| o.started && o.input == clip.input && o.even == clip.even && (o.from + o.audio.elapsed() - want).abs() < DRIFT);
+            let in_step = old.iter().position(|o| o.started && o.input == clip.input && o.filter == clip.sound_filter() && (o.from + o.audio.elapsed() - want).abs() < DRIFT);
             let ready = || old.iter().position(|o| !o.started && o.is(clip));
             let mut open = match in_step.or_else(ready) {
                 Some(k) => old.swap_remove(k),

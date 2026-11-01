@@ -426,6 +426,11 @@ pub struct MusicClip {
     /// Off; `gain` kept for when it's back on.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub mute: bool,
+    /// Its low rumble cut and steady noise cleaned, as a cut's.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub low_cut: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub clean: bool,
     /// What normalizing measured of its stretch, LUFS.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub loudness: Option<f64>,
@@ -449,6 +454,11 @@ impl MusicClip {
     /// Its own level, dB: `OFF_DB` when muted.
     pub fn sound_db(&self) -> f64 {
         if self.mute { OFF_DB } else { self.gain }
+    }
+
+    /// The filters its sound goes through (`loudness::sound_filter`).
+    pub fn sound_filter(&self) -> Option<String> {
+        crate::loudness::sound_filter(self.even, self.low_cut, self.clean)
     }
 
     /// Its own level at edit time `t`, dB: its level and its volume
@@ -544,6 +554,12 @@ pub struct Cut {
     /// Its sound is off; `gain` is kept for when it's back on.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub mute: bool,
+    /// Its low rumble cut (`loudness::LOW_CUT`) and its steady noise
+    /// cleaned (`loudness::CLEAN`), before evening.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub low_cut: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub clean: bool,
     /// Its sound fades in from its start and out to its end, seconds
     /// (the picture doesn't): straight, as the sound tracks' fades.
     #[serde(default, skip_serializing_if = "is_zero")]
@@ -584,6 +600,8 @@ impl Cut {
             gain: 0.0,
             even: false,
             mute: false,
+            low_cut: false,
+            clean: false,
             sound_fade_in: 0.0,
             sound_fade_out: 0.0,
             loudness: None,
@@ -595,6 +613,11 @@ impl Cut {
     /// Its sound's own level, dB: `gain`, or silence when muted.
     pub fn sound_db(&self) -> f64 {
         if self.mute { OFF_DB } else { self.gain }
+    }
+
+    /// The filters its sound goes through (`loudness::sound_filter`).
+    pub fn sound_filter(&self) -> Option<String> {
+        crate::loudness::sound_filter(self.even, self.low_cut, self.clean)
     }
 
     /// The file whose sound the cut plays (its cleaned voice if it has one
@@ -861,17 +884,18 @@ impl Project {
     /// `own`'s sound settings, to change.
     pub fn own_sound(&mut self, own: Own) -> Option<OwnSound<'_>> {
         match own {
-            Own::Cut(i) => self.cuts.get_mut(i).map(|c| OwnSound { range: (c.start, c.end), gain: &mut c.gain, even: &mut c.even, mute: &mut c.mute, loudness: &mut c.loudness, volume: &mut c.volume, fade_in: &mut c.sound_fade_in, fade_out: &mut c.sound_fade_out }),
-            Own::Clip(which, i) => self.track_mut(which).clips.get_mut(i).map(|c| OwnSound { range: (c.start, c.end), gain: &mut c.gain, even: &mut c.even, mute: &mut c.mute, loudness: &mut c.loudness, volume: &mut c.volume, fade_in: &mut c.fade_in, fade_out: &mut c.fade_out }),
+            Own::Cut(i) => self.cuts.get_mut(i).map(|c| OwnSound { range: (c.start, c.end), gain: &mut c.gain, even: &mut c.even, mute: &mut c.mute, low_cut: &mut c.low_cut, clean: &mut c.clean, loudness: &mut c.loudness, volume: &mut c.volume, fade_in: &mut c.sound_fade_in, fade_out: &mut c.sound_fade_out }),
+            Own::Clip(which, i) => self.track_mut(which).clips.get_mut(i).map(|c| OwnSound { range: (c.start, c.end), gain: &mut c.gain, even: &mut c.even, mute: &mut c.mute, low_cut: &mut c.low_cut, clean: &mut c.clean, loudness: &mut c.loudness, volume: &mut c.volume, fade_in: &mut c.fade_in, fade_out: &mut c.fade_out }),
         }
     }
 
     /// The file `own`'s sound comes from (a cut's cleaned voice or proxy,
-    /// as `Cut::sound_file`), its stretch of it and whether it's evened.
-    pub fn own_file(&self, own: Own) -> Option<(PathBuf, (f64, f64), bool)> {
+    /// as `Cut::sound_file`), its stretch of it, and the filters it would go
+    /// through evened out or not as `even` says (normalizing asks).
+    pub fn own_file(&self, own: Own, even: bool) -> Option<(PathBuf, (f64, f64), Option<String>)> {
         match own {
-            Own::Cut(i) => self.cuts.get(i).map(|c| (c.sound_file(), (c.start, c.end), c.even)),
-            Own::Clip(which, i) => self.track(which).clips.get(i).map(|c| (c.input.clone(), (c.start, c.end), c.even)),
+            Own::Cut(i) => self.cuts.get(i).map(|c| (c.sound_file(), (c.start, c.end), crate::loudness::sound_filter(even, c.low_cut, c.clean))),
+            Own::Clip(which, i) => self.track(which).clips.get(i).map(|c| (c.input.clone(), (c.start, c.end), crate::loudness::sound_filter(even, c.low_cut, c.clean))),
         }
     }
 
@@ -922,6 +946,8 @@ pub struct OwnSound<'a> {
     pub gain: &'a mut f64,
     pub even: &'a mut bool,
     pub mute: &'a mut bool,
+    pub low_cut: &'a mut bool,
+    pub clean: &'a mut bool,
     pub loudness: &'a mut Option<f64>,
     pub volume: &'a mut Vec<VolumeKey>,
     pub fade_in: &'a mut f64,
@@ -943,6 +969,7 @@ impl OwnSound<'_> {
     /// Back to the file as it is: no level, evening, mute, points or fades.
     pub fn original(&mut self) {
         (*self.gain, *self.even, *self.mute, *self.loudness) = (0.0, false, false, None);
+        (*self.low_cut, *self.clean) = (false, false);
         self.volume.clear();
         (*self.fade_in, *self.fade_out) = (0.0, 0.0);
     }

@@ -18,8 +18,9 @@ pub struct Media {
     /// A sound file heard in place of the clip's own (`Cut::audio`), set on
     /// the copy a cut plays; the library's copy has none.
     pub audio: Option<PathBuf>,
-    /// The cut's sound is evened out (`Cut::even`), on the copy it plays.
-    pub even: bool,
+    /// The filters the cut's sound goes through (`Cut::sound_filter`), on
+    /// the copy it plays.
+    pub filter: Option<String>,
     pub rig: Arc<Rig>,
     pub stab: Stabilizer,
     pub readout_ms: f64,
@@ -37,16 +38,16 @@ impl Media {
         self.audio.as_deref().unwrap_or(&self.input)
     }
 
-    /// The filter its sound goes through: the leveler when evened out.
-    pub fn leveler(&self) -> Option<&'static str> {
-        self.even.then_some(crate::loudness::LEVELER)
+    /// The filters its sound goes through: rumble cut, cleaning, evening.
+    pub fn filter(&self) -> Option<&str> {
+        self.filter.as_deref()
     }
 
     /// This clip as cut `cut` plays it: with the cut's audio file, if any.
     pub(super) fn for_cut(&self, cut: &Cut) -> Media {
         let mut media = self.clone();
         media.audio = heard_audio(cut);
-        media.even = cut.even;
+        media.filter = cut.sound_filter();
         media.has_audio |= media.audio.is_some();
         media
     }
@@ -79,7 +80,7 @@ impl Media {
             },
             has_audio: ffmpeg::has_audio(&input)?,
             audio: None,
-            even: false,
+            filter: None,
             proxy,
             osv_size: opts.osv_size,
             hw,

@@ -17,8 +17,9 @@ pub struct Sound<'a> {
     pub volume: &'a [crate::project::VolumeKey],
     /// The cut's own level, dB (`Cut::sound_db`), applied only in a mix.
     pub gain: f64,
-    /// Evened out first (`loudness::LEVELER`), only in a mix.
-    pub even: bool,
+    /// The filters it goes through first (`loudness::sound_filter`: its
+    /// rumble cut, cleaning, evening), only in a mix.
+    pub filter: Option<String>,
     /// Seconds it crossfades with the stretch before, only in a mix.
     pub crossfade: f64,
     /// Its own fades in and out, seconds (`Cut::sound_fade_in`/`_out`),
@@ -111,7 +112,7 @@ pub(super) fn mixed(cmd: &mut Command, audio: &[Sound<'_>], mix: &Mix<'_>) -> Re
             } else {
                 format!(",{}", level_filter(sound.gain, sound.volume, &format!("(t+{})", sound.start)))
             };
-            let even = if sound.even { format!(",{}", crate::loudness::LEVELER) } else { String::new() };
+            let even = sound.filter.as_ref().map_or_else(String::new, |f| format!(",{f}"));
             // Straight, as the player's `Cut::sound_fade`.
             let mut fades = String::new();
             if sound.fade_in > 0.0 {
@@ -151,8 +152,8 @@ pub(super) fn mixed(cmd: &mut Command, audio: &[Sound<'_>], mix: &Mix<'_>) -> Re
         let mut chain = format!("[{input}:a:0]{stereo}");
         // Its own sound, as a cut's: evened, then its level and points
         // (file time: the stretch starts at `clip.start`).
-        if clip.even {
-            chain += &format!(",{}", crate::loudness::LEVELER);
+        if let Some(f) = clip.sound_filter() {
+            chain += &format!(",{f}");
         }
         if clip.gain != 0.0 || !clip.volume.is_empty() {
             chain += &format!(",{}", level_filter(clip.gain, &clip.volume, &format!("(t+{})", clip.start)));
@@ -207,7 +208,7 @@ mod tests {
     use super::*;
 
     fn stretch<'a>(input: &'a Path, gain: f64, volume: &'a [crate::project::VolumeKey]) -> Sound<'a> {
-        Sound { input, start: 2.0, duration: Some(4.0), volume, gain, even: false, crossfade: 0.0, fade_in: 0.0, fade_out: 0.0 }
+        Sound { input, start: 2.0, duration: Some(4.0), volume, gain, filter: None, crossfade: 0.0, fade_in: 0.0, fade_out: 0.0 }
     }
 
     #[test]

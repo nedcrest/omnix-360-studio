@@ -87,6 +87,10 @@ pub enum SoundMsg {
     Continue(Own),
     /// Back to the file as it is (`OwnSound::original`).
     Original(Own),
+    /// Its low rumble cut, on or off (`loudness::LOW_CUT`); its steady
+    /// noise cleaned (`loudness::CLEAN`).
+    LowCut(Own, bool),
+    Clean(Own, bool),
     /// A volume line's point `i` removed (Ctrl+click on it, or its menu).
     DeletePoint(Own, usize),
     /// A volume line removed, all its points.
@@ -117,7 +121,7 @@ impl App {
                 let Some(d) = self.normalize.as_mut() else { return Task::none() };
                 let todo: Vec<Own> = match d.scope {
                     Scope::All => (0..self.edit.cuts.len()).map(Own::Cut).collect(),
-                    Scope::Own(own) if self.edit.own_file(own).is_some() => vec![own],
+                    Scope::Own(own) if self.edit.own_line(own).is_some() => vec![own],
                     Scope::Own(_) => Vec::new(),
                     Scope::Track(which) => (0..self.edit.track(which).clips.len()).map(|i| Own::Clip(which, i)).collect(),
                 };
@@ -140,7 +144,7 @@ impl App {
                         *s.loudness = Some(*lufs);
                     }
                 }
-                let name = self.edit.own_file(own).map(|(f, ..)| super::clip_name(&f)).unwrap_or_default();
+                let name = self.edit.own_file(own, false).map(|(f, ..)| super::clip_name(&f)).unwrap_or_default();
                 if let Some(Dialog { state: State::Running { done, gains, silent, failed, .. }, .. }) = self.normalize.as_mut() {
                     *done += 1;
                     match result {
@@ -169,6 +173,8 @@ impl App {
                 }
             }),
             SoundMsg::Original(own) => self.set_sound(own, |mut s| s.original()),
+            SoundMsg::LowCut(own, on) => self.set_sound(own, |s| *s.low_cut = on),
+            SoundMsg::Clean(own, on) => self.set_sound(own, |s| *s.clean = on),
             SoundMsg::Continue(own) => {
                 self.sound_menu = None;
                 self.edit.attempt(|e| e.continue_level(own));
@@ -231,8 +237,8 @@ impl App {
             return Task::none();
         };
         // Measured as it will sound: evened out or not as asked.
-        let Some((file, range, _)) = self.edit.own_file(own) else { return Task::none() };
-        Task::perform(blocking(move || crate::loudness::measure_stretch(&file, range, even).map_err(|e| format!("{e:#}"))), move |r| Message::Sound(SoundMsg::Measured(own, r)))
+        let Some((file, range, filter)) = self.edit.own_file(own, even) else { return Task::none() };
+        Task::perform(blocking(move || crate::loudness::measure_stretch(&file, range, filter.as_deref()).map_err(|e| format!("{e:#}"))), move |r| Message::Sound(SoundMsg::Measured(own, r)))
     }
 
     /// The dialog over the window, if open.
@@ -290,7 +296,7 @@ impl App {
 
     /// How the dialog names a cut's sound or a sound clip.
     fn own_name(&self, own: Own) -> String {
-        let file = self.edit.own_file(own).map(|(f, ..)| super::clip_name(&f)).unwrap_or_default();
+        let file = self.edit.own_file(own, false).map(|(f, ..)| super::clip_name(&f)).unwrap_or_default();
         match own {
             Own::Cut(i) => format!("Cut {}: {file}", i + 1),
             Own::Clip(which, _) => format!("{}: {file}", which.name()),
@@ -307,9 +313,9 @@ impl App {
         match menu {
             Menu::Own(own) => {
                 let Some((keys, _)) = self.edit.own_line(own) else { return below };
-                let (gain, mute, even, loudness) = match own {
-                    Own::Cut(i) => self.edit.cuts.get(i).map(|c| (c.gain, c.mute, c.even, c.loudness)),
-                    Own::Clip(which, i) => self.edit.track(which).clips.get(i).map(|c| (c.gain, c.mute, c.even, c.loudness)),
+                let (gain, mute, even, loudness, low_cut, clean) = match own {
+                    Own::Cut(i) => self.edit.cuts.get(i).map(|c| (c.gain, c.mute, c.even, c.loudness, c.low_cut, c.clean)),
+                    Own::Clip(which, i) => self.edit.track(which).clips.get(i).map(|c| (c.gain, c.mute, c.even, c.loudness, c.low_cut, c.clean)),
                 }
                 .unwrap_or_default();
                 items.push(sound(format!("Lower for voice-over ({VOICE_OVER_DIP:+.0} dB)"), SoundMsg::Lower(own)));
@@ -325,6 +331,8 @@ impl App {
                 }
                 items.push(sound(if mute { "Unmute".into() } else { "Mute".into() }, SoundMsg::Mute(own, !mute)));
                 items.push(sound(if even { "Stop evening out".into() } else { "Even out quiet and loud".into() }, SoundMsg::Even1(own, !even)));
+                items.push(sound(if low_cut { "Stop cutting the low rumble".into() } else { "Cut the low rumble (wind)".into() }, SoundMsg::LowCut(own, !low_cut)));
+                items.push(sound(if clean { "Stop cleaning up the noise".into() } else { "Clean up steady noise".into() }, SoundMsg::Clean(own, !clean)));
                 items.push(sound("Normalize…".into(), SoundMsg::Open(Scope::Own(own))));
                 items.push(sound("Back to the original".into(), SoundMsg::Original(own)));
                 // Auto-duck where a song is right-clicked too, not only on

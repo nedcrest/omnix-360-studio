@@ -28,6 +28,24 @@ pub const MOST_GAIN: f64 = 24.0;
 /// voice only 2.5 dB, which the user couldn't hear. Samples for choosing by
 /// ear: EDITOR-GAPS gap 11.
 pub const LEVELER: &str = "dynaudnorm=f=150:g=7:p=0.9:m=12:b=1";
+
+/// «Cut the low rumble»: a high-pass at 120 Hz, two poles. Wind on a
+/// scooter and handling rumble live under ~150 Hz; voices start around
+/// 85-180 Hz, so little of them goes (gap 46c).
+pub const LOW_CUT: &str = "highpass=f=120:p=2";
+
+/// «Clean up steady noise»: FFT denoising that follows the noise floor as
+/// it changes (`tn`), 12 dB of reduction (ffmpeg's default), floor −40 dB.
+/// For hiss, hum, an engine's drone; not for gusts (gap 46c).
+pub const CLEAN: &str = "afftdn=nr=12:nf=-40:tn=1";
+
+/// The filters a cut's or a sound clip's sound goes through, in order: the
+/// rumble cut first, then the denoising, the leveler last (it should even
+/// out the voice, not the wind or the hiss). `None` when there are none.
+pub fn sound_filter(even: bool, low_cut: bool, clean: bool) -> Option<String> {
+    let parts: Vec<&str> = [(low_cut, LOW_CUT), (clean, CLEAN), (even, LEVELER)].into_iter().filter_map(|(on, f)| on.then_some(f)).collect();
+    (!parts.is_empty()).then(|| parts.join(","))
+}
 /// Quieter than this is silence, not something to raise.
 const SILENT_LUFS: f64 = -70.0;
 
@@ -71,17 +89,18 @@ pub fn normalizing_gain(lufs: f64) -> f64 {
 /// the gain that normalizes it, or `None` where it's silent (a picture, a
 /// clip without sound).
 pub fn measure_cut(cut: &crate::project::Cut) -> Result<Option<(f64, f64)>> {
-    measure_stretch(&cut.sound_file(), (cut.start, cut.end), cut.even)
+    measure_stretch(&cut.sound_file(), (cut.start, cut.end), cut.sound_filter().as_deref())
 }
 
-/// Measures `file` from `start` to `end`, evened out first if `even`: its
+/// Measures `file` from `start` to `end` through `filter` (its evening and
+/// cleaning, `sound_filter`): its
 /// loudness and the gain that normalizes it, or `None` where it's silent.
 /// A cut's sound and a sound clip's alike.
-pub fn measure_stretch(file: &std::path::Path, (start, end): (f64, f64), even: bool) -> Result<Option<(f64, f64)>> {
+pub fn measure_stretch(file: &std::path::Path, (start, end): (f64, f64), filter: Option<&str>) -> Result<Option<(f64, f64)>> {
     if !crate::ffmpeg::has_audio(file).unwrap_or(false) {
         return Ok(None);
     }
-    Ok(measure(file, start, end - start, even.then_some(LEVELER))?.map(|lufs| (lufs, normalizing_gain(lufs))))
+    Ok(measure(file, start, end - start, filter)?.map(|lufs| (lufs, normalizing_gain(lufs))))
 }
 
 /// `rosmo360 normalize`: measures each cut (all, or those numbered in
@@ -120,6 +139,13 @@ pub fn normalize(project: &std::path::Path, only: &[usize], even: bool, output: 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn filters_run_rumble_cut_then_cleaning_then_evening() {
+        assert_eq!(sound_filter(false, false, false), None);
+        assert_eq!(sound_filter(true, true, true).unwrap(), format!("{LOW_CUT},{CLEAN},{LEVELER}"));
+        assert_eq!(sound_filter(true, false, true).unwrap(), format!("{CLEAN},{LEVELER}"));
+    }
 
     #[test]
     fn measures_a_level_and_a_change_in_it() {

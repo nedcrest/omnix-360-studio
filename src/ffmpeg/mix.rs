@@ -142,12 +142,21 @@ pub(super) fn mixed(cmd: &mut Command, audio: &[Sound<'_>], mix: &Mix<'_>) -> Re
         // What's left of the edit from where it starts.
         let room = mix.length - clip.at;
         let len = (clip.end - clip.start).min(room);
-        if len <= 0.0 {
+        // A muted clip is silent whatever its points say: left out.
+        if len <= 0.0 || clip.sound_db() <= crate::project::OFF_DB {
             continue;
         }
         let input = audio.len() + parts.len();
         cmd.args(["-ss", &clip.start.to_string(), "-t", &len.to_string()]).arg("-i").arg(&clip.input);
         let mut chain = format!("[{input}:a:0]{stereo}");
+        // Its own sound, as a cut's: evened, then its level and points
+        // (file time: the stretch starts at `clip.start`).
+        if clip.even {
+            chain += &format!(",{}", crate::loudness::LEVELER);
+        }
+        if clip.gain != 0.0 || !clip.volume.is_empty() {
+            chain += &format!(",{}", level_filter(clip.gain, &clip.volume, &format!("(t+{})", clip.start)));
+        }
         if clip.fade_in > 0.0 {
             chain += &format!(",afade=t=in:st=0:d={}", clip.fade_in.min(len));
         }
@@ -202,6 +211,22 @@ mod tests {
         assert!(graph.contains("[1:a:0]") && graph.split("[c1]").next().unwrap().contains("volume=0"), "{graph}");
         assert!(graph.contains(&format!("volume={}", crate::project::gain(3.0))), "{graph}");
         assert!(graph.ends_with(&format!("{LIMITER}[a]")), "{graph}");
+    }
+
+    #[test]
+    fn a_sound_clips_own_level_and_evening_come_before_its_fades() {
+        let mut voice = crate::project::Music::default();
+        voice.clips.push(crate::project::MusicClip { input: "take1.wav".into(), at: 1.0, start: 0.5, end: 3.5, gain: 4.0, even: true, fade_in: 0.3, ..Default::default() });
+        voice.clips.push(crate::project::MusicClip { input: "take2.wav".into(), at: 5.0, start: 0.0, end: 2.0, mute: true, ..Default::default() });
+        let mix = Mix { sound_db: 0.0, tracks: vec![&voice], length: 8.0, fades: Default::default() };
+        let mut cmd = tool("ffmpeg");
+        let graph = mixed(&mut cmd, &[], &mix).unwrap();
+        let chain = graph.split("[1:a:0]").nth(1).unwrap();
+        let (even, level, fade) = (chain.find(crate::loudness::LEVELER).unwrap(), chain.find(&format!("volume={}", crate::project::gain(4.0))).unwrap(), chain.find("afade=t=in").unwrap());
+        assert!(even < level && level < fade, "{graph}");
+        // The muted take isn't even an input.
+        let args: Vec<_> = cmd.get_args().map(|a| a.to_string_lossy().into_owned()).collect();
+        assert!(!args.iter().any(|a| a == "take2.wav"), "{args:?}");
     }
 
     #[test]

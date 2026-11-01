@@ -75,30 +75,6 @@ pub fn gain(db: f64) -> f32 {
     project::gain(db) as f32
 }
 
-/// How loud music clip `clip` is at edit time `t` from its own fades, its
-/// `crossfades` with the clips before and after it (equal power, so the
-/// loudness holds through the middle), and the fade-out before `video_end`
-/// when it runs on past it, 0..1.
-pub fn envelope(clip: &MusicClip, (cross_in, cross_out): (f64, f64), t: f64, video_end: f64) -> f64 {
-    let into = t - clip.at;
-    let left = clip.ends() - t;
-    // Its own fades, and the edit's end fade over them where it runs on
-    // past the video: all multiply, as the export's chained fades do.
-    let mut g = project::fade_ramp(into, left, clip.fade_in, clip.fade_out);
-    if clip.ends() > video_end {
-        g *= project::ramp(video_end - t, project::END_FADE);
-    }
-    let quarter_sine = |x: f64| (x.clamp(0.0, 1.0) * std::f64::consts::FRAC_PI_2).sin();
-    let mut x = 1.0;
-    if cross_in > 0.0 {
-        x *= quarter_sine(into / cross_in);
-    }
-    if cross_out > 0.0 {
-        x *= quarter_sine(left / cross_out);
-    }
-    g * x
-}
-
 /// A clip's sound, open: its song, where the clip sits on the edit, from
 /// where in the song the stream started (so it's at `from + elapsed` once
 /// let through), whether it has been, and whether it's evened out (decoded
@@ -146,7 +122,7 @@ impl Player {
             self.open.clear();
             return;
         }
-        let level = |i: usize, t: f64| gain(track.level_at(t)) * gain(track.clips[i].own_db_at(t)) * envelope(&track.clips[i], track.crossfades(i), t, video_end) as f32;
+        let level = |i: usize, t: f64| crate::mixdown::clip_gain(track, i, t, video_end) as f32;
         let mut old = std::mem::take(&mut self.open);
         let now: Vec<usize> = (0..track.clips.len()).filter(|&i| t >= track.clips[i].at && t < track.clips[i].ends() && t < video_end).collect();
         for &i in &now {
@@ -224,22 +200,5 @@ mod tests {
         // well up (as `loudness`'s test measures it).
         assert!(middle(&plain) < 0.04, "{}", middle(&plain));
         assert!(middle(&even) > 2.0 * middle(&plain), "{} vs {}", middle(&even), middle(&plain));
-    }
-
-    #[test]
-    fn fades_in_out_and_before_the_video_ends() {
-        let clip = MusicClip { input: "song.mp3".into(), at: 10.0, start: 0.0, end: 100.0, fade_in: 2.0, ..Default::default() };
-        let none = (0.0, 0.0);
-        assert_eq!(envelope(&clip, none, 11.0, 1000.0), 0.5);
-        assert_eq!(envelope(&clip, none, 50.0, 1000.0), 1.0);
-        // The video ends at 60 s, so it fades over the last 3 s before it.
-        assert_eq!(envelope(&clip, none, 58.5, 60.0), 0.5);
-        assert_eq!(envelope(&clip, none, 56.0, 60.0), 1.0);
-        let short = MusicClip { fade_out: 4.0, end: 20.0, ..clip.clone() };
-        assert_eq!(envelope(&short, none, 28.0, 1000.0), 0.5);
-        // Halfway through a 4 s crossfade into the next clip: equal power,
-        // so the two together are as loud as one.
-        let out = envelope(&clip, (0.0, 4.0), 108.0, 1000.0);
-        assert!((out * out - 0.5).abs() < 1e-9, "{out}");
     }
 }

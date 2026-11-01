@@ -2,8 +2,8 @@
 //! evened out, with its volume points, crossfaded into the next), the sound
 //! tracks' clips placed, faded and levelled, all mixed and held under the
 //! limiter, as one ffmpeg filter graph. Built as a string, so it is tested
-//! without running ffmpeg. The player follows the same rules (`cut_gain`,
-//! `music::envelope`); change them together.
+//! without running ffmpeg. The player follows the same rules
+//! (`mixdown`), and the tests here check the two sound alike.
 
 use super::*;
 
@@ -293,8 +293,7 @@ mod tests {
             let power_at = |t: f64| -> f64 {
                 (0..track.clips.len())
                     .map(|i| {
-                        let c = &track.clips[i];
-                        let g = crate::project::gain(track.level_at(t)) * crate::project::gain(c.own_db_at(t)) * crate::player::music::envelope(c, track.crossfades(i), t, length);
+                        let g = crate::mixdown::clip_gain(track, i, t, length);
                         g * g
                     })
                     .sum()

@@ -447,11 +447,9 @@ impl MusicClip {
     }
 
     /// Its own level at edit time `t`, dB: its level and its volume
-    /// points (in the file's time), off at `OFF_DB` whatever the points
-    /// say, as a cut's (`cut_gain`'s rule).
+    /// points (in the file's time), off when muted (`mixdown::own_level`).
     pub fn own_db_at(&self, t: f64) -> f64 {
-        let own = self.sound_db();
-        if own <= OFF_DB { OFF_DB } else { own + volume_at(&self.volume, self.start + t - self.at) }
+        crate::mixdown::own_level(self.sound_db(), volume_at(&self.volume, self.start + t - self.at))
     }
 }
 
@@ -949,7 +947,7 @@ impl OwnSound<'_> {
     /// Its level at file time `t`, dB: its own and its points', `OFF_DB`
     /// when muted.
     fn db_at(&self, t: f64) -> f64 {
-        if *self.mute { OFF_DB } else { *self.gain + volume_at(self.volume, t) }
+        crate::mixdown::own_level(if *self.mute { OFF_DB } else { *self.gain }, volume_at(self.volume, t))
     }
 }
 

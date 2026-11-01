@@ -5,13 +5,6 @@
 
 use super::*;
 
-/// A cut's sound as the speakers get it from the mix, as the export works
-/// it out: its own level (`Cut::sound_db`, silence when muted) plus its
-/// volume points, off at `OFF_DB`; times the clips' level.
-pub(super) fn cut_gain(clips_db: f64, own_db: f64, points_db: f64) -> f32 {
-    if own_db <= crate::project::OFF_DB { 0.0 } else { music::gain(own_db + points_db) * music::gain(clips_db) }
-}
-
 /// The next cut is primed this many seconds before the playing one ends:
 /// enough for its decoder to open and seek. From a network share that took
 /// 0.2-1.6 s; at 1 s ahead the slower ones still stalled the change.
@@ -38,14 +31,13 @@ impl App {
         // The cut's own volume points move its level as it plays, and
         // through a crossfade the two cuts trade places, equal power.
         let shares = self.crossfade_shares();
-        let quarter = |x: f64| (x.clamp(0.0, 1.0) * std::f64::consts::FRAC_PI_2).sin() as f32;
-        let v = self.clip_volume() * shares.map_or(1.0, |(mine, _)| quarter(mine));
+        let v = self.clip_volume() * shares.map_or(1.0, |(mine, _)| crate::mixdown::equal_power(mine) as f32);
         if let Some(c) = &mut self.clip {
             c.playback.set_volume(v);
         }
         if let (Some((_, theirs)), Some((i, inc))) = (shares, &self.partner) {
             let (own, points, fade) = self.edit.cuts.get(*i).map_or((0.0, 0.0, 1.0), |c| (c.sound_db(), crate::project::volume_at(&c.volume, inc.playback.now()), c.sound_fade(inc.playback.now())));
-            let v = cut_gain(self.edit.sound.volume, own, points) * fade as f32 * quarter(theirs);
+            let v = (crate::mixdown::cut_gain(self.edit.sound.volume, own, points, fade) * crate::mixdown::equal_power(theirs)) as f32;
             if let Some((_, inc)) = &mut self.partner {
                 inc.playback.set_volume(v);
             }
@@ -176,7 +168,7 @@ impl App {
             (Some(c), Some(cut)) => (cut.sound_db(), crate::project::volume_at(&cut.volume, c.playback.now()), cut.sound_fade(c.playback.now())),
             _ => (0.0, 0.0, 1.0),
         };
-        cut_gain(self.edit.sound.volume, own, points) * fade as f32
+        crate::mixdown::cut_gain(self.edit.sound.volume, own, points, fade) as f32
     }
 
     pub(super) fn with_playback(&mut self, f: impl FnOnce(&mut Playback)) {
@@ -491,20 +483,6 @@ impl App {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_cuts_sound_as_the_export_mixes_it() {
-        // Muted is silent even with a point above 0 dB.
-        assert_eq!(cut_gain(0.0, crate::project::OFF_DB, 6.0), 0.0);
-        // Its own level and points go off at OFF_DB on their own, before
-        // the clips' level, as each stretch's volume filter does.
-        assert_eq!(cut_gain(10.0, -30.0, -12.0), 0.0);
-        assert!((cut_gain(-6.0, 3.0, 3.0) - 1.0).abs() < 1e-6);
-    }
-}
 
 impl App {
     /// Playing and moving through the edit: this area's messages, as `handle` passes them on.

@@ -113,7 +113,7 @@ pub(crate) fn sheet_music(project: &project::Project) -> Option<impl Fn(f64) -> 
                     continue;
                 }
                 let peak = wave.peaks.get(((clip.start + t - clip.at) / player::music::WAVE_STEP) as usize).copied().unwrap_or(0.0);
-                let level = player::music::gain(track.level_at(t)) * player::music::envelope(clip, track.crossfades(i), t, end) as f32;
+                let level = player::music::gain(track.level_at(t)) * crate::mixdown::envelope(clip, track.crossfades(i), t, end) as f32;
                 loudest = loudest.max(peak * level);
             }
         }

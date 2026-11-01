@@ -641,7 +641,7 @@ impl Timeline {
                 let heard = |t: f64| {
                     let on_edit = m.from + t - m.start;
                     let own = if m.own_db <= crate::project::OFF_DB { crate::project::OFF_DB } else { m.own_db + crate::project::volume_at(&m.volume, t) };
-                    music::gain(*level + crate::project::volume_at(volume, on_edit)) * music::gain(own) * music::envelope(&clip, (0.0, 0.0), on_edit, self.video) as f32
+                    music::gain(*level + crate::project::volume_at(volume, on_edit)) * music::gain(own) * crate::mixdown::envelope(&clip, (0.0, 0.0), on_edit, self.video) as f32
                 };
                 let wave = Wave { left: l, right: r, top, height: h, start: m.start, len: m.len };
                 wave.draw(frame, b, w, m.even_wave.as_ref().unwrap_or(w), heard, palette.background.base.text.scale_alpha(0.7));
@@ -749,8 +749,8 @@ impl Timeline {
             let Some(w) = &c.wave else { continue };
             // As it's heard: evened out (once that's read), its level and
             // points, the clips' level; what the file holds faint behind.
-            let ramp = |t: f64| crate::project::fade_ramp(t - c.start, c.start + c.len - t, c.fade_in, c.fade_out) as f32;
-            let heard = |t: f64| super::transport::cut_gain(self.clips_db, c.own_db, crate::project::volume_at(&c.sound, t)) * ramp(t);
+            let ramp = |t: f64| crate::project::fade_ramp(t - c.start, c.start + c.len - t, c.fade_in, c.fade_out);
+            let heard = |t: f64| crate::mixdown::cut_gain(self.clips_db, c.own_db, crate::project::volume_at(&c.sound, t), ramp(t)) as f32;
             let wave = Wave { left: l, right: r, top, height: h, start: c.start, len: c.len };
             wave.draw(frame, b, w, c.even_wave.as_ref().unwrap_or(w), heard, palette.background.base.text.scale_alpha(0.6));
         }

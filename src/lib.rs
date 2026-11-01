@@ -11,6 +11,7 @@ mod check;
 mod dissolve;
 mod dji;
 mod duck;
+mod mixdown;
 mod exposure;
 mod grade;
 mod ffmpeg;

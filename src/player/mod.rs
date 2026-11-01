@@ -820,11 +820,7 @@ impl App {
         let busy = self.clip.iter().chain(self.partner.as_ref().map(|(_, c)| c)).any(|c| c.playback.busy());
         let close = window::close_requests().map(|_| Message::CloseRequested);
         // The Record panel's meter and countdown, every screen frame.
-        let (keys, close) = if self.side == Some(Side::Record) {
-            (Subscription::batch([keys, window::frames().map(|_| Message::Record(record_ui::RecordMsg::Tick))]), close)
-        } else {
-            (keys, close)
-        };
+        let keys = if self.side == Some(Side::Record) { Subscription::batch([keys, window::frames().map(|_| Message::Record(record_ui::RecordMsg::Tick))]) } else { keys };
         if busy {
             Subscription::batch([keys, close, window::frames().map(|_| Message::Tick)])
         } else if self.loading.is_some() {

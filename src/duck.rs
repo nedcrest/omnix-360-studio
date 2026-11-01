@@ -1,0 +1,228 @@
+//! Auto-duck: the music lowered under speech (gap 3). The user's design
+//! (2026-10-23): one action and one «how much»; where speech is comes from
+//! the cleaned voice; the result is ordinary volume points on the Music
+//! track's line, to be edited by hand like any.
+//!
+//! Speech is found in the waveforms of what certainly is speech: cuts with a
+//! cleaned voice (`Cut::audio`, footage-agent's denoised talk) and the
+//! takes on the Voice lane. A cut's own sound without one is wind, traffic
+//! and music as often as talk, so it doesn't count. Plain model maths: the
+//! waveforms are read by the caller.
+
+use crate::project::{Project, VolumeKey, volume_at};
+use std::path::PathBuf;
+
+/// The music starts going down this long before speech, so the first
+/// word is heard clear.
+pub const ATTACK: f64 = 0.3;
+/// It comes back up over this long after speech, so a pause between
+/// sentences doesn't pump.
+pub const RELEASE: f64 = 0.6;
+/// Pauses shorter than this stay ducked: two sentences are one stretch.
+pub const HOLD: f64 = 0.8;
+/// A peak this far under the loudest of a voice's stretch is a pause.
+const BELOW_LOUDEST_DB: f64 = 24.0;
+/// …but never quieter than this, dBFS: a denoised pause sits far lower.
+const FLOOR_DB: f64 = -50.0;
+/// Shorter blips (a click, a breath) aren't speech.
+const SHORTEST: f64 = 0.25;
+
+/// What may hold speech: a file, its stretch in its own time, and where
+/// that stretch starts on the edit.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Source {
+    pub file: PathBuf,
+    pub start: f64,
+    pub end: f64,
+    pub at: f64,
+}
+
+/// The project's sources of speech: cuts with a cleaned voice and the
+/// Voice lane's takes, muted ones left out.
+pub fn sources(project: &Project) -> Vec<Source> {
+    let offsets = crate::project::offsets(&project.cuts);
+    let cuts = project.cuts.iter().zip(offsets).filter(|(c, _)| !c.mute).filter_map(|(c, at)| Some(Source { file: c.audio.clone()?, start: c.start, end: c.end, at }));
+    let takes = project.voice.clips.iter().filter(|c| !c.mute).map(|c| Source { file: c.input.clone(), start: c.start, end: c.end, at: c.at });
+    cuts.chain(takes).collect()
+}
+
+/// Where a waveform holds speech within `start..end` (its own time), as
+/// stretches of edit time from `at`: peaks (one per `step` seconds, 0..1)
+/// above the stretch's loudest less `BELOW_LOUDEST_DB` (and above
+/// `FLOOR_DB`), pauses under `HOLD` bridged, blips under `SHORTEST` dropped.
+pub fn speech(peaks: &[f32], step: f64, source: &Source) -> Vec<(f64, f64)> {
+    let first = (source.start / step).floor().max(0.0) as usize;
+    let last = ((source.end / step).ceil() as usize).min(peaks.len());
+    if first >= last {
+        return Vec::new();
+    }
+    let db = |p: f32| 20.0 * (p.max(1e-6) as f64).log10();
+    let loudest = peaks[first..last].iter().fold(0.0f32, |m, &p| m.max(p));
+    let threshold = (db(loudest) - BELOW_LOUDEST_DB).max(FLOOR_DB);
+    let mut spans: Vec<(f64, f64)> = Vec::new();
+    for i in first..last {
+        if db(peaks[i]) < threshold {
+            continue;
+        }
+        let (a, b) = ((i as f64 * step).max(source.start), ((i + 1) as f64 * step).min(source.end));
+        match spans.last_mut() {
+            Some(last) if a - last.1 < HOLD => last.1 = b,
+            _ => spans.push((a, b)),
+        }
+    }
+    spans.retain(|(a, b)| b - a >= SHORTEST);
+    spans.iter().map(|&(a, b)| (source.at + a - source.start, source.at + b - source.start)).collect()
+}
+
+/// Where `project` holds speech, edit time: each source's waveform read
+/// (from the cache, or decoded once; `player::music::Waveform` until the
+/// waveform moves to the media layer, `CORE-API.md` step 7). Slow on a
+/// cold cache: off the UI thread.
+pub fn find_speech(project: &Project) -> anyhow::Result<Vec<(f64, f64)>> {
+    use crate::player::music::{WAVE_STEP, Waveform};
+    let mut spans = Vec::new();
+    for s in sources(project) {
+        let wave = Waveform::read(&s.file, false)?;
+        spans.extend(speech(&wave.peaks, WAVE_STEP, &s));
+    }
+    Ok(merge(spans))
+}
+
+/// `rosmo360 duck`: the music lowered `depth` dB under the project's
+/// speech, as the Audio panel's «Lower under speech» does; prints where,
+/// writes the project to `output` if given.
+pub fn run(path: &std::path::Path, depth: f64, output: Option<&std::path::Path>) -> anyhow::Result<()> {
+    let mut project = Project::load(path)?;
+    let spans = find_speech(&project)?;
+    for (a, b) in &spans {
+        println!("speech {a:7.2} – {b:7.2} s");
+    }
+    if spans.is_empty() {
+        println!("no speech found: it's looked for in cleaned voices and on the Voice lane");
+    }
+    project.music.keyframes = duck(&project.music.keyframes, &spans, depth);
+    if let Some(out) = output {
+        project.save(out)?;
+        eprintln!("wrote {}", out.display());
+    }
+    Ok(())
+}
+
+/// Stretches from several sources as one sorted list, overlapping or near
+/// ones (closer than `HOLD`) joined.
+pub fn merge(mut spans: Vec<(f64, f64)>) -> Vec<(f64, f64)> {
+    spans.sort_by(|x, y| x.0.total_cmp(&y.0));
+    let mut out: Vec<(f64, f64)> = Vec::new();
+    for (a, b) in spans {
+        match out.last_mut() {
+            Some(last) if a - last.1 < HOLD => last.1 = last.1.max(b),
+            _ => out.push((a, b)),
+        }
+    }
+    out
+}
+
+/// The track's line with the music `depth` dB lower over each speech
+/// stretch, ramped down `ATTACK` before it and up over `RELEASE` after:
+/// the duck added to what the line already says, so a hand-drawn line
+/// keeps its shape. Ramps that would meet between two stretches keep it
+/// down.
+pub fn duck(line: &[VolumeKey], speech: &[(f64, f64)], depth: f64) -> Vec<VolumeKey> {
+    // Where the duck itself bends: 0 dB, down, down, 0 dB per stretch,
+    // stretches whose ramps would cross joined first.
+    let mut spans: Vec<(f64, f64)> = Vec::new();
+    for &(a, b) in speech {
+        match spans.last_mut() {
+            Some(last) if a - ATTACK <= last.1 + RELEASE => last.1 = last.1.max(b),
+            _ => spans.push((a, b)),
+        }
+    }
+    let mut bends: Vec<(f64, f64)> = Vec::new();
+    for (a, b) in spans {
+        bends.extend([((a - ATTACK).max(0.0), 0.0), (a, -depth.abs()), (b, -depth.abs()), (b + RELEASE, 0.0)]);
+    }
+    let duck_at = |t: f64| {
+        let i = bends.partition_point(|k| k.0 <= t);
+        match (i.checked_sub(1).map(|j| bends[j]), bends.get(i)) {
+            (Some(a), Some(b)) => a.1 + (b.1 - a.1) * (t - a.0) / (b.0 - a.0).max(1e-9),
+            _ => 0.0,
+        }
+    };
+    // Every time either line bends, with both added there: straight lines
+    // between them in dB, as `volume_at` reads them.
+    let mut times: Vec<f64> = line.iter().map(|k| k.t).chain(bends.iter().map(|b| b.0)).collect();
+    times.sort_by(f64::total_cmp);
+    times.dedup_by(|a, b| (*a - *b).abs() < 1e-6);
+    times.into_iter().map(|t| VolumeKey { t, volume: volume_at(line, t) + duck_at(t) }).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn source(at: f64) -> Source {
+        Source { file: "voice.flac".into(), start: 1.0, end: 9.0, at }
+    }
+
+    /// Peaks every 0.1 s: quiet, then speech from 2 s to 4 s with a 0.5 s
+    /// pause at 3 s, a click at 6 s, speech 7..8.
+    fn peaks() -> Vec<f32> {
+        (0..100)
+            .map(|i| {
+                let t = i as f64 * 0.1;
+                let talking = (2.0..3.0).contains(&t) || (3.5..4.0).contains(&t) || (7.0..8.0).contains(&t);
+                if talking { 0.5 } else if (6.0..6.1).contains(&t) { 0.4 } else { 0.001 }
+            })
+            .collect()
+    }
+
+    #[test]
+    fn speech_is_found_on_the_edit_with_short_pauses_bridged() {
+        // The source's own 1 s is the edit's 10 s.
+        let got = speech(&peaks(), 0.1, &source(10.0));
+        let near = |x: f64, y: f64| (x - y).abs() < 1e-6;
+        assert_eq!(got.len(), 2, "{got:?}");
+        assert!(near(got[0].0, 11.0) && near(got[0].1, 13.0), "the pause at 3 s bridged: {got:?}");
+        assert!(near(got[1].0, 16.0) && near(got[1].1, 17.0), "the click at 6 s dropped: {got:?}");
+        // Outside its stretch nothing counts.
+        let short = Source { start: 4.5, end: 6.5, ..source(0.0) };
+        assert!(speech(&peaks(), 0.1, &short).is_empty());
+    }
+
+    #[test]
+    fn stretches_from_several_voices_join() {
+        assert_eq!(merge(vec![(5.0, 6.0), (1.0, 2.0), (2.5, 3.0), (5.5, 7.0)]), vec![(1.0, 3.0), (5.0, 7.0)]);
+    }
+
+    #[test]
+    fn the_music_goes_down_under_speech_on_top_of_its_own_line() {
+        // The music's own line falls from 0 to −6 dB over 0..20 s.
+        let line = [VolumeKey { t: 0.0, volume: 0.0 }, VolumeKey { t: 20.0, volume: -6.0 }];
+        let ducked = duck(&line, &[(5.0, 8.0)], 12.0);
+        let at = |t: f64| volume_at(&ducked, t);
+        assert!((at(0.0) - 0.0).abs() < 1e-9 && (at(20.0) + 6.0).abs() < 1e-9, "its own line kept");
+        assert!((at(4.0) - volume_at(&line, 4.0)).abs() < 1e-9, "untouched before the attack");
+        assert!((at(6.5) - (volume_at(&line, 6.5) - 12.0)).abs() < 1e-9, "12 dB down under speech");
+        assert!((at(5.0 - ATTACK / 2.0) - (volume_at(&line, 5.0 - ATTACK / 2.0) - 6.0)).abs() < 1e-9, "half way down");
+        assert!((at(9.0) - volume_at(&line, 9.0)).abs() < 1e-9, "back up after the release");
+        // Two sentences closer than the ramps: down all through.
+        let close = duck(&[], &[(5.0, 6.0), (6.5, 8.0)], 10.0);
+        assert!((volume_at(&close, 6.2) + 10.0).abs() < 1e-9);
+        // No speech, no change.
+        assert_eq!(duck(&line, &[], 12.0), line.to_vec());
+    }
+
+    #[test]
+    fn sources_are_cleaned_voices_and_voice_takes_not_muted() {
+        let mut p = Project::default();
+        let mut talk = crate::project::Cut::new("a.mp4".into(), 2.0, 6.0);
+        talk.audio = Some("voice/a.flac".into());
+        let wind = crate::project::Cut::new("b.mp4".into(), 0.0, 3.0);
+        let mut muted = talk.clone();
+        muted.mute = true;
+        p.cuts = vec![wind, talk, muted];
+        p.voice.clips.push(crate::project::MusicClip { input: "take.wav".into(), at: 1.0, start: 0.5, end: 2.0, ..Default::default() });
+        let got = sources(&p);
+        assert_eq!(got, vec![Source { file: "voice/a.flac".into(), start: 2.0, end: 6.0, at: 3.0 }, Source { file: "take.wav".into(), start: 0.5, end: 2.0, at: 1.0 }]);
+    }
+}

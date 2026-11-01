@@ -10,6 +10,7 @@ mod capture;
 mod check;
 mod dissolve;
 mod dji;
+mod duck;
 mod exposure;
 mod grade;
 mod ffmpeg;

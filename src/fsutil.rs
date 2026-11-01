@@ -36,3 +36,36 @@ pub(crate) fn replace_file(path: &Path, bytes: &[u8]) -> Result<()> {
 pub(crate) fn save_png(path: &Path, f: &stitch::Frame) -> Result<()> {
     image::save_buffer(path, &f.rgb, f.width as u32, f.height as u32, image::ColorType::Rgb8).with_context(|| format!("writing {}", path.display()))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_replacement_lands_whole_keeps_permissions_and_follows_a_link() {
+        let dir = std::env::temp_dir().join(format!("omnix-replace-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("edit.json");
+        std::fs::write(&file, "old").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o640)).unwrap();
+            std::os::unix::fs::symlink(&file, dir.join("link.json")).unwrap();
+            // Through the link: the file it points at is replaced, the link stays.
+            replace_file(&dir.join("link.json"), b"new").unwrap();
+            assert!(std::fs::symlink_metadata(dir.join("link.json")).unwrap().file_type().is_symlink());
+            assert_eq!(std::fs::metadata(&file).unwrap().permissions().mode() & 0o777, 0o640);
+        }
+        #[cfg(not(unix))]
+        replace_file(&file, b"new").unwrap();
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), "new");
+        // A file that can't be written (its folder is gone): an error, and
+        // no temporary file left behind.
+        assert!(replace_file(&dir.join("gone/edit.json"), b"x").is_err());
+        let left: Vec<_> = std::fs::read_dir(&dir).unwrap().map(|e| e.unwrap().file_name()).filter(|n| n.to_string_lossy().ends_with(".tmp")).collect();
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert!(left.is_empty(), "{left:?}");
+    }
+}

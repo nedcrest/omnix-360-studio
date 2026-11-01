@@ -975,6 +975,11 @@ Decided:
   down.
 - `project::Line` (Own or Track) folds back into `Own`.
 
+**Built 2026-11-01** (`c34ae65`, `abc21b9`), waiting for the check. On
+the test project the music's six track points and the Voice point moved
+into the clips' lines; auto-duck writes there. «Lower the music under
+speech» is now also in a song's right-click menu.
+
 ### 33d. Waveforms drawn as they're heard — small (user, 2026-11-01)
 
 User, after normalizing the scooter cut and lowering it for voice-over:

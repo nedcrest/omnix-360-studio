@@ -207,6 +207,8 @@ impl App {
             None => center(column![self.logo(), text("Decoding…")].spacing(16).align_x(Alignment::Center)).into(),
         };
         let view = container(view).width(Length::Fill).height(Length::Fill).style(|_| container::background(iced::Color::BLACK));
+        // The mix check stands in the picture's place while it's on.
+        let view: Element<'_, Message> = if self.check.on { container(self.mix_check_view()).width(Length::Fill).height(Length::Fill).into() } else { view.into() };
         let view: Element<'_, Message> = match self.side {
             Some(Side::Effects) => row![view, self.effects_panel()].into(),
             Some(Side::Export) => row![view, self.export_panel()].into(),
@@ -404,6 +406,11 @@ impl App {
             tip(
                 toggler(self.framing).label("Framing").on_toggle(Message::Framing),
                 text("Framing: the view's keyframes, field of view and angles; for a 360 clip also stabilisation, projection and tracking. Off: editing only, and the view can't be turned by accident."),
+                tooltip::Position::Top,
+            ),
+            tip(
+                toggler(self.check.on).label("Mix check").on_toggle(|on| Message::Check(super::mixcheck_ui::CheckMsg::Toggle(on))),
+                text("The sound against the export's loudness target and the mixing rules, in the picture's place: each clip as loud as it is, what to fix outlined; a click takes you to it"),
                 tooltip::Position::Top,
             ),
         ]

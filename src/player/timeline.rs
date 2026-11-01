@@ -614,12 +614,7 @@ impl Timeline {
     fn draw_sound_lane(&self, frame: &mut Frame, theme: &Theme, b: Rectangle, li: usize) {
         let palette = theme.extended_palette();
         let SoundLane { which, blocks, track } = &self.sounds[li];
-        let colour = match which {
-            SoundTrack::Music => palette.success.base.color,
-            SoundTrack::Sfx => SFX_COLOUR,
-            SoundTrack::Sfx2 => SFX2_COLOUR,
-            SoundTrack::Voice => VOICE_COLOUR,
-        };
+        let colour = lane_colour(crate::mixcheck::Lane::Track(*which), theme);
         let (top, h) = (self.rows.sound_top(li) + 2.0, self.rows.music - 4.0);
         let lane = Path::rounded_rectangle(Point::new(self.x(0.0, b), top), Size::new((self.x(self.duration, b) - self.x(0.0, b)).max(0.0), h), 4.0.into());
         frame.fill(&lane, palette.background.weak.color.scale_alpha(0.5));
@@ -1816,5 +1811,16 @@ fn draw_listen(frame: &mut Frame, name: &str, mid: f32, listen: &super::listen::
         frame.fill(&Path::rounded_rectangle(r.position(), r.size(), 3.0.into()), if on { lit } else { iced::Color::from_rgba(0.0, 0.0, 0.0, 0.7) });
         let ink = if on { iced::Color::BLACK } else { iced::Color::from_rgba(1.0, 1.0, 1.0, 0.75) };
         frame.fill_text(Text { content: label.into(), position: Point::new(r.x + 3.5, r.y + r.height / 2.0), color: ink, size: 10.0.into(), align_y: Vertical::Center, ..Default::default() });
+    }
+}
+
+/// A sound lane's colour, as the timeline draws it (the mix check too).
+pub(super) fn lane_colour(lane: crate::mixcheck::Lane, theme: &Theme) -> iced::Color {
+    match lane {
+        crate::mixcheck::Lane::ClipSound => SOUND_LINE,
+        crate::mixcheck::Lane::Track(SoundTrack::Music) => theme.extended_palette().success.base.color,
+        crate::mixcheck::Lane::Track(SoundTrack::Sfx) => SFX_COLOUR,
+        crate::mixcheck::Lane::Track(SoundTrack::Sfx2) => SFX2_COLOUR,
+        crate::mixcheck::Lane::Track(SoundTrack::Voice) => VOICE_COLOUR,
     }
 }

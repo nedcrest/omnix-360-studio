@@ -40,6 +40,7 @@ mod overlay_ui;
 mod cuts;
 mod record_ui;
 mod listen;
+mod mixcheck_ui;
 
 use crate::ffmpeg::{self, Hwaccel};
 use crate::stab::{ImuAxes, Mode, Stabilizer};
@@ -283,6 +284,8 @@ enum Message {
     Sound(sound_ui::SoundMsg),
     /// The Record panel: a voice-over recorded onto the Voice lane.
     Record(record_ui::RecordMsg),
+    /// The mix check in the viewer's place (gap 45).
+    Check(mixcheck_ui::CheckMsg),
     /// A song's waveform, read off the UI thread.
     Waveform(PathBuf, Result<Arc<music::Waveform>, String>),
     /// The waveform of what a cut plays, if it has sound.
@@ -621,6 +624,8 @@ struct App {
     record: record_ui::Panel,
     /// Solo and mute per sound lane: what's heard while mixing.
     listen: listen::Listen,
+    /// The mix check, and whether it's in the viewer's place.
+    check: mixcheck_ui::Check,
     /// Auto-duck's depth, dB, and whether it's reading the voices now.
     duck_db: f64,
     ducking: bool,
@@ -708,6 +713,7 @@ impl App {
             duck_db: saved.duck_db.clamp(3.0, 30.0),
             ducking: false,
             listen: Default::default(),
+            check: Default::default(),
             angle_draft: None,
             modifiers: keyboard::Modifiers::default(),
             scrubbing: None,
@@ -874,6 +880,7 @@ impl App {
             }
             Message::Sound(msg) => self.sound_ui(msg),
             Message::Record(msg) => self.record_ui(msg),
+            Message::Check(msg) => self.mix_check(msg),
         }
     }
 

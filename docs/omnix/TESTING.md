@@ -158,7 +158,7 @@ Tests: 84 → 103 (100 in the library, 3 end to end), 2026-11-01.
 | Plan | Test | Commit |
 |---|---|---|
 | 1 | `a_project_saved_elsewhere_still_finds_its_clips`, with the fix | `cf7dbc2` |
-| 2, 3 | `old_project_files_still_load` (`tests/fixtures/`), `save_names_paths_from_the_project_and_reads_back_the_same` | |
+| 2, 3 | `old_project_files_still_load` (`tests/fixtures/`), `save_names_paths_from_the_project_and_reads_back_the_same` | `906a87f` |
 | 4 | `the_exports_volume_line_sounds_as_the_player_draws_it` [ff] | `005e8af` |
 | 5 | `the_export_fades_sound_clips_as_the_player_does`, `the_export_cuts_a_clip_off_at_the_edits_end_as_the_player_does` [ff], with the fix | `5e97aa8` |
 | 8–10 | `tests/cli.rs`: export with crossfade and music, a file per cut with handles, `check` | `83a1ac4` |

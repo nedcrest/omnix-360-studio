@@ -1315,6 +1315,12 @@ so the ducked shape stays and the whole clip moves; today only «Lower
 One undo step per drag. Several clips selected (gap 8) later move
 together.
 
+**Built 2026-11-01** (`0f65503`), waiting for the check. Defaults: the tag
+is always shown now (it was only when the level wasn't 0), 0.25 dB a
+pixel in 0.5 dB steps (Shift 0.05 / 0.1), capped at +24 dB as normalizing
+is; a volume point wins over the tag where both are. «Level…» to type a
+number is left for later: a drag and the double-click cover it.
+
 ### 45. A mix check: the sound's levels against a platform's, drawn and clickable — large (user, 2026-11-01)
 
 User: "an analysis of the sound lanes, as a panel, to see what stands out

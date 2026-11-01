@@ -931,6 +931,28 @@ Heavy computing goes off the UI thread with progress, as the colour
 track does; a face or person detector (footage-agent's gap 30 models)
 could seed the box later.
 
+### 38. A slider dragged during playback makes a key per frame — bug, small (user, 2026-11-01)
+
+Seen in the test project's saved file: dragging the vignette slider while
+the edit played left 9 effect keys on one cut and 15 on another, 0.03–
+0.07 s apart. The user confirmed they dragged during playback.
+
+Cause: `effects.rs` `change_effects` (and `change_place` for overlays)
+writes into the key at the playhead, or makes one there, on every slider
+message. The playhead moves while playing, so each step lands at a new
+time.
+
+Fix (default): one drag is one key. The time is taken when the drag
+starts (the playhead then) and kept until the slider is let go
+(`EffectMsg::Done`); every step of that drag changes that one key. Same
+for the overlay place sliders and the on-picture drag. A test: a drag
+of many steps with the time moving between them leaves one key.
+
+Later, on purpose and switchable: FL Studio's «record automation», where
+moving a control during playback writes a curve, thinned to the few keys
+that keep its shape (fits gap 31's automation lanes). Off by default, so
+the accident above can't happen.
+
 ## Format rule for all of these
 
 New fields only, each `#[serde(default, skip_serializing_if = …)]`, so every

@@ -460,6 +460,16 @@ fn is_zero(v: &f64) -> bool {
     *v == 0.0
 }
 
+/// The folder a project file's relative paths are relative to, absolute.
+/// Opened by a relative path (`edit.json`), `parent()` is "", and joined
+/// to it the clips stayed relative to the working folder: a copy saved
+/// elsewhere then named them as if they were beside it, and couldn't find
+/// them (found 2026-11-01).
+fn project_dir(path: &Path) -> Result<PathBuf> {
+    let file = std::path::absolute(path).with_context(|| format!("finding {}", path.display()))?;
+    Ok(file.parent().map(Path::to_owned).unwrap_or_default())
+}
+
 /// Music running on past the last cut fades out over this long before it.
 pub const END_FADE: f64 = 3.0;
 
@@ -678,7 +688,7 @@ impl Project {
         if project.cuts.is_empty() && project.sound_clips().next().is_none() {
             bail!("{} has no cuts", path.display());
         }
-        let dir = path.parent().unwrap_or(Path::new(""));
+        let dir = &project_dir(path)?;
         for (n, cut) in project.cuts.iter_mut().enumerate() {
             if cut.end <= cut.start {
                 bail!("cut {} ends ({} s) before it starts ({} s)", n + 1, cut.end, cut.start);
@@ -753,7 +763,7 @@ impl Project {
     /// Writes the project as JSON. Clips in the project's folder or below
     /// are stored relative to it, so the folder can move as a whole.
     pub fn save(&self, path: &Path) -> Result<()> {
-        let dir = path.parent().unwrap_or(Path::new(""));
+        let dir = &project_dir(path)?;
         let mut project = self.clone();
         for cut in &mut project.cuts {
             if let Ok(rel) = cut.input.strip_prefix(dir) {
@@ -1268,6 +1278,23 @@ mod tests {
         p.own_sound(Own::Clip(SoundTrack::Voice, 0)).unwrap().original();
         assert_eq!((p.voice.clips[0].gain, p.voice.clips[0].volume.len()), (0.0, 0));
         assert!(!p.continue_level(Own::Clip(SoundTrack::Voice, 1)));
+    }
+
+    #[test]
+    fn a_project_saved_elsewhere_still_finds_its_clips() {
+        // Opened by a relative path, its folder is still absolute.
+        assert!(project_dir(Path::new("edit.json")).unwrap().is_absolute());
+        let dir = std::env::temp_dir().join(format!("omnix-paths-{}", std::process::id()));
+        std::fs::create_dir_all(dir.join("sub")).unwrap();
+        std::fs::write(dir.join("edit.json"), r#"{"cuts": [{"input": "a.mp4", "in": 0, "out": 2}], "voice": {"clips": [{"input": "take.wav", "at": 0, "in": 0, "out": 1}]}}"#).unwrap();
+        let p = Project::load(&dir.join("edit.json")).unwrap();
+        assert_eq!(p.cuts[0].input, dir.join("a.mp4"));
+        // Saved one folder down: the clips are named from there.
+        p.save(&dir.join("sub/copy.json")).unwrap();
+        let copy = Project::load(&dir.join("sub/copy.json")).unwrap();
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert_eq!(copy.cuts[0].input, dir.join("a.mp4"));
+        assert_eq!(copy.voice.clips[0].input, dir.join("take.wav"));
     }
 
     #[test]

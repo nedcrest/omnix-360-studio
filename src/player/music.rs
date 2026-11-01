@@ -70,11 +70,6 @@ impl Waveform {
     }
 }
 
-/// A mix level in dB as the speakers' gain factor.
-pub fn gain(db: f64) -> f32 {
-    project::gain(db) as f32
-}
-
 /// A clip's sound, open: its song, where the clip sits on the edit, from
 /// where in the song the stream started (so it's at `from + elapsed` once
 /// let through), whether it has been, and whether it's evened out (decoded

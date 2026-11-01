@@ -152,3 +152,28 @@ fn exports_the_whole_film_at_a_loudness_target() {
     assert!((loud + 14.0).abs() < 0.5, "brought to {loud}: {said}");
     assert_eq!(frames, 180);
 }
+
+#[test]
+fn mixcheck_finds_music_too_loud_under_the_voice() {
+    if !has_ffmpeg() {
+        return;
+    }
+    let d = dir("mixcheck");
+    clip(&d, "a.mp4", 6.0, 440);
+    // A voice-over and a song as loud as it.
+    ffmpeg(&d, &["-f", "lavfi", "-i", "sine=f=660:d=3:sample_rate=48000,volume=-6dB", "take.wav"]);
+    ffmpeg(&d, &["-f", "lavfi", "-i", "sine=f=220:d=6:sample_rate=48000,volume=-6dB", "song.wav"]);
+    std::fs::write(d.join("edit.json"), r#"{"cuts": [{"input": "a.mp4", "in": 0, "out": 6, "mute": true}],
+        "voice": {"clips": [{"input": "take.wav", "at": 1, "in": 0, "out": 3}]},
+        "music": {"clips": [{"input": "song.wav", "at": 0, "in": 0, "out": 6}]}}"#).unwrap();
+    let said = omnix(&d, &["mixcheck", "edit.json"]);
+    // Quieted 20 dB, the song sits well under the voice: nothing about it.
+    std::fs::write(d.join("quiet.json"), r#"{"cuts": [{"input": "a.mp4", "in": 0, "out": 6, "mute": true}],
+        "voice": {"clips": [{"input": "take.wav", "at": 1, "in": 0, "out": 3}]},
+        "music": {"clips": [{"input": "song.wav", "at": 0, "in": 0, "out": 6, "gain": -20}]}}"#).unwrap();
+    let quiet = omnix(&d, &["mixcheck", "quiet.json"]);
+    std::fs::remove_dir_all(&d).unwrap();
+    assert!(said.contains("Music only") && said.contains("1.0-4.0 s"), "{said}");
+    assert!(said.contains("Voice") && said.contains("speech"), "{said}");
+    assert!(!quiet.contains("Music only"), "{quiet}");
+}

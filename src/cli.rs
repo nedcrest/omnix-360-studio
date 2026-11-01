@@ -70,6 +70,16 @@ pub(crate) enum Cmd {
         #[arg(short, long)]
         output: Option<PathBuf>,
     },
+    /// Check the sound against a platform's loudness and the mixing rules:
+    /// each clip measured as the export makes it, the whole film, and what
+    /// to fix (music too loud under speech, a sound effect over it, quiet
+    /// speech, the film off the target).
+    Mixcheck {
+        project: PathBuf,
+        /// The platform's target, LUFS integrated (YouTube -14).
+        #[arg(long, allow_negative_numbers = true, default_value_t = -14.0)]
+        target: f64,
+    },
     /// Lower the music under speech (auto-duck): find where cleaned voices
     /// and Voice takes speak and put volume points on the music's line, this
     /// far down there. Prints where; writes the project with -o.
@@ -568,6 +578,7 @@ pub(crate) fn run() -> Result<()> {
         Cmd::Check { project, fast_pan, opts } => check::check(&project, &opts, fast_pan)?,
         Cmd::Normalize { project, cuts, even, output } => loudness::normalize(&project, &cuts, even, output.as_deref())?,
         Cmd::Duck { project, depth, output } => crate::duck::run(&project, depth, output.as_deref())?,
+        Cmd::Mixcheck { project, target } => crate::mixmeasure::run_cli(&project, target)?,
         Cmd::Play { input, osv_size, hwaccel, stabilize, imu_axes, world_z_down } => {
             player::run(input, player::Launch { osv_size, hw: hwaccel, stabilize, imu_axes, world_z_down })?;
         }

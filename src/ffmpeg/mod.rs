@@ -820,6 +820,40 @@ pub fn wav(input: &Path, start: f64, duration: f64, output: &Path) -> Result<()>
     Ok(())
 }
 
+/// `audio`'s stretches as inputs to `cmd`, after its input 0 (the
+/// picture): each clip from its start for its length, or silence as long
+/// as its frames where it has no sound (a picture, a silent video).
+fn sound_inputs(cmd: &mut Command, audio: &[Sound<'_>]) {
+    for s in audio {
+        match s.duration {
+            Some(d) if !has_audio(s.input).unwrap_or(false) => {
+                cmd.args(["-f", "lavfi", "-t", &d.to_string(), "-i", "anullsrc=r=48000:cl=stereo"]);
+            }
+            _ => {
+                cmd.args(["-ss", &s.start.to_string()]);
+                if let Some(d) = s.duration {
+                    cmd.args(["-t", &d.to_string()]);
+                }
+                cmd.arg("-i").arg(s.input);
+            }
+        }
+    }
+}
+
+/// The sound `audio` and `mix` make, as the export mixes it, without the
+/// picture: an ffmpeg writing it to its stdout as 48 kHz stereo f32 (a
+/// lane alone, for the mix check, is `audio` or one track; the whole film
+/// is both). Read it as it comes: a film's worth would be large.
+pub fn sound_stream(audio: &[Sound<'_>], mix: &Mix<'_>) -> Result<Child> {
+    let mut cmd = tool("ffmpeg");
+    // Input 0 stands for the picture, as in an export.
+    cmd.args(["-v", "error", "-nostdin", "-f", "lavfi", "-t", &mix.length.to_string(), "-i", "anullsrc=r=48000:cl=stereo"]);
+    sound_inputs(&mut cmd, audio);
+    let graph = mixed(&mut cmd, audio, mix)?;
+    cmd.args(["-filter_complex", &graph, "-map", "[a]", "-ar", "48000", "-ac", "2", "-f", "f32le", "-"]);
+    cmd.stdout(Stdio::piped()).stderr(Stdio::null()).spawn().context("running ffmpeg")
+}
+
 impl Encoder {
     /// The sound is `audio`'s stretches back to back. Each stretch should
     /// last exactly as long as the frames written for it, so later cuts stay
@@ -833,21 +867,7 @@ impl Encoder {
     pub fn new(output: &Path, (w, h): (usize, usize), fps: f64, audio: &[Sound<'_>], mix: Option<&Mix<'_>>, format: Format, deep: bool) -> Result<Self> {
         let mut cmd = tool("ffmpeg");
         cmd.args(["-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", if deep { "rgb48le" } else { "rgb24" }]).args(["-s", &format!("{w}x{h}"), "-r", &fps.to_string(), "-i", "-"]);
-        for s in audio {
-            match s.duration {
-                // A picture or a silent video: silence as long as its frames.
-                Some(d) if !has_audio(s.input).unwrap_or(false) => {
-                    cmd.args(["-f", "lavfi", "-t", &d.to_string(), "-i", "anullsrc=r=48000:cl=stereo"]);
-                }
-                _ => {
-                    cmd.args(["-ss", &s.start.to_string()]);
-                    if let Some(d) = s.duration {
-                        cmd.args(["-t", &d.to_string()]);
-                    }
-                    cmd.arg("-i").arg(s.input);
-                }
-            }
-        }
+        sound_inputs(&mut cmd, audio);
         // The music's inputs, before any output option.
         let points = audio.iter().any(|s| !s.volume.is_empty() || s.crossfade > 0.0 || s.gain != 0.0 || s.filter.is_some());
         let graph = mix.filter(|m| m.matters() || points).map(|m| mixed(&mut cmd, audio, m)).transpose()?;

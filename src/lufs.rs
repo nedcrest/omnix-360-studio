@@ -1,5 +1,5 @@
-//! Loudness as the platforms measure it (ITU-R BS.1770, ffmpeg's `ebur128`)
-//! of the mix as it plays: short-term (the last 3 s) and integrated since
+//! Loudness as the platforms measure it (ITU-R BS.1770, ffmpeg's `ebur128`):
+//! of the mix as it plays (the meter), and of each clip for the mix check; short-term (the last 3 s) and integrated since
 //! play started, beside the peak meter, so «too quiet» shows in the units
 //! the targets are given in (YouTube −14 LUFS; gap 46b).
 //!
@@ -97,6 +97,11 @@ impl Loudness {
     /// The last 3 s (fewer at the start), LUFS; `None` before 400 ms.
     pub fn short_term(&self) -> Option<f64> {
         (self.recent.len() >= 4).then(|| lufs(self.recent.iter().sum::<f64>() / self.recent.len() as f64))
+    }
+
+    /// The loudest 400 ms so far, LUFS; `None` before 400 ms.
+    pub fn loudest(&self) -> Option<f64> {
+        self.blocks.iter().copied().reduce(f64::max).map(lufs)
     }
 
     /// Since play started, gated as BS.1770 says; `None` while silent.

@@ -13,7 +13,7 @@ mod handles;
 mod info;
 mod settings_panel;
 mod meter;
-mod lufs;
+
 mod playback;
 pub mod render;
 mod settings;

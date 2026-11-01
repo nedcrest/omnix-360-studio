@@ -31,7 +31,7 @@ pub struct Meter {
     /// The loudest peak since play started, dBFS.
     pub loudest: Option<f32>,
     /// Loudness as the platforms measure it, since play started (gap 46b).
-    pub lufs: super::lufs::Loudness,
+    pub lufs: crate::lufs::Loudness,
     /// The output frame it has read the mix up to.
     since: u64,
     last: Option<Instant>,

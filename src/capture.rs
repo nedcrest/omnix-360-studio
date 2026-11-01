@@ -195,18 +195,18 @@ impl std::fmt::Display for Channel {
     }
 }
 
-/// The level of the last tenth of a second, dBFS, and whether anything
-/// has hit full scale since the meter was last cleared.
+/// The peak of the last 50 ms (`astats` reset every 5 frames of 10 ms),
+/// dBFS, and whether anything has hit full scale since the meter was last
+/// cleared. The peak alone: the meter draws nothing else.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Level {
     pub peak: f64,
-    pub rms: f64,
     pub clipped: bool,
 }
 
 impl Default for Level {
     fn default() -> Self {
-        Level { peak: f64::NEG_INFINITY, rms: f64::NEG_INFINITY, clipped: false }
+        Level { peak: f64::NEG_INFINITY, clipped: false }
     }
 }
 
@@ -230,7 +230,7 @@ impl Recorder {
     /// Starts listening to `input`'s `channel`; with `file`, recording it
     /// there as 48 kHz 24-bit mono WAV.
     pub fn start(input: &Input, channel: Channel, file: Option<&Path>) -> Result<Recorder> {
-        let meter = "astats=metadata=1:reset=5:measure_perchannel=none:measure_overall=Peak_level+RMS_level,ametadata=mode=print";
+        let meter = "astats=metadata=1:reset=5:measure_perchannel=none:measure_overall=Peak_level,ametadata=mode=print";
         let pan = channel.pan(input.channels);
         let mut cmd = crate::ffmpeg::tool("ffmpeg");
         cmd.args(["-hide_banner", "-nostats", "-loglevel", "info", "-f", "pulse", "-sample_rate", "48000", "-channels", &input.channels.max(1).to_string(), "-fragment_size", "1920", "-i", &input.name]);
@@ -251,7 +251,7 @@ impl Recorder {
         let (l, f, s) = (level.clone(), first.clone(), said.clone());
         std::thread::spawn(move || {
             for line in BufReader::new(err).lines().map_while(Result::ok) {
-                let Some((what, db)) = parse_level(&line) else {
+                let Some(db) = parse_peak(&line) else {
                     if !line.contains("frame:") {
                         let mut s = s.lock().unwrap();
                         s.push(line);
@@ -262,13 +262,8 @@ impl Recorder {
                 };
                 f.lock().unwrap().get_or_insert_with(Instant::now);
                 let mut level = l.lock().unwrap();
-                match what {
-                    Measure::Peak => {
-                        level.peak = db;
-                        level.clipped |= db >= CLIP_DB;
-                    }
-                    Measure::Rms => level.rms = db,
-                }
+                level.peak = db;
+                level.clipped |= db >= CLIP_DB;
             }
         });
         Ok(Recorder { child, stdin, level, first, file: file.map(Path::to_owned), said })
@@ -325,26 +320,16 @@ impl Drop for Recorder {
     }
 }
 
-enum Measure {
-    Peak,
-    Rms,
-}
-
-/// One of ffmpeg's metadata lines: `lavfi.astats.Overall.Peak_level=-12.3`.
-fn parse_level(line: &str) -> Option<(Measure, f64)> {
+/// The peak in one of ffmpeg's metadata lines,
+/// `lavfi.astats.Overall.Peak_level=-12.3`, dBFS.
+fn parse_peak(line: &str) -> Option<f64> {
     // The log prefixes each line with "[Parsed_ametadata_N @ 0x…] ".
     let line = line.rsplit_once("] ").map_or(line, |(_, l)| l);
-    let (key, value) = line.trim().split_once('=')?;
-    let what = match key {
-        "lavfi.astats.Overall.Peak_level" => Measure::Peak,
-        "lavfi.astats.Overall.RMS_level" => Measure::Rms,
-        _ => return None,
-    };
-    let db = match value.trim() {
-        "-inf" => f64::NEG_INFINITY,
-        v => v.parse().ok()?,
-    };
-    Some((what, db))
+    let value = line.trim().strip_prefix("lavfi.astats.Overall.Peak_level=")?;
+    match value.trim() {
+        "-inf" => Some(f64::NEG_INFINITY),
+        v => v.parse().ok(),
+    }
 }
 
 #[cfg(test)]
@@ -399,10 +384,10 @@ mod tests {
 
     #[test]
     fn reads_the_level_lines() {
-        assert!(matches!(parse_level("lavfi.astats.Overall.Peak_level=-12.5"), Some((Measure::Peak, db)) if db == -12.5));
-        assert!(matches!(parse_level("lavfi.astats.Overall.RMS_level=-inf"), Some((Measure::Rms, db)) if db.is_infinite()));
-        assert!(matches!(parse_level("[Parsed_ametadata_2 @ 0x57a1] lavfi.astats.Overall.Peak_level=-90.3"), Some((Measure::Peak, db)) if db == -90.3));
-        assert!(parse_level("frame:3    pts:3072    pts_time:0.064").is_none());
+        assert_eq!(parse_peak("lavfi.astats.Overall.Peak_level=-12.5"), Some(-12.5));
+        assert_eq!(parse_peak("lavfi.astats.Overall.Peak_level=-inf"), Some(f64::NEG_INFINITY));
+        assert_eq!(parse_peak("[Parsed_ametadata_2 @ 0x57a1] lavfi.astats.Overall.Peak_level=-90.3"), Some(-90.3));
+        assert_eq!(parse_peak("frame:3    pts:3072    pts_time:0.064"), None);
         // A mono input records its one channel whatever is chosen.
         assert_eq!(Channel::Second.pan(1), "pan=mono|c0=c0");
         assert_eq!(Channel::Second.pan(2), "pan=mono|c0=c1");

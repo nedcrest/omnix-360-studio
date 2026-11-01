@@ -327,6 +327,11 @@ impl App {
                 items.push(sound(if even { "Stop evening out".into() } else { "Even out quiet and loud".into() }, SoundMsg::Even1(own, !even)));
                 items.push(sound("Normalize…".into(), SoundMsg::Open(Scope::Own(own))));
                 items.push(sound("Back to the original".into(), SoundMsg::Original(own)));
+                // Auto-duck where a song is right-clicked too, not only on
+                // the lane's empty stretch or in the Audio panel.
+                if let Own::Clip(SoundTrack::Music, _) = own {
+                    items.push(item(format!("Lower the music under speech (−{:.0} dB)", self.duck_db), Message::Duck));
+                }
                 items.push(rule::horizontal(1).into());
                 let info = match own {
                     Own::Cut(i) => super::info::Of::Cut(i),
@@ -340,7 +345,7 @@ impl App {
                     items.push(sound(format!("Normalize every clip on {}…", which.name()), SoundMsg::Open(Scope::Track(which))));
                 }
                 if which == SoundTrack::Music && !track.clips.is_empty() {
-                    items.push(item(format!("Lower under speech (−{:.0} dB)", self.duck_db), Message::Duck));
+                    items.push(item(format!("Lower the music under speech (−{:.0} dB)", self.duck_db), Message::Duck));
                 }
             }
             // On their own, so a misplaced right-click only opens a menu.

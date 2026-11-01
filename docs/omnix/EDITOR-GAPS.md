@@ -948,10 +948,14 @@ starts (the playhead then) and kept until the slider is let go
 for the overlay place sliders and the on-picture drag. A test: a drag
 of many steps with the time moving between them leaves one key.
 
-Later, on purpose and switchable: FL Studio's «record automation», where
-moving a control during playback writes a curve, thinned to the few keys
-that keep its shape (fits gap 31's automation lanes). Off by default, so
-the accident above can't happen.
+**Built 2026-11-01** (`b070d97`): `effects::Pin` keeps the drag's target
+and time from its first step; one-shot changes (reset, white balance, key)
+take the playhead as before. Two tests. Waiting for the user's check.
+
+Recording a control's moves during playback as a curve (FL Studio's
+«record automation») goes to the automation lanes, gap 39 (user,
+2026-11-01): it writes into one parameter's curve there, thinned to the
+few points that keep its shape.
 
 ### 39. Automation lanes: Effects and View as folding groups of curves — large (user, 2026-11-01)
 

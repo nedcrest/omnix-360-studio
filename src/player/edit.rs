@@ -371,6 +371,65 @@ mod tests {
     }
 
     #[test]
+    fn crossfades_settle_after_removing_and_inserting() {
+        let mut e = Edit::default();
+        e.cuts = vec![cut("a", 0.0, 4.0), cut("b", 0.0, 4.0), cut("c", 0.0, 4.0)];
+        e.cuts[1].crossfade = 1.0;
+        e.cuts[2].crossfade = 1.0;
+        // The first cut has nothing before it: its crossfade goes.
+        e.remove(0);
+        assert_eq!((e.cuts[0].crossfade, e.cuts[1].crossfade), (0.0, 1.0));
+        // A short cut put before c: c's crossfade can't be longer than it.
+        e.insert_cut(1, cut("x", 0.0, 0.5));
+        assert!(e.cuts[2].crossfade <= 0.5 && e.cuts[2].crossfade >= 0.0, "{}", e.cuts[2].crossfade);
+        // Too short for any crossfade at all: none, never negative.
+        e.insert_cut(2, cut("y", 0.0, 0.05));
+        assert!(e.cuts.iter().all(|c| c.crossfade >= 0.0));
+        assert_eq!(e.cuts[3].crossfade, 0.0);
+    }
+
+    #[test]
+    fn edit_time_and_clip_time_go_back_and_forth() {
+        let mut e = Edit::default();
+        e.cuts = vec![cut("a", 10.0, 14.0), cut("b", 2.0, 5.0), cut("c", 0.0, 6.0)];
+        e.cuts[1].crossfade = 0.5;
+        e.cuts[2].crossfade = 1.0;
+        let duration = e.duration();
+        assert!((duration - (4.0 + 3.0 + 6.0 - 1.5)).abs() < 1e-9);
+        let mut t = 0.0;
+        while t < duration {
+            let (i, clip_t) = e.locate(t).unwrap();
+            // Within an overlap locate gives the earlier cut; either way the
+            // time comes back.
+            assert!((e.edit_time(i, clip_t) - t).abs() < 1e-9, "t {t}: cut {i} at {clip_t}");
+            assert!(clip_t >= e.cuts[i].start && clip_t <= e.cuts[i].end);
+            t += 0.05;
+        }
+        // Past the end: the last cut's out point.
+        assert_eq!(e.locate(duration + 5.0), Some((2, 6.0)));
+        assert_eq!(Edit::default().locate(1.0), None);
+    }
+
+    #[test]
+    fn moved_index_follows_every_move() {
+        let names = ["a", "b", "c", "d", "e"];
+        for from in 0..5 {
+            for to in 0..=5 {
+                let mut e = Edit::default();
+                e.cuts = names.iter().map(|n| cut(n, 0.0, 1.0)).collect();
+                e.move_cut(from, to);
+                let mut seen = [false; 5];
+                for (i, name) in names.iter().enumerate() {
+                    let j = Edit::moved_index(from, to, i);
+                    assert_eq!(e.cuts[j].input, PathBuf::from(name), "from {from} to {to}: {name}");
+                    seen[j] = true;
+                }
+                assert!(seen.iter().all(|&s| s), "a permutation, from {from} to {to}");
+            }
+        }
+    }
+
+    #[test]
     fn a_split_keeps_each_sound_fade_at_its_outer_end() {
         let mut e = edit();
         e.cuts[0].sound_fade_in = 0.5;

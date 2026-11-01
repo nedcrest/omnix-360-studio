@@ -907,6 +907,10 @@ take recorded without manual gain):
   the pointer whatever its height. Fix: its bottom at the pointer, by its
   own height (items × row height), kept inside the window.
 
+Built 2026-11-01, waiting for the check. A right-click near a cut's or
+clip's drawn line now opens the line's menu; elsewhere on it, its sound
+menu as before.
+
 ### 33d. Waveforms drawn as they're heard — small (user, 2026-11-01)
 
 User, after normalizing the scooter cut and lowering it for voice-over:

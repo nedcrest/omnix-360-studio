@@ -783,6 +783,44 @@ out at its end. Optional `Cut.sound_fade_in/out` (seconds, absent = 0);
 the player's clip volume and the export's mix both apply it (CPU = export
 rule), and a crossfade's own sound blend stays as it is.
 
+### 33e. A sound clip's own volume line, apart from the track's — medium (user, 2026-11-01)
+
+User (screenshot of the Voice lane: the yellow volume line starts at the
+lane's left edge, over empty space, not at the take's start): "so it
+isn't like this (the curve goes from the start of the lane, not from the
+start of the file), I'd add a context menu with a few items: «continue the
+volume from the previous file», and then a sound lane appears on the new
+file; or «reset the volume and sound to the original». I don't know if
+that's right, you tell me."
+
+Why it looks so: the line is the **track's** (`Music.keyframes`, edit
+time, the whole lane), not the clip's. One point on Voice at 12.8 s holds
+its +3.1 dB from the lane's very start. That is how a DAW's track
+automation works (FL, Ardour), and it suits a mix move over several
+clips (a duck under speech). It is wrong for "this take a little
+louder": the level should belong to the take and move with it.
+
+**Recommended: both, as cuts already have** (`Cut.volume` lives in the
+clip, the track's line over the whole edit):
+- **The clip's own line** (default). A sound clip gets optional
+  `MusicClip.volume: Vec<VolumeKey>` in the file's time, so it moves and
+  trims with the clip and is drawn only inside it. «Show volume line» in
+  the clip's right-click menu puts points at its in and out at 0 dB (as
+  33b does for cuts); a click on the line adds points.
+- **The track's line** stays, for moves across clips. Drawn dimmer, and
+  only when shown from the lane's name menu («Show track volume»), so it
+  no longer looks like it belongs to a clip. Existing track points keep
+  working, so old projects sound the same.
+- **The menu on a sound clip** (the user's items, kept):
+  - «Show volume line»;
+  - «Continue from the previous clip»: the clip's line starts at the level
+    the clip before it on the lane ends at, so a split or a second take
+    carries on without a jump;
+  - «Back to the original»: the clip's points, gain and fades cleared;
+  - also «Lower −12 dB», «Mute», as on Clip sound (gap 33), and «Info».
+- Player and export apply clip line × track line × track level (CPU =
+  export rule, tested on the mix graph strings).
+
 ### 33d. Waveforms drawn as they're heard — small (user, 2026-11-01)
 
 User, after normalizing the scooter cut and lowering it for voice-over:

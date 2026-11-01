@@ -77,6 +77,27 @@ pub fn levels(window: f64) -> ([f32; 2], [f32; 2]) {
     (peak, sum.map(|s| (s / n as f64).sqrt() as f32))
 }
 
+/// The frames the mix reached the speakers with since `*since` (an output
+/// frame number, moved on to now), and the rate: for the loudness meter,
+/// which needs every frame, not a window. Frames older than the ring are
+/// gone; a frame no stream wrote is silence.
+pub fn frames_since(since: &mut u64) -> (f64, Vec<[f32; 2]>) {
+    let m = METER.lock().unwrap_or_else(|e| e.into_inner());
+    if m.rate <= 0.0 || m.slots.is_empty() {
+        return (0.0, Vec::new());
+    }
+    let now = (EPOCH.elapsed().as_secs_f64() * m.rate) as u64;
+    let from = (*since).max(now.saturating_sub(m.slots.len() as u64));
+    *since = now;
+    let frames = (from..now)
+        .map(|f| {
+            let (at, s) = m.slots[(f % m.slots.len() as u64) as usize];
+            if at == f { s } else { [0.0; 2] }
+        })
+        .collect();
+    (m.rate, frames)
+}
+
 struct Shared {
     samples: Mutex<VecDeque<f32>>,
     /// Frames handed to the device so far.

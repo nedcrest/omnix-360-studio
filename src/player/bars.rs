@@ -144,10 +144,16 @@ impl App {
                         .size(12)
                         .width(34)
                         .color_maybe(self.meter.loudest.filter(|&l| l >= 0.0).map(|_| iced::Color::from_rgb8(0xe5, 0x3e, 0x3e))),
+                    // Loudness as the platforms measure it: the last 3 s,
+                    // and since play started in the tip.
+                    text(self.meter.lufs.short_term().map_or("– LUFS".to_string(), |s| format!("{s:.0} LUFS"))).size(12).width(58),
                 ]
                 .spacing(4)
                 .align_y(Alignment::Center),
-                text("The mix as it plays, left and right: peak (faint) and RMS, red past 0 dBFS; the number is the loudest peak since play started, dBFS. It sums the clip sound and music at their levels, as the export mixes them, whatever the speakers are set to."),
+                text(format!(
+                    "The mix as it plays, left and right: peak (faint) and RMS, red past 0 dBFS; the number is the loudest peak since play started, dBFS. LUFS: its loudness over the last 3 s, as YouTube and others measure it (they aim at about −14); since play started: {}. It sums the clip sound and music at their levels, as the export mixes them, whatever the speakers are set to.",
+                    self.meter.lufs.integrated().map_or("–".to_string(), |i| format!("{i:.1} LUFS"))
+                )),
                 tooltip::Position::Bottom,
             ),
             tip(icon_button(TEXT_SMALLER, (self.ui_scale > *settings::UI_SCALE.start() + 1e-3).then_some(Message::UiScale(-1))), text("Make the interface smaller"), tooltip::Position::Bottom),

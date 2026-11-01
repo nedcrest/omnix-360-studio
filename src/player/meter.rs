@@ -30,13 +30,17 @@ pub struct Meter {
     held: [(f32, Option<Instant>); 2],
     /// The loudest peak since play started, dBFS.
     pub loudest: Option<f32>,
+    /// Loudness as the platforms measure it, since play started (gap 46b).
+    pub lufs: super::lufs::Loudness,
+    /// The output frame it has read the mix up to.
+    since: u64,
     last: Option<Instant>,
     playing: bool,
 }
 
 impl Default for Meter {
     fn default() -> Self {
-        Meter { peak: [FLOOR; 2], rms: [FLOOR; 2], held: [(FLOOR, None); 2], loudest: None, last: None, playing: false }
+        Meter { peak: [FLOOR; 2], rms: [FLOOR; 2], held: [(FLOOR, None); 2], loudest: None, lufs: Default::default(), since: 0, last: None, playing: false }
     }
 }
 
@@ -53,12 +57,17 @@ impl Meter {
         self.last = Some(now);
         if playing && !self.playing {
             self.loudest = None;
+            // Measured afresh from here: what played before is skipped.
+            self.lufs = Default::default();
+            audio::frames_since(&mut self.since);
         }
         self.playing = playing;
         if !playing {
-            *self = Meter { loudest: self.loudest, ..Meter::default() };
+            *self = Meter { loudest: self.loudest, lufs: std::mem::take(&mut self.lufs), ..Meter::default() };
             return;
         }
+        let (rate, frames) = audio::frames_since(&mut self.since);
+        self.lufs.feed(rate, &frames);
         let (peak, rms) = audio::levels(WINDOW);
         for c in 0..2 {
             let p = db(peak[c]);

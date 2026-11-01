@@ -14,6 +14,9 @@ nothing be lost after a forced compact.
 ## When
 
 - A task starts → its card goes to `## Зараз` with `статус: робимо`.
+  «Зараз» holds the whole group being worked on, not one card (user,
+  2026-11-01): a group of ideas and tasks, each its own card, `робимо`
+  until built.
 - Code is done and needs the user's eyes or ears → `статус: чекає перевірки`
   (the page shows these in a band at the top).
 - The user confirms it works → move the card to `## Зроблено` with `коли:` and

@@ -608,7 +608,7 @@ To work out before building:
 - **Speed ramps** (automation over time) second. Time becomes the integral
   of the speed curve. Sound must be done in pieces of constant tempo, or
   with a time-stretcher (`rubberband`, rarely in ffmpeg builds).
-- **Grouped effects per track** (the FL idea): a cut's effects row could
+- **Grouped effects per track** (the FL idea; designed in gap 39): a cut's effects row could
   show lanes per automated value (exposure, speed, volume) that fold open,
   instead of one row of marks. A UI question, together with gap 9's action
   bar and the effects panel.
@@ -952,6 +952,69 @@ Later, on purpose and switchable: FL Studio's «record automation», where
 moving a control during playback writes a curve, thinned to the few keys
 that keep its shape (fits gap 31's automation lanes). Off by default, so
 the accident above can't happen.
+
+### 39. Automation lanes: Effects and View as folding groups of curves — large (user, 2026-11-01)
+
+User (pointing at the two thin rows «Effects» and «View» under the clips,
+which show keyframes as dots): "I once suggested these become group
+spaces, where under them, as in FL Studio, you could add a view of the
+automation curve for each effect; I think that's very handy. And make
+both of them collapsible. So what we have in the effects now would just
+render as separate 'fields' with curves, instead of just placing points.
+View doesn't work now, but the function, contract and factory can be
+thought out for it too." (First raised 2026-10-23, gap 31's «grouped
+effects per track».)
+
+**What it looks like.**
+- «Effects» and «View» stay as one thin row each, with a ▸ to fold open.
+  Folded, as today: the dots of all keys.
+- Open, a lane per parameter that is automated (exposure, contrast,
+  vignette… for Effects; yaw, pitch, roll, FOV for View), each with its
+  name, its curve over the cut, and the value under the mouse. A «+»
+  at the group's head adds a lane for a parameter not yet automated.
+- In a lane: a click on the line adds a point (as the volume line,
+  33b); drag a point in time and value; right-click for delete and the
+  easing (gap 17); double-click resets to the default.
+- Lanes are as tall as they need; the group remembers open or folded per
+  project.
+
+**The data question (to decide before building).** Today one effect key
+holds *every* parameter at its time (`grade::EffectKey` = time + a whole
+`Grade`; a field left out of the JSON means 0). So a vignette point and an
+exposure point can't sit at different times independently; drawing lanes
+over this model would move all parameters when one point moves. Two ways:
+- **A (proposed): a point list per parameter**, as FL does: an optional
+  `automation: { "vignette": [{t, v, ease}], … }` per cut (and per
+  overlay). Old `effects` keys are read into it on load (each key gives a
+  point to each parameter it changed); the old field is still read, so
+  old projects open. Independent curves, and the gap 38 «record
+  automation» mode writes into one lane alone.
+- B: lanes as views of the shared keys. Small, but coupled: moving one
+  point moves them all. Not what the user described.
+
+**The contract («factory»).** One generic lane, so a new automatable value
+is one description, not a new widget:
+- `Param`: id, name, range, unit, default, scale (linear, dB, log for
+  speed), how it is applied (into a `Grade`, a `View`, a gain).
+- `Curve`: points `{t, v, ease}` with `value_at(t)`, add, move between
+  neighbours, remove: the volume-point functions of the edit API
+  (`ARCHITECTURE.md` step 5) made generic.
+- The timeline's lane drawing and mouse handling take a `Param` + `Curve`
+  (`ARCHITECTURE.md` step 8, «timeline lanes behind one lane type»).
+- Users of it: Effects (11 parameters), View (yaw, pitch, roll, FOV),
+  a cut's volume and the tracks' volume (already curves), speed (gap
+  31), overlay motion and opacity, and later a stinger's or transition's
+  parameters.
+
+**View today.** The user says View «doesn't work now»: its row shows the
+view keys of 360 framing, but turning the view by keys (automation of
+framing) is what's missing on flat video and in Edit mode (noted with the
+Framing check, 2026-11-01; tracking, gap 37, comes with it). The
+contract covers it so View lanes arrive with that work.
+
+**Order.** The generic `Curve` and lane first (moving volume onto it, no
+change seen), then Effects lanes (data A with conversion), then View
+lanes with gap 37, then speed (31) as one more `Param`.
 
 ## Format rule for all of these
 

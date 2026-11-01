@@ -200,6 +200,10 @@ impl App {
             RecordMsg::Stop => return self.stop_take(),
             RecordMsg::Stopped(result, at, start) => {
                 self.record.stopping = false;
+                // The meter back on while the panel is open.
+                if self.side == Some(Side::Record) {
+                    self.record.listen();
+                }
                 match result {
                     Err(e) => self.record.error = Some(format!("The take wasn't saved: {e}")),
                     Ok((_, len)) if len - start < 0.1 => self.record.error = Some("Nothing was recorded after the countdown.".into()),
@@ -211,14 +215,8 @@ impl App {
                         self.selected_overlay = None;
                         self.selected_volume = None;
                         self.selected_sound = None;
-                        if self.side == Some(Side::Record) {
-                            self.record.listen();
-                        }
                         return self.load_waveform(&path);
                     }
-                }
-                if self.side == Some(Side::Record) {
-                    self.record.listen();
                 }
             }
             RecordMsg::Tick => self.record_tick(),

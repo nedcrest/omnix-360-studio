@@ -1297,6 +1297,102 @@ mod tests {
         assert_eq!(copy.voice.clips[0].input, dir.join("take.wav"));
     }
 
+    fn song(at: f64, len: f64) -> MusicClip {
+        MusicClip { input: "s.wav".into(), at, start: 0.0, end: len, ..Default::default() }
+    }
+
+    #[test]
+    fn a_third_clip_never_lands_in_an_overlap() {
+        // A 0..10 and B 8..18 crossfade over 8..10.
+        let mut m = Music::default();
+        m.clips = vec![song(0.0, 10.0), song(8.0, 10.0), song(30.0, 4.0)];
+        // C dragged so it would cover the crossfade, even partly: no.
+        assert!(!m.fits(2, 7.0, 4.0, true));
+        assert!(!m.fits(2, 9.0, 2.0, true));
+        // C wholly inside A: no.
+        assert!(!m.fits(2, 2.0, 3.0, true));
+        // A plain drag (no Shift) doesn't grow B's crossfade with A; Shift does.
+        assert!(!m.fits(1, 7.0, 10.0, false));
+        assert!(m.fits(1, 7.0, 10.0, true));
+        assert!(m.fits(1, 8.5, 10.0, false), "shrinking it is fine");
+        // Before the edit's start: never.
+        assert!(!m.fits(2, -1.0, 4.0, true));
+    }
+
+    #[test]
+    fn reach_stops_at_the_last_value_that_holds() {
+        let ok = |x: f64| x <= 3.25;
+        let r = Music::reach(0.0, 10.0, ok);
+        assert!(ok(r) && (r - 3.25).abs() < 1e-9, "{r}");
+        assert_eq!(Music::reach(0.0, 2.0, ok), 2.0);
+        // Downwards too.
+        let r = Music::reach(5.0, -5.0, |x| x >= 1.5);
+        assert!(r >= 1.5 && r - 1.5 < 1e-9, "{r}");
+    }
+
+    #[test]
+    fn a_sound_with_no_room_goes_after_the_last() {
+        let mut m = Music::default();
+        m.clips = vec![song(0.0, 5.0), song(5.0, 5.0), song(0.0, 20.0)];
+        // The 20 s clip fits nowhere between the two: after the last.
+        assert_eq!(m.place(2, 3.0), 10.0);
+    }
+
+    #[test]
+    fn volume_points_at_their_edges() {
+        let keys = [VolumeKey { t: 1.0, volume: -6.0 }, VolumeKey { t: 1.0, volume: 6.0 }, VolumeKey { t: 3.0, volume: 0.0 }];
+        // Two points at one time: the later one wins from there on, no NaN.
+        assert!(volume_at(&keys, 1.0).is_finite());
+        assert_eq!(volume_at(&keys, 0.0), -6.0);
+        assert_eq!(volume_at(&[], 5.0), 0.0);
+        // A point near another is that point, not a new one.
+        let mut keys = vec![VolumeKey { t: 2.0, volume: -3.0 }];
+        assert_eq!(volume_key_at(&mut keys, 2.005), 0);
+        assert_eq!(keys.len(), 1);
+        // Moved within a range narrower than its neighbours leave: held in it.
+        let mut keys = vec![VolumeKey { t: 1.0, volume: 0.0 }, VolumeKey { t: 2.0, volume: 0.0 }, VolumeKey { t: 3.0, volume: 0.0 }];
+        move_volume_key(&mut keys, 1, 9.0, -4.0, (0.0, 10.0));
+        assert!(keys[1].t < 3.0 && keys[1].t > 1.0 && keys[1].volume == -4.0);
+        move_volume_key(&mut keys, 1, 2.5, 0.0, (2.2, 2.3));
+        assert!((2.2..=2.3).contains(&keys[1].t));
+        move_volume_key(&mut keys, 7, 1.0, 0.0, (0.0, 1.0));
+        assert_eq!(keys.len(), 3);
+    }
+
+    #[test]
+    fn continue_level_counts_edit_order_not_list_order_and_skips_silence() {
+        let mut p = Project::default();
+        // Stored out of order: clip 0 plays last.
+        p.sfx.clips = vec![song(20.0, 2.0), song(0.0, 2.0), song(10.0, 2.0)];
+        assert_eq!(p.before(Own::Clip(SoundTrack::Sfx, 0)), Some(Own::Clip(SoundTrack::Sfx, 2)));
+        assert_eq!(p.before(Own::Clip(SoundTrack::Sfx, 2)), Some(Own::Clip(SoundTrack::Sfx, 1)));
+        // The one before muted: nothing to carry on from.
+        p.sfx.clips[2].mute = true;
+        assert!(!p.continue_level(Own::Clip(SoundTrack::Sfx, 0)));
+        assert!(p.sfx.clips[0].volume.is_empty());
+        // Cuts: the one before in the edit.
+        p.cuts = vec![Cut::new("a.mp4".into(), 0.0, 2.0), Cut::new("b.mp4".into(), 0.0, 2.0)];
+        p.cuts[0].gain = -4.0;
+        assert!(p.continue_level(Own::Cut(1)));
+        assert_eq!(volume_at(&p.cuts[1].volume, 1.0), -4.0);
+        assert_eq!(p.before(Own::Cut(0)), None);
+    }
+
+    #[test]
+    fn fades_at_their_bounds() {
+        // No fades: always full; fades longer than the clip: they meet, never above 1.
+        assert_eq!(fade_ramp(0.0, 0.0, 0.0, 0.0), 1.0);
+        assert_eq!(fade_ramp(1.0, 1.0, 4.0, 4.0), 0.25);
+        assert_eq!(fade_ramp(-1.0, 5.0, 2.0, 0.0), 0.0);
+        let mut c = Cut::new("a.mp4".into(), 0.0, 2.0);
+        c.set_sound_fade(true, -3.0);
+        assert_eq!(c.sound_fade_in, 0.0);
+        c.set_sound_fade(true, 5.0);
+        assert_eq!(c.sound_fade_in, 2.0);
+        c.set_sound_fade(false, 1.0);
+        assert_eq!(c.sound_fade_out, 0.0, "nothing left after the fade in");
+    }
+
     #[test]
     fn a_take_lands_without_its_lead_in() {
         let mut m = Music::default();

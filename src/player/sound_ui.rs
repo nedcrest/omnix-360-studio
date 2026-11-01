@@ -405,6 +405,49 @@ fn summary(done: usize, total: usize, gains: &[f64], silent: usize, failed: &[St
 mod tests {
     use super::*;
 
+    fn app() -> App {
+        let opts = super::super::Options { osv_size: None, hw: Some(crate::ffmpeg::Hwaccel::Software), hw_forced: true, stabilize: crate::stab::Mode::Horizon, imu_axes: crate::stab::ImuAxes::X180, world_z_down: false };
+        let mut app = App::new(opts, super::super::settings::Settings::default());
+        // Files that aren't there: the dialog's measuring finds no sound,
+        // and the results are fed in below by hand.
+        app.edit.cuts = vec![crate::project::Cut::new("nowhere/a.mp4".into(), 0.0, 2.0), crate::project::Cut::new("nowhere/b.mp4".into(), 0.0, 2.0)];
+        app
+    }
+
+    #[test]
+    fn normalizing_every_cut_is_one_undo_step_and_says_what_it_did() {
+        let mut app = app();
+        let _ = app.sound_ui(SoundMsg::Open(Scope::All));
+        let _ = app.sound_ui(SoundMsg::Start);
+        assert!(matches!(app.normalize.as_ref().map(|d| &d.state), Some(State::Running { total: 2, .. })));
+        let _ = app.sound_ui(SoundMsg::Measured(Own::Cut(0), Ok(Some((-20.0, 4.0)))));
+        let _ = app.sound_ui(SoundMsg::Measured(Own::Cut(1), Ok(None)));
+        let c = &app.edit.cuts[0];
+        assert_eq!((c.gain, c.loudness, c.even), (4.0, Some(-20.0), true), "evened out by default");
+        assert!(matches!(app.normalize.as_ref().map(|d| &d.state), Some(State::Done(s)) if s == "2 clips done. Level +4.0 dB. 1 without sound, left as they were."));
+        // All of it undone at once.
+        assert!(app.edit.undo());
+        assert_eq!((app.edit.cuts[0].gain, app.edit.cuts[0].even), (0.0, false));
+    }
+
+    #[test]
+    fn a_cancelled_run_stops_after_the_one_being_measured() {
+        let mut app = app();
+        let _ = app.sound_ui(SoundMsg::Open(Scope::All));
+        let _ = app.sound_ui(SoundMsg::Start);
+        let _ = app.sound_ui(SoundMsg::Cancel);
+        let _ = app.sound_ui(SoundMsg::Measured(Own::Cut(0), Ok(Some((-18.0, 2.0)))));
+        assert_eq!(app.edit.cuts[1].gain, 0.0, "the second never measured");
+        assert!(matches!(app.normalize.as_ref().map(|d| &d.state), Some(State::Done(s)) if s.starts_with("Stopped after 1 of 2 clips")));
+        // A sound clip's track, normalized the same way.
+        app.edit.voice.clips.push(crate::project::MusicClip { input: "nowhere/take.wav".into(), at: 0.0, start: 0.0, end: 3.0, ..Default::default() });
+        let _ = app.sound_ui(SoundMsg::Close);
+        let _ = app.sound_ui(SoundMsg::Open(Scope::Track(SoundTrack::Voice)));
+        let _ = app.sound_ui(SoundMsg::Start);
+        let _ = app.sound_ui(SoundMsg::Measured(Own::Clip(SoundTrack::Voice, 0), Ok(Some((-30.0, 14.0)))));
+        assert_eq!(app.edit.voice.clips[0].gain, 14.0);
+    }
+
     #[test]
     fn says_what_changed() {
         assert_eq!(summary(3, 3, &[2.6, 7.7, 0.7], 0, &[], false), "3 clips done. Levels from +0.7 to +7.7 dB.");

@@ -1381,6 +1381,13 @@ reaches for (the user's question «what else may be missing for sound?»):
   noise; footage-agent's cleaner already makes the cleaned voices.
 - **Solo and mute per lane** (46d): hear the Voice alone, or everything
   but the music, while mixing.
+- **Built 2026-11-01, waiting for the check:** 46d solo and mute
+  (`2a085c0`): «S»/«M» by each sound lane's name, for listening only (not
+  saved, not exported). 46c rumble cut and cleaning: `loudness::LOW_CUT`
+  (highpass 120 Hz, 2 poles) and `CLEAN` (afftdn nr 12, nf −40, tn), one
+  chain with evening, in playback, export and measuring; on the scooter
+  −6.5 dB under 150 Hz, −3.4 LUFS overall; cleaning does nothing for wind.
+  The waveform isn't drawn through them (only through the leveler).
 - **Two sound effects at once** (46e): a second SFX lane (gap 3's «not
   yet»).
 - **The duck's depth** (46f): its 12 dB default against the 15–20 dB the

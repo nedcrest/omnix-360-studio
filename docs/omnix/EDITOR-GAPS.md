@@ -144,9 +144,25 @@ and easy to work in. A free-form mode can come later if ever needed.
 **Built 2026-10-29:** the Voice lane (`a6776ec`) and fade handles on sound
 clips' top corners (`bc19aab`).
 
-**Not yet:**
-- two sound effects at once (a second SFX lane);
-- auto-duck.
+**Auto-duck, built 2026-11-01** (`684f7d2`, `0efe6b4`), waiting for the
+check. The user's design: one action and a depth; speech from the cleaned
+voice; ordinary volume points. Defaults taken:
+- speech is looked for in cuts with a cleaned voice and in Voice takes
+  only; a cut's own sound without a cleaned voice doesn't count (wind and
+  traffic as often as talk);
+- found as peaks above the stretch's loudest less 24 dB (never under
+  −50 dBFS), pauses under 0.8 s bridged, blips under 0.25 s dropped;
+- the music goes down 0.3 s before speech and back up over 0.6 s after;
+- depth 12 dB by default (3–30), remembered;
+- the dip is added to the music's own line, so hand-drawn points keep
+  their shape; running it again dips again (Ctrl+Z first to change the
+  depth);
+- an action, not a live switch: the points are the user's to edit after.
+In the Audio panel («Lower under speech» and the depth), the Music lane's
+menu, and `rosmo360 duck project.json [--depth] [-o]`. On the test
+project: speech 5.7–11.7 s and 12.9–25.9 s, the music 12 dB down there.
+
+**Not yet:** two sound effects at once (a second SFX lane).
 
 ### 4. The clip's sound as its own lane — 4A built with 3; 4B its own milestone
 

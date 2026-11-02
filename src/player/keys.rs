@@ -63,6 +63,20 @@ impl App {
         // Editing: the keys that turn, frame or key the view do nothing. K
         // still adds a volume point to a selected sound.
         let sound = self.selection.sound(&self.edit).is_some();
+        // Editing: the arrows, Home and End move the playhead (gap 55).
+        if !self.framing && !mods.alt() && !mods.command() {
+            match key.as_ref() {
+                Key::Named(Named::ArrowLeft) if mods.shift() => return self.seek_by(-1.0, "−1 s"),
+                Key::Named(Named::ArrowRight) if mods.shift() => return self.seek_by(1.0, "+1 s"),
+                // A field of the angles strip being typed in keeps them.
+                Key::Named(arrow @ (Named::ArrowUp | Named::ArrowDown)) if self.angles_shown => return angles::arrow(if arrow == Named::ArrowUp { 1.0 } else { -1.0 }),
+                Key::Named(Named::ArrowUp) => return self.to_join(-1.0),
+                Key::Named(Named::ArrowDown) => return self.to_join(1.0),
+                Key::Named(Named::Home) => return self.seek_to(0.0, "start"),
+                Key::Named(Named::End) => return self.seek_to(self.edit.frame(), "end"),
+                _ => {}
+            }
+        }
         if !self.framing && framing_key(&key, mods, sound) {
             return Task::none();
         }
@@ -93,13 +107,13 @@ impl App {
             }
             Key::Named(Named::ArrowLeft) if mods.shift() => self.free_look().yaw -= 2.0 * step,
             Key::Named(Named::ArrowRight) if mods.shift() => self.free_look().yaw += 2.0 * step,
+            // A frame, as `,` and `.` (it was 5 s, thrown about unclearly:
+            // gap 55).
             Key::Named(arrow @ (Named::ArrowLeft | Named::ArrowRight)) => {
                 self.follow = true;
-                let t = self.position() + if arrow == Named::ArrowLeft { -5.0 } else { 5.0 };
-                if let Some((i, t)) = self.edit.locate(t.max(0.0)) {
-                    let playing = self.clip.as_ref().is_some_and(|c| c.playback.playing);
-                    self.goto(i, t, playing);
-                }
+                let back = arrow == Named::ArrowLeft;
+                self.with_playback(|p| p.step(if back { -1.0 } else { 1.0 }));
+                return self.step_note(if back { "−1 f" } else { "+1 f" });
             }
             // With the strip showing, a field typed in may want them.
             Key::Named(arrow @ (Named::ArrowUp | Named::ArrowDown)) if self.angles_shown => {
@@ -191,5 +205,70 @@ impl App {
             _ => {}
         }
         Task::none()
+    }
+}
+
+impl App {
+    /// The playhead `dt` seconds on, said by it as `note` for a moment.
+    fn seek_by(&mut self, dt: f64, note: &'static str) -> Task<Message> {
+        self.seek_to(self.position() + dt, note)
+    }
+
+    /// The playhead to edit time `t` (held within the edit), said by it.
+    fn seek_to(&mut self, t: f64, note: &'static str) -> Task<Message> {
+        self.follow = true;
+        // The edit's end shows its last frame.
+        let t = t.clamp(0.0, (self.edit.duration() - 1.0 / self.fps()).max(0.0));
+        if let Some((i, t)) = self.edit.locate(t) {
+            let playing = self.clip.as_ref().is_some_and(|c| c.playback.playing);
+            self.goto(i, t, playing);
+        }
+        self.step_note(note)
+    }
+
+    /// The playhead to the previous (`dir` < 0) or next join: where any
+    /// cut, sound clip or overlay starts or ends, and the edit's ends.
+    pub(super) fn to_join(&mut self, dir: f64) -> Task<Message> {
+        let now = self.position();
+        let t = joins(&self.edit).into_iter().filter(|&t| if dir < 0.0 { t < now - 1e-3 } else { t > now + 1e-3 }).min_by(|a, b| (a - now).abs().total_cmp(&(b - now).abs()));
+        match t {
+            Some(t) => self.seek_to(t, if dir < 0.0 { "← join" } else { "join →" }),
+            None => Task::none(),
+        }
+    }
+
+    /// Says `note` by the playhead for a moment (gap 55).
+    fn step_note(&mut self, note: &'static str) -> Task<Message> {
+        let n = self.step_note.map_or(0, |(_, n)| n + 1);
+        self.step_note = Some((note, n));
+        Task::perform(super::blocking(|| std::thread::sleep(std::time::Duration::from_millis(900))), move |_| Message::StepNoteGone(n))
+    }
+}
+
+/// Every edit time where something starts or ends: the cuts' joins, the
+/// sound clips' and overlay items' edges, the edit's start and end.
+fn joins(edit: &crate::model::edit::Edit) -> Vec<f64> {
+    let offsets = crate::project::offsets(&edit.cuts);
+    let cuts = edit.cuts.iter().zip(&offsets).flat_map(|(c, &at)| [at, at + c.len()]);
+    let sounds = crate::project::SoundTrack::ALL.into_iter().flat_map(|w| edit.track(w).clips.iter().flat_map(|c| [c.at, c.ends()]).collect::<Vec<_>>());
+    let items = edit.lanes().flat_map(|l| &l.items).flat_map(|it| [it.at, it.ends()]);
+    std::iter::once(0.0).chain(cuts).chain(sounds).chain(items).chain(std::iter::once(edit.duration())).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::project::{Cut, MusicClip};
+
+    #[test]
+    fn joins_are_every_edge_on_the_edit() {
+        let mut e = crate::model::edit::Edit::default();
+        e.cuts = vec![Cut::new("a".into(), 0.0, 4.0), Cut { crossfade: 1.0, ..Cut::new("b".into(), 0.0, 3.0) }];
+        e.music.clips.push(MusicClip { input: "s".into(), at: 2.5, start: 0.0, end: 1.0, ..Default::default() });
+        let mut t = joins(&e);
+        t.sort_by(f64::total_cmp);
+        t.dedup();
+        // a 0..4, b overlapping it from 3 to 6, the song 2.5..3.5.
+        assert_eq!(t, [0.0, 2.5, 3.0, 3.5, 4.0, 6.0]);
     }
 }

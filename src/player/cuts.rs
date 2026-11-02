@@ -190,6 +190,11 @@ impl App {
                     return Task::perform(super::blocking(|| std::thread::sleep(std::time::Duration::from_secs(6))), move |_| Message::ToastGone(n));
                 }
             }
+            Message::StepNoteGone(n) => {
+                if self.step_note.is_some_and(|(_, m)| m == n) {
+                    self.step_note = None;
+                }
+            }
             Message::ToastGone(n) => {
                 if self.toast.is_some_and(|(_, m)| m == n) {
                     self.toast = None;

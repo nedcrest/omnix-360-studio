@@ -319,6 +319,8 @@ pub struct Timeline {
     pub selected_overlay: Option<crate::overlay::ItemRef>,
     /// Moves on when Esc cancels a drag, so the canvases drop theirs.
     pub drag_epoch: u64,
+    /// The playhead's last key step, said by it for a moment (gap 55).
+    pub step_note: Option<&'static str>,
     /// The rows' heights, from the divider's scale.
     pub rows: Rows,
     /// Which sound lanes are soloed or muted, for listening.
@@ -1760,6 +1762,9 @@ impl canvas::Program<Message> for Marks {
         if let (Some(p), Some(said)) = (cursor.position_in(bounds), self.readout(drag)) {
             readout(&mut frame, bounds, p, &said);
         }
+        if let Some(note) = self.step_note {
+            readout(&mut frame, bounds, Point::new(at - 14.0, 30.0), note);
+        }
         vec![frame.into_geometry()]
     }
 
@@ -1921,7 +1926,7 @@ mod tests {
             sounds,
             selected_music: None, selected_point: None,
             video: 10.0, clips_db: 0.0, duration: 10.0, start: 0.0, span: 10.0, position: 0.0,
-            selected: None, current: None, overlays: vec![], texts: vec![], selected_overlay: None, drag_epoch: 0,
+            selected: None, current: None, overlays: vec![], texts: vec![], selected_overlay: None, drag_epoch: 0, step_note: None,
             rows: Rows::new(1.0, false, Folds { sfx2: false, ..Folds::default() }),
             listen: Default::default(),
             check_marks: vec![],

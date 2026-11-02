@@ -12,6 +12,10 @@ use iced::widget::canvas::{self, Frame, Geometry, Path, Stroke, Text};
 use iced::widget::{button, canvas as canvas_widget, column, container, row, scrollable, space, text};
 use iced::{Alignment, Color, Element, Length, Point, Rectangle, Renderer, Size, Task, Theme, mouse};
 
+/// The time ruler's height over the lanes, px, and the lanes' names' room.
+const RULER: f32 = 22.0;
+const LEFT: f32 = 90.0;
+
 /// The loudness range a block's height spans, LUFS.
 const QUIET: f64 = -50.0;
 const LOUD: f64 = -6.0;
@@ -76,6 +80,14 @@ impl App {
         Task::none()
     }
 
+    /// Where the findings are on the edit, for the timeline's seek bar:
+    /// each one's stretch and whether it's one to fix; the whole film's
+    /// aren't anywhere in particular.
+    pub(super) fn check_marks(&self) -> Vec<(f64, f64, bool)> {
+        let Some(m) = &self.check.measured else { return Vec::new() };
+        check(m, &self.check_rules()).into_iter().filter(|f| f.own.is_some()).map(|f| (f.at, f.until, f.severity == Severity::Fix)).collect()
+    }
+
     /// What stands in the viewer's place while the check is on.
     pub(super) fn mix_check_view(&self) -> Element<'_, Message> {
         let rules = self.check_rules();
@@ -119,6 +131,16 @@ struct Schematic {
 }
 
 impl Schematic {
+    /// Edit time to x, in a canvas `width` wide.
+    fn x(&self, t: f64, width: f32) -> f32 {
+        LEFT + (t / self.duration) as f32 * (width - LEFT - 6.0)
+    }
+
+    /// The finding whose mark on the ruler is under `x`.
+    fn mark_at(&self, x: f32, width: f32) -> Option<&Finding> {
+        self.found.iter().filter(|f| f.own.is_some()).find(|f| x >= self.x(f.at, width) - 4.0 && x <= self.x(f.until, width).max(self.x(f.at, width) + 4.0))
+    }
+
     /// The lanes shown, top to bottom: the clips' sound, then each track
     /// with something on it.
     fn lanes(&self) -> Vec<Lane> {
@@ -128,8 +150,8 @@ impl Schematic {
     /// Each item's block: its rectangle and the item.
     fn blocks(&self, b: Size) -> Vec<(Rectangle, &crate::mixcheck::Item)> {
         let lanes = self.lanes();
-        let (left, h) = (90.0, b.height / lanes.len().max(1) as f32);
-        let x = |t: f64| left + (t / self.duration) as f32 * (b.width - left - 6.0);
+        let h = (b.height - RULER) / lanes.len().max(1) as f32;
+        let x = |t: f64| self.x(t, b.width);
         self.measured
             .items
             .iter()
@@ -138,7 +160,7 @@ impl Schematic {
                 let share = i.lufs.map_or(0.04, |v| ((v - QUIET) / (LOUD - QUIET)).clamp(0.04, 1.0)) as f32;
                 let (l, r) = (x(i.at), x(i.at + i.len));
                 let tall = share * (h - 10.0);
-                Some((Rectangle::new(Point::new(l + 1.0, row * h + h - 4.0 - tall), Size::new((r - l - 2.0).max(2.0), tall)), i))
+                Some((Rectangle::new(Point::new(l + 1.0, RULER + row * h + h - 4.0 - tall), Size::new((r - l - 2.0).max(2.0), tall)), i))
             })
             .collect()
     }
@@ -151,14 +173,36 @@ impl canvas::Program<Message> for Schematic {
         let mut frame = Frame::new(renderer, bounds.size());
         let palette = theme.extended_palette();
         let lanes = self.lanes();
-        let h = bounds.height / lanes.len().max(1) as f32;
-        let x = |t: f64| 90.0 + (t / self.duration) as f32 * (bounds.width - 96.0);
+        let h = (bounds.height - RULER) / lanes.len().max(1) as f32;
+        let x = |t: f64| self.x(t, bounds.width);
+        // The ruler: seconds, a tick every so many as fit 70 px apart.
+        let per_px = self.duration / (bounds.width - LEFT - 6.0) as f64;
+        let step = [1.0, 2.0, 5.0, 10.0, 15.0, 30.0, 60.0, 120.0, 300.0, 600.0].into_iter().find(|&s| s / per_px >= 70.0).unwrap_or(1200.0);
+        let mut t = 0.0;
+        while t <= self.duration {
+            frame.fill_rectangle(Point::new(x(t), RULER - 6.0), Size::new(1.0, 6.0), palette.background.base.text.scale_alpha(0.6));
+            frame.fill_text(Text { content: format!("{}:{:02}", (t / 60.0) as u32, (t % 60.0) as u32), position: Point::new(x(t) + 3.0, 2.0), color: palette.background.base.text.scale_alpha(0.8), size: 10.0.into(), ..Default::default() });
+            t += step;
+        }
+        // The findings on it, where each is: red to fix, yellow a hint.
+        for f in self.found.iter().filter(|f| f.own.is_some()) {
+            let ink = if f.severity == Severity::Fix { Color::from_rgb(1.0, 0.3, 0.3) } else { Color::from_rgb(0.95, 0.79, 0.3) };
+            let (a, b) = (x(f.at), x(f.until).max(x(f.at) + 3.0));
+            frame.fill_rectangle(Point::new(a, RULER - 5.0), Size::new(b - a, 4.0), ink);
+            let tip = Path::new(|p| {
+                p.move_to(Point::new(a - 4.0, RULER - 13.0));
+                p.line_to(Point::new(a + 4.0, RULER - 13.0));
+                p.line_to(Point::new(a, RULER - 6.0));
+                p.close();
+            });
+            frame.fill(&tip, ink);
+        }
         // Speech, faint across every lane: what the music sits under.
         for s in &self.measured.speech {
-            frame.fill_rectangle(Point::new(x(s.from), 0.0), Size::new(x(s.to) - x(s.from), bounds.height), Color { a: 0.07, ..palette.background.base.text });
+            frame.fill_rectangle(Point::new(x(s.from), RULER), Size::new(x(s.to) - x(s.from), bounds.height - RULER), Color { a: 0.07, ..palette.background.base.text });
         }
         for (row, lane) in lanes.iter().enumerate() {
-            let top = row as f32 * h;
+            let top = RULER + row as f32 * h;
             frame.fill_rectangle(Point::new(0.0, top + 2.0), Size::new(bounds.width, h - 4.0), palette.background.weak.color.scale_alpha(0.4));
             let name = match lane {
                 Lane::ClipSound => "Clip sound",
@@ -189,15 +233,21 @@ impl canvas::Program<Message> for Schematic {
     fn update(&self, _state: &mut (), event: &iced::Event, bounds: Rectangle, cursor: mouse::Cursor) -> Option<canvas::Action<Message>> {
         let iced::Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) = event else { return None };
         let p = cursor.position_in(bounds)?;
+        // A finding's mark on the ruler: to its clip, at where it is.
+        if p.y < RULER {
+            let f = self.mark_at(p.x, bounds.width)?;
+            return Some(canvas::Action::publish(Message::Check(CheckMsg::Go(f.own?, f.at))).and_capture());
+        }
         // A block, or anywhere in its stretch of its lane.
         let lanes = self.lanes();
-        let h = bounds.height / lanes.len().max(1) as f32;
-        let (_, item) = self.blocks(bounds.size()).into_iter().find(|(r, _)| p.x >= r.x && p.x <= r.x + r.width && (p.y / h).floor() == (r.y / h).floor())?;
+        let h = (bounds.height - RULER) / lanes.len().max(1) as f32;
+        let row = |y: f32| ((y - RULER) / h).floor();
+        let (_, item) = self.blocks(bounds.size()).into_iter().find(|(r, _)| p.x >= r.x && p.x <= r.x + r.width && row(p.y) == row(r.y))?;
         Some(canvas::Action::publish(Message::Check(CheckMsg::Go(item.own, item.at))).and_capture())
     }
 
     fn mouse_interaction(&self, _state: &(), bounds: Rectangle, cursor: mouse::Cursor) -> mouse::Interaction {
-        let over = cursor.position_in(bounds).is_some_and(|p| self.blocks(bounds.size()).iter().any(|(r, _)| p.x >= r.x && p.x <= r.x + r.width));
+        let over = cursor.position_in(bounds).is_some_and(|p| if p.y < RULER { self.mark_at(p.x, bounds.width).is_some() } else { self.blocks(bounds.size()).iter().any(|(r, _)| p.x >= r.x && p.x <= r.x + r.width) });
         if over { mouse::Interaction::Pointer } else { mouse::Interaction::default() }
     }
 }
@@ -218,7 +268,7 @@ mod tests {
         assert_eq!(s.lanes(), vec![Lane::ClipSound, Lane::Track(SoundTrack::Music)], "lanes with nothing aren't shown");
         let blocks = s.blocks(Size::new(1000.0, 200.0));
         let (quiet, loud) = (blocks[0].0, blocks[1].0);
-        assert!(quiet.y + quiet.height <= 100.0 && loud.y >= 100.0, "each in its lane");
+        assert!(quiet.y >= RULER && quiet.y + quiet.height <= RULER + 89.0 && loud.y >= RULER + 89.0, "each in its lane, under the ruler");
         assert!(loud.height > 3.0 * quiet.height, "louder is taller");
         assert!(loud.x > quiet.x + quiet.width, "later is further right");
     }

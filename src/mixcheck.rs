@@ -83,11 +83,13 @@ pub enum Severity {
     Fix,
 }
 
-/// Something that breaks a rule: where, which clip (none for the whole
+/// Something that breaks a rule: where (from `at` to `until` on the edit;
+/// the whole film's at 0 for nothing), which clip (none for the whole
 /// film), how bad, and what it is in words.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Finding {
     pub at: f64,
+    pub until: f64,
     pub own: Option<Own>,
     pub severity: Severity,
     pub text: String,
@@ -103,17 +105,17 @@ fn median(mut v: Vec<f64>) -> Option<f64> {
 /// first.
 pub fn check(m: &Measured, rules: &Rules) -> Vec<Finding> {
     let mut found = Vec::new();
-    let mut say = |at: f64, own: Option<Own>, severity: Severity, text: String| found.push(Finding { at, own, severity, text });
+    let mut say = |(at, until): (f64, f64), own: Option<Own>, severity: Severity, text: String| found.push(Finding { at, until, own, severity, text });
     if let Some(mix) = m.mix {
         let off = mix - rules.target;
         if off < -1.0 {
-            say(0.0, None, Severity::Hint, format!("The film is {mix:.1} LUFS, {:.1} LU under {:.0}: export with Loudness at {:.0} to bring it up.", -off, rules.target, rules.target));
+            say((0.0, 0.0), None, Severity::Hint, format!("The film is {mix:.1} LUFS, {:.1} LU under {:.0}: export with Loudness at {:.0} to bring it up.", -off, rules.target, rules.target));
         } else if off > 1.0 {
-            say(0.0, None, Severity::Hint, format!("The film is {mix:.1} LUFS, {off:.1} LU over {:.0}: the platform will turn it down.", rules.target));
+            say((0.0, 0.0), None, Severity::Hint, format!("The film is {mix:.1} LUFS, {off:.1} LU over {:.0}: the platform will turn it down.", rules.target));
         }
     }
     if m.peak > rules.peak {
-        say(0.0, None, Severity::Fix, format!("Peaks reach {:.1} dBFS, over {:.0}: they may distort on some players.", m.peak, rules.peak));
+        say((0.0, 0.0), None, Severity::Fix, format!("Peaks reach {:.1} dBFS, over {:.0}: they may distort on some players.", m.peak, rules.peak));
     }
     // Speech against the rest of the speech.
     let speech: Vec<&Item> = m.items.iter().filter(|i| i.speech && i.lufs.is_some()).collect();
@@ -122,9 +124,9 @@ pub fn check(m: &Measured, rules: &Rules) -> Vec<Finding> {
         for i in &speech {
             let off = i.lufs.unwrap() - typical;
             if off < -rules.speech_spread {
-                say(i.at, Some(i.own), Severity::Fix, format!("Speech {:.1} LU quieter than the rest: raise it, or normalize it.", -off));
+                say((i.at, i.at + i.len), Some(i.own), Severity::Fix, format!("Speech {:.1} LU quieter than the rest: raise it, or normalize it.", -off));
             } else if off > rules.speech_spread {
-                say(i.at, Some(i.own), Severity::Hint, format!("Speech {off:.1} LU louder than the rest."));
+                say((i.at, i.at + i.len), Some(i.own), Severity::Hint, format!("Speech {off:.1} LU louder than the rest."));
             }
         }
     }
@@ -132,8 +134,8 @@ pub fn check(m: &Measured, rules: &Rules) -> Vec<Finding> {
     let speech_peak = median(speech.iter().filter_map(|i| i.loudest).collect());
     for i in m.items.iter().filter(|i| matches!(i.lane, Lane::Track(SoundTrack::Sfx | SoundTrack::Sfx2))) {
         match (i.loudest, speech_peak) {
-            (Some(l), Some(s)) if l - s > rules.sfx_over => say(i.at, Some(i.own), Severity::Fix, format!("Sound effect {:.1} dB over the speech: lower it.", l - s)),
-            (Some(l), Some(s)) if s - l > rules.sfx_lost => say(i.at, Some(i.own), Severity::Hint, format!("Sound effect {:.1} dB under the speech: it may be lost.", s - l)),
+            (Some(l), Some(s)) if l - s > rules.sfx_over => say((i.at, i.at + i.len), Some(i.own), Severity::Fix, format!("Sound effect {:.1} dB over the speech: lower it.", l - s)),
+            (Some(l), Some(s)) if s - l > rules.sfx_lost => say((i.at, i.at + i.len), Some(i.own), Severity::Hint, format!("Sound effect {:.1} dB under the speech: it may be lost.", s - l)),
             _ => {}
         }
     }
@@ -143,7 +145,7 @@ pub fn check(m: &Measured, rules: &Rules) -> Vec<Finding> {
             let is_music = matches!(own, Own::Clip(SoundTrack::Music, _));
             let gap = s.voice - level;
             if is_music && gap < rules.music_under {
-                say(s.from, Some(own), Severity::Fix, format!("Music only {gap:.1} dB under the voice at {:.1}-{:.1} s: lower it {:.0} dB more (or «Lower the music under speech»).", s.from, s.to, rules.music_under - gap));
+                say((s.from, s.to), Some(own), Severity::Fix, format!("Music only {gap:.1} dB under the voice at {:.1}-{:.1} s: lower it {:.0} dB more (or «Lower the music under speech»).", s.from, s.to, rules.music_under - gap));
             }
         }
     }

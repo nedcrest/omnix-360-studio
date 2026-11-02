@@ -288,6 +288,8 @@ pub struct Timeline {
     pub rows: Rows,
     /// Which sound lanes are soloed or muted, for listening.
     pub listen: super::listen::Listen,
+    /// The mix check's findings (from, to, one to fix), on the seek bar.
+    pub check_marks: Vec<(f64, f64, bool)>,
 }
 
 #[derive(Default)]
@@ -1503,6 +1505,13 @@ impl canvas::Program<Message> for Marks {
         frame.fill(&bar(x0, x1), palette.background.strong.color);
         let at = self.x(self.position, bounds);
         frame.fill(&bar(x0, at), palette.primary.base.color);
+        // The mix check's findings, just over the bar: red to fix, yellow
+        // a hint, each over its stretch.
+        for &(from, to, fix) in &self.check_marks {
+            let ink = if fix { iced::Color::from_rgb(1.0, 0.3, 0.3) } else { iced::Color::from_rgb(0.95, 0.79, 0.3) };
+            let (a, b) = (self.x(from, bounds), self.x(to, bounds).max(self.x(from, bounds) + 3.0));
+            frame.fill(&Path::rectangle(Point::new(a, mid - BAR / 2.0 - 4.0), Size::new(b - a, 3.0)), ink);
+        }
         // Where one cut ends and the next begins.
         for c in self.blocks.iter().skip(1) {
             let x = self.x(c.from, bounds);
@@ -1692,6 +1701,7 @@ mod tests {
             selected: None, current: None, overlays: vec![], texts: vec![], selected_overlay: None,
             rows: Rows::new(1.0, false),
             listen: Default::default(),
+            check_marks: vec![],
         };
         (t, Rectangle::new(Point::ORIGIN, Size::new(1000.0 + 2.0 * PICK, 300.0)))
     }

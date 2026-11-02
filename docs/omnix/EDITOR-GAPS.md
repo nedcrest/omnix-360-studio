@@ -866,7 +866,7 @@ clip, the track's line over the whole edit):
   export rule, tested on the mix graph strings).
 
 **Built 2026-11-01 with 33f, confirmed by the user the same day** (`4e0411b`, `37da672`, `d3902f0`, `23fee09`,
-`9bc8478`, `8046051`), waiting for the user's check. As designed, with
+`9bc8478`, `8046051`). As designed, with
 these defaults: the clip's line is cyan like a cut's (both «own» lines),
 the track's line stays shown when it has points but dimmer (no separate
 «Show track volume» switch: hiding it would hide existing points); the
@@ -975,7 +975,7 @@ Decided:
   down.
 - `project::Line` (Own or Track) folds back into `Own`.
 
-**Built 2026-11-01** (`c34ae65`, `abc21b9`), waiting for the check. On
+**Built 2026-11-01** (`c34ae65`, `abc21b9`), confirmed by the user with the sound group. On
 the test project the music's six track points and the Voice point moved
 into the clips' lines; auto-duck writes there. «Lower the music under
 speech» is now also in a song's right-click menu.
@@ -1315,7 +1315,7 @@ so the ducked shape stays and the whole clip moves; today only «Lower
 One undo step per drag. Several clips selected (gap 8) later move
 together.
 
-**Built 2026-11-01** (`0f65503`), waiting for the check. Defaults: the tag
+**Built 2026-11-01** (`0f65503`), confirmed by the user with the sound group. Defaults: the tag
 is always shown now (it was only when the level wasn't 0), 0.25 dB a
 pixel in 0.5 dB steps (Shift 0.05 / 0.1), capped at +24 dB as normalizing
 is; a volume point wins over the tag where both are. «Level…» to type a

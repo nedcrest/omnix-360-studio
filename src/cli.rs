@@ -86,7 +86,7 @@ pub(crate) enum Cmd {
     Duck {
         project: PathBuf,
         /// How far down, dB.
-        #[arg(long, default_value_t = 12.0)]
+        #[arg(long, default_value_t = 18.0)]
         depth: f64,
         #[arg(short, long)]
         output: Option<PathBuf>,

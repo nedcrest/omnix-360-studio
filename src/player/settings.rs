@@ -98,7 +98,7 @@ impl Default for Settings {
             record_channel: crate::capture::Channel::First,
             record_countdown: true,
             record_play: true,
-            duck_db: 12.0,
+            duck_db: 18.0,
             ruler_large: true,
             fold_text: true,
             fold_overlay: true,

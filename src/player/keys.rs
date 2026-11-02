@@ -62,7 +62,7 @@ impl App {
         }
         // Editing: the keys that turn, frame or key the view do nothing. K
         // still adds a volume point to a selected sound.
-        let sound = self.selection.sound().is_some();
+        let sound = self.selection.sound(&self.edit).is_some();
         if !self.framing && framing_key(&key, mods, sound) {
             return Task::none();
         }
@@ -87,7 +87,7 @@ impl App {
             Key::Named(Named::Space) => return self.update(Message::Toggle),
             // The selected cut one place left or right (a drag's key route).
             Key::Named(arrow @ (Named::ArrowLeft | Named::ArrowRight)) if mods.alt() => {
-                let Some(i) = self.selection.cut() else { return Task::none() };
+                let Some(i) = self.selection.cut(&self.edit) else { return Task::none() };
                 let to = if arrow == Named::ArrowLeft { i.checked_sub(1) } else { Some(i + 2).filter(|&to| to <= self.edit.cuts.len()) };
                 return to.map_or_else(Task::none, |to| self.update(Message::MoveCut(i, to)));
             }
@@ -135,8 +135,8 @@ impl App {
                 // A sound clip or a point selected: a volume point at the
                 // playhead on that clip's own line (within it), or the
                 // playing cut's.
-                "k" | "K" if self.selection.sound().is_some() => {
-                    let own = self.selection.sound();
+                "k" | "K" if self.selection.sound(&self.edit).is_some() => {
+                    let own = self.selection.sound(&self.edit);
                     // The playhead in that sound's file time: the selected
                     // cut's, not the playing one's (K used to key that).
                     let at = match own {

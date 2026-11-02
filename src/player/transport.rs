@@ -368,7 +368,7 @@ impl App {
     pub(super) fn partner_layer(&self) -> Option<(Arc<Rig>, Arc<Shown>, Camera, Vec<M3>, f32)> {
         // Paused with the playing cut selected, it's shown on its own, to
         // frame it.
-        if self.selection.cut() == Some(self.current) && self.clip.as_ref().is_some_and(|c| !c.playback.playing) {
+        if self.selection.cut(&self.edit) == Some(self.current) && self.clip.as_ref().is_some_and(|c| !c.playback.playing) {
             return None;
         }
         let (i, inc) = self.partner.as_ref()?;
@@ -509,7 +509,7 @@ impl App {
             Message::Scrub(t) => {
                 self.follow = true;
                 // In an overlap, the selected cut's time, if it's one of the two.
-                let selected = self.selection.cut().filter(|&i| i < self.edit.cuts.len()).and_then(|i| {
+                let selected = self.selection.cut(&self.edit).filter(|&i| i < self.edit.cuts.len()).and_then(|i| {
                     let (from, c) = (self.edit.offset(i), &self.edit.cuts[i]);
                     (t >= from && t < from + c.len()).then(|| (i, c.start + t - from))
                 });

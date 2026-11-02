@@ -172,7 +172,7 @@ impl App {
     /// cut.
     fn effect_target(&self) -> Option<(Target, f64)> {
         let t = self.position();
-        if let Some(i) = self.selection.item()
+        if let Some(i) = self.selection.item(&self.edit)
             && let Some(item) = self.edit.item(i)
             && t >= item.at
             && t <= item.ends()
@@ -407,7 +407,7 @@ impl App {
             }
             EffectMsg::Jump(cut, t) => {
                 self.follow = true;
-                self.selection = Selection::Cut(cut);
+                self.selection = Selection::cut_at(&self.edit, cut);
                 self.goto(cut, t, false);
             }
             EffectMsg::KeyMove(cut, key, t) => {
@@ -426,7 +426,7 @@ impl App {
     /// The selected overlay's text, if it's a text overlay.
     /// The selected text item's id and text.
     fn selected_text(&self) -> Option<(crate::project::Id, Text)> {
-        let it = self.edit.item(self.selection.item()?)?;
+        let it = self.edit.item(self.selection.item(&self.edit)?)?;
         Some((it.id, it.text.clone()?))
     }
 
@@ -434,7 +434,7 @@ impl App {
     /// its words and look, wherever the playhead is (where it is and its
     /// effects stay in the Effects panel).
     pub(super) fn text_panel(&self) -> Option<Element<'_, Message>> {
-        let i = self.selection.item()?;
+        let i = self.selection.item(&self.edit)?;
         let words = self.edit.item(i)?.text.as_ref()?;
         let t = |c: TextChange| Message::Effect(EffectMsg::Text(c));
         let swatches = |chosen: Colour, f: fn(Colour) -> TextChange| {
@@ -496,7 +496,7 @@ impl App {
     pub(super) fn white_balance(&mut self, rgb: [f64; 3]) {
         let (temperature, tint) = crate::grade::white_balance(rgb);
         // The picked colour is the cut's, whatever the panel shows.
-        if self.selection.item().is_some() {
+        if self.selection.item(&self.edit).is_some() {
             self.selection = Selection::None;
         }
         self.change_effects(true, |g| {

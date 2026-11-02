@@ -284,8 +284,8 @@ impl App {
         let timeline = timeline::Timeline {
             blocks,
             sounds,
-            selected_music: self.selection.clip(),
-            selected_point: self.selection.point(),
+            selected_music: self.selection.clip(&self.edit),
+            selected_point: self.selection.point(&self.edit),
             listen: self.listen,
             check_marks: self.check_marks(),
             ruler: if self.ruler_large { timeline::RULER_LARGE } else { timeline::RULER_COMPACT },
@@ -296,11 +296,11 @@ impl App {
             start: timeline_start,
             span: timeline_span,
             position: self.position(),
-            selected: self.selection.cut(),
+            selected: self.selection.cut(&self.edit),
             current: current.map(|k| (self.current, k)),
             overlays: self.overlay_blocks(crate::overlay::Track::Overlay),
             texts: self.overlay_blocks(crate::overlay::Track::Text),
-            selected_overlay: self.selection.item(),
+            selected_overlay: self.selection.item(&self.edit),
             drag_epoch: self.drag_epoch,
             rows: timeline::Rows::new(self.split, self.framing, self.folds),
         }
@@ -318,10 +318,10 @@ impl App {
         let shown_view = self.shown_view();
         let (lo, hi) = shown_view.fov_range();
         // With a song selected, C splits that instead.
-        let music = self.selection.clip().and_then(|(which, i)| self.edit.track(which).clips.get(i));
-        let point = self.selection.point().is_some();
+        let music = self.selection.clip(&self.edit).and_then(|(which, i)| self.edit.track(which).clips.get(i));
+        let point = self.selection.point(&self.edit).is_some();
         // Any cut but the first can crossfade in from the one before.
-        let crossfade_cut = Some(self.selection.cut().unwrap_or(self.current)).filter(|&i| i > 0).and_then(|i| self.edit.cuts.get(i));
+        let crossfade_cut = Some(self.selection.cut(&self.edit).unwrap_or(self.current)).filter(|&i| i > 0).and_then(|i| self.edit.cuts.get(i));
         let can_split = match music {
             Some(c) => self.position() > c.at + edit::MIN_CUT && self.position() < c.ends() - edit::MIN_CUT,
             None => self.edit.cuts.get(self.current).is_some_and(|c| p.target() > c.start + edit::MIN_CUT && p.target() < c.end - edit::MIN_CUT),

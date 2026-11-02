@@ -175,7 +175,7 @@ impl App {
                 if self.edit.apply(&Op::Clip(crate::model::ops::clips::ClipOp::OtherSfx { clip })).is_ok()
                     && let Some((w, j)) = self.clip_index(clip)
                 {
-                    self.selection = Selection::Clip(w, j);
+                    self.selection = Selection::clip_at(&self.edit, w, j);
                 }
             }
             SoundMsg::Continue(own) => self.sound_op(own, |sound| SoundOp::ContinueLevel { sound }),
@@ -184,13 +184,13 @@ impl App {
                 if let Some(t) = self.edit.own_line(own).and_then(|(keys, _)| keys.get(i)).map(|k| k.t) {
                     self.sound_op(own, |sound| SoundOp::DeletePoint { sound, t });
                 }
-                if self.selection.point().is_some() {
+                if self.selection.point(&self.edit).is_some() {
                     self.selection = Selection::None;
                 }
             }
             SoundMsg::DeleteLine(own) => {
                 self.sound_menu = None;
-                if self.selection.point().is_some() {
+                if self.selection.point(&self.edit).is_some() {
                     self.selection = Selection::None;
                 }
                 self.sound_op(own, |sound| SoundOp::DeleteLine { sound });
@@ -249,7 +249,7 @@ impl App {
                 let mut choices = column![pick(format!("All cuts ({})", self.edit.cuts.len()), Scope::All)].spacing(8);
                 let one = match d.scope {
                     Scope::Own(own) => Some(own),
-                    _ => self.selection.cut().filter(|&i| i < self.edit.cuts.len()).map(Own::Cut),
+                    _ => self.selection.cut(&self.edit).filter(|&i| i < self.edit.cuts.len()).map(Own::Cut),
                 };
                 if let Some(own) = one.filter(|&o| self.edit.own_line(o).is_some()) {
                     choices = choices.push(pick(self.own_name(own), Scope::Own(own)));
@@ -452,7 +452,7 @@ mod tests {
     #[test]
     fn a_cut_trims_to_the_playhead_and_moves_by_keys() {
         let mut app = app();
-        app.selection = Selection::Cut(0);
+        app.selection = Selection::cut_at(&app.edit, 0);
         // The playhead 1.5 s into cut 0 (0..2 s).
         assert_eq!(app.trim_to(false, 1.5), Some(0));
         assert_eq!(app.edit.cuts[0].end, 1.5);
@@ -471,11 +471,11 @@ mod tests {
         app.edit.voice.clips.push(crate::project::MusicClip { input: "nowhere/take.wav".into(), at: 0.0, start: 0.0, end: 3.0, ..Default::default() });
         app.edit.voice.clips.push(crate::project::MusicClip { input: "nowhere/take.wav".into(), at: 4.0, start: 0.0, end: 3.0, ..Default::default() });
         app.edit.settle_ids();
-        app.selection = Selection::Clip(SoundTrack::Voice, 0);
+        app.selection = Selection::clip_at(&app.edit, SoundTrack::Voice, 0);
         let _ = app.update(Message::DeleteCut);
         assert_eq!(app.toast.map(|t| t.0), Some("Sound deleted"));
         let first = app.toast.unwrap().1;
-        app.selection = Selection::Clip(SoundTrack::Voice, 0);
+        app.selection = Selection::clip_at(&app.edit, SoundTrack::Voice, 0);
         let _ = app.update(Message::DeleteCut);
         let _ = app.update(Message::ToastGone(first));
         assert!(app.toast.is_some(), "the newer note stays");

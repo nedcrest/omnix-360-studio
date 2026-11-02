@@ -41,7 +41,7 @@ impl App {
     /// Trims the selected (else playing) cut's in point (`start`) or out
     /// point to edit time `at`, if it falls inside the cut; its index then.
     pub(super) fn trim_to(&mut self, start: bool, at: f64) -> Option<usize> {
-        let i = self.selection.cut().unwrap_or(self.current);
+        let i = self.selection.cut(&self.edit).unwrap_or(self.current);
         let c = self.edit.cuts.get(i)?;
         let t = c.start + at - self.edit.offset(i);
         if t <= c.start || t >= c.end {
@@ -50,7 +50,7 @@ impl App {
         let most = self.library.iter().find(|m| m.input == c.input).map_or(f64::INFINITY, |m| m.duration);
         let cut = c.id;
         self.op(Op::Cut(CutOp::Trim { cut, end: if start { End::In } else { End::Out }, t, most }))?;
-        self.selection = Selection::Cut(i);
+        self.selection = Selection::cut_at(&self.edit, i);
         Some(i)
     }
 
@@ -71,7 +71,7 @@ impl App {
         let added = self.op(Op::Cut(CutOp::Add { input, start: 0.0, end, place, stabilize: Some(self.opts.stabilize), lut }));
         let Some(i) = added.and_then(|o| o.made).and_then(|id| self.cut_index(id)) else { return };
         self.mark_flat();
-        self.selection = Selection::Cut(i);
+        self.selection = Selection::cut_at(&self.edit, i);
         if self.clip.is_none() {
             self.follow = true;
             self.goto(i, 0.0, true);
@@ -94,7 +94,7 @@ impl App {
                 if self.partner.as_ref().is_some_and(|(j, _)| *j == i) && self.clip.as_ref().is_some_and(|c| !c.playback.playing) {
                     self.swap_partner();
                 }
-                self.selection = Selection::Cut(i);
+                self.selection = Selection::cut_at(&self.edit, i);
             }
             Message::Trim(i, start, t) => {
                 let Some(clip_len) = self.edit.cuts.get(i).and_then(|c| self.library.iter().find(|m| m.input == c.input)).map(|m| m.duration) else {
@@ -113,9 +113,10 @@ impl App {
                 if to != from && to != from + 1 && from < self.edit.cuts.len() {
                     let (cut, before) = (self.edit.cuts[from].id, self.edit.cuts.get(to).map(|c| c.id));
                     if self.op(Op::Cut(CutOp::Move { cut, before })).is_some() {
+                        // The selection names the cut by id: it follows by itself.
                         let at = |i: usize| crate::project::Project::moved_index(from, to, i);
                         self.current = at(self.current);
-                        self.selection = Selection::Cut(at(from));
+                        self.selection = Selection::Cut(cut);
                     }
                 }
             }
@@ -134,17 +135,17 @@ impl App {
                 self.op(Op::Cut(CutOp::Crossfade { cut, seconds }));
             }
             Message::ToggleCrossfade => {
-                let i = self.selection.cut().unwrap_or(self.current);
+                let i = self.selection.cut(&self.edit).unwrap_or(self.current);
                 let Some(c) = self.edit.cuts.get(i) else { return Task::none() };
                 let (cut, seconds) = (c.id, if c.crossfade > 0.0 { 0.0 } else { 1.0 });
                 self.op(Op::Cut(CutOp::Crossfade { cut, seconds }));
             }
-            Message::Split if let Selection::Clip(which, i) = self.selection => {
+            Message::Split if let Some((which, i)) = self.selection.clip(&self.edit) => {
                 let (Some(clip), at) = (self.edit.track(which).clips.get(i).map(|c| c.id), self.position()) else { return Task::none() };
                 // Not where the playhead is: nothing to split, said quietly.
                 let Ok(done) = self.edit.apply(&Op::Clip(ClipOp::Split { clip, at })) else { return Task::none() };
                 if let Some(j) = done.made.and_then(|id| self.edit.track(which).clips.iter().position(|c| c.id == id)) {
-                    self.selection = Selection::Clip(which, j);
+                    self.selection = Selection::clip_at(&self.edit, which, j);
                 }
             }
             Message::Split => {
@@ -153,14 +154,14 @@ impl App {
                 if self.edit.apply(&Op::Cut(CutOp::Split { cut, t })).is_ok() {
                     // The playhead is now at the start of the second half.
                     self.current = i + 1;
-                    self.selection = Selection::Cut(i + 1);
+                    self.selection = Selection::cut_at(&self.edit, i + 1);
                 }
             }
             Message::DeleteCut => {
                 self.sound_menu = None;
                 // With nothing selected, the cut under the playhead.
                 let s = match self.selection {
-                    Selection::None if self.clip.is_some() => Selection::Cut(self.current),
+                    Selection::None if self.clip.is_some() => Selection::cut_at(&self.edit, self.current),
                     s => s,
                 };
                 let what = match s {
@@ -170,10 +171,13 @@ impl App {
                     Selection::Item(_) => "Overlay deleted",
                     Selection::None => return Task::none(),
                 };
+                let at = s.cut(&self.edit);
                 let done = self.edit.delete(s);
-                if let Selection::Cut(i) = s {
-                    // The cut after it, now at `i`, stays selected.
+                if let Some(i) = at {
+                    // The cut after it, now at `i`, selected: Del again
+                    // takes the next.
                     if done {
+                        self.selection = Selection::cut_at(&self.edit, i);
                         self.after_edit(self.edit.offset(i.min(self.edit.cuts.len())));
                     }
                 } else {

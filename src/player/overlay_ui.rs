@@ -53,7 +53,7 @@ impl App {
     /// Fills the panel's text box with the selected text overlay's words
     /// when the selection moves to another one.
     pub(super) fn settle_text(&mut self) {
-        let words = self.selection.item().and_then(|r| self.edit.item(r)?.text.as_ref().map(|t| (r, t.content.clone())));
+        let words = self.selection.item(&self.edit).and_then(|r| self.edit.item(r)?.text.as_ref().map(|t| (r, t.content.clone())));
         match words {
             Some((i, content)) if self.text_of != Some(i) || self.text_content.text().trim_end_matches('\n') != content => {
                 self.text_content = iced::widget::text_editor::Content::with_text(&content);
@@ -94,7 +94,7 @@ impl App {
                 Some(((track, i), crate::overlay::look(item, t).0, picture))
             })
             .collect();
-        handles::Handles { items, selected: self.selection.item() }
+        handles::Handles { items, selected: self.selection.item(&self.edit) }
     }
 
     /// The timeline's blocks for `track`'s lane.
@@ -140,8 +140,8 @@ impl App {
                 self.folds.overlay = false;
                 // One after another from the playhead, each where it fits.
                 let added = self.op(Op::Item(ItemOp::AddPictures { inputs: paths, at: self.position(), len: ffmpeg::PICTURE_SECONDS }));
-                if let Some(r) = added.and_then(|o| o.made).and_then(|id| self.item_ref(id)) {
-                    self.selection = Selection::Item(r);
+                if let Some(id) = added.and_then(|o| o.made) {
+                    self.selection = Selection::Item(id);
                 }
             }
             Message::OverlayPicked(_) => {}
@@ -149,9 +149,9 @@ impl App {
                 // Typing in another overlay is a change of its own for undo.
                 self.edit.commit();
                 match i {
-                    Some(r) => self.selection = Selection::Item(r),
+                    Some(r) => self.selection = Selection::item_at(&self.edit, r),
                     // An empty spot on its lane: only an item lets go.
-                    None if self.selection.item().is_some() => self.selection = Selection::None,
+                    None if self.selection.item(&self.edit).is_some() => self.selection = Selection::None,
                     None => {}
                 }
             }
@@ -204,8 +204,8 @@ impl App {
             Message::AddText => {
                 self.folds.text = false;
                 let added = self.op(Op::Item(ItemOp::AddText { text: Default::default(), at: self.position(), len: ffmpeg::PICTURE_SECONDS }));
-                if let Some(r) = added.and_then(|o| o.made).and_then(|id| self.item_ref(id)) {
-                    self.selection = Selection::Item(r);
+                if let Some(id) = added.and_then(|o| o.made) {
+                    self.selection = Selection::Item(id);
                 }
                 // Its words and look are set in the text panel, open now.
                 self.text_of = None;

@@ -211,7 +211,7 @@ impl App {
                         use crate::model::ops::{Op, clips::ClipOp};
                         let take = self.op(Op::Clip(ClipOp::Add { track: SoundTrack::Voice, input: path.clone(), at, start, end: len }));
                         if let Some((w, i)) = take.and_then(|o| o.made).and_then(|id| self.clip_index(id)) {
-                            self.selection = Selection::Clip(w, i);
+                            self.selection = Selection::clip_at(&self.edit, w, i);
                         }
                         return self.load_waveform(&path);
                     }

@@ -104,7 +104,7 @@ impl App {
 
     /// Selects point `i` of a volume line, and nothing else.
     pub(super) fn select_point(&mut self, own: Own, i: usize) {
-        self.selection = Selection::Point(own, i);
+        self.selection = Selection::point_at(&self.edit, own, i);
     }
 }
 
@@ -155,7 +155,7 @@ impl App {
                     if w == SoundTrack::Sfx2 {
                         self.folds.sfx2 = false;
                     }
-                    self.selection = Selection::Clip(w, i);
+                    self.selection = Selection::clip_at(&self.edit, w, i);
                 }
                 return self.load_waveform(&path);
             }
@@ -170,7 +170,7 @@ impl App {
                 }
             }
             Message::SelectMusic(which, i) => {
-                self.selection = Selection::Clip(which, i);
+                self.selection = Selection::clip_at(&self.edit, which, i);
             }
             Message::PointAdd(own, t, db) => {
                 let Some((_, (start, end))) = self.edit.own_line(own) else { return Task::none() };
@@ -187,6 +187,9 @@ impl App {
                 self.edit.begin();
                 let from = self.edit.own_line(own).map_or(t, |(keys, _)| keys[i].t);
                 self.sound_op(own, |sound| SoundOp::MovePoint { sound, from, t, db });
+                // The selection names the point by its time, which moved;
+                // its place on the line didn't (points keep their order).
+                self.select_point(own, i);
             }
             // A stale index (the clip gone mid-drag) is no undo step.
             Message::MusicMove(which, i, _, _) if i >= self.edit.track(which).clips.len() => {}

@@ -916,12 +916,6 @@ impl App {
         SoundTrack::ALL.into_iter().find_map(|w| self.edit.track(w).clips.iter().position(|c| c.id == id).map(|i| (w, i)))
     }
 
-    /// Where the overlay or text item with id `id` is, in the lane shown.
-    fn item_ref(&self, id: crate::project::Id) -> Option<crate::overlay::ItemRef> {
-        use crate::overlay::Track;
-        [Track::Overlay, Track::Text].into_iter().find_map(|t| self.edit.lane(t)?.items.iter().position(|it| it.id == id).map(|i| (t, i)))
-    }
-
     /// Where the cut with id `id` is.
     fn cut_index(&self, id: crate::project::Id) -> Option<usize> {
         self.edit.cuts.iter().position(|c| c.id == id)

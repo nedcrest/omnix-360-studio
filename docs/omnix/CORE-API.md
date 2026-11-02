@@ -170,7 +170,7 @@ One commit each, behaviour unchanged unless the step says so. Tests
 | 5 | **Done 2026-11-02** (`7fc2c31`), waiting for the user's check: `player/selection.rs` (beside `edit.rs`, to move with it in step 7): `Selection`, `still_valid`, `Edit::delete`; four `App` fields became one. No `after_move`: a moved cut is selected outright | M | medium: ten files; removes a known source of bugs |
 | 6 | Normalize in the core: `OwnSound::{apply_measure, lower, restore}`, one runner with the measuring passed in; the CLI gains `--track` | S | low |
 | 7 | Moves: `edit.rs` → `model/`, `config_dir` → `fsutil`, `Waveform` → media, `gpu`/`render`/shaders → `src/gpu/`, `Cut::sound_file` → media | M | low logic risk |
-| 8 | `curve` with `Key`/`Lerp`; volume points, `change_effects`, `change_place` on it | M | low |
+| 8 | **Done 2026-11-02** (`36c216f`, as OPS-API step 5): `model::curve` (`Key`, `key_at`, `find`) for effect and motion keys; volume points stay `project::volume_key_at` (no ease, dB lines) until the automation lanes | M | low |
 | 9 | `Op` + `Edit::apply`, and `rosmo360 apply ops.json` (the agent's API) | M | medium |
 | 10 | Timeline `LaneView` | L | high: drawing and the mouse everywhere; last, after 4 and 5 |
 

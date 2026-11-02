@@ -55,10 +55,7 @@ impl App {
             }
         };
         self.mark_flat();
-        self.selected = Some(i);
-        // Cuts after it moved: a sound point selected by (cut, point) or a
-        // track's would now name the wrong one.
-        self.selected_point = None;
+        self.selection = Selection::Cut(i);
         if self.clip.is_none() {
             self.follow = true;
             self.goto(i, 0.0, true);
@@ -81,10 +78,7 @@ impl App {
                 if self.partner.as_ref().is_some_and(|(j, _)| *j == i) && self.clip.as_ref().is_some_and(|c| !c.playback.playing) {
                     self.swap_partner();
                 }
-                self.selected = Some(i);
-                self.selected_music = None;
-                self.selected_point = None;
-                self.selected_overlay = None;
+                self.selection = Selection::Cut(i);
             }
             Message::Trim(i, start, t) => {
                 let Some(clip_len) = self.edit.cuts.get(i).and_then(|c| self.library.iter().find(|m| m.input == c.input)).map(|m| m.duration) else {
@@ -101,11 +95,10 @@ impl App {
             Message::MoveCut(from, to) => {
                 if to != from && to != from + 1 {
                     self.edit.checkpoint();
-                    self.selected_point = None;
                     let at = |i: usize| edit::Edit::moved_index(from, to, i);
                     self.edit.move_cut(from, to);
                     self.current = at(self.current);
-                    self.selected = Some(at(from));
+                    self.selection = Selection::Cut(at(from));
                 }
             }
             Message::Crossfade(i, seconds) => {
@@ -113,17 +106,16 @@ impl App {
                 self.edit.set_crossfade(i, seconds);
             }
             Message::ToggleCrossfade => {
-                let i = self.selected.unwrap_or(self.current);
+                let i = self.selection.cut().unwrap_or(self.current);
                 let Some(c) = self.edit.cuts.get(i) else { return Task::none() };
                 let to = if c.crossfade > 0.0 { 0.0 } else { 1.0 };
                 self.edit.checkpoint();
                 self.edit.set_crossfade(i, to);
             }
-            Message::Split if self.selected_music.is_some() => {
-                let (which, i) = self.selected_music.unwrap();
+            Message::Split if let Selection::Clip(which, i) = self.selection => {
                 let at = self.position();
                 if self.edit.attempt(|e| e.track_mut(which).split(i, at, edit::MIN_CUT)) {
-                    self.selected_music = Some((which, i + 1));
+                    self.selection = Selection::Clip(which, i + 1);
                 }
             }
             Message::Split => {
@@ -132,40 +124,25 @@ impl App {
                 if self.edit.attempt(|e| e.split(i, t)) {
                     // The playhead is now at the start of the second half.
                     self.current = i + 1;
-                    self.selected = Some(i + 1);
-                    // The cuts after it moved up one: a sound point selected
-                    // by (cut, point) would now name another cut's.
-                    self.selected_point = None;
-                }
-            }
-            Message::DeleteCut if self.selected_overlay.is_some() => {
-                let (track, i) = self.selected_overlay.take().unwrap();
-                if self.edit.item((track, i)).is_some() {
-                    self.edit.checkpoint();
-                    self.edit.lane_mut(track).items.remove(i);
-                }
-            }
-            Message::DeleteCut if let Some((line, i)) = self.selected_point => {
-                return self.sound_ui(super::sound_ui::SoundMsg::DeletePoint(line, i));
-            }
-            // With a song or sound effect selected, delete that, not the
-            // cut under the playhead (Shift+Del used to, being the key for
-            // cuts).
-            Message::DeleteCut if self.selected_music.is_some() => {
-                let (which, i) = self.selected_music.take().unwrap();
-                if i < self.edit.track(which).clips.len() {
-                    self.edit.checkpoint();
-                    self.edit.track_mut(which).clips.remove(i);
+                    self.selection = Selection::Cut(i + 1);
                 }
             }
             Message::DeleteCut => {
-                let Some(i) = self.selected.or(self.clip.as_ref().map(|_| self.current)) else { return Task::none() };
-                if i >= self.edit.cuts.len() {
-                    return Task::none();
+                self.sound_menu = None;
+                // With nothing selected, the cut under the playhead.
+                let s = match self.selection {
+                    Selection::None if self.clip.is_some() => Selection::Cut(self.current),
+                    s => s,
+                };
+                if let Selection::Cut(i) = s {
+                    // The cut after it, now at `i`, stays selected.
+                    if self.edit.delete(s) {
+                        self.after_edit(self.edit.offset(i.min(self.edit.cuts.len())));
+                    }
+                } else {
+                    self.edit.delete(s);
+                    self.selection = Selection::None;
                 }
-                self.edit.checkpoint();
-                self.edit.remove(i);
-                self.after_edit(self.edit.offset(i.min(self.edit.cuts.len())));
             }
             Message::Undo | Message::Redo => {
                 let at = self.position();

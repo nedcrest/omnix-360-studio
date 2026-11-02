@@ -17,7 +17,7 @@
 //! for Bluetooth and webcam mics, a live meter, channel choice, countdown,
 //! play along on headphones, and takes in `02_audio/voiceover`.
 
-use super::{App, Message, Side, bin, tip};
+use super::{App, Message, Selection, Side, bin, tip};
 use crate::capture::{Channel, Input, Kind, Level, Recorder};
 use crate::project::SoundTrack;
 use iced::widget::{button, checkbox, column, container, pick_list, progress_bar, row, rule, scrollable, slider, text, tooltip};
@@ -210,10 +210,7 @@ impl App {
                     Ok((path, len)) => {
                         self.edit.checkpoint();
                         let i = self.edit.voice.append_part(path.clone(), at, start, len);
-                        self.selected_music = Some((SoundTrack::Voice, i));
-                        self.selected = None;
-                        self.selected_overlay = None;
-                        self.selected_point = None;
+                        self.selection = Selection::Clip(SoundTrack::Voice, i);
                         return self.load_waveform(&path);
                     }
                 }

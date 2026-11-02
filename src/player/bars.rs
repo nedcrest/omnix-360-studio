@@ -279,8 +279,8 @@ impl App {
         let timeline = timeline::Timeline {
             blocks,
             sounds,
-            selected_music: self.selected_music,
-            selected_point: self.selected_point,
+            selected_music: self.selection.clip(),
+            selected_point: self.selection.point(),
             listen: self.listen,
             check_marks: self.check_marks(),
             ruler: if self.ruler_large { timeline::RULER_LARGE } else { timeline::RULER_COMPACT },
@@ -291,11 +291,11 @@ impl App {
             start: timeline_start,
             span: timeline_span,
             position: self.position(),
-            selected: self.selected,
+            selected: self.selection.cut(),
             current: current.map(|k| (self.current, k)),
             overlays: self.overlay_blocks(crate::overlay::Track::Overlay),
             texts: self.overlay_blocks(crate::overlay::Track::Text),
-            selected_overlay: self.selected_overlay,
+            selected_overlay: self.selection.item(),
             rows: timeline::Rows::new(self.split, self.framing, self.folds),
         }
         .view();
@@ -312,10 +312,10 @@ impl App {
         let shown_view = self.shown_view();
         let (lo, hi) = shown_view.fov_range();
         // With a song selected, C splits that instead.
-        let music = self.selected_music.and_then(|(which, i)| self.edit.track(which).clips.get(i));
-        let point = self.selected_point.is_some();
+        let music = self.selection.clip().and_then(|(which, i)| self.edit.track(which).clips.get(i));
+        let point = self.selection.point().is_some();
         // Any cut but the first can crossfade in from the one before.
-        let crossfade_cut = Some(self.selected.unwrap_or(self.current)).filter(|&i| i > 0).and_then(|i| self.edit.cuts.get(i));
+        let crossfade_cut = Some(self.selection.cut().unwrap_or(self.current)).filter(|&i| i > 0).and_then(|i| self.edit.cuts.get(i));
         let can_split = match music {
             Some(c) => self.position() > c.at + edit::MIN_CUT && self.position() < c.ends() - edit::MIN_CUT,
             None => self.edit.cuts.get(self.current).is_some_and(|c| p.target() > c.start + edit::MIN_CUT && p.target() < c.end - edit::MIN_CUT),
@@ -376,7 +376,7 @@ impl App {
             separator(),
             tip(icon_button(SPLIT, can_split.then_some(Message::Split)), text(if music.is_some() { "Split the selected sound at the playhead (C)" } else { "Split the cut at the playhead (C)" }), tooltip::Position::Top),
             tip(
-                icon_button(DELETE_CUT, (self.selected.is_some() || music.is_some() || point || self.selected_overlay.is_some()).then_some(Message::DeleteCut)),
+                icon_button(DELETE_CUT, (self.selection != Selection::None).then_some(Message::DeleteCut)),
                 text(if point {
                     "Delete the selected volume point (Del)"
                 } else if music.is_some() {

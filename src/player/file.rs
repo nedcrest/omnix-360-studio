@@ -156,10 +156,7 @@ impl App {
     /// list, and both missed some (an overlay still selected after opening
     /// a project, so Del removed an item of the new one).
     pub(super) fn forget_edit_state(&mut self) {
-        self.selected = None;
-        self.selected_overlay = None;
-        self.selected_music = None;
-        self.selected_point = None;
+        self.selection = Selection::None;
         self.hand_cut = None;
         self.info = None;
         self.text_of = None;

@@ -58,7 +58,7 @@ impl App {
             level("Voice", self.edit.voice.volume, |db| Message::TrackLevel(SoundTrack::Voice, db), "The voice-over track, in playback and the export."),
             iced::widget::button(text("Normalize sound…"))
                 .on_press_maybe((!self.edit.cuts.is_empty()).then(|| {
-                    let scope = self.selected.filter(|&i| i < self.edit.cuts.len()).map_or(super::sound_ui::Scope::All, |i| super::sound_ui::Scope::Own(crate::project::Own::Cut(i)));
+                    let scope = self.selection.cut().filter(|&i| i < self.edit.cuts.len()).map_or(super::sound_ui::Scope::All, |i| super::sound_ui::Scope::Own(crate::project::Own::Cut(i)));
                     Message::Sound(super::sound_ui::SoundMsg::Open(scope))
                 })),
             note("To change the level within a cut or a track, Ctrl+click its lane on the timeline for a volume point."),

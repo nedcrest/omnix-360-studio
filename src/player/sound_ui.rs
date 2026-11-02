@@ -16,7 +16,7 @@
 //! The user's design (2026-10-24/28): "so I don't have to fiddle with
 //! levels myself"; a modal with Start and a progress bar.
 
-use super::{App, Message, blocking};
+use super::{App, Message, Selection, blocking};
 use crate::project::{Own, SoundTrack};
 use iced::widget::{button, checkbox, column, container, mouse_area, opaque, pin, progress_bar, radio, row, rule, space, stack, text};
 use iced::{Element, Length, Point, Task};
@@ -182,8 +182,7 @@ impl App {
                 let to = if from == SoundTrack::Sfx { SoundTrack::Sfx2 } else { SoundTrack::Sfx };
                 self.edit.checkpoint();
                 if let Some(j) = self.edit.move_clip(from, i, to) {
-                    self.selected_music = Some((to, j));
-                    self.selected_point = None;
+                    self.selection = Selection::Clip(to, j);
                 }
             }
             SoundMsg::Continue(own) => {
@@ -192,17 +191,16 @@ impl App {
             }
             SoundMsg::DeletePoint(own, i) => {
                 self.sound_menu = None;
-                self.selected_point = None;
-                if self.edit.own_line_mut(own).is_some_and(|(keys, _)| i < keys.len()) {
-                    self.edit.checkpoint();
-                    if let Some((keys, _)) = self.edit.own_line_mut(own) {
-                        keys.remove(i);
-                    }
+                self.edit.delete(Selection::Point(own, i));
+                if self.selection.point().is_some() {
+                    self.selection = Selection::None;
                 }
             }
             SoundMsg::DeleteLine(own) => {
                 self.sound_menu = None;
-                self.selected_point = None;
+                if self.selection.point().is_some() {
+                    self.selection = Selection::None;
+                }
                 if self.edit.own_line_mut(own).is_some_and(|(keys, _)| !keys.is_empty()) {
                     self.edit.checkpoint();
                     if let Some((keys, _)) = self.edit.own_line_mut(own) {
@@ -263,7 +261,7 @@ impl App {
                 let mut choices = column![pick(format!("All cuts ({})", self.edit.cuts.len()), Scope::All)].spacing(8);
                 let one = match d.scope {
                     Scope::Own(own) => Some(own),
-                    _ => self.selected.filter(|&i| i < self.edit.cuts.len()).map(Own::Cut),
+                    _ => self.selection.cut().filter(|&i| i < self.edit.cuts.len()).map(Own::Cut),
                 };
                 if let Some(own) = one.filter(|&o| self.edit.own_line(o).is_some()) {
                     choices = choices.push(pick(self.own_name(own), Scope::Own(own)));

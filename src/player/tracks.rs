@@ -94,9 +94,7 @@ impl App {
 
     /// Selects point `i` of a volume line, and nothing else.
     pub(super) fn select_point(&mut self, own: Own, i: usize) {
-        self.selected_point = Some((own, i));
-        self.selected_music = None;
-        self.selected = None;
+        self.selection = Selection::Point(own, i);
     }
 }
 
@@ -150,8 +148,7 @@ impl App {
                     self.folds.sfx2 = false;
                 }
                 let i = self.edit.track_mut(which).append(path.clone(), at, len);
-                self.selected_music = Some((which, i));
-                self.selected = None;
+                self.selection = Selection::Clip(which, i);
                 return self.load_waveform(&path);
             }
             Message::Waveform(path, Ok(wave)) => {
@@ -165,10 +162,7 @@ impl App {
                 }
             }
             Message::SelectMusic(which, i) => {
-                self.selected_music = Some((which, i));
-                self.selected_overlay = None;
-                self.selected = None;
-                self.selected_point = None;
+                self.selection = Selection::Clip(which, i);
             }
             Message::PointAdd(own, t, db) => {
                 if self.edit.own_line(own).is_none() {
@@ -242,7 +236,7 @@ impl App {
                         // One undo step; the line stays editable point by point.
                         self.edit.checkpoint();
                         crate::duck::duck_music(&mut self.edit.music, &spans, self.duck_db);
-                        self.selected_point = None;
+                        self.selection = self.selection.still_valid(&self.edit);
                     }
                 }
             }

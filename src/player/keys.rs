@@ -58,7 +58,7 @@ impl App {
         }
         // Editing: the keys that turn, frame or key the view do nothing. K
         // still adds a volume point to a selected sound.
-        let sound = self.selected_music.is_some() || self.selected_point.is_some();
+        let sound = self.selection.sound().is_some();
         if !self.framing && framing_key(&key, mods, sound) {
             return Task::none();
         }
@@ -84,7 +84,7 @@ impl App {
             Key::Named(Named::ArrowUp) => self.free_look().pitch += step,
             Key::Named(Named::ArrowDown) => self.free_look().pitch -= step,
             Key::Named(Named::Home) => self.free_look().reset(),
-            Key::Named(Named::Delete | Named::Backspace) if mods.shift() || self.selected_music.is_some() || self.selected_point.is_some() || self.selected_overlay.is_some() => {
+            Key::Named(Named::Delete | Named::Backspace) if mods.shift() || !matches!(self.selection, Selection::None | Selection::Cut(_)) => {
                 return self.update(Message::DeleteCut);
             }
             // Editing: Del takes the selected cut (framing, the keyframe).
@@ -111,8 +111,8 @@ impl App {
                 // A sound clip or a point selected: a volume point at the
                 // playhead on that clip's own line (within it), or the
                 // playing cut's.
-                "k" | "K" if self.selected_music.is_some() || self.selected_point.is_some() => {
-                    let own = self.selected_point.map(|(o, _)| o).or(self.selected_music.map(|(w, i)| Own::Clip(w, i)));
+                "k" | "K" if self.selection.sound().is_some() => {
+                    let own = self.selection.sound();
                     let at = match own {
                         Some(Own::Cut(_)) => self.playing_cut().map(|(_, t)| (Own::Cut(self.current), t)),
                         Some(own @ Own::Clip(which, c)) => self.edit.track(which).clips.get(c).map(|m| (own, m.start + self.position() - m.at)).filter(|(_, t)| self.edit.own_line(own).is_some_and(|(_, (s, e))| *t >= s && *t <= e)),

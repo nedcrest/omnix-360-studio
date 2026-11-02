@@ -39,6 +39,8 @@ mod tracks;
 mod overlay_ui;
 mod cuts;
 mod record_ui;
+mod selection;
+use selection::Selection;
 mod listen;
 mod mixcheck_ui;
 
@@ -483,8 +485,6 @@ struct App {
     text_content: iced::widget::text_editor::Content,
     text_of: Option<crate::overlay::ItemRef>,
 
-    /// The overlay or text item selected, in the lane shown of its track.
-    selected_overlay: Option<crate::overlay::ItemRef>,
     /// The «Framing» switch: off (editing) by default, each start.
     framing: bool,
     /// The interface's size (iced's scale factor), kept in the settings.
@@ -493,10 +493,6 @@ struct App {
     normalize: Option<sound_ui::Dialog>,
     /// The right-click menu on a cut's sound: which cut, where.
     sound_menu: Option<(sound_ui::Menu, iced::Point)>,
-    /// The clip selected on a sound track.
-    selected_music: Option<(SoundTrack, usize)>,
-    /// A point on a cut's or a sound clip's own volume line, selected.
-    selected_point: Option<(Own, usize)>,
     /// Each sound track's streams, in `SoundTrack::ALL`'s order.
     music: [music::Player; SoundTrack::ALL.len()],
     /// Through a crossfade, the other cut of it alongside: its index and
@@ -505,9 +501,10 @@ struct App {
     /// current cut and this is the one before (`follow_crossfade`).
     partner: Option<(usize, Clip)>,
     edit: edit::Edit,
-    /// The cut being played, and the one selected on the timeline.
+    /// The cut being played.
     current: usize,
-    selected: Option<usize>,
+    /// What's selected on the timeline.
+    selection: Selection,
     /// Clips waiting to be loaded, in order, and whether each is added as a
     /// cut (opened) or only loaded for a project's cuts.
     queue: std::collections::VecDeque<(PathBuf, bool)>,
@@ -666,12 +663,9 @@ impl App {
             text_content: Default::default(),
             text_of: None,
 
-            selected_overlay: None,
             framing: false,
             normalize: None,
             sound_menu: None,
-            selected_music: None,
-            selected_point: None,
             cut_waves_asked: Default::default(),
             even_waves: Default::default(),
             cut_waves_reading: 0,
@@ -679,7 +673,7 @@ impl App {
             partner: None,
             edit: edit::Edit::default(),
             current: 0,
-            selected: None,
+            selection: Selection::None,
             dragging: false,
             effect_pin: effects::Pin::default(),
             timeline_zoom: 1.0,

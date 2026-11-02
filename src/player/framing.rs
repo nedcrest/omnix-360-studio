@@ -331,7 +331,7 @@ impl App {
             }
             Message::KeyJump(i, k) => {
                 self.follow = true;
-                self.selected = Some(i);
+                self.selection = Selection::Cut(i);
                 if let Some(t) = self.edit.cuts.get(i).and_then(|c| c.keyframes.get(k)).map(|k| k.t) {
                     let playing = self.clip.as_ref().is_some_and(|c| c.playback.playing);
                     self.goto(i, t, playing);

@@ -51,7 +51,7 @@ impl App {
     /// Fills the panel's text box with the selected text overlay's words
     /// when the selection moves to another one.
     pub(super) fn settle_text(&mut self) {
-        let words = self.selected_overlay.and_then(|r| self.edit.item(r)?.text.as_ref().map(|t| (r, t.content.clone())));
+        let words = self.selection.item().and_then(|r| self.edit.item(r)?.text.as_ref().map(|t| (r, t.content.clone())));
         match words {
             Some((i, content)) if self.text_of != Some(i) || self.text_content.text().trim_end_matches('\n') != content => {
                 self.text_content = iced::widget::text_editor::Content::with_text(&content);
@@ -92,7 +92,7 @@ impl App {
                 Some(((track, i), crate::overlay::look(item, t).0, picture))
             })
             .collect();
-        handles::Handles { items, selected: self.selected_overlay }
+        handles::Handles { items, selected: self.selection.item() }
     }
 
     /// The timeline's blocks for `track`'s lane.
@@ -145,19 +145,18 @@ impl App {
                     let i = lane.items.len() - 1;
                     lane.items[i].at = lane.place(i, at);
                     at = lane.items[i].ends();
-                    self.selected_overlay = Some((crate::overlay::Track::Overlay, i));
+                    self.selection = Selection::Item((crate::overlay::Track::Overlay, i));
                 }
-                self.selected_music = None;
-                self.selected_point = None;
             }
             Message::OverlayPicked(_) => {}
             Message::OverlaySelect(i) => {
                 // Typing in another overlay is a change of its own for undo.
                 self.dragging = false;
-                self.selected_overlay = i;
-                if i.is_some() {
-                    self.selected_music = None;
-                    self.selected_point = None;
+                match i {
+                    Some(r) => self.selection = Selection::Item(r),
+                    // An empty spot on its lane: only an item lets go.
+                    None if self.selection.item().is_some() => self.selection = Selection::None,
+                    None => {}
                 }
             }
             Message::OverlayMove((track, i), at) => {
@@ -216,9 +215,7 @@ impl App {
                 lane.items.push(crate::overlay::Item { input: PathBuf::new(), text: Some(Default::default()), at, start: 0.0, end: ffmpeg::PICTURE_SECONDS, motion: Vec::new(), effects: Vec::new() });
                 let i = lane.items.len() - 1;
                 lane.items[i].at = lane.place(i, at);
-                self.selected_overlay = Some((crate::overlay::Track::Text, i));
-                self.selected_music = None;
-                self.selected_point = None;
+                self.selection = Selection::Item((crate::overlay::Track::Text, i));
                 // Its words and look are set in the text panel, open now.
                 self.text_of = None;
             }

@@ -7,7 +7,7 @@
 //! moves): a cut's single keyframe is its look throughout, and more of them
 //! animate it.
 
-use super::{App, Message, icon_button, tip};
+use super::{App, Message, Selection, icon_button, tip};
 use crate::grade::{EffectKey, Grade, grade_at};
 use crate::overlay::{MotionKey, Place, place_at};
 use crate::text::{Colour, Outline, TextAlign};
@@ -170,7 +170,7 @@ impl App {
     /// cut.
     fn effect_target(&self) -> Option<(Target, f64)> {
         let t = self.position();
-        if let Some(i) = self.selected_overlay
+        if let Some(i) = self.selection.item()
             && let Some(item) = self.edit.item(i)
             && t >= item.at
             && t <= item.ends()
@@ -428,8 +428,7 @@ impl App {
             }
             EffectMsg::Jump(cut, t) => {
                 self.follow = true;
-                self.selected = Some(cut);
-                self.selected_overlay = None;
+                self.selection = Selection::Cut(cut);
                 self.goto(cut, t, false);
             }
             EffectMsg::KeyMove(cut, key, t) => {
@@ -447,7 +446,7 @@ impl App {
 
     /// The selected overlay's text, if it's a text overlay.
     fn selected_text(&mut self) -> Option<&mut crate::text::Text> {
-        let i = self.selected_overlay?;
+        let i = self.selection.item()?;
         self.edit.item_mut(i)?.text.as_mut()
     }
 
@@ -455,7 +454,7 @@ impl App {
     /// its words and look, wherever the playhead is (where it is and its
     /// effects stay in the Effects panel).
     pub(super) fn text_panel(&self) -> Option<Element<'_, Message>> {
-        let i = self.selected_overlay?;
+        let i = self.selection.item()?;
         let words = self.edit.item(i)?.text.as_ref()?;
         let t = |c: TextChange| Message::Effect(EffectMsg::Text(c));
         let swatches = |chosen: Colour, f: fn(Colour) -> TextChange| {
@@ -518,7 +517,9 @@ impl App {
         let (temperature, tint) = crate::grade::white_balance(rgb);
         self.edit.checkpoint();
         // The picked colour is the cut's, whatever the panel shows.
-        self.selected_overlay = None;
+        if self.selection.item().is_some() {
+            self.selection = Selection::None;
+        }
         self.change_effects(true, |g| {
             g.temperature = temperature;
             g.tint = tint;

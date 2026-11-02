@@ -43,13 +43,14 @@ impl App {
             level("Clip sound", self.edit.sound.volume, Message::SoundLevel, "The clips' own sound, in playback and the export."),
             level("Music", self.edit.music.volume, |db| Message::TrackLevel(SoundTrack::Music, db), "The music track, in playback and the export."),
             tip(
-                row![
-                    iced::widget::button(text(if self.ducking { "Lowering…" } else { "Lower the music under speech" }).size(13)).on_press_maybe((!self.ducking && !self.edit.music.clips.is_empty()).then_some(Message::Duck)),
+                // As the levels above: name and value, then the slider across
+                // the panel. Beside the button it was squeezed to nothing.
+                column![
+                    row![text("Music under speech").width(Length::Fill), text(format!("−{:.0} dB", self.duck_db)).size(13)],
                     slider(3.0..=30.0, self.duck_db, Message::DuckDepth).step(1.0),
-                    text(format!("−{:.0} dB", self.duck_db)).size(13).width(48),
+                    iced::widget::button(text(if self.ducking { "Lowering…" } else { "Lower the music under speech" }).size(13)).on_press_maybe((!self.ducking && !self.edit.music.clips.is_empty()).then_some(Message::Duck)),
                 ]
-                .spacing(8)
-                .align_y(Alignment::Center),
+                .spacing(4),
                 text("Auto-duck: volume points on the songs' own lines, this far down wherever a cleaned voice or a Voice take speaks. Ctrl+Z undoes it"),
                 tooltip::Position::Bottom,
             ),

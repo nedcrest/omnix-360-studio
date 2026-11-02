@@ -38,7 +38,6 @@ use std::sync::Arc;
 /// a cut's edge.
 const DIAMOND: f32 = 6.0;
 const PICK: f32 = 7.0;
-const BAR: f32 = 8.0;
 /// The cut row's height at scale 1, and the gap between cut blocks.
 const CUTS: f32 = 40.0;
 /// The clips' own sound under them at scale 1: each cut's waveform and its
@@ -49,7 +48,9 @@ const GAP: f32 = 2.0;
 /// cut's) or motion (an overlay's) keyframes.
 const EFFECTS: f32 = 16.0;
 const KEYS: f32 = 20.0;
-const SEEK: f32 = 18.0;
+/// The rule between the picture's lanes and the sound's (it was the seek
+/// bar, before the ruler went on top).
+const SEEK: f32 = 10.0;
 /// The music lane at scale 1.
 const MUSIC: f32 = 40.0;
 /// The scrollbar's row at the bottom, and the bar's thickness.
@@ -288,8 +289,10 @@ pub struct Timeline {
     pub rows: Rows,
     /// Which sound lanes are soloed or muted, for listening.
     pub listen: super::listen::Listen,
-    /// The mix check's findings (from, to, one to fix), on the seek bar.
+    /// The mix check's findings (from, to, one to fix), on the ruler.
     pub check_marks: Vec<(f64, f64, bool)>,
+    /// The time ruler's height (`RULER_LARGE` or `RULER_COMPACT`).
+    pub ruler: f32,
 }
 
 #[derive(Default)]
@@ -601,7 +604,8 @@ impl Timeline {
             let height = lane.height();
             iced::widget::container(canvas(lane).width(iced::Length::Fill).height(height)).clip(true)
         };
-        iced::widget::column![lane(Track::Text), lane(Track::Overlay), iced::widget::container(layers).clip(true)].into()
+        let ruler = canvas(Ruler(t.clone())).width(iced::Length::Fill).height(t.ruler);
+        iced::widget::column![iced::widget::container(ruler).clip(true), lane(Track::Text), lane(Track::Overlay), iced::widget::container(layers).clip(true)].into()
     }
 
     /// The sound lanes: each one's clips with their waveforms and handles,
@@ -1501,22 +1505,10 @@ impl canvas::Program<Message> for Marks {
         let mid = self.rows.seek_top + SEEK / 2.0;
         let keys_mid = self.rows.keys_top + KEYS / 2.0;
         let (x0, x1) = (self.x(0.0, bounds), self.x(self.duration, bounds));
-        let bar = |from: f32, to: f32| Path::rounded_rectangle(Point::new(from, mid - BAR / 2.0), Size::new((to - from).max(0.0), BAR), (BAR / 2.0).into());
-        frame.fill(&bar(x0, x1), palette.background.strong.color);
+        // Where the picture's lanes end and the sound's begin: a rule (the
+        // time ruler is on top of everything now, gap 50).
+        frame.fill(&Path::rectangle(Point::new(x0, mid - 1.0), Size::new((x1 - x0).max(0.0), 2.0)), palette.background.strong.color);
         let at = self.x(self.position, bounds);
-        frame.fill(&bar(x0, at), palette.primary.base.color);
-        // The mix check's findings, just over the bar: red to fix, yellow
-        // a hint, each over its stretch.
-        for &(from, to, fix) in &self.check_marks {
-            let ink = if fix { iced::Color::from_rgb(1.0, 0.3, 0.3) } else { iced::Color::from_rgb(0.95, 0.79, 0.3) };
-            let (a, b) = (self.x(from, bounds), self.x(to, bounds).max(self.x(from, bounds) + 3.0));
-            frame.fill(&Path::rectangle(Point::new(a, mid - BAR / 2.0 - 4.0), Size::new(b - a, 3.0)), ink);
-        }
-        // Where one cut ends and the next begins.
-        for c in self.blocks.iter().skip(1) {
-            let x = self.x(c.from, bounds);
-            frame.fill(&Path::rectangle(Point::new(x - 1.0, mid - BAR), Size::new(2.0, 2.0 * BAR)), palette.background.base.color);
-        }
         // The view's keyframes, while framing (their row is gone otherwise).
         for (ci, c) in self.blocks.iter().enumerate().filter(|_| self.rows.keys > 0.0) {
             for &(ki, t, ease, follows) in &c.keys {
@@ -1535,7 +1527,6 @@ impl canvas::Program<Message> for Marks {
         self.draw_clip_sound(&mut frame, theme, bounds);
         frame.fill(&Path::rectangle(Point::new(at - 1.0, 0.0), Size::new(2.0, self.rows.seek_top)), palette.primary.strong.color);
         frame.fill(&Path::rectangle(Point::new(at - 1.0, self.rows.sounds_top), Size::new(2.0, SOUND_LANES as f32 * self.rows.music)), palette.primary.strong.color);
-        frame.fill(&Path::circle(Point::new(at, mid), BAR), palette.primary.strong.color);
         if self.zoomed() {
             let y = self.rows.height - SCROLL / 2.0 - SCROLL_BAR / 2.0;
             let pill = |l: f32, r: f32| Path::rounded_rectangle(Point::new(l, y), Size::new((r - l).max(SCROLL_BAR), SCROLL_BAR), (SCROLL_BAR / 2.0).into());
@@ -1702,6 +1693,7 @@ mod tests {
             rows: Rows::new(1.0, false),
             listen: Default::default(),
             check_marks: vec![],
+            ruler: RULER_LARGE,
         };
         (t, Rectangle::new(Point::ORIGIN, Size::new(1000.0 + 2.0 * PICK, 300.0)))
     }
@@ -1720,6 +1712,19 @@ mod tests {
         // Past them, and the level tags start beyond.
         assert_eq!(t.listen_button_at(Point::new(mute.x + 40.0, mid)), None);
         assert!(mute.x + mute.width < PICK + 125.0);
+    }
+
+    #[test]
+    fn the_ruler_marks_time_at_a_readable_step() {
+        // 80 px apart at least, whatever the zoom.
+        for per_px in [0.001, 0.01, 0.05, 0.2, 1.0, 5.0] {
+            let (step, minors) = ruler_step(per_px);
+            assert!(step / per_px >= 80.0 && minors >= 3, "{per_px}: {step}");
+        }
+        assert_eq!(ruler_step(0.01).0, 1.0);
+        assert_eq!(ruler_label(65.0, 5.0), "1:05");
+        assert_eq!(ruler_label(65.5, 0.5), "1:05.5");
+        assert_eq!(ruler_label(3725.0, 60.0), "1:02:05");
     }
 
     #[test]
@@ -1832,5 +1837,121 @@ pub(super) fn lane_colour(lane: crate::mixcheck::Lane, theme: &Theme) -> iced::C
         crate::mixcheck::Lane::Track(SoundTrack::Sfx) => SFX_COLOUR,
         crate::mixcheck::Lane::Track(SoundTrack::Sfx2) => SFX2_COLOUR,
         crate::mixcheck::Lane::Track(SoundTrack::Voice) => VOICE_COLOUR,
+    }
+}
+
+/// The time ruler over every lane (gap 50, as editors have it on top):
+/// seconds marked at a step that suits the zoom, the playhead's head to
+/// drag, the mix check's findings along its foot. `large` is the default;
+/// the compact one is the old seek bar's height.
+pub struct Ruler(pub Arc<Timeline>);
+
+/// The ruler's height, large and compact.
+pub const RULER_LARGE: f32 = 28.0;
+pub const RULER_COMPACT: f32 = 16.0;
+
+/// Between the major ticks: as many seconds as keep them 80 px apart or
+/// more, and how many minor ticks each holds.
+fn ruler_step(seconds_per_px: f64) -> (f64, u32) {
+    const STEPS: [(f64, u32); 15] = [(0.1, 5), (0.2, 4), (0.5, 5), (1.0, 5), (2.0, 4), (5.0, 5), (10.0, 5), (15.0, 3), (30.0, 6), (60.0, 6), (120.0, 4), (300.0, 5), (600.0, 6), (1800.0, 6), (3600.0, 6)];
+    STEPS.into_iter().find(|&(s, _)| s / seconds_per_px >= 80.0).unwrap_or((7200.0, 4))
+}
+
+/// A ruler label: «1:05», «1:05.5» under a second's step, «1:02:05» past
+/// an hour.
+fn ruler_label(t: f64, step: f64) -> String {
+    let whole = t.round_ties_even() as u64;
+    let (h, m, s) = (whole / 3600, whole / 60 % 60, whole % 60);
+    if step < 1.0 {
+        let tenth = ((t * 10.0).round() as u64) % 10;
+        format!("{}:{:02}.{tenth}", t as u64 / 60, (t as u64) % 60)
+    } else if h > 0 {
+        format!("{h}:{m:02}:{s:02}")
+    } else {
+        format!("{m}:{s:02}")
+    }
+}
+
+#[derive(Default)]
+pub struct RulerState {
+    dragging: bool,
+}
+
+impl canvas::Program<Message> for Ruler {
+    type State = RulerState;
+
+    fn draw(&self, _state: &RulerState, renderer: &Renderer, theme: &Theme, bounds: Rectangle, _: mouse::Cursor) -> Vec<Geometry> {
+        let t = &self.0;
+        let palette = theme.extended_palette();
+        let mut frame = Frame::new(renderer, bounds.size());
+        let h = bounds.height;
+        let large = h >= RULER_LARGE - 0.5;
+        frame.fill(&Path::rectangle(Point::ORIGIN, bounds.size()), palette.background.weak.color.scale_alpha(0.6));
+        let per_px = t.span.max(1e-9) / Timeline::width(bounds) as f64;
+        let (step, minors) = ruler_step(per_px);
+        let ink = palette.background.base.text;
+        let first = (t.start / step).floor() * step;
+        let mut m = first;
+        while m <= t.start + t.span + step {
+            let x = t.x(m, bounds);
+            frame.fill(&Path::rectangle(Point::new(x, h * 0.45), Size::new(1.0, h * 0.55)), ink.scale_alpha(0.7));
+            frame.fill_text(Text { content: ruler_label(m.max(0.0), step), position: Point::new(x + 3.0, if large { 3.0 } else { 1.0 }), color: ink.scale_alpha(0.85), size: (if large { 11.0 } else { 9.0 }).into(), ..Default::default() });
+            for k in 1..minors {
+                let x = t.x(m + step * k as f64 / minors as f64, bounds);
+                frame.fill(&Path::rectangle(Point::new(x, h * 0.75), Size::new(1.0, h * 0.25)), ink.scale_alpha(0.35));
+            }
+            m += step;
+        }
+        // Where the video ends, when the music runs on past it.
+        if t.duration > t.video + 1e-6 {
+            let x = t.x(t.video, bounds);
+            frame.fill(&Path::rectangle(Point::new(x, 0.0), Size::new(1.0, h)), ink.scale_alpha(0.5));
+        }
+        // The mix check's findings along its foot: red to fix, yellow a hint.
+        for &(from, to, fix) in &t.check_marks {
+            let colour = if fix { iced::Color::from_rgb(1.0, 0.3, 0.3) } else { iced::Color::from_rgb(0.95, 0.79, 0.3) };
+            let (a, b) = (t.x(from, bounds), t.x(to, bounds).max(t.x(from, bounds) + 3.0));
+            frame.fill(&Path::rectangle(Point::new(a, h - 3.0), Size::new(b - a, 3.0)), colour);
+        }
+        // The playhead's head: a tab to drag, its line on down the lanes.
+        let at = t.x(t.position, bounds);
+        let head = Path::new(|p| {
+            let w = if large { 6.0 } else { 4.5 };
+            p.move_to(Point::new(at - w, 0.0));
+            p.line_to(Point::new(at + w, 0.0));
+            p.line_to(Point::new(at + w, h * 0.55));
+            p.line_to(Point::new(at, h));
+            p.line_to(Point::new(at - w, h * 0.55));
+            p.close();
+        });
+        frame.fill(&head, palette.primary.strong.color);
+        vec![frame.into_geometry()]
+    }
+
+    fn update(&self, state: &mut RulerState, event: &iced::Event, bounds: Rectangle, cursor: mouse::Cursor) -> Option<canvas::Action<Message>> {
+        use iced::Event::Mouse;
+        match event {
+            Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
+                let p = cursor.position_in(bounds)?;
+                state.dragging = true;
+                Some(canvas::Action::publish(Message::Scrub(self.0.t(p.x, bounds))).and_capture())
+            }
+            Mouse(mouse::Event::CursorMoved { position }) if state.dragging => Some(canvas::Action::publish(Message::Scrub(self.0.t(position.x - bounds.x, bounds))).and_capture()),
+            Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) if state.dragging => {
+                state.dragging = false;
+                Some(canvas::Action::publish(Message::ScrubDone).and_capture())
+            }
+            _ => None,
+        }
+    }
+
+    fn mouse_interaction(&self, state: &RulerState, bounds: Rectangle, cursor: mouse::Cursor) -> mouse::Interaction {
+        if state.dragging {
+            mouse::Interaction::Grabbing
+        } else if cursor.position_in(bounds).is_some() {
+            mouse::Interaction::Pointer
+        } else {
+            mouse::Interaction::default()
+        }
     }
 }

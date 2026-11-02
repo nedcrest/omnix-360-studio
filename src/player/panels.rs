@@ -109,6 +109,7 @@ impl App {
                 .clamp(*settings::UI_SCALE.start(), *settings::UI_SCALE.end());
             }
             Message::ShowAngles(on) => self.angles_shown = on,
+            Message::RulerLarge(on) => self.ruler_large = on,
             Message::Modifiers(m) => self.modifiers = m,
             Message::ViewSize(size) => self.view_size = size,
             Message::Aspect(a) => self.aspect = a,

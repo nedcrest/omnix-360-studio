@@ -83,6 +83,13 @@ impl App {
                 note("A strip under the transport row with the yaw, pitch, roll, FOV and correction: type one, or drag its name sideways, to set it as dragging the view would; scroll or ↑ ↓ on a field nudges it, Shift for finer steps. Handy for giving clips from a camera mounted the same way the same framing."),
             ]
             .spacing(6),
+            rule::horizontal(1),
+            text("Timeline").size(15),
+            column![
+                toggler(self.ruler_large).label("Large time ruler").on_toggle(Message::RulerLarge),
+                note("Off: a compact ruler, more room for the lanes."),
+            ]
+            .spacing(6),
         ]
         .spacing(12)
         .padding(12);

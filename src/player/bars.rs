@@ -283,6 +283,7 @@ impl App {
             selected_point: self.selected_point,
             listen: self.listen,
             check_marks: self.check_marks(),
+            ruler: if self.ruler_large { timeline::RULER_LARGE } else { timeline::RULER_COMPACT },
             video: self.edit.duration(),
             clips_db: self.edit.sound.volume,
             duration: self.edit.frame(),

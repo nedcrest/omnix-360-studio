@@ -430,6 +430,8 @@ enum Message {
     AngleArrow(Option<angles::Angle>, f64),
     /// Show the view-angles strip.
     ShowAngles(bool),
+    /// The timeline's time ruler large or compact.
+    RulerLarge(bool),
     Modifiers(keyboard::Modifiers),
     Stab(Mode),
     Projection(Projection),
@@ -628,6 +630,8 @@ struct App {
     check: mixcheck_ui::Check,
     /// Auto-duck's depth, dB, and whether it's reading the voices now.
     duck_db: f64,
+    /// The timeline's time ruler large or compact (Settings).
+    ruler_large: bool,
     ducking: bool,
     /// The Info panel (at the left, in the Text panel's place).
     info: Option<info::Info>,
@@ -711,6 +715,7 @@ impl App {
             angles_shown: saved.view_angles,
             ui_scale: saved.ui_scale.clamp(*settings::UI_SCALE.start(), *settings::UI_SCALE.end()),
             duck_db: saved.duck_db.clamp(3.0, 30.0),
+            ruler_large: saved.ruler_large,
             ducking: false,
             listen: Default::default(),
             check: Default::default(),
@@ -766,6 +771,7 @@ impl App {
             record_countdown: self.record.countdown,
             record_play: self.record.play,
             duck_db: self.duck_db,
+            ruler_large: self.ruler_large,
         }
     }
 
@@ -861,7 +867,7 @@ impl App {
         match message {
             m @ (Message::Open { .. } | Message::Picked { .. } | Message::Loaded { .. } | Message::OpenProject { .. } | Message::NewProject { .. } | Message::CloseRequested { .. } | Message::StopAndClose { .. } | Message::Confirmed { .. } | Message::ProjectPicked { .. } | Message::SaveProjectTo { .. } | Message::SaveProject { .. } | Message::LoadingTick { .. } | Message::Thumb { .. }) => self.on_file(m),
             m @ (Message::Export { .. } | Message::ExportTo { .. } | Message::ExportProgress { .. } | Message::ExportCancel { .. } | Message::PickColour { .. } | Message::PickArea { .. } | Message::AreaPicked { .. } | Message::TrackProgress { .. } | Message::TrackCancel { .. } | Message::Tracked { .. } | Message::ExportDone { .. } | Message::Save { .. } | Message::SaveTo { .. } | Message::Saved { .. }) => self.on_jobs(m),
-            m @ (Message::Resolution { .. } | Message::ExportClips { .. } | Message::ExportGraded { .. } | Message::ExportFormat { .. } | Message::ExportLoudness { .. } | Message::Info { .. } | Message::InfoRead { .. } | Message::InfoClose { .. } | Message::Reveal { .. } | Message::CopyPath { .. } | Message::ExportPanel { .. } | Message::AudioPanel { .. } | Message::SettingsPanel { .. } | Message::AutoKey { .. } | Message::SplitDrag { .. } | Message::SplitDone { .. } | Message::SplitReset { .. } | Message::TenBit { .. } | Message::AddLut { .. } | Message::LutPicked { .. } | Message::RemoveLut { .. } | Message::DlogMLut { .. } | Message::UiScale { .. } | Message::ShowAngles { .. } | Message::Modifiers { .. } | Message::ViewSize { .. } | Message::Aspect { .. } | Message::Theme { .. } | Message::Mute { .. } | Message::Volume { .. } | Message::Fullscreen { .. }) => self.on_panels(m),
+            m @ (Message::Resolution { .. } | Message::ExportClips { .. } | Message::ExportGraded { .. } | Message::ExportFormat { .. } | Message::ExportLoudness { .. } | Message::Info { .. } | Message::InfoRead { .. } | Message::InfoClose { .. } | Message::Reveal { .. } | Message::CopyPath { .. } | Message::ExportPanel { .. } | Message::AudioPanel { .. } | Message::SettingsPanel { .. } | Message::AutoKey { .. } | Message::SplitDrag { .. } | Message::SplitDone { .. } | Message::SplitReset { .. } | Message::TenBit { .. } | Message::AddLut { .. } | Message::LutPicked { .. } | Message::RemoveLut { .. } | Message::DlogMLut { .. } | Message::UiScale { .. } | Message::ShowAngles { .. } | Message::RulerLarge { .. } | Message::Modifiers { .. } | Message::ViewSize { .. } | Message::Aspect { .. } | Message::Theme { .. } | Message::Mute { .. } | Message::Volume { .. } | Message::Fullscreen { .. }) => self.on_panels(m),
             m @ (Message::BinPanel { .. } | Message::BinPin { .. } | Message::BinRefresh { .. } | Message::BinPreview { .. } | Message::BinStop { .. } | Message::BinMeta { .. } | Message::BinFrames { .. } | Message::BinAdd { .. }) => self.on_bin(m),
             m @ (Message::Tick { .. } | Message::TimelineZoom { .. } | Message::TimelineZoomTo { .. } | Message::TimelinePan { .. } | Message::Toggle { .. } | Message::Scrub { .. } | Message::ScrubDone { .. }) => self.on_transport(m),
             m @ (Message::Select { .. } | Message::Trim { .. } | Message::MoveCut { .. } | Message::Crossfade { .. } | Message::ToggleCrossfade { .. } | Message::Split { .. } | Message::DeleteCut { .. } | Message::Undo { .. } | Message::Redo { .. }) => self.on_cuts(m),

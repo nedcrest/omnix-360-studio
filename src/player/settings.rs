@@ -56,6 +56,8 @@ pub struct Settings {
     pub record_play: bool,
     /// How far auto-duck lowers the music under speech, dB.
     pub duck_db: f64,
+    /// The timeline's time ruler large (labels you can read) or compact.
+    pub ruler_large: bool,
 }
 
 /// The interface's size range and steps (A− / A+ in the top bar), and its
@@ -93,6 +95,7 @@ impl Default for Settings {
             record_countdown: true,
             record_play: true,
             duck_db: 12.0,
+            ruler_large: true,
         }
     }
 }

@@ -1731,8 +1731,10 @@ nothing on the lane saying why.
 - Picture lanes get the same header (cuts, overlay, text: name, fold,
   what's on).
 
-Open when designing: the column's width against the timeline's own room
-at 1440 px; whether the playhead ruler (gap 50a) starts after it.
+Decided (user, 2026-11-02): the ruler (gap 50a) starts after the column.
+Its width: 1–2 cm, to try out; not fixed to the user's 43-inch monitor,
+as they won't always edit on it, so it follows the UI scale and may be
+narrowed (or dragged) on a small screen.
 
 ## Format rule for all of these
 

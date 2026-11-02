@@ -165,9 +165,13 @@ impl App {
                         None => None,
                     };
                     let Some((own, t)) = at.filter(|&(own, t)| self.edit.own_line(own).is_some_and(|(_, (s, e))| t >= s && t <= e)) else { return Task::none() };
-                    // No undo step when one is there already: just selected.
+                    // No undo step when one is there already. A clip selected
+                    // stays selected (K again keys it again); a point
+                    // selected moves to the one keyed.
                     self.sound_op(own, |sound| SoundOp::PointAt { sound, t });
-                    self.select_point_at(own, t);
+                    if self.selection.point(&self.edit).is_some() {
+                        self.select_point_at(own, t);
+                    }
                 }
                 "k" | "K" => return self.update(Message::KeyAdd),
                 "j" | "J" => {

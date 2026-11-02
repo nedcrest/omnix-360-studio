@@ -445,6 +445,19 @@ pub struct MusicClip {
     /// with it; on top of its level, under the track's line (gap 33e).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub volume: Vec<VolumeKey>,
+    /// The auto-duck folded into `volume`, so pressing it again starts from
+    /// the line without it instead of lowering twice (user, 2026-11-02).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ducked: Option<Ducked>,
+}
+
+/// An auto-duck as applied to a clip's own line: how far down, and where,
+/// in the file's time (`duck::duck_music`).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Ducked {
+    pub depth: f64,
+    pub speech: Vec<(f64, f64)>,
 }
 
 /// How long the spans `a0..a1` and `b0..b1` share.
@@ -959,6 +972,17 @@ impl Project {
             s.volume[i].volume = v;
         }
         true
+    }
+
+    /// Forgets a clip's auto-duck once its line is gone (deleted, back to
+    /// the original): taking it out of a line without it would raise the
+    /// music instead.
+    pub fn forget_duck(&mut self, own: Own) {
+        if let Own::Clip(which, i) = own
+            && let Some(c) = self.track_mut(which).clips.get_mut(i)
+        {
+            c.ducked = None;
+        }
     }
 
     pub fn own_line_mut(&mut self, own: Own) -> Option<(&mut Vec<VolumeKey>, (f64, f64))> {

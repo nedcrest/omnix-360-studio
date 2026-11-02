@@ -111,14 +111,20 @@ pub fn run(path: &std::path::Path, depth: f64, output: Option<&std::path::Path>)
 
 /// The music lowered under `speech` (edit time): each clip's own line, in
 /// its file's time, ducked where speech falls on it or within a ramp of it.
+/// A duck from before is taken out first, so pressing it again (another
+/// depth, a new take) replaces it rather than lowering twice; points moved
+/// by hand since keep their change.
 pub fn duck_music(music: &mut crate::project::Music, speech: &[(f64, f64)], depth: f64) {
     for c in &mut music.clips {
         let to_file = |t: f64| c.start + t - c.at;
         let reach = ATTACK + RELEASE;
         let on: Vec<(f64, f64)> = speech.iter().filter(|&&(a, b)| b > c.at - reach && a < c.ends() + reach).map(|&(a, b)| (to_file(a), to_file(b))).collect();
-        if !on.is_empty() {
-            c.volume = duck(&c.volume, &on, depth);
-        }
+        let base = match c.ducked.take() {
+            Some(before) => unduck(&c.volume, &before),
+            None => c.volume.clone(),
+        };
+        c.volume = if on.is_empty() { base } else { duck(&base, &on, depth) };
+        c.ducked = (!on.is_empty()).then(|| crate::project::Ducked { depth, speech: on });
     }
 }
 
@@ -142,26 +148,7 @@ pub fn merge(mut spans: Vec<(f64, f64)>) -> Vec<(f64, f64)> {
 /// keeps its shape. Ramps that would meet between two stretches keep it
 /// down.
 pub fn duck(line: &[VolumeKey], speech: &[(f64, f64)], depth: f64) -> Vec<VolumeKey> {
-    // Where the duck itself bends: 0 dB, down, down, 0 dB per stretch,
-    // stretches whose ramps would cross joined first.
-    let mut spans: Vec<(f64, f64)> = Vec::new();
-    for &(a, b) in speech {
-        match spans.last_mut() {
-            Some(last) if a - ATTACK <= last.1 + RELEASE => last.1 = last.1.max(b),
-            _ => spans.push((a, b)),
-        }
-    }
-    let mut bends: Vec<(f64, f64)> = Vec::new();
-    for (a, b) in spans {
-        bends.extend([((a - ATTACK).max(0.0), 0.0), (a, -depth.abs()), (b, -depth.abs()), (b + RELEASE, 0.0)]);
-    }
-    let duck_at = |t: f64| {
-        let i = bends.partition_point(|k| k.0 <= t);
-        match (i.checked_sub(1).map(|j| bends[j]), bends.get(i)) {
-            (Some(a), Some(b)) => a.1 + (b.1 - a.1) * (t - a.0) / (b.0 - a.0).max(1e-9),
-            _ => 0.0,
-        }
-    };
+    let bends = bends(speech, depth);
     // Every time either line bends, with both added there: straight lines
     // between them in dB, as `volume_at` reads them.
     let mut times: Vec<f64> = line.iter().map(|k| k.t).chain(bends.iter().map(|b| b.0)).collect();
@@ -169,7 +156,50 @@ pub fn duck(line: &[VolumeKey], speech: &[(f64, f64)], depth: f64) -> Vec<Volume
     // Points closer than a hundredth of a second are one (as `volume_key_at`
     // has it): a bend on an existing point doesn't make a second.
     times.dedup_by(|a, b| (*a - *b).abs() < 0.01);
-    times.into_iter().map(|t| VolumeKey { t, volume: volume_at(line, t) + duck_at(t) }).collect()
+    times.into_iter().map(|t| VolumeKey { t, volume: volume_at(line, t) + at(&bends, t) }).collect()
+}
+
+/// The line `duck` made from `before`'s, with that duck taken out: each
+/// point back up by the duck there, and the points only the duck put in
+/// (on the line without them) dropped. Both lines are straight between
+/// the same points, so a line left as `duck` made it comes back exactly.
+pub fn unduck(line: &[VolumeKey], before: &crate::project::Ducked) -> Vec<VolumeKey> {
+    let bends = bends(&before.speech, before.depth);
+    let mut keys: Vec<VolumeKey> = line.iter().map(|k| VolumeKey { t: k.t, volume: k.volume - at(&bends, k.t) }).collect();
+    let mut i = 0;
+    while i < keys.len() {
+        let bend = bends.iter().any(|b| (b.0 - keys[i].t).abs() < 0.01);
+        let mut without = keys.clone();
+        let k = without.remove(i);
+        if bend && (volume_at(&without, k.t) - k.volume).abs() < 0.01 {
+            keys = without;
+        } else {
+            i += 1;
+        }
+    }
+    keys
+}
+
+/// Where the duck itself bends: 0 dB, down, down, 0 dB per stretch,
+/// stretches whose ramps would cross joined first.
+fn bends(speech: &[(f64, f64)], depth: f64) -> Vec<(f64, f64)> {
+    let mut spans: Vec<(f64, f64)> = Vec::new();
+    for &(a, b) in speech {
+        match spans.last_mut() {
+            Some(last) if a - ATTACK <= last.1 + RELEASE => last.1 = last.1.max(b),
+            _ => spans.push((a, b)),
+        }
+    }
+    spans.into_iter().flat_map(|(a, b)| [((a - ATTACK).max(0.0), 0.0), (a, -depth.abs()), (b, -depth.abs()), (b + RELEASE, 0.0)]).collect()
+}
+
+/// The duck's own level at `t`, dB: 0 away from speech.
+fn at(bends: &[(f64, f64)], t: f64) -> f64 {
+    let i = bends.partition_point(|k| k.0 <= t);
+    match (i.checked_sub(1).map(|j| bends[j]), bends.get(i)) {
+        (Some(a), Some(b)) => a.1 + (b.1 - a.1) * (t - a.0) / (b.0 - a.0).max(1e-9),
+        _ => 0.0,
+    }
 }
 
 #[cfg(test)]
@@ -241,6 +271,44 @@ mod tests {
         assert!((at(1, 2.5) + 10.0).abs() < 1e-9 && (at(1, 6.0)).abs() < 1e-9);
         // The song no speech falls on is left alone.
         assert!(music.clips[2].volume.is_empty());
+    }
+
+    #[test]
+    fn pressed_again_it_replaces_the_duck_before() {
+        let song = crate::project::MusicClip { input: "s.wav".into(), at: 0.0, start: 0.0, end: 20.0, volume: vec![VolumeKey { t: 2.0, volume: -3.0 }, VolumeKey { t: 15.0, volume: 0.0 }], ..Default::default() };
+        let speech = [(5.0, 8.0)];
+        let once = |depth: f64| {
+            let mut m = crate::project::Music::default();
+            m.clips.push(song.clone());
+            duck_music(&mut m, &speech, depth);
+            m
+        };
+        // 20, then 18: as 18 alone, not 38 down (user, 2026-11-02).
+        let mut twice = once(20.0);
+        duck_music(&mut twice, &speech, 18.0);
+        assert_eq!(twice, once(18.0));
+        // Taken out, the hand-drawn line comes back as it was.
+        let ducked = &twice.clips[0];
+        assert_eq!(unduck(&ducked.volume, ducked.ducked.as_ref().unwrap()), song.volume);
+        // A point moved by hand after the duck keeps its change through the next.
+        let mut edited = once(18.0);
+        let k = edited.clips[0].volume.iter().position(|k| k.t == 15.0).unwrap();
+        edited.clips[0].volume[k].volume = -4.0;
+        duck_music(&mut edited, &speech, 12.0);
+        assert!((volume_at(&edited.clips[0].volume, 15.0) + 4.0).abs() < 1e-9);
+        assert!((volume_at(&edited.clips[0].volume, 6.0) - (volume_at(&song.volume, 6.0) - 12.0)).abs() < 1e-9);
+    }
+
+    #[test]
+    fn a_line_deleted_after_a_duck_is_not_raised_by_the_next() {
+        let mut p = Project::default();
+        p.music.clips.push(crate::project::MusicClip { input: "s.wav".into(), at: 0.0, start: 0.0, end: 20.0, ..Default::default() });
+        duck_music(&mut p.music, &[(5.0, 8.0)], 18.0);
+        let own = crate::project::Own::Clip(crate::project::SoundTrack::Music, 0);
+        p.own_line_mut(own).unwrap().0.clear();
+        p.forget_duck(own);
+        duck_music(&mut p.music, &[(5.0, 8.0)], 18.0);
+        assert!(p.music.clips[0].volume.iter().all(|k| k.volume <= 1e-9), "{:?}", p.music.clips[0].volume);
     }
 
     #[test]

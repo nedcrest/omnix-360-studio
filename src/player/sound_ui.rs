@@ -174,7 +174,10 @@ impl App {
                     crate::project::add_volume_key(s.volume, t, 0.0);
                 }
             }),
-            SoundMsg::Original(own) => self.set_sound(own, |mut s| s.original()),
+            SoundMsg::Original(own) => {
+                self.set_sound(own, |mut s| s.original());
+                self.edit.forget_duck(own);
+            }
             SoundMsg::LowCut(own, on) => self.set_sound(own, |s| *s.low_cut = on),
             SoundMsg::Clean(own, on) => self.set_sound(own, |s| *s.clean = on),
             SoundMsg::OtherSfx(from, i) => {
@@ -206,6 +209,7 @@ impl App {
                     if let Some((keys, _)) = self.edit.own_line_mut(own) {
                         keys.clear();
                     }
+                    self.edit.forget_duck(own);
                 }
             }
             SoundMsg::Even1(own, on) => {

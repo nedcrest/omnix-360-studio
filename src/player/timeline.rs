@@ -317,6 +317,8 @@ pub struct Timeline {
     pub overlays: Vec<OverlayBlock>,
     pub texts: Vec<OverlayBlock>,
     pub selected_overlay: Option<crate::overlay::ItemRef>,
+    /// Moves on when Esc cancels a drag, so the canvases drop theirs.
+    pub drag_epoch: u64,
     /// The rows' heights, from the divider's scale.
     pub rows: Rows,
     /// Which sound lanes are soloed or muted, for listening.
@@ -366,6 +368,9 @@ pub enum Drag {
 #[derive(Default)]
 pub struct State {
     drag: Drag,
+    /// `Timeline::drag_epoch` when the drag began: moved on (Esc), the drag
+    /// is dropped.
+    epoch: u64,
     /// The last press on a level tag, for a double-click.
     tag_click: Option<(std::time::Instant, Own)>,
     /// Shift held: the wheel pans instead of zooming, and music may
@@ -1035,11 +1040,16 @@ impl OverlayLane {
 }
 
 impl canvas::Program<Message> for OverlayLane {
-    type State = OverlayDrag;
+    /// Its drag, and the drag epoch it began in (see `State::epoch`).
+    type State = (OverlayDrag, u64);
 
-    fn update(&self, drag: &mut OverlayDrag, event: &iced::Event, bounds: Rectangle, cursor: mouse::Cursor) -> Option<canvas::Action<Message>> {
+    fn update(&self, state: &mut (OverlayDrag, u64), event: &iced::Event, bounds: Rectangle, cursor: mouse::Cursor) -> Option<canvas::Action<Message>> {
         use iced::Event::Mouse;
         let t = &self.0;
+        if state.1 != t.drag_epoch {
+            *state = (OverlayDrag::None, t.drag_epoch);
+        }
+        let drag = &mut state.0;
         match event {
             Mouse(mouse::Event::WheelScrolled { delta }) => {
                 let p = cursor.position_in(bounds)?;
@@ -1112,7 +1122,7 @@ impl canvas::Program<Message> for OverlayLane {
         }
     }
 
-    fn draw(&self, drag: &OverlayDrag, renderer: &Renderer, theme: &Theme, bounds: Rectangle, cursor: mouse::Cursor) -> Vec<Geometry> {
+    fn draw(&self, (drag, _): &(OverlayDrag, u64), renderer: &Renderer, theme: &Theme, bounds: Rectangle, cursor: mouse::Cursor) -> Vec<Geometry> {
         let t = &self.0;
         let palette = theme.extended_palette();
         let mut frame = Frame::new(renderer, bounds.size());
@@ -1200,7 +1210,7 @@ impl canvas::Program<Message> for OverlayLane {
         vec![frame.into_geometry()]
     }
 
-    fn mouse_interaction(&self, drag: &OverlayDrag, bounds: Rectangle, cursor: mouse::Cursor) -> mouse::Interaction {
+    fn mouse_interaction(&self, (drag, _): &(OverlayDrag, u64), bounds: Rectangle, cursor: mouse::Cursor) -> mouse::Interaction {
         match drag {
             OverlayDrag::Trim { .. } => mouse::Interaction::ResizingHorizontally,
             OverlayDrag::Move { .. } | OverlayDrag::Key { .. } => mouse::Interaction::Grabbing,
@@ -1439,6 +1449,12 @@ impl canvas::Program<Message> for Marks {
 
     fn update(&self, state: &mut State, event: &iced::Event, bounds: Rectangle, cursor: mouse::Cursor) -> Option<canvas::Action<Message>> {
         use iced::Event::{Keyboard, Mouse};
+        // Esc cancelled the drag in the app: nothing more of it, not even
+        // its release (a cut's move lands then).
+        if state.epoch != self.drag_epoch {
+            state.epoch = self.drag_epoch;
+            state.drag = Drag::None;
+        }
         let drag = &mut state.drag;
         match event {
             Keyboard(iced::keyboard::Event::ModifiersChanged(m)) => {
@@ -1905,7 +1921,7 @@ mod tests {
             sounds,
             selected_music: None, selected_point: None,
             video: 10.0, clips_db: 0.0, duration: 10.0, start: 0.0, span: 10.0, position: 0.0,
-            selected: None, current: None, overlays: vec![], texts: vec![], selected_overlay: None,
+            selected: None, current: None, overlays: vec![], texts: vec![], selected_overlay: None, drag_epoch: 0,
             rows: Rows::new(1.0, false, Folds { sfx2: false, ..Folds::default() }),
             listen: Default::default(),
             check_marks: vec![],

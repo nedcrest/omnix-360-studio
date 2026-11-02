@@ -299,6 +299,7 @@ impl App {
             overlays: self.overlay_blocks(crate::overlay::Track::Overlay),
             texts: self.overlay_blocks(crate::overlay::Track::Text),
             selected_overlay: self.selection.item(),
+            drag_epoch: self.drag_epoch,
             rows: timeline::Rows::new(self.split, self.framing, self.folds),
         }
         .view();

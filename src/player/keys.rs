@@ -68,7 +68,21 @@ impl App {
         }
         match key.as_ref() {
             Key::Named(Named::Escape) if self.picking.is_some() => return self.update(Message::PickColour),
-            Key::Named(Named::Escape) if self.fullscreen => return self.update(Message::Fullscreen),
+            // Esc cancels a drag: a change under way (a trim, a fade, a run
+            // of typing, a look-around keyed by Auto keyframe) goes back to
+            // before it, and the timeline drops its drag, a cut's move too
+            // (it lands only on release). Without a drag it changes nothing
+            // there. Then, as before, it leaves full screen.
+            Key::Named(Named::Escape) => {
+                if self.edit.changing() {
+                    self.edit.cancel();
+                    self.selection = self.selection.still_valid(&self.edit);
+                }
+                self.drag_epoch += 1;
+                if self.fullscreen {
+                    return self.update(Message::Fullscreen);
+                }
+            }
             // As the Play button: from the end of the edit, from the start.
             Key::Named(Named::Space) => return self.update(Message::Toggle),
             // The selected cut one place left or right (a drag's key route).

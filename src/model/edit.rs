@@ -129,6 +129,15 @@ impl Edit {
     }
 
 
+    /// Drops the change under way (Esc during a drag): the edit as it was
+    /// before it began, saved or not as it was then.
+    pub fn cancel(&mut self) {
+        if let Some((before, version)) = self.open.take() {
+            self.project = before;
+            self.version = version;
+        }
+    }
+
     /// Makes `change` one undo step if it says it changed anything; if it
     /// says not, the edit is as it was, with redo and the saved state
     /// untouched. (Saving the edit first and undoing on a failed change
@@ -349,6 +358,12 @@ mod tests {
             true
         });
         assert!(e.undo() && e.cuts[0].start == 11.0 && e.undo() && e.cuts[0].start == 10.0);
+        // Cancelled, a drag leaves nothing: no change, no step, as saved.
+        let v = e.version;
+        e.begin();
+        e.trim(0, true, 12.0, 20.0);
+        e.cancel();
+        assert!(!e.changing() && e.cuts[0].start == 10.0 && e.version == v && !e.undo());
     }
 
     #[test]

@@ -508,6 +508,8 @@ struct App {
     current: usize,
     /// What's selected on the timeline.
     selection: Selection,
+    /// Counts drags cancelled by Esc; the timeline drops a drag begun before.
+    drag_epoch: u64,
     /// Clips waiting to be loaded, in order, and whether each is added as a
     /// cut (opened) or only loaded for a project's cuts.
     queue: std::collections::VecDeque<(PathBuf, bool)>,
@@ -675,6 +677,7 @@ impl App {
             edit: edit::Edit::default(),
             current: 0,
             selection: Selection::None,
+            drag_epoch: 0,
             effect_pin: effects::Pin::default(),
             timeline_zoom: 1.0,
             timeline_start: 0.0,

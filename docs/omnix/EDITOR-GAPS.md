@@ -1375,7 +1375,7 @@ loudness, else −14; a speech stretch's voice is the louder of the Voice
 lane and the clips' sound; the music under it the song covering most of
 it; measured when switched on and on «Measure again», not live. On the
 test project: the film −14.1 LUFS, music 14.2 and 2.8 dB under the voice.
-46f (the duck's depth) to set from what it shows.
+46f (the duck's depth) was set from it: 18 dB.
 The user tried it (2026-11-02): «Lower the music under speech» and the
 level knob at −3.5 dB cleared the red. Asked: a timeline in the check,
 and its points on the timeline. Added (`6ece9f4`): each finding's stretch
@@ -1419,8 +1419,26 @@ reaches for (the user's question «what else may be missing for sound?»):
   `SoundTrack::Sfx2`; an SFX added over one already playing goes there by
   itself; «Move to SFX 2 / SFX» in the menu. The lane always shows, empty
   or not (rows are fixed per track).
-- **The duck's depth** (46f): its 12 dB default against the 15–20 dB the
-  guides give; to set with the mix check's measurements.
+- **The duck's depth** (46f): **built 2026-11-02** (`1cbbd13`, `9167d66`),
+  waiting for the check. The default is now 18 dB (was 12; the guides
+  give 15–20, WCAG 20). Measured on the test project with `rosmo360
+  mixcheck` (which now prints every speech stretch's gap, not only the
+  failing ones) after a duck at each depth. The music under the voice:
+
+  | Depth | 5.7–11.7 s | 12.9–25.9 s |
+  |---|---|---|
+  | none | 14.2 dB | 2.8 dB |
+  | 12 | 26.2 | 14.8 (fails the check's 15) |
+  | 15 | 29.2 | 17.8 |
+  | 18 | 32.2 | 20.8 |
+  | 20 | 34.2 | 22.8 |
+
+  The duck lowers from the line the music already has, so the gap is the
+  music's own distance plus the depth (the second stretch's music had
+  been raised to 0 dB by hand). With music as loud as the voice the gap
+  is the depth itself: 15 would sit on the check's edge, 18 clears it by
+  3 dB. A settings.json that already holds a depth keeps it (the slider
+  sets it, 3–30).
 
 ### 47. The sound menus in groups — idea (user, 2026-11-01)
 

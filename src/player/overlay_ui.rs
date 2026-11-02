@@ -141,7 +141,7 @@ impl App {
                 let mut at = self.position();
                 let lane = self.edit.lane_mut(crate::overlay::Track::Overlay);
                 for input in paths {
-                    lane.items.push(crate::overlay::Item { input, text: None, at, start: 0.0, end: ffmpeg::PICTURE_SECONDS, motion: Vec::new(), effects: Vec::new() });
+                    lane.items.push(crate::overlay::Item { id: 0, input, text: None, at, start: 0.0, end: ffmpeg::PICTURE_SECONDS, motion: Vec::new(), effects: Vec::new() });
                     let i = lane.items.len() - 1;
                     lane.items[i].at = lane.place(i, at);
                     at = lane.items[i].ends();
@@ -212,7 +212,7 @@ impl App {
                 self.edit.checkpoint();
                 let at = self.position();
                 let lane = self.edit.lane_mut(crate::overlay::Track::Text);
-                lane.items.push(crate::overlay::Item { input: PathBuf::new(), text: Some(Default::default()), at, start: 0.0, end: ffmpeg::PICTURE_SECONDS, motion: Vec::new(), effects: Vec::new() });
+                lane.items.push(crate::overlay::Item { id: 0, input: PathBuf::new(), text: Some(Default::default()), at, start: 0.0, end: ffmpeg::PICTURE_SECONDS, motion: Vec::new(), effects: Vec::new() });
                 let i = lane.items.len() - 1;
                 lane.items[i].at = lane.place(i, at);
                 self.selection = Selection::Item((crate::overlay::Track::Text, i));

@@ -409,6 +409,11 @@ impl Music {
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct MusicClip {
+    /// Names it for operations and their undo (`OPS-API.md`): unique in
+    /// the project, kept through moves and edits; 0 until given one
+    /// (`Project::settle_ids`).
+    #[serde(default, skip_serializing_if = "no_id")]
+    pub id: Id,
     /// The file; a relative path is relative to the project file.
     pub input: PathBuf,
     /// Where it starts on the edit, in seconds.
@@ -488,6 +493,13 @@ impl MusicClip {
     }
 }
 
+/// What names a cut, a sound clip or an overlay item (`OPS-API.md`).
+pub type Id = u32;
+
+pub(crate) fn no_id(id: &Id) -> bool {
+    *id == 0
+}
+
 fn is_zero(v: &f64) -> bool {
     *v == 0.0
 }
@@ -516,6 +528,11 @@ pub fn gain(db: f64) -> f64 {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Cut {
+    /// Names it for operations and their undo (`OPS-API.md`): unique in
+    /// the project, kept through moves and edits; 0 until given one
+    /// (`Project::settle_ids`).
+    #[serde(default, skip_serializing_if = "no_id")]
+    pub id: Id,
     /// The clip; a relative path is relative to the project file.
     pub input: PathBuf,
     /// In and out points, clip time in seconds.
@@ -605,6 +622,7 @@ impl Cut {
     /// means one edit here, not one at every cut made.
     pub fn new(input: PathBuf, start: f64, end: f64) -> Cut {
         Cut {
+            id: 0,
             input,
             start,
             end,
@@ -794,6 +812,7 @@ impl Project {
             }
             cut.effects.sort_by(|a, b| a.t.total_cmp(&b.t));
         }
+        project.settle_ids();
         Ok(project)
     }
 
@@ -834,7 +853,31 @@ impl Project {
                 item.input = rel.to_owned();
             }
         }
+        project.settle_ids();
         crate::replace_file(path, (serde_json::to_string_pretty(&project)? + "\n").as_bytes())
+    }
+
+    /// Gives an id to every cut, sound clip and overlay item without one,
+    /// or sharing one with something before it (the second half of a
+    /// split): one past the highest, so ids aren't handed out twice while
+    /// the highest stays. Order: cuts, each sound track, overlays, text.
+    pub fn settle_ids(&mut self) {
+        let mut ids: Vec<&mut Id> = Vec::new();
+        ids.extend(self.cuts.iter_mut().map(|c| &mut c.id));
+        let [music, sfx, sfx2, voice] = [&mut self.music, &mut self.sfx, &mut self.sfx2, &mut self.voice];
+        for t in [music, sfx, sfx2, voice] {
+            ids.extend(t.clips.iter_mut().map(|c| &mut c.id));
+        }
+        ids.extend(self.overlays.iter_mut().chain(&mut self.text).flat_map(|l| &mut l.items).map(|i| &mut i.id));
+        let mut next = ids.iter().map(|id| **id).max().unwrap_or(0) + 1;
+        let mut seen = std::collections::HashSet::new();
+        for id in ids {
+            if *id == 0 || !seen.insert(*id) {
+                *id = next;
+                seen.insert(next);
+                next += 1;
+            }
+        }
     }
 
     /// Length of the edit in seconds.
@@ -1074,6 +1117,30 @@ pub fn held(aim: Aim<'_>, own: bool, t: f64) -> impl Fn(&crate::view::Follow, f6
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn everything_gets_an_id_once_and_a_split_half_a_new_one() {
+        let mut p = Project::default();
+        p.cuts = vec![Cut::new("a.mp4".into(), 0.0, 4.0), Cut { id: 7, ..Cut::new("b.mp4".into(), 0.0, 3.0) }];
+        p.music.append("song.wav".into(), 0.0, 10.0);
+        p.text.push(crate::overlay::Lane::default());
+        p.text[0].items.push(crate::overlay::Item { id: 0, input: PathBuf::new(), text: Some(Default::default()), at: 0.0, start: 0.0, end: 5.0, motion: Vec::new(), effects: Vec::new() });
+        p.settle_ids();
+        assert_eq!(p.cuts[1].id, 7, "an id given stays");
+        assert_eq!((p.cuts[0].id, p.music.clips[0].id, p.text[0].items[0].id), (8, 9, 10), "past the highest, in order");
+        // The second half of a split is a copy: it gets its own.
+        let half = p.cuts[1].clone();
+        p.cuts.push(half);
+        p.settle_ids();
+        assert_eq!((p.cuts[1].id, p.cuts[2].id), (7, 11));
+        // Settled, nothing moves; and the ids survive the file.
+        let before = p.clone();
+        p.settle_ids();
+        assert_eq!(p, before);
+        let json = serde_json::to_string(&p).unwrap();
+        assert!(json.contains("\"id\":7"), "{json}");
+        assert_eq!(serde_json::from_str::<Project>(&json).unwrap(), p);
+    }
 
     #[test]
     fn loads_cuts_relative_to_the_file() {

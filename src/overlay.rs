@@ -42,6 +42,11 @@ pub struct Lane {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Item {
+    /// Names it for operations and their undo (`OPS-API.md`): unique in
+    /// the project, kept through moves and edits; 0 until given one
+    /// (`crate::project::Project::settle_ids`).
+    #[serde(default, skip_serializing_if = "crate::project::no_id")]
+    pub id: crate::project::Id,
     /// The picture; a relative path is relative to the project file. Empty
     /// for text.
     #[serde(default, skip_serializing_if = "is_empty_path")]
@@ -473,7 +478,7 @@ mod tests {
     use super::*;
 
     fn item(at: f64, len: f64) -> Item {
-        Item { input: "a.png".into(), text: None, at, start: 0.0, end: len, motion: Vec::new(), effects: Vec::new() }
+        Item { id: 0, input: "a.png".into(), text: None, at, start: 0.0, end: len, motion: Vec::new(), effects: Vec::new() }
     }
 
     #[test]

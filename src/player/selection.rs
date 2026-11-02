@@ -105,7 +105,7 @@ mod tests {
         e.cuts = vec![Cut::new(PathBuf::from("a"), 0.0, 4.0), Cut::new(PathBuf::from("b"), 0.0, 3.0)];
         e.cuts[0].volume = vec![VolumeKey { t: 1.0, volume: -6.0 }];
         e.track_mut(SoundTrack::Music).append(PathBuf::from("song"), 0.0, 5.0);
-        e.lane_mut(crate::overlay::Track::Text).items.push(crate::overlay::Item { input: PathBuf::new(), text: Some(Default::default()), at: 0.0, start: 0.0, end: 5.0, motion: Vec::new(), effects: Vec::new() });
+        e.lane_mut(crate::overlay::Track::Text).items.push(crate::overlay::Item { id: 0, input: PathBuf::new(), text: Some(Default::default()), at: 0.0, start: 0.0, end: 5.0, motion: Vec::new(), effects: Vec::new() });
         e
     }
 

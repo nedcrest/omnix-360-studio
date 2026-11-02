@@ -68,28 +68,29 @@ impl Selection {
 }
 
 impl Edit {
-    /// Deletes what `s` names, as one undo step; false if it isn't there.
+    /// Deletes what `s` names, as one undo step, through its op; false if
+    /// it isn't there.
     pub fn delete(&mut self, s: Selection) -> bool {
+        use super::ops::{Op, SoundRef, clips::ClipOp, cuts::CutOp, sound::SoundOp};
         if !s.there(self) {
             return false;
         }
-        self.checkpoint();
-        match s {
-            Selection::None => {}
-            Selection::Cut(i) => self.remove(i),
-            Selection::Clip(w, i) => {
-                self.track_mut(w).clips.remove(i);
-            }
+        let op = match s {
+            Selection::None => return false,
+            Selection::Cut(i) => Op::Cut(CutOp::Delete { cut: self.cuts[i].id }),
+            Selection::Clip(w, i) => Op::Clip(ClipOp::Delete { clip: self.track(w).clips[i].id }),
             Selection::Point(own, i) => {
-                if let Some((keys, _)) = self.own_line_mut(own) {
-                    keys.remove(i);
-                }
+                let (Some(sound), Some((keys, _))) = (SoundRef::of(own, self), self.own_line(own)) else { return false };
+                Op::Sound(SoundOp::DeletePoint { sound, t: keys[i].t })
             }
+            // Overlays get their ops next (`OPS-API.md` step 4).
             Selection::Item((track, i)) => {
+                self.checkpoint();
                 self.lane_mut(track).items.remove(i);
+                return true;
             }
-        }
-        true
+        };
+        self.apply(&op).is_ok()
     }
 }
 

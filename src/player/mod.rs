@@ -892,6 +892,17 @@ impl App {
         }
     }
 
+    /// Applies `op` to the edit (`OPS-API.md`): one undo step, or part of
+    /// the drag under way; a refusal is shown. What it did, if it did.
+    fn op(&mut self, op: crate::model::ops::Op) -> Option<crate::model::ops::Outcome> {
+        self.edit.apply(&op).map_err(|e| self.error = Some(e.to_string())).ok()
+    }
+
+    /// Where the cut with id `id` is.
+    fn cut_index(&self, id: crate::project::Id) -> Option<usize> {
+        self.edit.cuts.iter().position(|c| c.id == id)
+    }
+
     fn view(&self) -> Element<'_, Message> {
         let Some(clip) = &self.clip else { return self.start_screen() };
         let error = self.error.as_ref().map(|e| text(e.clone()).style(text::danger));

@@ -3,6 +3,9 @@
 //! the timeline.
 
 use super::*;
+use crate::model::ops::clips::ClipOp;
+use crate::model::ops::cuts::{CutOp, Place};
+use crate::model::ops::{End, Op};
 
 /// A cut's names on the timeline, longest first, for the block to show the
 /// first that fits: its clip, length, stabilisation when that isn't horizon
@@ -39,21 +42,18 @@ impl App {
     /// the end) and selects it. The first clip starts playing, as opening a
     /// clip always did; later ones leave playback where it is.
     pub(super) fn add_cut(&mut self, input: PathBuf, duration: f64) {
-        self.edit.checkpoint();
         // A picture has no length of its own: a few seconds, trimmed at will.
         let picture = self.library.iter().find(|m| m.input == input).and_then(|m| m.flat).is_some_and(|f| f.picture);
         let end = if picture { ffmpeg::PICTURE_SECONDS } else { duration };
         let lut = self.auto_lut(&input);
         let spot = self.placing.remove(&input).unwrap_or(bin::Spot::End);
-        let cut = Cut { stabilize: Some(self.opts.stabilize), lut, ..Cut::new(input, 0.0, end) };
-        let i = match spot {
-            bin::Spot::End => self.edit.insert_cut(usize::MAX, cut),
-            bin::Spot::At(t) => self.edit.insert_at(t, cut),
-            bin::Spot::Join(t) => {
-                let at = self.edit.nearest_join(t);
-                self.edit.insert_cut(at, cut)
-            }
+        let place = match spot {
+            bin::Spot::End => Place::End,
+            bin::Spot::At(t) => Place::At(t),
+            bin::Spot::Join(t) => Place::Join(t),
         };
+        let added = self.op(Op::Cut(CutOp::Add { input, start: 0.0, end, place, stabilize: Some(self.opts.stabilize), lut }));
+        let Some(i) = added.and_then(|o| o.made).and_then(|id| self.cut_index(id)) else { return };
         self.mark_flat();
         self.selection = Selection::Cut(i);
         if self.clip.is_none() {
@@ -85,7 +85,8 @@ impl App {
                     return Task::none();
                 };
                 self.edit.begin();
-                self.edit.trim(i, start, t, clip_len);
+                let cut = self.edit.cuts[i].id;
+                self.op(Op::Cut(CutOp::Trim { cut, end: if start { End::In } else { End::Out }, t, most: clip_len }));
                 let c = &self.edit.cuts[i];
                 // Show the frame at the edge being trimmed.
                 let t = if start { c.start } else { c.end - 1.0 / self.fps() };
@@ -93,35 +94,38 @@ impl App {
                 self.scrub_to(i, t);
             }
             Message::MoveCut(from, to) => {
-                if to != from && to != from + 1 {
-                    self.edit.checkpoint();
-                    let at = |i: usize| crate::project::Project::moved_index(from, to, i);
-                    self.edit.move_cut(from, to);
-                    self.current = at(self.current);
-                    self.selection = Selection::Cut(at(from));
+                if to != from && to != from + 1 && from < self.edit.cuts.len() {
+                    let (cut, before) = (self.edit.cuts[from].id, self.edit.cuts.get(to).map(|c| c.id));
+                    if self.op(Op::Cut(CutOp::Move { cut, before })).is_some() {
+                        let at = |i: usize| crate::project::Project::moved_index(from, to, i);
+                        self.current = at(self.current);
+                        self.selection = Selection::Cut(at(from));
+                    }
                 }
             }
             Message::Crossfade(i, seconds) => {
+                let Some(cut) = self.edit.cuts.get(i).map(|c| c.id) else { return Task::none() };
                 self.edit.begin();
-                self.edit.set_crossfade(i, seconds);
+                self.op(Op::Cut(CutOp::Crossfade { cut, seconds }));
             }
             Message::ToggleCrossfade => {
                 let i = self.selection.cut().unwrap_or(self.current);
                 let Some(c) = self.edit.cuts.get(i) else { return Task::none() };
-                let to = if c.crossfade > 0.0 { 0.0 } else { 1.0 };
-                self.edit.checkpoint();
-                self.edit.set_crossfade(i, to);
+                let (cut, seconds) = (c.id, if c.crossfade > 0.0 { 0.0 } else { 1.0 });
+                self.op(Op::Cut(CutOp::Crossfade { cut, seconds }));
             }
             Message::Split if let Selection::Clip(which, i) = self.selection => {
-                let at = self.position();
-                if self.edit.attempt(|e| e.track_mut(which).split(i, at, edit::MIN_CUT)) {
-                    self.selection = Selection::Clip(which, i + 1);
+                let (Some(clip), at) = (self.edit.track(which).clips.get(i).map(|c| c.id), self.position()) else { return Task::none() };
+                // Not where the playhead is: nothing to split, said quietly.
+                let Ok(done) = self.edit.apply(&Op::Clip(ClipOp::Split { clip, at })) else { return Task::none() };
+                if let Some(j) = done.made.and_then(|id| self.edit.track(which).clips.iter().position(|c| c.id == id)) {
+                    self.selection = Selection::Clip(which, j);
                 }
             }
             Message::Split => {
                 let Some((_, t)) = self.playing_cut() else { return Task::none() };
-                let i = self.current;
-                if self.edit.attempt(|e| e.split(i, t)) {
+                let (i, cut) = (self.current, self.edit.cuts[self.current].id);
+                if self.edit.apply(&Op::Cut(CutOp::Split { cut, t })).is_ok() {
                     // The playhead is now at the start of the second half.
                     self.current = i + 1;
                     self.selection = Selection::Cut(i + 1);

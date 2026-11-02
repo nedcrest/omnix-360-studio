@@ -57,6 +57,14 @@ impl App {
         if self.normalize.is_some() {
             return if escape { self.update(Message::Sound(sound_ui::SoundMsg::Cancel)) } else { Task::none() };
         }
+        // The shortcuts' list open: Esc, ? or F1 close it, the rest wait.
+        let help = matches!(key.as_ref(), Key::Named(Named::F1) | Key::Character("?"));
+        if self.shortcuts {
+            return if escape || help { self.update(Message::Shortcuts) } else { Task::none() };
+        }
+        if help {
+            return self.update(Message::Shortcuts);
+        }
         if self.sound_menu.is_some() && escape {
             return self.update(Message::Sound(sound_ui::SoundMsg::Menu(None)));
         }

@@ -39,6 +39,7 @@ mod tracks;
 mod overlay_ui;
 mod cuts;
 mod record_ui;
+mod shortcuts;
 use crate::model::selection::Selection;
 mod listen;
 mod mixcheck_ui;
@@ -388,6 +389,8 @@ enum Message {
     MoveCut(usize, usize),
     /// A delete's «Undo» note has had its time (its number).
     ToastGone(u64),
+    /// The shortcuts' window opened or closed (? or F1, its button).
+    Shortcuts,
     /// The playhead's step note has had its time (its number).
     StepNoteGone(u64),
     /// The selected (else playing) cut's in point (true) or out point to
@@ -517,6 +520,8 @@ struct App {
     /// «… deleted · Undo» in the top bar for a few seconds after a delete,
     /// and which one it is, so an older one's timer doesn't clear a newer.
     toast: Option<(&'static str, u64)>,
+    /// The keyboard and mouse shortcuts' window, open (gap 56).
+    shortcuts: bool,
     /// The playhead's last key step («+1 f», «join →») shown by it for a
     /// moment, and which one (gap 55).
     step_note: Option<(&'static str, u64)>,
@@ -689,6 +694,7 @@ impl App {
             selection: Selection::None,
             drag_epoch: 0,
             toast: None,
+            shortcuts: false,
             step_note: None,
             effect_pin: effects::Pin::default(),
             timeline_zoom: 1.0,
@@ -888,7 +894,7 @@ impl App {
         match message {
             m @ (Message::Open { .. } | Message::Picked { .. } | Message::Loaded { .. } | Message::OpenProject { .. } | Message::NewProject { .. } | Message::CloseRequested { .. } | Message::StopAndClose { .. } | Message::Confirmed { .. } | Message::ProjectPicked { .. } | Message::SaveProjectTo { .. } | Message::SaveProject { .. } | Message::LoadingTick { .. } | Message::Thumb { .. }) => self.on_file(m),
             m @ (Message::Export { .. } | Message::ExportTo { .. } | Message::ExportProgress { .. } | Message::ExportCancel { .. } | Message::PickColour { .. } | Message::PickArea { .. } | Message::AreaPicked { .. } | Message::TrackProgress { .. } | Message::TrackCancel { .. } | Message::Tracked { .. } | Message::ExportDone { .. } | Message::Save { .. } | Message::SaveTo { .. } | Message::Saved { .. }) => self.on_jobs(m),
-            m @ (Message::Resolution { .. } | Message::ExportClips { .. } | Message::ExportGraded { .. } | Message::ExportFormat { .. } | Message::ExportLoudness { .. } | Message::Info { .. } | Message::InfoRead { .. } | Message::InfoClose { .. } | Message::Reveal { .. } | Message::CopyPath { .. } | Message::ExportPanel { .. } | Message::AudioPanel { .. } | Message::SettingsPanel { .. } | Message::AutoKey { .. } | Message::SplitDrag { .. } | Message::SplitDone { .. } | Message::SplitReset { .. } | Message::TenBit { .. } | Message::AddLut { .. } | Message::LutPicked { .. } | Message::RemoveLut { .. } | Message::DlogMLut { .. } | Message::UiScale { .. } | Message::ShowAngles { .. } | Message::RulerLarge { .. } | Message::Fold { .. } | Message::Modifiers { .. } | Message::ViewSize { .. } | Message::Aspect { .. } | Message::Theme { .. } | Message::Mute { .. } | Message::Volume { .. } | Message::Fullscreen { .. }) => self.on_panels(m),
+            m @ (Message::Resolution { .. } | Message::ExportClips { .. } | Message::ExportGraded { .. } | Message::ExportFormat { .. } | Message::ExportLoudness { .. } | Message::Info { .. } | Message::InfoRead { .. } | Message::InfoClose { .. } | Message::Reveal { .. } | Message::CopyPath { .. } | Message::ExportPanel { .. } | Message::AudioPanel { .. } | Message::SettingsPanel { .. } | Message::Shortcuts { .. } | Message::AutoKey { .. } | Message::SplitDrag { .. } | Message::SplitDone { .. } | Message::SplitReset { .. } | Message::TenBit { .. } | Message::AddLut { .. } | Message::LutPicked { .. } | Message::RemoveLut { .. } | Message::DlogMLut { .. } | Message::UiScale { .. } | Message::ShowAngles { .. } | Message::RulerLarge { .. } | Message::Fold { .. } | Message::Modifiers { .. } | Message::ViewSize { .. } | Message::Aspect { .. } | Message::Theme { .. } | Message::Mute { .. } | Message::Volume { .. } | Message::Fullscreen { .. }) => self.on_panels(m),
             m @ (Message::BinPanel { .. } | Message::BinPin { .. } | Message::BinRefresh { .. } | Message::BinPreview { .. } | Message::BinStop { .. } | Message::BinMeta { .. } | Message::BinFrames { .. } | Message::BinAdd { .. }) => self.on_bin(m),
             m @ (Message::Tick { .. } | Message::TimelineZoom { .. } | Message::TimelineZoomTo { .. } | Message::TimelinePan { .. } | Message::Toggle { .. } | Message::Scrub { .. } | Message::ScrubDone { .. }) => self.on_transport(m),
             m @ (Message::Select { .. } | Message::Trim { .. } | Message::MoveCut { .. } | Message::ToastGone { .. } | Message::StepNoteGone { .. } | Message::TrimToPlayhead { .. } | Message::Crossfade { .. } | Message::ToggleCrossfade { .. } | Message::Split { .. } | Message::DeleteCut { .. } | Message::Undo { .. } | Message::Redo { .. }) => self.on_cuts(m),
@@ -938,7 +944,7 @@ impl App {
             tooltip::Position::Top,
         );
         let window: Element<'_, Message> = column![self.top_bar(clip), self.picture(), divider, self.transport_bar(clip)].push(self.angles_strip().filter(|_| self.framing)).push(timeline).push(error.map(|e| container(e).padding([0, 10]))).push(credit()).into();
-        self.normalize_dialog(self.sound_menu_layer(window))
+        self.shortcuts_dialog(self.normalize_dialog(self.sound_menu_layer(window)))
     }
 }
 

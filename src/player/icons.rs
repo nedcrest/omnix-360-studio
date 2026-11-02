@@ -163,3 +163,6 @@ pub(super) fn separator<'a>() -> Element<'a, Message> {
 pub(super) fn labelled<'a>(label: &'a str, widget: impl Into<Element<'a, Message>>) -> Element<'a, Message> {
     row![text(label), widget.into()].spacing(6).align_y(Alignment::Center).into()
 }
+
+/// Keyboard: the shortcuts' list.
+pub(super) const KEYBOARD: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M6 9h.01M10 9h.01M14 9h.01M18 9h.01M6 13h.01M18 13h.01M10 13h4M7 16h10"/></svg>"#;

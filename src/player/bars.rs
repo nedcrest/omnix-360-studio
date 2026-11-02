@@ -87,6 +87,7 @@ impl App {
                 text(if self.settings_open { "Close the Settings panel (Ctrl+,)" } else { "Settings (Ctrl+,)" }),
                 tooltip::Position::Bottom,
             ),
+            tip(icon_button(KEYBOARD, Some(Message::Shortcuts)), text("Keyboard and mouse shortcuts (? or F1)"), tooltip::Position::Bottom),
             separator(),
             tip(icon_button(NEW_PROJECT, Some(Message::NewProject)), text("Start a new, empty project (Ctrl+N)"), tooltip::Position::Bottom),
             tip(icon_button(OPEN_PROJECT, Some(Message::OpenProject)), text("Open a saved edit (Ctrl+Shift+O)"), tooltip::Position::Bottom),

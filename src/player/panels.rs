@@ -52,6 +52,7 @@ impl App {
             }
             Message::ExportPanel => self.toggle_side(Side::Export),
             Message::AudioPanel => self.toggle_side(Side::Audio),
+            Message::Shortcuts => self.shortcuts = !self.shortcuts,
             Message::SettingsPanel => {
                 self.settings_open = !self.settings_open;
                 if self.settings_open {

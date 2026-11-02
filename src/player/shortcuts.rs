@@ -1,0 +1,123 @@
+//! The keyboard shortcuts and mouse gestures, grouped, in a window over
+//! the editor (gap 56): opened with ? or F1 or the keyboard button, closed
+//! with Esc or a click outside. Hidden until asked for, so the interface
+//! stays without help text. Keep it in step with `keys.rs` and the
+//! timeline's presses.
+
+use super::{App, Message};
+use iced::widget::{button, column, container, mouse_area, opaque, row, rule, scrollable, space, text};
+use iced::{Alignment, Element, Font, Length};
+
+/// What each group's keys do, as «keys», «what».
+const GROUPS: &[(&str, &[(&str, &str)])] = &[
+    (
+        "Play and the playhead",
+        &[
+            ("Space", "play / pause"),
+            ("← / →  or  , / .", "a frame back / on"),
+            ("Shift+← / →", "a second back / on (editing)"),
+            ("↑ / ↓", "the previous / next join (editing)"),
+            ("Home / End", "the edit's start / end (editing)"),
+            ("M", "mute"),
+            ("F", "full screen"),
+        ],
+    ),
+    (
+        "Cuts",
+        &[
+            ("C", "split at the playhead (a sound clip if one is selected)"),
+            ("Alt+[ / Alt+]", "trim the start / end to the playhead"),
+            ("Alt+← / Alt+→", "move the selected cut one place"),
+            ("Del", "delete what's selected (Shift+Del: the cut)"),
+            ("Esc", "cancel a drag under way"),
+            ("Ctrl+Z / Ctrl+Shift+Z", "undo / redo"),
+        ],
+    ),
+    (
+        "On the timeline (mouse)",
+        &[
+            ("drag an edge", "trim the selected clip (yellow: more footage, red: its end)"),
+            ("drag a clip", "move it"),
+            ("Shift+drag a cut's start", "crossfade: out, onto the cut before"),
+            ("Shift+drag a sound clip", "let it overlap its neighbour (a crossfade)"),
+            ("drag a fade knob", "fade in / out"),
+            ("Ctrl+click a sound", "a volume point there"),
+            ("Ctrl+click a point", "take it away"),
+            ("drag a level tag", "the clip's own level; double-click: back to normal"),
+            ("right-click", "the sound or overlay menu"),
+            ("drag a diamond or mark", "move the keyframe in time"),
+            ("scroll  /  Shift+scroll", "zoom the timeline / pan it"),
+            ("Ctrl+= / Ctrl+− / Ctrl+0", "zoom in / out / the whole edit"),
+        ],
+    ),
+    (
+        "Sound",
+        &[
+            ("K", "a volume point at the playhead on the selected sound"),
+            ("S / M on a lane", "solo / mute it"),
+        ],
+    ),
+    (
+        "Framing (the Framing switch on)",
+        &[
+            ("drag the picture", "look around"),
+            ("Shift+← / →, ↑ / ↓", "turn, tilt"),
+            ("Q / E or right-drag", "roll"),
+            ("scroll, + / −", "zoom"),
+            ("0 or Home", "reset the view"),
+            ("K", "keyframe the view here"),
+            ("[ / ]", "the previous / next keyframe"),
+            ("J", "the keyframe's ease"),
+            ("Del", "delete the keyframe"),
+            ("S", "stabilisation"),
+            ("P", "projection"),
+            ("R", "rolling shutter"),
+        ],
+    ),
+    (
+        "Panels and files",
+        &[
+            ("G", "effects"),
+            ("B", "bin"),
+            ("Ctrl+,", "settings"),
+            ("Ctrl+E", "export"),
+            ("Ctrl+N", "new project"),
+            ("Ctrl+O", "add clips"),
+            ("Ctrl+Shift+O", "open a project"),
+            ("Ctrl+S / Ctrl+Shift+S", "save / save as"),
+            ("? or F1", "this list"),
+        ],
+    ),
+];
+
+impl App {
+    /// The shortcuts over `below`, while open.
+    pub(super) fn shortcuts_dialog<'a>(&'a self, below: Element<'a, Message>) -> Element<'a, Message> {
+        if !self.shortcuts {
+            return below;
+        }
+        let group = |(name, keys): &(&'static str, &'static [(&'static str, &'static str)])| {
+            let rows = keys.iter().map(|(k, what)| row![text(*k).font(Font::MONOSPACE).size(13).width(210), text(*what).size(13)].spacing(10).into());
+            column![text(*name).size(15), column(rows).spacing(4)].spacing(8)
+        };
+        // Two columns, the groups in order down each.
+        let half = GROUPS.len().div_ceil(2);
+        let col = |gs: &'static [(&'static str, &'static [(&'static str, &'static str)])]| column(gs.iter().map(|g| group(g).into())).spacing(18).width(Length::Fill);
+        let body = row![col(&GROUPS[..half]), col(&GROUPS[half..])].spacing(28);
+        let card = container(
+            column![
+                row![text("Keyboard and mouse").size(18), space().width(Length::Fill), button(text("Close")).on_press(Message::Shortcuts)].align_y(Alignment::Center),
+                rule::horizontal(1),
+                scrollable(body).height(Length::Shrink),
+            ]
+            .spacing(12)
+            .width(960),
+        )
+        .padding(18)
+        .max_height(760)
+        .style(container::rounded_box);
+        // A click outside closes it; inside, nothing below takes it.
+        let shade = mouse_area(container(iced::widget::center(opaque(card))).width(Length::Fill).height(Length::Fill).style(|_| container::Style::default().background(iced::Color::from_rgba(0.0, 0.0, 0.0, 0.55)))).on_press(Message::Shortcuts);
+        iced::widget::stack![below, opaque(shade)].into()
+    }
+}

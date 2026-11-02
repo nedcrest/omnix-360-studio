@@ -250,8 +250,8 @@ Small-medium; independent of the rest.
 The selected cut's frame on the timeline is hard to see. Make it thicker
 and in the accent colour (`timeline.rs`, where the cut blocks are drawn).
 
-**Built 2026-11-02 with timeline pack 1** (`b5c95f8`), waiting for the
-user's check: 3 px in the accent colour over a dark 5 px line, on cuts,
+**Built 2026-11-02 with timeline pack 1** (`b5c95f8`), confirmed by the
+user the same day: 3 px in the accent colour over a dark 5 px line, on cuts,
 sound clips and overlay items (`selection_frame`).
 
 ### 8. Select several cuts, act on them together — medium (user, 2026-10-22)
@@ -272,8 +272,10 @@ its pack 1, and the bin's skimmer is shared with the timeline's. Keys that
 clash with the 360 view (J/K/L, ↑/↓, E/Q, S) wait for the user's choice.
 
 
-**Pack 1 built 2026-11-02** (`33fe0d0`, `b5c95f8`, `2094684`), waiting
-for the user's check: edges a 24 px target (`EDGE` 12 px inside, a
+**Pack 1 built 2026-11-02** (`33fe0d0`, `b5c95f8`, `2094684`, and
+`0eb941c` after the user's check: fade knobs kept 8 px inside so two at
+a join don't stack), confirmed by the user the same day (the yellow /
+red handles: «геніально»): edges a 24 px target (`EDGE` 12 px inside, a
 cut's as far outside; one `edge_of` for cuts, sound clips and items; a
 narrow clip split in thirds so its middle moves it); trim handles and
 trimming only on the selected clip, yellow where there's footage

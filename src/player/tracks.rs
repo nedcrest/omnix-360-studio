@@ -8,7 +8,7 @@ use crate::model::ops::{End, Op};
 use crate::model::ops::sound::SoundOp;
 
 /// The most a level tag turns a clip up, dB: as far as normalizing goes.
-const LEVEL_MOST: f64 = crate::loudness::MOST_GAIN;
+const LEVEL_MOST: f64 = crate::model::level::MOST_GAIN;
 
 /// A cut's or a sound clip's own level as its lane tags it ("0 dB",
 /// "+1.4 · even", "muted"): always shown, as it is the knob a drag up or

@@ -575,7 +575,7 @@ pub struct Cut {
     pub old_lut_strength: Option<f64>,
     /// Its own sound level, dB, on top of the edit's clip sound level and
     /// under its volume points: set by normalizing (to
-    /// `loudness::TARGET_LUFS`) or from the menu ("lower for voice-over").
+    /// `model::level::TARGET_LUFS`) or from the menu ("lower for voice-over").
     /// 0 is as recorded.
     #[serde(default, skip_serializing_if = "is_zero")]
     pub gain: f64,

@@ -5,6 +5,7 @@
 
 pub mod curve;
 pub mod edit;
+pub mod level;
 pub mod ops;
 pub mod selection;
 

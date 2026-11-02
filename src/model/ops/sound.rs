@@ -13,14 +13,14 @@ pub const VOICE_OVER_DIP: f64 = -12.0;
 /// The level a sound has when nothing has lowered it: what normalizing
 /// gave it (from what it measured), or 0 dB as recorded.
 pub fn normal_gain(loudness: Option<f64>) -> f64 {
-    loudness.map_or(0.0, crate::loudness::normalizing_gain)
+    loudness.map_or(0.0, crate::model::level::normalizing_gain)
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(tag = "op", rename_all = "snake_case", deny_unknown_fields)]
 pub enum SoundOp {
     /// Its own level, dB (the level tag), from `OFF_DB` (silent) to
-    /// `loudness::MOST_GAIN`.
+    /// `model::level::MOST_GAIN`.
     Level { sound: SoundRef, db: f64 },
     /// Its fade in or out, seconds; kept within its length less the other.
     Fade { sound: SoundRef, end: End, seconds: f64 },
@@ -67,7 +67,7 @@ pub enum SoundOp {
 pub(super) fn apply(p: &mut Project, op: &SoundOp) -> Result<Outcome, OpError> {
     match op {
         &SoundOp::Level { sound, db } => {
-            let most = crate::loudness::MOST_GAIN;
+            let most = crate::model::level::MOST_GAIN;
             if !(OFF_DB..=most).contains(&db) {
                 return Err(OpError::OutOfRange { what: "level", value: db, least: OFF_DB, most });
             }

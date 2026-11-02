@@ -260,7 +260,7 @@ impl App {
                 column![
                     choices,
                     checkbox(d.even).label("Even out quiet and loud stretches").on_toggle(|on| Message::Sound(SoundMsg::Even(on))),
-                    text(format!("Speech to {:.0} LUFS; peaks held under −1 dB.", crate::loudness::TARGET_LUFS)).size(13).style(text::secondary),
+                    text(format!("Speech to {:.0} LUFS; peaks held under −1 dB.", crate::model::level::TARGET_LUFS)).size(13).style(text::secondary),
                     row![
                         space().width(Length::Fill),
                         button(text("Cancel")).style(button::secondary).on_press(Message::Sound(SoundMsg::Close)),

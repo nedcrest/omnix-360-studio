@@ -8,15 +8,11 @@
 //! the export's limiter (`ffmpeg::mix::LIMITER`) keeps the raised peaks under
 //! full scale.
 
+use crate::model::level::normalizing_gain;
 use anyhow::{Context, Result, bail};
 use std::path::Path;
 use std::process::Stdio;
 
-/// What a cut's speech is brought to: web video and podcasts sit around
-/// −14 to −16 LUFS; −16 leaves room for music under it.
-pub const TARGET_LUFS: f64 = -16.0;
-/// The most a cut is raised or lowered when normalized, dB.
-pub const MOST_GAIN: f64 = 24.0;
 /// The speech leveler a cut gets with `Cut::even`: over 150 ms frames
 /// with a short window, quiet stretches are lifted towards the loud ones
 /// (at most 12x), loud ones left alone. `b=1` (alternative boundary mode)
@@ -72,17 +68,6 @@ pub fn measure(input: &Path, start: f64, duration: f64, filter: Option<&str>) ->
         .find_map(|l| l.trim().strip_prefix("I:").and_then(|v| v.trim().trim_end_matches("LUFS").trim().parse::<f64>().ok()))
         .with_context(|| format!("no loudness measured for {}", input.display()))?;
     Ok((lufs > SILENT_LUFS).then_some(lufs))
-}
-
-/// The gain, dB, that brings `lufs` to the target (unbounded;
-/// `normalizing_gain` holds it within `MOST_GAIN`).
-pub fn gain_to_target(lufs: f64) -> f64 {
-    ((TARGET_LUFS - lufs) * 10.0).round() / 10.0
-}
-
-/// `gain_to_target` held within what normalizing may do.
-pub fn normalizing_gain(lufs: f64) -> f64 {
-    gain_to_target(lufs).clamp(-MOST_GAIN, MOST_GAIN)
 }
 
 /// Measures `file` from `start` to `end` through `filter` (its evening and
@@ -205,13 +190,13 @@ mod tests {
         let (a, b) = (measure(&quiet, 0.0, 6.0, None).unwrap().unwrap(), measure(&louder, 0.0, 6.0, None).unwrap().unwrap());
         // 6 dB louder reads 6 LU more, and the gain to the target follows.
         assert!(((b - a) - 6.0).abs() < 0.2, "{a} {b}");
+        use crate::model::level::{TARGET_LUFS, gain_to_target};
         assert!((gain_to_target(a) - (TARGET_LUFS - a)).abs() < 0.06);
         // Just a stretch of it measures the same, and silence is none.
         assert!((measure(&quiet, 2.0, 3.0, None).unwrap().unwrap() - a).abs() < 0.3);
         assert_eq!(measure(&silent, 0.0, 3.0, None).unwrap(), None);
         // The leveler lifts a steady quiet tone towards its peak.
         assert!(measure(&quiet, 0.0, 6.0, Some(LEVELER)).unwrap().unwrap() > a + 6.0);
-        assert_eq!(normalizing_gain(-60.0), MOST_GAIN);
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }

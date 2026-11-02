@@ -211,8 +211,8 @@ Progress (2026-11-02):
 | 2b | The player's sound menu, level tags, fades and duck on ops | **Done** `5955b28`, waiting for the user's check |
 | 2c | Normalize as measure + apply, by id (`CORE-API` step 6; Even1; the CLI's `--track`); points as ops (add, K, move, delete, continue; named by time); the duck's speech found again if the edit changed meanwhile | **Done** `0bcb553`, `2d259da`, `5b5dc65`, and the duck's check |
 | 3 | Cuts (`CutOp`: add, trim, move, split, crossfade, stabilisation, LUT, delete) and sound clips (`ClipOp`: add with the SFX 2 rule, move, trim, split, other SFX lane, delete); the edit's cut rules moved from `Edit` to `Project`; `Outcome::made`; the player's handlers and `Edit::delete` on them; an export test driven by an ops script | **Done** `bb87844`, `755603c`, `c7d38cd`, `9dfba52`, and the test |
-| 4 | Overlays and text: add, move, trim, delete, text words and look | next |
-| 5 | Keyframes, with step 8's curve | |
+| 4 | Overlays and text (`ItemOp`: add pictures, add text, move, trim, set text whole, delete); the player's handlers and Del on them | **Done**, the two commits after `79f53bd` |
+| 5 | Keyframes, with step 8's curve | next |
 | 6 | AI: `schemars` schemas, query tools, preview; `proptest` on random op sequences (with 3, once there are ops enough to mix) | |
 
 What differs from the sketch above, as built: the `Editor` is the

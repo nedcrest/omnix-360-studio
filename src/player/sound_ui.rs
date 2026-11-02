@@ -17,13 +17,11 @@
 //! levels myself"; a modal with Start and a progress bar.
 
 use super::{App, Message, Selection, blocking};
+use crate::model::ops::sound::{SoundOp, VOICE_OVER_DIP, normal_gain};
+use crate::model::ops::{Op, SoundRef};
 use crate::project::{Own, SoundTrack};
 use iced::widget::{button, checkbox, column, container, mouse_area, opaque, pin, progress_bar, radio, row, rule, space, stack, text};
 use iced::{Element, Length, Point, Task};
-
-/// How far «lower for voice-over» takes a cut down: the usual depth of a
-/// dip under speech.
-pub const VOICE_OVER_DIP: f64 = -12.0;
 
 /// What the dialog works on: every cut, one cut's sound or sound clip, or
 /// every clip on a sound track.
@@ -167,20 +165,13 @@ impl App {
             // From its normal level, not from where it is: pressed again it
             // stays put (user, 2026-11-02: operations start from the
             // original; further down is the level knob's job).
-            SoundMsg::Lower(own) => self.set_sound(own, |s| *s.gain = normal_gain(*s.loudness) + VOICE_OVER_DIP),
-            SoundMsg::Restore(own) => self.set_sound(own, |s| *s.gain = normal_gain(*s.loudness)),
-            SoundMsg::Mute(own, on) => self.set_sound(own, |s| *s.mute = on),
-            SoundMsg::ShowLine(own) => self.set_sound(own, |s| {
-                for t in [s.range.0, s.range.1] {
-                    crate::project::add_volume_key(s.volume, t, 0.0);
-                }
-            }),
-            SoundMsg::Original(own) => {
-                self.set_sound(own, |mut s| s.original());
-                self.edit.forget_duck(own);
-            }
-            SoundMsg::LowCut(own, on) => self.set_sound(own, |s| *s.low_cut = on),
-            SoundMsg::Clean(own, on) => self.set_sound(own, |s| *s.clean = on),
+            SoundMsg::Lower(own) => self.sound_op(own, |sound| SoundOp::LowerForVoice { sound }),
+            SoundMsg::Restore(own) => self.sound_op(own, |sound| SoundOp::Restore { sound }),
+            SoundMsg::Mute(own, on) => self.sound_op(own, |sound| SoundOp::Mute { sound, on }),
+            SoundMsg::ShowLine(own) => self.sound_op(own, |sound| SoundOp::ShowLine { sound }),
+            SoundMsg::Original(own) => self.sound_op(own, |sound| SoundOp::Original { sound }),
+            SoundMsg::LowCut(own, on) => self.sound_op(own, |sound| SoundOp::LowCut { sound, on }),
+            SoundMsg::Clean(own, on) => self.sound_op(own, |sound| SoundOp::Clean { sound, on }),
             SoundMsg::OtherSfx(from, i) => {
                 self.sound_menu = None;
                 let to = if from == SoundTrack::Sfx { SoundTrack::Sfx2 } else { SoundTrack::Sfx };
@@ -205,13 +196,7 @@ impl App {
                 if self.selection.point().is_some() {
                     self.selection = Selection::None;
                 }
-                if self.edit.own_line_mut(own).is_some_and(|(keys, _)| !keys.is_empty()) {
-                    self.edit.checkpoint();
-                    if let Some((keys, _)) = self.edit.own_line_mut(own) {
-                        keys.clear();
-                    }
-                    self.edit.forget_duck(own);
-                }
+                self.sound_op(own, |sound| SoundOp::DeleteLine { sound });
             }
             SoundMsg::Even1(own, on) => {
                 // Evening out changes how loud it is: measured again, as
@@ -225,6 +210,17 @@ impl App {
             }
         }
         Task::none()
+    }
+
+    /// Applies the sound op `make` builds for `own` (`OPS-API.md`), closing
+    /// the menu; a refusal is shown.
+    pub(super) fn sound_op(&mut self, own: Own, make: impl FnOnce(SoundRef) -> SoundOp) {
+        self.sound_menu = None;
+        let Some(sound) = SoundRef::of(own, &self.edit) else { return };
+        match self.edit.apply(&Op::Sound(make(sound))) {
+            Ok(_) => self.reload_cut_sound(),
+            Err(e) => self.error = Some(e.to_string()),
+        }
     }
 
     /// Changes a cut's sound or a sound clip's as one undo step, closing
@@ -390,12 +386,6 @@ impl App {
         stack![below, close, pin(opaque(menu)).position(Point::new(at.x, top))].into()
     }
 
-}
-
-/// The level a cut's sound or a sound clip has when nothing has lowered
-/// it: what normalizing gave it (from what it measured), or as recorded.
-fn normal_gain(loudness: Option<f64>) -> f64 {
-    loudness.map_or(0.0, crate::loudness::normalizing_gain)
 }
 
 /// What a run changed, in a sentence or two.

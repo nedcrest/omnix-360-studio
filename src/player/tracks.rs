@@ -3,6 +3,8 @@
 //! level is tagged on the Clip sound lane.
 
 use super::*;
+use crate::model::ops::Op;
+use crate::model::ops::sound::{End, SoundOp};
 
 /// The most a level tag turns a clip up, dB: as far as normalizing goes.
 const LEVEL_MOST: f64 = crate::loudness::MOST_GAIN;
@@ -202,21 +204,16 @@ impl App {
                 let flag = if solo { &mut l.solo[lane] } else { &mut l.muted[lane] };
                 *flag = !*flag;
             }
+            // Drags: one undo step each, from press to release.
             Message::Level(own, db) => {
-                if self.edit.own_line(own).is_some() {
-                    self.edit.begin();
-                    if let Some(s) = self.edit.own_sound(own) {
-                        *s.gain = db.clamp(crate::project::OFF_DB, LEVEL_MOST);
-                    }
-                }
+                self.edit.begin();
+                let db = db.clamp(crate::project::OFF_DB, LEVEL_MOST);
+                self.sound_op(own, |sound| SoundOp::Level { sound, db });
             }
             Message::Fade(own, in_edge, seconds) => {
-                if self.edit.own_line(own).is_some() {
-                    self.edit.begin();
-                    if let Some(mut s) = self.edit.own_sound(own) {
-                        s.set_fade(in_edge, seconds);
-                    }
-                }
+                self.edit.begin();
+                let end = if in_edge { End::In } else { End::Out };
+                self.sound_op(own, |sound| SoundOp::Fade { sound, end, seconds });
             }
             Message::DuckDepth(db) => self.duck_db = db,
             Message::Duck if !self.ducking => {
@@ -232,11 +229,12 @@ impl App {
                 match result {
                     Err(e) => self.error = Some(format!("Can't find the speech: {e}")),
                     Ok(spans) if spans.is_empty() => self.error = Some("No speech to lower the music under: it's found in cleaned voices and on the Voice lane.".into()),
-                    Ok(spans) => {
+                    Ok(speech) => {
                         // One undo step; the line stays editable point by point.
-                        self.edit.checkpoint();
-                        crate::duck::duck_music(&mut self.edit.music, &spans, self.duck_db);
-                        self.selection = self.selection.still_valid(&self.edit);
+                        match self.edit.apply(&Op::Sound(SoundOp::Duck { depth: self.duck_db, speech })) {
+                            Ok(_) => self.selection = self.selection.still_valid(&self.edit),
+                            Err(e) => self.error = Some(e.to_string()),
+                        }
                     }
                 }
             }

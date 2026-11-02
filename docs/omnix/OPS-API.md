@@ -200,24 +200,35 @@ the user's to check.
 
 ## Order of work (each a commit, behaviour unchanged unless it says)
 
-1. `src/model/`: `Editor` with transactions, `Op` skeleton, `Outcome`,
-   `OpError`, `check`; ids on cuts, clips and items. The player's `Edit`
-   becomes `Editor`; drags move to `begin`/`commit`.
-2. Sound ops (the area tested most by hand this week): level, mute,
-   fades, low cut, clean, line, delete line, duck, normalize as
-   measure + apply (step 6), lower/restore. The player's sound handlers
-   on them. `rosmo360 apply`, `describe`. First script and integration
-   tests.
-3. Cuts and timeline: add, trim, move, split, crossfade, delete, LUT,
-   stabilisation.
-4. Overlays and text.
-5. Keyframes, with step 8's curve (`change_effects`/`change_place`).
-6. AI: schemas, query tools, preview.
+Progress (2026-11-02):
+
+| # | Step | State |
+|---|---|---|
+| 1a | Ids on cuts, sound clips, items (`Project::settle_ids`, saved in the file) | **Done** `d48af1b` |
+| 1b | `src/model/` with `edit.rs`, `selection.rs`; a test that the core imports no player, ffmpeg or iced | **Done** `23aff2d` |
+| 1c | Transactions: `Edit::begin`/`commit`/`changing` replace `begin_drag` and the `dragging` flag; no empty steps | **Done** `30b0959` |
+| 2a | `Op`, `SoundRef`, `Outcome`, `OpError`, `Edit::apply`/`batch`, `check`; sound ops; `rosmo360 apply`/`describe`; first unit and CLI tests | **Done** `2e22ce9` |
+| 2b | The player's sound menu, level tags, fades and duck on ops | **Done** `5955b28`, waiting for the user's check |
+| 2c | Normalize as measure + apply (`CORE-API` step 6; Even1, the CLI's `--track`), points (add, move, delete, continue) as ops, a version check for async results | next |
+| 3 | Cuts and timeline: add, trim, move, split, crossfade, delete, LUT, stabilisation | |
+| 4 | Overlays and text | |
+| 5 | Keyframes, with step 8's curve | |
+| 6 | AI: `schemars` schemas, query tools, preview; `proptest` on random op sequences (with 3, once there are ops enough to mix) | |
+
+What differs from the sketch above, as built: the `Editor` is the
+existing `Edit` (in `src/model/edit.rs`) with transactions and `apply`
+added, not a new type; `Op` is tagged `"area"` and each area's enum
+`"op"`, so a sound op in a file reads `{"area": "sound", "op": "level",
+"sound": {"clip": 4}, "db": -8}`; `Outcome` has only `summary` until a
+caller needs the ids it changed.
 
 ## Bugs found while taking stock (fixed along the way)
 
 - Empty undo steps: `OverlayKeyMove`, `EffectMsg::KeyMove`,
-  `Text(change)`, `EffectMsg::Key`, `OtherSfx`.
+  `Text(change)` (fixed by 1c), `EffectMsg::Key`, `OtherSfx` (left for
+  their ops).
+- «Show line» twice doubled its points (found by the twice-is-once
+  test, fixed in 2a).
 - K with a point selected on a cut's line keys the playing cut's line,
   not that cut's (`keys.rs`).
 - Duck, normalize and colour-track results apply to the edit as it is

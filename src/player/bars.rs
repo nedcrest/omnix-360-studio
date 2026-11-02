@@ -249,7 +249,9 @@ impl App {
                 let wave = self.waveforms.get(&cut_wave_file(c)).cloned();
                 let even_wave = if c.even { self.even_waves.get(&cut_wave_file(c)).cloned() } else { None };
                 let level = level_tag(c.gain, c.mute, filter_tags(c.low_cut, c.clean, c.even));
-                timeline::Block { labels: cut_labels(c, self.opts.stabilize), from, len: c.end - c.start, start: c.start, keys, sound: c.volume.clone(), wave, even_wave, own_db: c.sound_db(), gain: c.gain, fade_in: c.sound_fade_in, fade_out: c.sound_fade_out, level, thumbs, crossfade: c.crossfade, effects: c.effects.iter().map(|k| k.t).collect() }
+                // A picture lasts as long as it's trimmed to.
+                let most = self.library.iter().find(|m| m.input == c.input).map_or(f64::INFINITY, |m| if m.flat.is_some_and(|f| f.picture) { f64::INFINITY } else { m.duration });
+                timeline::Block { labels: cut_labels(c, self.opts.stabilize), from, len: c.end - c.start, start: c.start, most, keys, sound: c.volume.clone(), wave, even_wave, own_db: c.sound_db(), gain: c.gain, fade_in: c.sound_fade_in, fade_out: c.sound_fade_out, level, thumbs, crossfade: c.crossfade, effects: c.effects.iter().map(|k| k.t).collect() }
             })
             .collect();
         let (timeline_start, timeline_span) = self.timeline_window();
@@ -264,6 +266,7 @@ impl App {
                         from: c.at,
                         start: c.start,
                         len: c.end - c.start,
+                        most: self.waveforms.get(&c.input).map_or(f64::INFINITY, |w| w.duration),
                         wave: self.waveforms.get(&c.input).cloned(),
                         fade_in: c.fade_in,
                         fade_out: c.fade_out,

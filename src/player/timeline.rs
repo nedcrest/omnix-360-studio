@@ -208,6 +208,9 @@ pub struct Block {
     pub len: f64,
     /// Its in point in clip time.
     pub start: f64,
+    /// Its clip's length (infinite if not known): its handles say whether
+    /// there is footage beyond each edge.
+    pub most: f64,
     /// Its keyframes within the cut: index into the cut's keyframes, clip
     /// time, and how it moves on to the next (drawn as its shape).
     /// Keyframes: index, clip time, ease, and whether it follows the stick.
@@ -266,6 +269,8 @@ pub struct MusicBlock {
     pub from: f64,
     pub start: f64,
     pub len: f64,
+    /// The file's length (infinite until its waveform is read).
+    pub most: f64,
     /// The song's waveform, once read.
     pub wave: Option<Arc<music::Waveform>>,
     /// Its fades in and out, seconds: a handle at each top corner.
@@ -427,6 +432,18 @@ impl Timeline {
     /// first: a crossfading cut's in edge lies over the cut before it.
     fn edge_hit(&self, x: f32, b: Rectangle) -> Option<(usize, bool)> {
         (0..self.blocks.len()).rev().find_map(|i| {
+            let (l, r) = self.block_x(&self.blocks[i], b);
+            (x >= l - EDGE && x <= r + EDGE).then(|| self.edge_at(i, x, b)).flatten().map(|e| (i, e))
+        })
+    }
+
+    /// The selected cut's edge under `x`: only it has handles, so a press
+    /// elsewhere on a cut moves or selects it.
+    fn selected_edge(&self, x: f32, b: Rectangle) -> Option<(usize, bool)> {
+        self.edge_hit(x, b).filter(|&(i, _)| Some(i) == self.selected).or_else(|| {
+            // At a join the later cut's edge comes first: the selected one
+            // may be the cut before.
+            let i = self.selected.filter(|&i| i < self.blocks.len())?;
             let (l, r) = self.block_x(&self.blocks[i], b);
             (x >= l - EDGE && x <= r + EDGE).then(|| self.edge_at(i, x, b)).flatten().map(|e| (i, e))
         })
@@ -657,10 +674,8 @@ impl Timeline {
             }
             draw_fades(frame, (l, r), top, h, m.len, (m.fade_in, m.fade_out));
             if selected {
-                frame.stroke(&block, Stroke::default().with_width(2.0).with_color(palette.primary.strong.color));
-            }
-            for x in [l + 4.0, r - 4.0] {
-                frame.fill(&Path::rounded_rectangle(Point::new(x - 1.0, top + 4.0), Size::new(2.0, h - 8.0), 1.0.into()), iced::Color::from_rgba(1.0, 1.0, 1.0, 0.8));
+                selection_frame(frame, &block, theme);
+                trim_handles(frame, (l, r), top, h, (m.start > 1e-3, m.start + m.len < m.most - 1e-3));
             }
             // On a dark tag, as on the cuts, so it reads over the waveform.
             if r - l > m.label.chars().count() as f32 * 6.0 + 28.0 {
@@ -1035,7 +1050,8 @@ impl canvas::Program<Message> for OverlayLane {
                 };
                 let o = &self.blocks()[item];
                 let per_px = t.span / Timeline::width(bounds) as f64;
-                *drag = match self.edge_at(item, p.x, bounds) {
+                let edge = self.edge_at(item, p.x, bounds).filter(|_| t.selected_overlay == Some((self.1, item)));
+                *drag = match edge {
                     Some(start) => OverlayDrag::Trim { item, start, x0: p.x, from: if start { o.start } else { o.start + o.len }, per_px },
                     None => OverlayDrag::Move { item, x0: p.x, at: o.from, per_px },
                 };
@@ -1092,10 +1108,10 @@ impl canvas::Program<Message> for OverlayLane {
             let selected = Some((self.1, i)) == t.selected_overlay;
             frame.fill(&block, if selected { colour } else { colour.scale_alpha(0.55) });
             if selected {
-                frame.stroke(&block, Stroke::default().with_width(2.0).with_color(palette.primary.strong.color));
-            }
-            for x in [l + 4.0, r - 4.0] {
-                frame.fill(&Path::rounded_rectangle(Point::new(x - 1.0, top + 4.0), Size::new(2.0, h - 8.0), 1.0.into()), iced::Color::from_rgba(1.0, 1.0, 1.0, 0.8));
+                selection_frame(&mut frame, &block, theme);
+                // A picture or text has no end of its own: footage both ways
+                // but before its start.
+                trim_handles(&mut frame, (l, r), top, h, (o.start > 1e-3, true));
             }
             // The picture, then its name, where there's room.
             let mut text_x = l + 9.0;
@@ -1150,7 +1166,7 @@ impl canvas::Program<Message> for OverlayLane {
                     return if self.key_at(p, bounds).is_some() { mouse::Interaction::Grab } else { mouse::Interaction::Pointer };
                 }
                 match self.item_at(p.x, bounds) {
-                    Some(i) if self.edge_at(i, p.x, bounds).is_some() => mouse::Interaction::ResizingHorizontally,
+                    Some(i) if self.0.selected_overlay == Some((self.1, i)) && self.edge_at(i, p.x, bounds).is_some() => mouse::Interaction::ResizingHorizontally,
                     Some(_) => mouse::Interaction::Grab,
                     None => mouse::Interaction::default(),
                 }
@@ -1222,6 +1238,27 @@ fn lane_tag(frame: &mut Frame, name: &str, colour: iced::Color, mid: f32) {
 }
 
 /// A volume line on `lane` from `ends.0` to `ends.1` (x, dB) through
+/// The selected clip's frame: thick in the accent colour, over a dark
+/// line so it stands off any picture or waveform (gap 7; WCAG 1.4.11's
+/// 3:1 against both). It was 2 px and easy to miss.
+fn selection_frame(frame: &mut Frame, block: &Path, theme: &Theme) {
+    frame.stroke(block, Stroke::default().with_width(5.0).with_color(iced::Color::from_rgba(0.0, 0.0, 0.0, 0.7)));
+    frame.stroke(block, Stroke::default().with_width(3.0).with_color(theme.extended_palette().primary.strong.color));
+}
+
+/// Trim handles at a selected clip's ends (`l`, `r`), only there, so a stray
+/// drag on another clip moves it rather than trims it (iMovie, InShot).
+/// Yellow where there's footage beyond that edge (`more`: in, out), red at
+/// the file's end (FCP), each on a dark edge to show on any picture.
+fn trim_handles(frame: &mut Frame, (l, r): (f32, f32), top: f32, h: f32, more: (bool, bool)) {
+    const MORE: iced::Color = iced::Color::from_rgb(0.98, 0.80, 0.18);
+    const END: iced::Color = iced::Color::from_rgb(0.92, 0.30, 0.30);
+    for (x, more) in [(l + 5.0, more.0), (r - 5.0, more.1)] {
+        frame.fill(&Path::rounded_rectangle(Point::new(x - 3.0, top + 5.0), Size::new(6.0, h - 10.0), 3.0.into()), iced::Color::from_rgba(0.0, 0.0, 0.0, 0.6));
+        frame.fill(&Path::rounded_rectangle(Point::new(x - 2.0, top + 6.0), Size::new(4.0, h - 12.0), 2.0.into()), if more { MORE } else { END });
+    }
+}
+
 /// Whether `x` takes the in edge (`Some(true)`) or out edge of a block
 /// drawn from `l` to `r`, or its body (`None`): `EDGE` inside each end,
 /// and anything outside that reaches it.
@@ -1417,7 +1454,7 @@ impl canvas::Program<Message> for Marks {
                     Message::Select(self.block_at(p.x, bounds)?)
                 } else if p.y < self.rows.cuts {
                     let per_px = self.span / Timeline::width(bounds) as f64;
-                    let cut = match self.edge_hit(p.x, bounds) {
+                    let cut = match self.selected_edge(p.x, bounds) {
                         // Shift on a start edge: how far it overlaps the
                         // cut before, a crossfade.
                         Some((cut, true)) if state.shift && cut > 0 => {
@@ -1457,7 +1494,8 @@ impl canvas::Program<Message> for Marks {
                         let clip = self.music_at(lane, p.x, bounds)?;
                         let m = &self.sounds[lane].blocks[clip];
                         let per_px = self.span / Timeline::width(bounds) as f64;
-                        *drag = match self.music_edge_at(lane, clip, p.x, bounds) {
+                        let edge = self.music_edge_at(lane, clip, p.x, bounds).filter(|_| self.selected_music == Some((which, clip)));
+                        *drag = match edge {
                             Some(start) => Drag::MusicTrim { lane, clip, start, x0: p.x, from: if start { m.start } else { m.start + m.len }, per_px },
                             None => Drag::MusicMove { lane, clip, x0: p.x, at: m.from, per_px },
                         };
@@ -1547,14 +1585,9 @@ impl canvas::Program<Message> for Marks {
         for (i, c) in self.blocks.iter().enumerate() {
             let (l, r) = self.block_x(c, bounds);
             let block = Path::rounded_rectangle(Point::new(l, 0.0), Size::new((r - l).max(1.0), self.rows.cuts), 4.0.into());
-            let selected = Some(i) == self.selected;
-            if selected {
-                frame.stroke(&block, Stroke::default().with_width(2.0).with_color(palette.primary.strong.color));
-            }
-            // Trim handles, light on a dark edge so they show on any picture.
-            for x in [l + 4.0, r - 4.0] {
-                frame.fill(&Path::rounded_rectangle(Point::new(x - 2.0, 5.0), Size::new(4.0, self.rows.cuts - 10.0), 2.0.into()), iced::Color::from_rgba(0.0, 0.0, 0.0, 0.5));
-                frame.fill(&Path::rounded_rectangle(Point::new(x - 1.0, 6.0), Size::new(2.0, self.rows.cuts - 12.0), 1.0.into()), iced::Color::from_rgba(1.0, 1.0, 1.0, 0.8));
+            if Some(i) == self.selected {
+                selection_frame(&mut frame, &block, theme);
+                trim_handles(&mut frame, (l, r), 0.0, self.rows.cuts, (c.start > 1e-3, c.start + c.len < c.most - 1e-3));
             }
             // The longest label that fits (about 7 px a character), on a
             // dark tag, readable over any picture.
@@ -1664,7 +1697,7 @@ impl canvas::Program<Message> for Marks {
                         return mouse::Interaction::Crosshair;
                     }
                     return match self.music_at(lane, p.x, bounds) {
-                        Some(i) if self.music_edge_at(lane, i, p.x, bounds).is_some() => mouse::Interaction::ResizingHorizontally,
+                        Some(i) if self.selected_music == Some((self.sounds[lane].which, i)) && self.music_edge_at(lane, i, p.x, bounds).is_some() => mouse::Interaction::ResizingHorizontally,
                         Some(_) => mouse::Interaction::Grab,
                         None => mouse::Interaction::default(),
                     };
@@ -1687,7 +1720,7 @@ impl canvas::Program<Message> for Marks {
                     let on = if p.y < self.rows.keys_top { self.effect_at(p, bounds).is_some() } else { p.y < self.rows.seek_top && self.key_at(p.x, bounds).is_some() };
                     return if on { mouse::Interaction::Grab } else { mouse::Interaction::Pointer };
                 }
-                if self.edge_hit(p.x, bounds).is_some() {
+                if self.selected_edge(p.x, bounds).is_some() {
                     return mouse::Interaction::ResizingHorizontally;
                 }
                 match self.block_at(p.x, bounds) {
@@ -1772,7 +1805,7 @@ mod tests {
 
     fn block(from: f64, len: f64, crossfade: f64) -> Block {
         Block {
-            labels: vec![], from, len, start: 0.0, keys: vec![], thumbs: vec![], sound: vec![], wave: None, even_wave: None,
+            labels: vec![], from, len, start: 0.0, most: f64::INFINITY, keys: vec![], thumbs: vec![], sound: vec![], wave: None, even_wave: None,
             own_db: 0.0, gain: 0.0, fade_in: 0.0, fade_out: 0.0, level: "0 dB".into(), crossfade, effects: vec![],
         }
     }
@@ -1783,7 +1816,7 @@ mod tests {
         let mut sounds: Vec<SoundLane> = SoundTrack::ALL.iter().map(|&which| SoundLane { which, track: Default::default(), blocks: vec![] }).collect();
         let voice = sounds.iter_mut().find(|l| l.which == SoundTrack::Voice).unwrap();
         voice.track.clips.push(crate::project::MusicClip { input: "take.wav".into(), at: 2.0, start: 1.0, end: 5.0, fade_in: 1.0, volume: vec![VolumeKey { t: 3.0, volume: 0.0 }], ..Default::default() });
-        voice.blocks.push(MusicBlock { label: "take".into(), from: 2.0, start: 1.0, len: 4.0, wave: None, fade_in: 1.0, fade_out: 0.0, volume: vec![VolumeKey { t: 3.0, volume: 0.0 }], even_wave: None, level: "0 dB".into() });
+        voice.blocks.push(MusicBlock { label: "take".into(), from: 2.0, start: 1.0, len: 4.0, most: f64::INFINITY, wave: None, fade_in: 1.0, fade_out: 0.0, volume: vec![VolumeKey { t: 3.0, volume: 0.0 }], even_wave: None, level: "0 dB".into() });
         let t = Timeline {
             blocks: vec![block(0.0, 4.0, 0.0), block(3.0, 4.0, 1.0), block(7.0, 3.0, 0.0)],
             sounds,
@@ -1819,7 +1852,7 @@ mod tests {
     fn sfx_2_folds_to_a_strip_that_opens_on_a_press() {
         let (mut t, b) = timeline();
         let li = t.sounds.iter().position(|l| l.which == SoundTrack::Sfx2).unwrap();
-        t.sounds[li].blocks.push(MusicBlock { label: "boom".into(), from: 2.0, start: 0.0, len: 1.0, wave: None, fade_in: 0.0, fade_out: 0.0, volume: vec![], even_wave: None, level: "0 dB".into() });
+        t.sounds[li].blocks.push(MusicBlock { label: "boom".into(), from: 2.0, start: 0.0, len: 1.0, most: f64::INFINITY, wave: None, fade_in: 0.0, fade_out: 0.0, volume: vec![], even_wave: None, level: "0 dB".into() });
         let open = t.rows;
         t.rows = Rows::new(1.0, false, Folds::default());
         assert_eq!(t.rows.lane_h(li), FOLDED);
@@ -1883,6 +1916,13 @@ mod tests {
         // The join at 7 s: the later cut's in edge.
         assert_eq!(t.edge_hit(x(7.0) + 1.0, b), Some((2, true)));
         assert_eq!(t.edge_hit(x(5.0), b), None);
+        // Only the selected cut's edges take a press; at the join it's the
+        // selected one's, even when the cut after it lies over the join.
+        let mut t2 = timeline().0;
+        assert_eq!(t2.selected_edge(x(7.0) + 1.0, b), None, "nothing selected: no handles");
+        t2.selected = Some(1);
+        assert_eq!(t2.selected_edge(x(7.0) - 1.0, b), Some((1, false)));
+        assert_eq!(t2.selected_edge(x(7.0) + 1.0, b), Some((1, false)), "the selected cut's out edge, not the next one's in");
         // 12 px in from an end is still the edge; a narrow block is split
         // in thirds, so its middle moves it.
         assert_eq!(edge_of(100.0, 300.0, 111.0), Some(true));

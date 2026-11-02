@@ -1552,6 +1552,91 @@ stay compact; the video group and the sound group are set apart
 - Later: Shift+press folds every foldable lane (Kdenlive); a lane's
   height dragged by its lower edge.
 
+### 51. The exporter grown up: 4K and 8K, codecs, bitrates, presets — idea (user, 2026-11-02)
+
+User, after asking whether the editor uses the GPU yet: "write down what
+you propose, and keep in mind we haven't developed the exporter yet: it
+will need 4K and 8K and different bitrates and so on". Milestone
+«Експорт».
+
+**Today (code facts, 2026-11-02).** `export.rs`'s `Resolution` is 720p,
+1080p, 1440p, 2160p (the short side) in the aspect lock's shape, or an
+exact `--size`. Two formats (`ffmpeg::Format`): MP4 = libx264 CRF 18,
+preset medium, yuv420p, AAC at ffmpeg's default bitrate; Resolve =
+10-bit DNxHR HQX + 16-bit PCM in MOV. Clips export with handles and
+Graded; the loudness target (46a). No bitrate, codec, frame rate or
+audio choice; no hardware encoder; no HDR or 360 output. Speed on the
+RTX 3090 from the full OSV: ~21 fps at 1080p 8-bit, ~15 fps 10-bit
+(gap 52 says why).
+
+**Proposed, in parts:**
+- **51a Sizes.** 2880p and 4320p (8K) beside today's; for a 360
+  export, an equirect 7680×3840 (YouTube's 8K 360). The Osmo's lenses are
+  3840² each, so a framed 8K is upscaled: say so in the panel, while an
+  8K equirect uses the sphere's whole detail.
+- **51b Codecs.** H.264 (now), H.265/HEVC 8 and 10-bit (half the size for
+  the look, the codec for 4K/8K and HDR), AV1 (SVT-AV1: smallest, slow on
+  the CPU); keep DNxHR for Resolve; ProRes (`prores_ks`) for a Mac
+  editor. H.264 stops at about 8192×4320 (level 6.x): 8K should default
+  to HEVC.
+- **51c Hardware encoders.** NVENC (H.264, HEVC, AV1 on newer cards),
+  VA-API, VideoToolbox on the Mac, probed like the decoders
+  (`Hwaccel::works`) with x264/x265 as the fallback. At 1080p NVENC
+  gained nothing (x264 used idle cores); at 4K and 8K the CPU encoder
+  becomes the limit, so measure there first.
+- **51d How big: quality or bitrate.** By default quality (CRF / CQ),
+  in a few named steps; or a target bitrate in Mbps with two passes
+  (x264/x265), and a cap for players that need one. Platform presets
+  carry their recommended bitrates (YouTube's page for SDR/HDR by size
+  and frame rate; check the numbers when building).
+- **51e Frame rate.** The edit's (now), or 24/25/30/50/60; a 100 fps
+  clip rendered at 30 runs ~3× faster (PR #5's idea).
+- **51f Sound.** AAC at 192/256/320 kbps (now ffmpeg's default), 48 kHz;
+  PCM where the container takes it.
+- **51g HDR out.** HEVC 10-bit HLG or PQ, tagged, for HDR phone clips
+  and log footage, instead of always tone-mapping to SDR (gap later; it
+  needs a colour pipeline that stays HDR).
+- **51h 360 out.** The whole sphere as equirect with spherical metadata
+  (left over from upstream's timeline polish), for YouTube/VR players.
+- **51i Presets.** Named sets in the Export panel and settings (YouTube
+  4K, Instagram 9:16 1080, Resolve, Archive HEVC 10-bit), with the file
+  size and time it will take shown before Export.
+
+Order when it comes: 51d + 51f (cheap, every export), 51b HEVC, 51a 4K
+and 8K with 51c measured, 51i presets, then 51e, 51h, 51g. Gap 52 decides
+how fast 4K and 8K are.
+
+### 52. The frames' fast path through the GPU (zero-copy) — idea, the main speed work (2026-11-02)
+
+From the user's question «does the editor use the GPU yet?». The answer:
+decoding (CUDA / Vulkan Video / VA-API through ffmpeg), the stitch,
+stabilisation, rolling shutter, grade, LUT, HDR→SDR and dither are on
+the GPU (wgpu); the encoder (x264), the sound, the seam measure, the
+thumbnails and contact sheets are on the CPU. What limits it is neither:
+each frame travels GPU (decoder) → ffmpeg's download → a pipe → our
+memory → upload → GPU (stitch) → readback → pipe → x264. At 10 bits
+moving the bytes, not computing, holds a full-res 1080p export to ~15
+fps against ~21 (measured 2026-10-14, `CLAUDE.md` «Not done yet» 1).
+At 4K and 8K (gap 51) it gets worse.
+
+**Proposed, cheapest first:**
+- **52a Smaller readback.** Convert RGBA to NV12 / P010 in a shader
+  before reading the frame back: 1.5 or 3 bytes a pixel instead of 4 or
+  8, and no RGB→YUV in ffmpeg. Export side only, no new dependency.
+  Measure first: GPU vs CPU export at 1080p and 4K.
+- **52b A Linux prototype of zero-copy decode.** One OSV decoded
+  in-process (ffmpeg's libraries instead of the program) into the
+  shader, sharing the decoder's memory with wgpu's device (CUDA or
+  Vulkan Video on Linux). Measure the gain before building it per
+  platform (VideoToolbox's IOSurface on the Mac, D3D11 on Windows).
+  Brings back the licence question (linking ffmpeg: LGPL or GPL).
+- **52c Encode on the GPU from the GPU.** With 51c's NVENC, hand the
+  rendered frame to the encoder without the readback (CUDA interop).
+  Last, and only if 52a and 52b leave the encoder waiting.
+
+Unmeasured guess (`CLAUDE.md`): export 30–40 fps at either depth at
+1080p; full-res playback on the dev laptop.
+
 ## Format rule for all of these
 
 New fields only, each `#[serde(default, skip_serializing_if = …)]`, so every
@@ -1603,10 +1688,14 @@ whenever a better grouping shows. `ROADMAP.md` shows the same as cards (field
    LUT any time (small, useful now) → 24 file facts → 19 lens protectors →
    20 mask release → 21 tilt diagnostic → 22 sky seam field (patents first)
    → 23 DJI presets → Osmo 360 II.
-10. **ШІ-монтаж** (gap 28, `AUTO-EDIT.md`): the user's main wish, but put
+10. **Експорт** (gaps 51, 52; user, 2026-11-02): what the export makes
+   (4K and 8K, HEVC and AV1, bitrates, frame rates, sound, presets, HDR
+   and 360 out) and how fast (the frames' path through the GPU). Before
+   the AI edit, which needs it; reordered freely.
+11. **ШІ-монтаж** (gap 28, `AUTO-EDIT.md`): the user's main wish, but put
    last on purpose (user, 2026-10-23: "I wouldn't do AI functions yet:
    Omnix doesn't have its full working functionality"). The design stays
    ready. The pieces it needs arrive with the milestones above.
-11. **Інші платформи** (gap 40, user's question 2026-11-01): Mac and
+12. **Інші платформи** (gap 40, user's question 2026-11-01): Mac and
    Windows realistic (upstream builds both), Android a new UI over the
    same core. Not planned; no new Linux-only code without a stub.

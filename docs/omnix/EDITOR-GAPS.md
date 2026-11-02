@@ -1376,6 +1376,12 @@ lane and the clips' sound; the music under it the song covering most of
 it; measured when switched on and on «Measure again», not live. On the
 test project: the film −14.1 LUFS, music 14.2 and 2.8 dB under the voice.
 46f (the duck's depth) to set from what it shows.
+The user tried it (2026-11-02): «Lower the music under speech» and the
+level knob at −3.5 dB cleared the red. Asked: a timeline in the check,
+and its points on the timeline. Added (`6ece9f4`): each finding's stretch
+(`Finding::until`), a ruler of seconds over the schematic with the
+findings marked (clickable), and the same marks over the seek bar while
+there are measurements.
 
 ### 46. More for the sound: what the review found — ideas (2026-11-01)
 

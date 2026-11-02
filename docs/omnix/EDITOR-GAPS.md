@@ -1779,6 +1779,47 @@ panels and files. Esc, ?, F1 or a click outside closes it. Hidden until
 asked for, so the «no help text in the UI» rule holds. Its list is kept
 in step with `keys.rs` by hand: a key added there is added here.
 
+### 57. Cutting footage to music's beat, for the AI edit — idea, large (user, 2026-11-03)
+
+User: "an idea for the AI-editing API: sometimes there's video that can
+be cut to music. It needs to find the beats (as in a sampler) and have
+several ways of cutting to them (in a row, separate scenes, and so on),
+held on something interesting. An AI model could categorise what's seen
+in the frames better; as it runs locally for me, the GPU can be used.
+For a mobile version that can be left out."
+
+Builds on gap 13 (beats found, cuts snapped to them), the ops API
+(`OPS-API.md`: a coarse op expanding into plain `CutOp`s, one undo step,
+previewable with `apply` without `-o`), and footage-agent's frame
+understanding (gaps 29, 30). Milestones: the beats in «Ритм і переходи»,
+the cutting in «ШІ-монтаж».
+
+- **57a Beats, as a sampler finds them**: onsets, the tempo, the beat
+  and bar grid, downbeats and stronger hits (drops), with a confidence;
+  measured once per song and cached like waveforms. Shown on the music
+  lane (gap 13), and a query for the AI (`beats` beside `describe`).
+- **57b Ways of cutting to them** (each a coarse op the user or the AI
+  picks, with its numbers):
+  - in a row: one clip cut on every beat (or every 2nd, 4th, bar), its
+    pieces in order, a fast montage;
+  - separate scenes: one shot per beat or bar from several clips;
+  - by intensity: longer shots in quiet bars, quicker on the drop;
+  - a held moment: a shot that lasts across beats where something
+    happens.
+- **57c Held on something interesting**: each shot's in point chosen
+  where the picture is worth it: motion and faces from what exists
+  (`scan`'s turning and shake, colour track, gap 53's people), and an
+  optional vision model categorising frames (people, landscape, action,
+  food, a view…) and scoring them. Local, on the GPU (CUDA / Vulkan):
+  the user's machine has one. Kept out of a mobile build (gap 40), whose
+  cutting uses beats and the simple measures only.
+- **57d The result stays editable**: plain cuts on the timeline, each
+  op's summary saying why («on beat 17, a face»), one undo step.
+
+Open when designing: which beat tracker (a Rust onset detector, or
+footage-agent's Python with librosa / madmom / aubio); which vision model
+(licence: permissive only, as for 53a); how the AI picks among the ways.
+
 ## Format rule for all of these
 
 New fields only, each `#[serde(default, skip_serializing_if = …)]`, so every

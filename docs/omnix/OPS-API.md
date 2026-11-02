@@ -200,7 +200,8 @@ the user's to check.
 
 ## Order of work (each a commit, behaviour unchanged unless it says)
 
-Progress (2026-11-02):
+Progress (2026-11-02): **the order of work is done.** What an agent
+still lacks is listed in the last row and in «Later» below.
 
 | # | Step | State |
 |---|---|---|
@@ -213,7 +214,7 @@ Progress (2026-11-02):
 | 3 | Cuts (`CutOp`: add, trim, move, split, crossfade, stabilisation, LUT, delete) and sound clips (`ClipOp`: add with the SFX 2 rule, move, trim, split, other SFX lane, delete); the edit's cut rules moved from `Edit` to `Project`; `Outcome::made`; the player's handlers and `Edit::delete` on them; an export test driven by an ops script | **Done** `bb87844`, `755603c`, `c7d38cd`, `9dfba52`, and the test |
 | 4 | Overlays and text (`ItemOp`: add pictures, add text, move, trim, set text whole, delete); the player's handlers and Del on them | **Done**, the two commits after `79f53bd` |
 | 5 | Keyframes: `model::curve` (`Key`, `key_at`; CORE-API step 8), `KeyOp` for effect, motion and view keys (view keys get where the stick and tracks point as data, `Aims`); the effects panel, K, Auto keyframe, diamond and mark drags, colour-track keys on them; `Edit::checkpoint` gone from the code | **Done** `36c216f`, `cc2eb5a`, and the two after |
-| 6 | AI: `schemars` schemas, query tools, preview; `proptest` on random op sequences | next |
+| 6 | `proptest` on random op sequences (found a trim panic and inexact floats in JSON, both fixed); `rosmo360 ops-schema` (`schemars`, doc comments as descriptions); `apply` without `-o` is the preview; `describe` the query | **Done** `cd89a11`, `74e2cca`, `e0b5b5c` |
 | — | Left as direct writes inside a begin/commit, no op yet: the edit's fades, the clip-sound and track levels (Audio panel), the aspect (kept by the app), a project's load clean-up. Small; ops when the AI needs them | |
 
 What differs from the sketch above, as built: the `Editor` is the
@@ -222,6 +223,18 @@ added, not a new type; `Op` is tagged `"area"` and each area's enum
 `"op"`, so a sound op in a file reads `{"area": "sound", "op": "level",
 "sound": {"clip": 4}, "db": -8}`; `Outcome` has only `summary` until a
 caller needs the ids it changed.
+
+## Later
+
+- Ops for what's still a direct write: the edit's fades, the clip-sound
+  and track levels, the aspect, a project's load clean-up.
+- `Outcome` with the ids an op changed (only `made` now), and a
+  readable diff of a batch (`preview` in the sketch).
+- One tool per op for an agent (the schema has them as `oneOf`); query
+  tools beyond `describe` (`find_speech`, `mixcheck` already exist as
+  commands).
+- A journal of applied ops per undo step, to replay a player session as
+  a test.
 
 ## Bugs found while taking stock (fixed along the way)
 

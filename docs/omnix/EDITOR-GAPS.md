@@ -1768,6 +1768,17 @@ these defaults: the 5 s jump is gone (Alt+← / → move a cut since pack
 keeps pitch and the view's reset), End in editing too; a field of the
 angles strip being typed in keeps ↑ / ↓.
 
+### 56. A window of every shortcut, grouped — small (user, 2026-11-03)
+
+User, to check gap 55 and the rest at once: "make a separate element
+that opens a help with the shortcuts, grouped". **Built 2026-11-03**,
+waiting for the user's check: ? or F1, or a keyboard button beside
+Settings, opens a window over the editor (`player/shortcuts.rs`): play
+and the playhead, cuts, the timeline's mouse gestures, sound, framing,
+panels and files. Esc, ?, F1 or a click outside closes it. Hidden until
+asked for, so the «no help text in the UI» rule holds. Its list is kept
+in step with `keys.rs` by hand: a key added there is added here.
+
 ## Format rule for all of these
 
 New fields only, each `#[serde(default, skip_serializing_if = …)]`, so every

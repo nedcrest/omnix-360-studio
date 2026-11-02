@@ -209,8 +209,8 @@ Progress (2026-11-02):
 | 1c | Transactions: `Edit::begin`/`commit`/`changing` replace `begin_drag` and the `dragging` flag; no empty steps | **Done** `30b0959` |
 | 2a | `Op`, `SoundRef`, `Outcome`, `OpError`, `Edit::apply`/`batch`, `check`; sound ops; `rosmo360 apply`/`describe`; first unit and CLI tests | **Done** `2e22ce9` |
 | 2b | The player's sound menu, level tags, fades and duck on ops | **Done** `5955b28`, waiting for the user's check |
-| 2c | Normalize as measure + apply (`CORE-API` step 6; Even1, the CLI's `--track`), points (add, move, delete, continue) as ops, a version check for async results | next |
-| 3 | Cuts and timeline: add, trim, move, split, crossfade, delete, LUT, stabilisation | |
+| 2c | Normalize as measure + apply, by id (`CORE-API` step 6; Even1; the CLI's `--track`); points as ops (add, K, move, delete, continue; named by time); the duck's speech found again if the edit changed meanwhile | **Done** `0bcb553`, `2d259da`, `5b5dc65`, and the duck's check |
+| 3 | Cuts and timeline: add, trim, move, split, crossfade, delete, LUT, stabilisation; sound clips placed, moved, trimmed, split, to the other SFX lane | next |
 | 4 | Overlays and text | |
 | 5 | Keyframes, with step 8's curve | |
 | 6 | AI: `schemars` schemas, query tools, preview; `proptest` on random op sequences (with 3, once there are ops enough to mix) | |
@@ -229,10 +229,11 @@ caller needs the ids it changed.
   their ops).
 - «Show line» twice doubled its points (found by the twice-is-once
   test, fixed in 2a).
-- K with a point selected on a cut's line keys the playing cut's line,
-  not that cut's (`keys.rs`).
-- Duck, normalize and colour-track results apply to the edit as it is
-  when they arrive, without checking it's still the same.
+- K with a point selected on a cut's line keyed the playing cut's line,
+  not that cut's (`keys.rs`; fixed in 2c).
+- Duck, normalize and colour-track results applied to the edit as it is
+  when they arrive. Duck now finds the speech again, normalize names its
+  sounds by id (2c); colour tracking is left for the keyframe step.
 
 ## Decided (user, 2026-11-02)
 

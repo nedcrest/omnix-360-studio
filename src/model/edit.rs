@@ -213,15 +213,6 @@ impl Project {
         self.lane(track)?.items.get(i)
     }
 
-    pub fn item_mut(&mut self, (track, i): ItemRef) -> Option<&mut Item> {
-        match track {
-            Track::Overlay => self.overlays.first_mut(),
-            Track::Text => self.text.first_mut(),
-        }?
-        .items
-        .get_mut(i)
-    }
-
     /// Splits cut `i` at clip time `t`. Both halves keep all its keyframes,
     /// so the view runs on across the split unchanged, and each half can be
     /// reframed on its own from then on.

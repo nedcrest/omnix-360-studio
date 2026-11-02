@@ -9,8 +9,12 @@
 
 use super::{App, Message, Selection, icon_button, tip};
 use crate::grade::{EffectKey, Grade, grade_at};
-use crate::overlay::{MotionKey, Place, place_at};
+use crate::overlay::{Place, place_at};
+use crate::model::ops::keys::{Graded, KeyOp, Line};
 use crate::model::ops::{Op, items::ItemOp};
+
+/// A key named by the very time it has (a mark's drag): no other near it.
+const EXACT: f64 = 1e-6;
 use crate::text::{Colour, Outline, Text, TextAlign};
 use crate::view::Ease;
 use iced::widget::{button, column, container, pick_list, row, rule, scrollable, slider, text, toggler, tooltip};
@@ -188,12 +192,6 @@ impl App {
         }
     }
 
-    fn effects_mut(&mut self, target: Target) -> &mut Vec<EffectKey> {
-        match target {
-            Target::Cut(i) => &mut self.edit.cuts[i].effects,
-            Target::Overlay(i) => &mut self.edit.item_mut(i).expect("the selected overlay").effects,
-        }
-    }
 
     /// The effect keyframe of `target` at its time `t`, if there's one.
     fn effect_key_at(&self, target: Target, t: f64) -> Option<usize> {
@@ -224,17 +222,11 @@ impl App {
     /// there's none.
     fn change_effects(&mut self, starting: bool, change: impl FnOnce(&mut Grade)) {
         let Some((target, t)) = self.pinned(starting) else { return };
-        let at = self.effect_key_at(target, t);
-        let keys = self.effects_mut(target);
-        let k = match at {
-            Some(k) => k,
-            None => {
-                let k = keys.partition_point(|k| k.t <= t);
-                keys.insert(k, EffectKey { t, grade: grade_at(keys, t), ease: Ease::Smooth });
-                k
-            }
-        };
-        change(&mut keys[k].grade);
+        let keys = self.effects_of(target);
+        let mut grade = self.effect_key_at(target, t).map_or_else(|| grade_at(keys, t), |k| keys[k].grade);
+        change(&mut grade);
+        let (on, tolerance) = (self.graded(target), self.tolerance());
+        self.op(Op::Key(KeyOp::Effects { on, t, grade, tolerance }));
     }
 
     /// Sets the selected overlay's place with `change`, at the playhead the
@@ -242,18 +234,43 @@ impl App {
     /// if there's none.
     fn change_place(&mut self, starting: bool, change: impl FnOnce(&mut Place)) {
         let Some((Target::Overlay(i), t)) = self.pinned(starting) else { return };
-        let at = self.motion_key_at(i, t);
-        let Some(item) = self.edit.item_mut(i) else { return };
-        let keys = &mut item.motion;
-        let k = match at {
-            Some(k) => k,
-            None => {
-                let k = keys.partition_point(|k| k.t <= t);
-                keys.insert(k, MotionKey { t, place: place_at(keys, t), ease: Ease::Smooth });
-                k
-            }
-        };
-        change(&mut keys[k].place);
+        let Some(it) = self.edit.item(i) else { return };
+        let mut place = self.motion_key_at(i, t).map_or_else(|| place_at(&it.motion, t), |k| it.motion[k].place);
+        change(&mut place);
+        let (item, tolerance) = (it.id, self.tolerance());
+        self.op(Op::Key(KeyOp::Motion { item, t, place, tolerance }));
+    }
+
+    /// The op `make` builds for each key at `t` on `target`: its effect
+    /// key, and an overlay's motion key.
+    fn on_keys_at(&self, target: Target, t: f64, make: impl Fn(Line, f64, f64) -> KeyOp) -> Vec<Op> {
+        let tolerance = self.tolerance();
+        let mut ops = Vec::new();
+        if self.effect_key_at(target, t).is_some() {
+            ops.push(Op::Key(make(Line::Effects(self.graded(target)), t, tolerance)));
+        }
+        if let Target::Overlay(i) = target
+            && self.motion_key_at(i, t).is_some()
+            && let Some(it) = self.edit.item(i)
+        {
+            ops.push(Op::Key(make(Line::Motion(it.id), t, tolerance)));
+        }
+        ops
+    }
+
+    /// Applies `ops` as one undo step, showing a refusal.
+    pub(super) fn ops(&mut self, ops: &[Op]) {
+        if let Err((_, e)) = self.edit.batch(ops) {
+            self.error = Some(e.to_string());
+        }
+    }
+
+    /// The id of what `target` names, for a key op.
+    fn graded(&self, target: Target) -> Graded {
+        match target {
+            Target::Cut(i) => Graded::Cut(self.edit.cuts[i].id),
+            Target::Overlay(r) => Graded::Item(self.edit.item(r).map_or(0, |it| it.id)),
+        }
     }
 
     pub(super) fn effect_message(&mut self, m: EffectMsg) {
@@ -332,42 +349,23 @@ impl App {
             }
             // On an overlay a keyframe holds both where it is and its look.
             EffectMsg::Key => {
-                self.edit.checkpoint();
+                // Both keys one undo step.
+                self.edit.begin();
                 self.change_effects(true, |_| {});
                 self.change_place(true, |_| {});
+                self.edit.commit();
             }
             EffectMsg::DeleteKey => {
                 let Some((target, t)) = target else { return };
-                let (effect, motion) = (self.effect_key_at(target, t), if let Target::Overlay(i) = target { self.motion_key_at(i, t) } else { None });
-                if effect.is_some() || motion.is_some() {
-                    self.edit.checkpoint();
-                }
-                if let Some(k) = effect {
-                    self.effects_mut(target).remove(k);
-                }
-                if let (Target::Overlay(i), Some(k)) = (target, motion)
-                    && let Some(item) = self.edit.item_mut(i)
-                {
-                    item.motion.remove(k);
-                }
+                let ops = self.on_keys_at(target, t, |line, t, tolerance| KeyOp::Delete { line, t, tolerance });
+                self.ops(&ops);
             }
             EffectMsg::Ease(ease) => {
                 let Some((target, t)) = target else { return };
-                let (effect, motion) = (self.effect_key_at(target, t), if let Target::Overlay(i) = target { self.motion_key_at(i, t) } else { None });
-                if effect.is_some() || motion.is_some() {
-                    self.edit.checkpoint();
-                }
-                if let Some(k) = effect {
-                    self.effects_mut(target)[k].ease = ease;
-                }
-                if let (Target::Overlay(i), Some(k)) = (target, motion)
-                    && let Some(item) = self.edit.item_mut(i)
-                {
-                    item.motion[k].ease = ease;
-                }
+                let ops = self.on_keys_at(target, t, |line, t, tolerance| KeyOp::Ease { line, t, ease, tolerance });
+                self.ops(&ops);
             }
             EffectMsg::Reset(Some(p)) => {
-                self.edit.checkpoint();
                 self.change_effects(true, |g| {
                     let mut values = g.values();
                     values[p] = crate::grade::NEUTRAL[p];
@@ -375,7 +373,6 @@ impl App {
                 });
             }
             EffectMsg::ResetPlace(p) => {
-                self.edit.checkpoint();
                 self.change_place(true, |place| {
                     let mut values = place.values();
                     values[p] = Place::default().values()[p];
@@ -384,27 +381,13 @@ impl App {
             }
             EffectMsg::Reset(None) => {
                 let Some((target, _)) = target else { return };
-                let moves = matches!(target, Target::Overlay(i) if self.edit.item(i).is_some_and(|it| !it.motion.is_empty()));
-                if !self.effects_of(target).is_empty() || moves {
-                    self.edit.checkpoint();
-                    self.effects_mut(target).clear();
-                    if let Target::Overlay(i) = target
-                        && let Some(item) = self.edit.item_mut(i)
-                    {
-                        item.motion.clear();
-                    }
-                }
+                let on = self.graded(target);
+                self.op(Op::Key(KeyOp::Clear { on }));
             }
             EffectMsg::ToAll => {
                 let Some((_, t)) = self.playing_cut() else { return };
-                let grade = grade_at(&self.edit.cuts[self.current].effects, t);
-                self.edit.checkpoint();
-                let current = self.current;
-                for (i, cut) in self.edit.cuts.iter_mut().enumerate() {
-                    if i != current {
-                        cut.effects = vec![EffectKey { t: cut.start, grade, ease: Ease::Smooth }];
-                    }
-                }
+                let cut = self.edit.cuts[self.current].id;
+                self.op(Op::Key(KeyOp::LookToAll { cut, t }));
             }
             EffectMsg::PickWhite => {
                 if self.picking.take().is_none() && self.clip.is_some() {
@@ -432,11 +415,11 @@ impl App {
             }
             EffectMsg::KeyMove(cut, key, t) => {
                 self.follow = true;
+                let Some((id, from)) = self.edit.cuts.get(cut).and_then(|c| Some((c.id, c.effects.get(key)?.t))) else { return };
                 self.edit.begin();
                 let gap = 1.0 / self.fps();
-                let Some(c) = self.edit.cuts.get_mut(cut) else { return };
-                crate::view::retime(&mut c.effects, key, t, gap);
-                if let Some(t) = c.effects.get(key).map(|k| k.t) {
+                self.op(Op::Key(KeyOp::Retime { line: Line::Effects(Graded::Cut(id)), from, t, gap, tolerance: EXACT }));
+                if let Some(t) = self.edit.cuts[cut].effects.get(key).map(|k| k.t) {
                     self.scrub_to(cut, t);
                 }
             }
@@ -515,7 +498,6 @@ impl App {
     /// something meant to be grey or white.
     pub(super) fn white_balance(&mut self, rgb: [f64; 3]) {
         let (temperature, tint) = crate::grade::white_balance(rgb);
-        self.edit.checkpoint();
         // The picked colour is the cut's, whatever the panel shows.
         if self.selection.item().is_some() {
             self.selection = Selection::None;

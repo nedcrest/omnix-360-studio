@@ -41,10 +41,10 @@ app, not from any source.
 
 | What | Now | Guidance |
 |---|---|---|
-| Edge hit zone | `PICK = 7` px each side → 14 px | ≥ 24 px (WCAG 2.5.8); drawn thin is fine |
-| Selection frame | 2 px stroke, `primary.strong` | thick and distinct from focus; ≥ 3:1 contrast (WCAG 1.4.11) |
+| Edge hit zone | ~~`PICK = 7` px each side → 14 px~~ 24 px (`EDGE`, pack 1, 2026-11-02) | ≥ 24 px (WCAG 2.5.8); drawn thin is fine |
+| Selection frame | ~~2 px stroke~~ 3 px over a dark 5 px line (pack 1) | thick and distinct from focus; ≥ 3:1 contrast (WCAG 1.4.11) |
 | Snapping | music clips only (`snap`, `SNAP = 8`), no visible sign | snap edges, playhead, joins and markers; a line flashes on snap; a key toggles it |
-| Feedback while dragging | none | live "+0:01.2 · 4.3 s" next to the pointer |
+| Feedback while dragging | ~~none~~ the readout by the pointer (pack 1) | live "+0:01.2 · 4.3 s" next to the pointer |
 | Drag-only actions | trim, move, retime keyframes | each needs a click or key route as well (WCAG 2.5.7) |
 | Hover preview | none on the timeline | skimmer: hover shows the frame in the viewer, silent |
 | Undo | keys only | always-visible ↶ ↷ buttons; an «Скасувати» toast after a delete |

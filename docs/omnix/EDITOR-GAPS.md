@@ -241,6 +241,10 @@ Small-medium; independent of the rest.
 The selected cut's frame on the timeline is hard to see. Make it thicker
 and in the accent colour (`timeline.rs`, where the cut blocks are drawn).
 
+**Built 2026-11-02 with timeline pack 1** (`b5c95f8`), waiting for the
+user's check: 3 px in the accent colour over a dark 5 px line, on cuts,
+sound clips and overlay items (`selection_frame`).
+
 ### 8. Select several cuts, act on them together — medium (user, 2026-10-22)
 
 Today one cut is selected (`App::selected: Option<usize>`). Wanted:
@@ -258,6 +262,16 @@ eight packs are in `TIMELINE-UX.md`. Item 7 (selection frame) is now part of
 its pack 1, and the bin's skimmer is shared with the timeline's. Keys that
 clash with the 360 view (J/K/L, ↑/↓, E/Q, S) wait for the user's choice.
 
+
+**Pack 1 built 2026-11-02** (`33fe0d0`, `b5c95f8`, `2094684`), waiting
+for the user's check: edges a 24 px target (`EDGE` 12 px inside, a
+cut's as far outside; one `edge_of` for cuts, sound clips and items; a
+narrow clip split in thirds so its middle moves it); trim handles and
+trimming only on the selected clip, yellow where there's footage
+beyond, red at the file's end; the thick selection frame (gap 7); a
+readout by the pointer while trimming, moving, crossfading or fading.
+Defaults: a press on another clip's edge selects and moves it; pictures
+and text show yellow at their out edge (they have no end).
 ### 10. Two modes: Edit and Framing — built 2026-10-24 (`562dad6`); the base that gap 53 grows (user, 2026-11-02)
 
 The user's answer to the key clashes in `TIMELINE-UX.md`: Omnix is a video

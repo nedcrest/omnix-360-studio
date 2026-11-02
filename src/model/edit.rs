@@ -230,10 +230,12 @@ impl Project {
     /// kept within the clip (`0..clip_len`) and at least `MIN_CUT` long.
     pub fn trim(&mut self, i: usize, start: bool, t: f64, clip_len: f64) {
         let c = &mut self.cuts[i];
+        // Bounds kept the right way round: a cut ending near its clip's
+        // end (or a clip shorter than told) would make `clamp` panic.
         if start {
-            c.start = t.clamp(0.0, c.end - MIN_CUT);
+            c.start = t.clamp(0.0, (c.end - MIN_CUT).max(0.0));
         } else {
-            c.end = t.clamp(c.start + MIN_CUT, clip_len);
+            c.end = t.clamp(c.start + MIN_CUT, clip_len.max(c.start + MIN_CUT));
         }
         crate::project::settle_crossfades(&mut self.cuts);
     }

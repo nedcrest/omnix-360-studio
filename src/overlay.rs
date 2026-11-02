@@ -226,14 +226,18 @@ impl Lane {
         }
         let (lo, hi) = self.room(i);
         let item = &mut self.items[i];
+        // Squeezed between neighbours, the room can come out a hair under
+        // `min` (or under 0 by float noise): then the edge stays, rather
+        // than `clamp` panicking on bounds the wrong way round (found by
+        // the ops' property test).
         if in_edge {
             let earliest = (item.start - (item.at - lo)).max(0.0);
-            let t = t.clamp(earliest, item.end - min);
+            let t = t.clamp(earliest.min(item.end - min), item.end - min);
             item.at += t - item.start;
             item.start = t;
         } else {
             let latest = (item.start + (hi - item.at)).min(item.start + most);
-            item.end = t.clamp(item.start + min, latest);
+            item.end = t.clamp(item.start + min, latest.max(item.start + min));
         }
     }
 

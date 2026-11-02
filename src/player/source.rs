@@ -30,6 +30,7 @@ pub fn deep() -> bool {
 /// One NV12 picture: Y plane then interleaved UV at half resolution; or,
 /// `deep`, P010: the same with 16-bit little-endian samples, the 10 bits
 /// in the high ones.
+#[derive(Clone)]
 pub struct Picture {
     pub width: u32,
     pub height: u32,
@@ -96,6 +97,7 @@ pub enum Layout {
     PerTrack,
 }
 
+#[derive(Clone)]
 pub struct Frame {
     pub pts: f64,
     pub layout: Layout,

@@ -13,6 +13,15 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, TryRecvError, channel};
 use std::time::Instant;
 
+/// How far ahead of the frame shown a parked preview decoder is taken on
+/// rather than a fresh one started at the time: decoding up to this many
+/// seconds of frames is about what a fresh start costs.
+const PARKED_REACH: f64 = 2.0;
+
+/// How many paused frames are kept to step back to without decoding
+/// (about 3 MB each at playback size).
+const RECENT: usize = 16;
+
 pub struct Playback {
     pub media: Media,
     pub playing: bool,
@@ -37,6 +46,20 @@ pub struct Playback {
     /// shows. Restarted on every step instead, a preview never got its
     /// first frame out while the keys repeated, and nothing showed.
     preview_next: Option<f64>,
+    /// The paused preview's decoder after its frame showed, kept with that
+    /// frame's time: a step on takes its next frames instead of starting a
+    /// decoder again, which decoded from the keyframe before every step
+    /// and held a core busy (the user, 2026-11-03). Its queue is bounded,
+    /// so parked it waits, decoding nothing more.
+    parked: Option<(Stream, f64)>,
+    /// A preview's frames before this time are passed over (a parked
+    /// decoder taken on to a later frame).
+    preview_from: f64,
+    /// The last paused frames shown, newest last: a step back to one of
+    /// them shows it at once, as no decoder can step backwards.
+    recent: std::collections::VecDeque<Frame>,
+    /// A frame from `recent` to show at the next tick.
+    recalled: Option<Frame>,
     /// A sharper frame for while paused, being decoded: its time and size
     /// (`None` for full resolution).
     still: Option<(f64, Option<u32>, Receiver<Result<Frame>>)>,
@@ -103,6 +126,10 @@ impl Playback {
             pending: None,
             preview_only: false,
             preview_next: None,
+            parked: None,
+            preview_from: 0.0,
+            recent: Default::default(),
+            recalled: None,
             still: None,
             still_busy: Default::default(),
             still_next: None,
@@ -241,6 +268,8 @@ impl Playback {
         self.started_at = self.playing.then(Instant::now);
         self.pending = None;
         self.preview_next = None;
+        self.parked = None;
+        self.preview_from = t;
         let kind = match (&self.media.proxy, self.playing) {
             (Some(p), false) => Kind::Lrf(p.clone()),
             _ => self.kind(),
@@ -300,12 +329,30 @@ impl Playback {
     /// The quick picture at `t` while paused (from the proxy where there
     /// is one), one decode in flight, the latest asked for next.
     fn preview(&mut self, t: f64) {
+        // Shown a moment ago: at once, and whatever was decoding is dropped.
+        if let Some(f) = self.recent.iter().find(|f| (f.pts - t).abs() < 0.5 / self.media.fps) {
+            self.recalled = Some(f.clone());
+            self.preview_only = true;
+            self.stream = None;
+            self.preview_next = None;
+            return;
+        }
         if self.stream.is_some() && self.preview_only {
             self.preview_next = Some(t);
-        } else {
-            self.preview_only = true;
-            self.start_stream(t);
+            return;
         }
+        self.preview_only = true;
+        // A little ahead of the frame shown: its decoder, parked, goes on.
+        if let Some((stream, at)) = self.parked.take()
+            && t > at
+            && t - at < PARKED_REACH
+        {
+            self.stream = Some(stream);
+            self.pending = None;
+            self.preview_from = t;
+            return;
+        }
+        self.start_stream(t);
     }
 
     /// The full-resolution frame where it has come to rest, once quick
@@ -483,13 +530,13 @@ impl Playback {
 
     /// Whether the clock or a decode needs polling every display frame.
     pub fn busy(&self) -> bool {
-        self.playing || self.stream.is_some() || self.still.is_some()
+        self.playing || self.stream.is_some() || self.still.is_some() || self.recalled.is_some()
     }
 
     /// Pulls whatever the decoders have ready for the current clock and
     /// returns the frame to show now, if it changed, with its seam corrections.
     pub fn tick(&mut self) -> Option<(Frame, SeamFix)> {
-        let mut show = None;
+        let mut show = self.recalled.take().map(|f| (f, None));
         // A slow machine at full resolution can fall behind the sound; then
         // the sound restarts from the picture rather than drifting from it.
         if self.audio.is_some() && self.clock() - self.shown_pts > 0.5 {
@@ -512,6 +559,11 @@ impl Playback {
                         }
                     },
                 };
+                // A parked decoder taken on: the frames it had before the
+                // one asked for go by.
+                if self.preview_only && next.pts < self.preview_from - 0.5 / self.media.fps {
+                    continue;
+                }
                 if next.pts <= due {
                     latest = Some(next);
                     if self.preview_only || self.sound_waits {
@@ -532,16 +584,23 @@ impl Playback {
                     self.start_audio(f.pts);
                 }
                 // A paused preview never replaces the full-resolution still.
+                let pts = f.pts;
+                if self.preview_only && !self.recent.iter().any(|r| r.pts == pts) {
+                    if self.recent.len() == RECENT {
+                        self.recent.pop_front();
+                    }
+                    self.recent.push_back(f.clone());
+                }
                 if !(self.preview_only && self.showing_still.is_some() && self.still.is_none()) {
                     show = Some((f, None));
                 }
                 if self.preview_only {
-                    self.stream = None;
+                    self.parked = self.stream.take().map(|s| (s, pts));
                     if let Some((resume, Some(t))) = self.scrub {
                         self.scrub = Some((resume, None));
-                        self.start_stream(t);
+                        self.preview(t);
                     } else if let Some(t) = self.preview_next.take() {
-                        self.start_stream(t);
+                        self.preview(t);
                     }
                 }
             } else if self.playing && self.audio.is_none() && self.shown_pts < self.clock() - 0.25 {

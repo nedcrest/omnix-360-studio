@@ -50,7 +50,9 @@ const EFFECTS: f32 = 16.0;
 const KEYS: f32 = 20.0;
 /// The rule between the picture's lanes and the sound's (it was the seek
 /// bar, before the ruler went on top).
-const SEEK: f32 = 10.0;
+/// The gap between the picture's lanes and the sound's, with the sound
+/// group's name in it: the eye finds where one group ends (gap 50d).
+const SEEK: f32 = 16.0;
 /// The music lane at scale 1.
 const MUSIC: f32 = 40.0;
 /// The scrollbar's row at the bottom, and the bar's thickness.
@@ -1609,9 +1611,12 @@ impl canvas::Program<Message> for Marks {
         let mid = self.rows.seek_top + SEEK / 2.0;
         let keys_mid = self.rows.keys_top + KEYS / 2.0;
         let (x0, x1) = (self.x(0.0, bounds), self.x(self.duration, bounds));
-        // Where the picture's lanes end and the sound's begin: a rule (the
-        // time ruler is on top of everything now, gap 50).
-        frame.fill(&Path::rectangle(Point::new(x0, mid - 1.0), Size::new((x1 - x0).max(0.0), 2.0)), palette.background.strong.color);
+        // Where the picture's lanes end and the sound's begin: the sound
+        // group's name, then a rule across the edit (gap 50d).
+        let name = Text { content: "SOUND".into(), position: Point::new(PICK + 4.0, mid), color: palette.background.base.text.scale_alpha(0.45), size: 9.5.into(), align_y: Vertical::Center, ..Default::default() };
+        frame.fill_text(name);
+        let x0 = x0.max(PICK + 44.0);
+        frame.fill(&Path::rectangle(Point::new(x0, mid - 0.5), Size::new((x1 - x0).max(0.0), 1.0)), palette.background.strong.color);
         let at = self.x(self.position, bounds);
         // The view's keyframes, while framing (their row is gone otherwise).
         for (ci, c) in self.blocks.iter().enumerate().filter(|_| self.rows.keys > 0.0) {

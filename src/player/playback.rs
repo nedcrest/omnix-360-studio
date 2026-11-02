@@ -20,7 +20,13 @@ const PARKED_REACH: f64 = 2.0;
 
 /// How many paused frames are kept to step back to without decoding
 /// (about 3 MB each at playback size).
-const RECENT: usize = 16;
+const RECENT: usize = 48;
+
+/// A step back to a frame not kept starts decoding this much earlier and
+/// keeps the frames on the way (the decoder goes through them from the
+/// keyframe anyway), so the steps back after it are at once: the
+/// playhead's buffer (the user, 2026-11-03).
+const BACK_FILL: f64 = 1.0;
 
 pub struct Playback {
     pub media: Media,
@@ -352,7 +358,22 @@ impl Playback {
             self.preview_from = t;
             return;
         }
-        self.start_stream(t);
+        // Behind the frame shown: from a second before, keeping the frames
+        // on the way for the steps back that follow.
+        let back = t < self.shown_pts - 0.5 / self.media.fps;
+        self.start_stream(if back { (t - BACK_FILL).max(0.0) } else { t });
+        self.preview_from = t;
+    }
+
+    /// Keeps a paused frame for steps back (`recent`), the oldest let go.
+    fn keep(&mut self, f: Frame) {
+        if self.recent.iter().any(|r| r.pts == f.pts) {
+            return;
+        }
+        if self.recent.len() == RECENT {
+            self.recent.pop_front();
+        }
+        self.recent.push_back(f);
     }
 
     /// The full-resolution frame where it has come to rest, once quick
@@ -562,9 +583,10 @@ impl Playback {
                         }
                     },
                 };
-                // A parked decoder taken on: the frames it had before the
-                // one asked for go by.
+                // Before the one asked for (a parked decoder taken on, or a
+                // step back's buffer filling): kept for steps back, not shown.
                 if self.preview_only && next.pts < self.preview_from - 0.5 / self.media.fps {
+                    self.keep(next);
                     continue;
                 }
                 if next.pts <= due {
@@ -588,11 +610,8 @@ impl Playback {
                 }
                 // A paused preview never replaces the full-resolution still.
                 let pts = f.pts;
-                if self.preview_only && !self.recent.iter().any(|r| r.pts == pts) {
-                    if self.recent.len() == RECENT {
-                        self.recent.pop_front();
-                    }
-                    self.recent.push_back(f.clone());
+                if self.preview_only {
+                    self.keep(f.clone());
                 }
                 if !(self.preview_only && self.showing_still.is_some() && self.still.is_none()) {
                     show = Some((f, None));

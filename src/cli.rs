@@ -63,6 +63,10 @@ pub(crate) enum Cmd {
         /// Only these cuts, numbered from 1 (all if none).
         #[arg(long, value_delimiter = ',')]
         cuts: Vec<usize>,
+        /// Every clip on this sound track instead of the cuts: music, sfx,
+        /// sfx2 or voice.
+        #[arg(long, value_parser = sound_track, conflicts_with = "cuts")]
+        track: Option<crate::project::SoundTrack>,
         /// Even out each cut's sound first: quiet stretches lifted, loud
         /// ones left alone.
         #[arg(long)]
@@ -588,7 +592,7 @@ pub(crate) fn run() -> Result<()> {
         }
         Cmd::Info { input } => info(&input)?,
         Cmd::Check { project, fast_pan, opts } => check::check(&project, &opts, fast_pan)?,
-        Cmd::Normalize { project, cuts, even, output } => loudness::normalize(&project, &cuts, even, output.as_deref())?,
+        Cmd::Normalize { project, cuts, track, even, output } => loudness::normalize(&project, &cuts, track, even, output.as_deref())?,
         Cmd::Duck { project, depth, output } => crate::duck::run(&project, depth, output.as_deref())?,
         Cmd::Apply { project, ops, output } => crate::apply::run(&project, &ops, output.as_deref())?,
         Cmd::Describe { project } => crate::apply::describe(&project)?,
@@ -714,4 +718,10 @@ pub(crate) fn run() -> Result<()> {
 
 pub(crate) fn is_project(input: &Path) -> bool {
     input.extension().is_some_and(|e| e.eq_ignore_ascii_case("json"))
+}
+
+/// A sound track by its lane's name, any case, spaces left out ("sfx2").
+fn sound_track(s: &str) -> Result<crate::project::SoundTrack, String> {
+    let squash = |t: &str| t.to_lowercase().replace(' ', "");
+    crate::project::SoundTrack::ALL.into_iter().find(|w| squash(w.name()) == squash(s)).ok_or_else(|| format!("no sound track {s:?}: music, sfx, sfx2 or voice"))
 }

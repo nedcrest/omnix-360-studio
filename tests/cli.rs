@@ -213,3 +213,27 @@ fn ops_from_a_file_duck_the_music_and_twice_is_once() {
     assert!(!twice.contains("Music only"), "{twice}");
     assert!(!bad.status.success() && String::from_utf8_lossy(&bad.stderr).contains("no cut #42") && !wrote_bad);
 }
+
+#[test]
+fn normalize_a_sound_track_through_ops() {
+    if !has_ffmpeg() {
+        return;
+    }
+    let d = dir("normalize");
+    clip(&d, "a.mp4", 4.0, 440);
+    // A song: normalizing gives it a level towards -16 LUFS.
+    ffmpeg(&d, &["-f", "lavfi", "-i", "sine=f=220:d=4:sample_rate=48000,volume=-3dB", "song.wav"]);
+    std::fs::write(d.join("edit.json"), r#"{"cuts": [{"input": "a.mp4", "in": 0, "out": 4}],
+        "music": {"clips": [{"input": "song.wav", "at": 0, "in": 0, "out": 4}]}}"#).unwrap();
+    let said = omnix(&d, &["normalize", "--track", "music", "edit.json", "-o", "n.json"]);
+    let held = omnix(&d, &["describe", "n.json"]);
+    // Applied again on the result, it's where it was: from the measure, not the level.
+    omnix(&d, &["normalize", "--track", "music", "n.json", "-o", "n2.json"]);
+    let again = omnix(&d, &["describe", "n2.json"]);
+    std::fs::remove_dir_all(&d).unwrap();
+    assert!(said.contains("sound clip #2") && said.contains("LUFS"), "{said}");
+    let level = |s: &str| s.lines().find(|l| l.contains("clip #2")).and_then(|l| l.split("level ").nth(1)).map(str::to_owned).unwrap();
+    assert!(!level(&held).starts_with("+0.0"), "levelled: {held}");
+    assert_eq!(level(&held), level(&again));
+    assert!(held.contains("cut #1") && held.contains("level +0.0 dB"), "the cut left alone: {held}");
+}

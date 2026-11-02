@@ -85,13 +85,6 @@ pub fn normalizing_gain(lufs: f64) -> f64 {
     gain_to_target(lufs).clamp(-MOST_GAIN, MOST_GAIN)
 }
 
-/// Measures what cut `cut` plays over its own stretch: its loudness and
-/// the gain that normalizes it, or `None` where it's silent (a picture, a
-/// clip without sound).
-pub fn measure_cut(cut: &crate::project::Cut) -> Result<Option<(f64, f64)>> {
-    measure_stretch(&cut.sound_file(), (cut.start, cut.end), cut.sound_filter().as_deref())
-}
-
 /// Measures `file` from `start` to `end` through `filter` (its evening and
 /// cleaning, `sound_filter`): its
 /// loudness and the gain that normalizes it, or `None` where it's silent.
@@ -142,33 +135,39 @@ pub fn bring_to(path: &Path, target: f64, format: crate::ffmpeg::Format) -> Resu
 }
 
 /// `rosmo360 normalize`: measures each cut (all, or those numbered in
-/// `only`, from 1), evened out first if `even`, and gives it the gain to the
-/// target, printing a line each; writes the project to `output` if given.
-pub fn normalize(project: &std::path::Path, only: &[usize], even: bool, output: Option<&std::path::Path>) -> Result<()> {
-    let mut p = crate::project::Project::load(project)?;
-    for (n, cut) in p.cuts.iter_mut().enumerate() {
-        if !only.is_empty() && !only.contains(&(n + 1)) {
-            continue;
-        }
-        let name = cut.input.file_name().map_or_else(String::new, |f| f.to_string_lossy().into_owned());
-        // Measured as it will sound; changed only once measured, so a cut
-        // that can't be read is left as it was and the rest go on, as in
-        // the app's dialog.
-        let mut trial = cut.clone();
-        trial.even = even;
-        match measure_cut(&trial) {
-            Ok(Some((lufs, gain))) => {
-                println!("#{:<3} {name}  {lufs:.1} LUFS  {:+.1} dB", n + 1, gain);
-                cut.even = even;
-                cut.gain = gain;
-                cut.loudness = Some(lufs);
+/// `only`, from 1), or every clip on `track`, as it will sound (evened out
+/// first if `even`), and applies what it measured as one step of ops
+/// (`SoundOp::Normalized`, as the player's dialog does), printing a line
+/// each; writes the project to `output` if given. One that can't be read
+/// is left as it was and the rest go on.
+pub fn normalize(project: &std::path::Path, only: &[usize], track: Option<crate::project::SoundTrack>, even: bool, output: Option<&std::path::Path>) -> Result<()> {
+    use crate::model::ops::{Op, SoundRef, sound::SoundOp};
+    use crate::project::Own;
+    let p = crate::project::Project::load(project)?;
+    let owns: Vec<Own> = match track {
+        Some(w) => (0..p.track(w).clips.len()).map(|i| Own::Clip(w, i)).collect(),
+        None => (0..p.cuts.len()).filter(|n| only.is_empty() || only.contains(&(n + 1))).map(Own::Cut).collect(),
+    };
+    let mut ops = Vec::new();
+    for own in owns {
+        let (Some(sound), Some((file, range, filter))) = (SoundRef::of(own, &p), p.own_file(own, even)) else { continue };
+        let name = file.file_name().map_or_else(String::new, |f| f.to_string_lossy().into_owned());
+        match measure_stretch(&file, range, filter.as_deref()) {
+            Ok(measured) => {
+                match measured {
+                    Some((lufs, gain)) => println!("{sound:<14} {name}  {lufs:.1} LUFS  {gain:+.1} dB"),
+                    None => println!("{sound:<14} {name}  silent, level kept"),
+                }
+                ops.push(Op::Sound(SoundOp::Normalized { sound, lufs: measured.map(|(lufs, _)| lufs), even }));
             }
-            Ok(None) => println!("#{:<3} {name}  silent, left as it is", n + 1),
-            Err(e) => println!("#{:<3} {name}  couldn't measure, left as it is: {e:#}", n + 1),
+            Err(e) => println!("{sound:<14} {name}  couldn't measure, left as it is: {e:#}"),
         }
     }
+    let mut edit = crate::model::edit::Edit::default();
+    edit.replace(p);
+    edit.batch(&ops).map_err(|(n, e)| anyhow::anyhow!("op {} of {}: {e}", n + 1, ops.len()))?;
     if let Some(out) = output {
-        p.save(out)?;
+        edit.save(out)?;
         eprintln!("wrote {}", out.display());
     }
     Ok(())

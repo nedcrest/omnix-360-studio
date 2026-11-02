@@ -9,7 +9,7 @@ use crate::grade::{EffectKey, Grade, grade_at};
 use crate::model::curve::{self, Key};
 use crate::overlay::{Item, Place};
 use crate::project::{Id, Project};
-use crate::view::Ease;
+use crate::view::{Ease, Follow, View};
 use serde::{Deserialize, Serialize};
 
 /// What has effects: a cut or an overlay/text item.
@@ -20,13 +20,21 @@ pub enum Graded {
     Item(Id),
 }
 
-/// A row of keyframes: something's effects, or an item's motion.
+/// A row of keyframes: a cut's view, something's effects, or an item's
+/// motion.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Line {
+    View(Id),
     Effects(Graded),
     Motion(Id),
 }
+
+/// Where each thing a view key can follow points at the key's time, as
+/// the player measured it (the camera's attitude, a colour track): `None`
+/// where it can't be told. A following key keeps its view as offsets from
+/// this.
+pub type Aims = Vec<(Follow, Option<(f64, f64)>)>;
 
 /// Two keys this close (seconds) are one, unless an op says otherwise.
 fn half_a_frame() -> f64 {
@@ -36,6 +44,12 @@ fn half_a_frame() -> f64 {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "op", rename_all = "snake_case", deny_unknown_fields)]
 pub enum KeyOp {
+    /// The view shown at `t` in cut `cut`: the key within `tolerance` set
+    /// to it, or a new one easing and following like the one before.
+    View { cut: Id, t: f64, view: View, #[serde(default = "half_a_frame")] tolerance: f64, #[serde(default)] aims: Aims },
+    /// The view key at `t` made to follow `follow` (or stop), still showing
+    /// what it shows now.
+    Follow { cut: Id, t: f64, follow: Option<Follow>, #[serde(default = "half_a_frame")] tolerance: f64, #[serde(default)] aims: Aims },
     /// The look at `t`: the key within `tolerance` set to `grade`, or a new
     /// one there.
     Effects { on: Graded, t: f64, grade: Grade, #[serde(default = "half_a_frame")] tolerance: f64 },
@@ -55,34 +69,48 @@ pub enum KeyOp {
 }
 
 pub(super) fn apply(p: &mut Project, op: &KeyOp) -> Result<Outcome, OpError> {
-    match *op {
-        KeyOp::Effects { on, t, grade, tolerance } => {
+    match op {
+        KeyOp::View { cut, t, view, tolerance, aims } => {
+            let keys = &mut find_cut(p, *cut)?.keyframes;
+            keys.set(*t, *view, *tolerance, &|f, _| aim(aims, f));
+            said(format!("cut #{cut}: view keyed at {t:.2} s"))
+        }
+        KeyOp::Follow { cut, t, follow, tolerance, aims } => {
+            let keys = &mut find_cut(p, *cut)?.keyframes;
+            let i = keys.near(*t, *tolerance).ok_or_else(|| OpError::NotFound(format!("view key at {t:.2} s on cut #{cut}")))?;
+            keys.set_follow(i, follow.clone(), &|f, _| aim(aims, f));
+            said(format!("cut #{cut}: view key at {t:.2} s {}", if follow.is_some() { "follows" } else { "fixed" }))
+        }
+        &KeyOp::Effects { on, t, grade, tolerance } => {
             set(effects(p, on)?, t, grade, tolerance);
             said(format!("{}: look set at {t:.2} s", name(on)))
         }
-        KeyOp::Motion { item, t, place, tolerance } => {
+        &KeyOp::Motion { item, t, place, tolerance } => {
             set(&mut find_item(p, item)?.motion, t, place, tolerance);
             said(format!("item #{item}: place set at {t:.2} s"))
         }
-        KeyOp::Ease { line, t, ease, tolerance } => {
+        &KeyOp::Ease { line, t, ease, tolerance } => {
             let i = index(p, line, t, tolerance)?;
             match line {
+                Line::View(cut) => find_cut(p, cut)?.keyframes.set_ease(i, ease),
                 Line::Effects(on) => effects(p, on)?[i].ease = ease,
                 Line::Motion(item) => find_item(p, item)?.motion[i].ease = ease,
             }
             said(format!("{}: key at {t:.2} s eases {ease:?}", line_name(line)))
         }
-        KeyOp::Retime { line, from, t, gap, tolerance } => {
+        &KeyOp::Retime { line, from, t, gap, tolerance } => {
             let i = index(p, line, from, tolerance)?;
             match line {
+                Line::View(cut) => find_cut(p, cut)?.keyframes.retime(i, t, gap),
                 Line::Effects(on) => crate::view::retime(effects(p, on)?, i, t, gap),
                 Line::Motion(item) => crate::view::retime(&mut find_item(p, item)?.motion, i, t, gap),
             }
             said(format!("{}: key at {from:.2} s moved to {t:.2} s", line_name(line)))
         }
-        KeyOp::Delete { line, t, tolerance } => {
+        &KeyOp::Delete { line, t, tolerance } => {
             let i = index(p, line, t, tolerance)?;
             match line {
+                Line::View(cut) => find_cut(p, cut)?.keyframes.remove(i),
                 Line::Effects(on) => {
                     effects(p, on)?.remove(i);
                 }
@@ -92,14 +120,14 @@ pub(super) fn apply(p: &mut Project, op: &KeyOp) -> Result<Outcome, OpError> {
             }
             said(format!("{}: key at {t:.2} s removed", line_name(line)))
         }
-        KeyOp::Clear { on } => {
+        &KeyOp::Clear { on } => {
             effects(p, on)?.clear();
             if let Graded::Item(item) = on {
                 find_item(p, item)?.motion.clear();
             }
             said(format!("{}: keys cleared", name(on)))
         }
-        KeyOp::LookToAll { cut, t } => {
+        &KeyOp::LookToAll { cut, t } => {
             let grade = grade_at(effects(p, Graded::Cut(cut))?, t);
             for c in p.cuts.iter_mut().filter(|c| c.id != cut) {
                 c.effects = vec![EffectKey::make(c.start, grade)];
@@ -115,9 +143,18 @@ fn set<K: Key>(keys: &mut Vec<K>, t: f64, v: K::V, tolerance: f64) {
     *keys[i].value_mut() = v;
 }
 
+fn find_cut(p: &mut Project, id: Id) -> Result<&mut crate::project::Cut, OpError> {
+    p.cuts.iter_mut().find(|c| c.id == id).ok_or_else(|| OpError::NotFound(format!("cut #{id}")))
+}
+
+/// Where `f` points, from the player's `aims`.
+fn aim(aims: &Aims, f: &Follow) -> Option<(f64, f64)> {
+    aims.iter().find(|a| &a.0 == f).and_then(|a| a.1)
+}
+
 fn effects(p: &mut Project, on: Graded) -> Result<&mut Vec<EffectKey>, OpError> {
     match on {
-        Graded::Cut(id) => p.cuts.iter_mut().find(|c| c.id == id).map(|c| &mut c.effects).ok_or_else(|| OpError::NotFound(format!("cut #{id}"))),
+        Graded::Cut(id) => Ok(&mut find_cut(p, id)?.effects),
         Graded::Item(id) => Ok(&mut find_item(p, id)?.effects),
     }
 }
@@ -129,6 +166,7 @@ fn find_item(p: &mut Project, id: Id) -> Result<&mut Item, OpError> {
 /// Where the key at `t` on `line` is.
 fn index(p: &mut Project, line: Line, t: f64, tolerance: f64) -> Result<usize, OpError> {
     let found = match line {
+        Line::View(cut) => find_cut(p, cut)?.keyframes.near(t, tolerance),
         Line::Effects(on) => curve::find(effects(p, on)?, t, tolerance),
         Line::Motion(item) => curve::find(&find_item(p, item)?.motion, t, tolerance),
     };
@@ -144,6 +182,7 @@ fn name(on: Graded) -> String {
 
 fn line_name(line: Line) -> String {
     match line {
+        Line::View(id) => format!("cut #{id}'s view"),
         Line::Effects(on) => format!("{}'s effects", name(on)),
         Line::Motion(id) => format!("item #{id}'s motion"),
     }
@@ -196,6 +235,22 @@ mod tests {
         e.apply(&key(KeyOp::Delete { line, t: 2.9, tolerance: 0.01 })).unwrap();
         assert_eq!(e.cuts[0].effects.len(), 1);
         check(&e).unwrap();
+    }
+
+    #[test]
+    fn a_view_key_follows_the_stick_as_offsets_from_where_it_points() {
+        let mut e = edit();
+        let view = View { yaw: 30.0, pitch: -10.0, ..View::home(crate::view::Projection::Perspective) };
+        e.apply(&key(KeyOp::View { cut: 1, t: 2.0, view, tolerance: 0.01, aims: Vec::new() })).unwrap();
+        // The stick points at yaw 20 there: following it, the key keeps 10 off.
+        let aims = vec![(Follow::Stick, Some((20.0, 0.0)))];
+        e.apply(&key(KeyOp::Follow { cut: 1, t: 2.0, follow: Some(Follow::Stick), tolerance: 0.01, aims })).unwrap();
+        let k = &e.cuts[0].keyframes[0];
+        assert_eq!((k.follow.clone(), k.view.yaw, k.view.pitch), (Some(Follow::Stick), 10.0, -10.0));
+        e.apply(&key(KeyOp::Ease { line: Line::View(1), t: 2.0, ease: Ease::Linear, tolerance: 0.01 })).unwrap();
+        e.apply(&key(KeyOp::Delete { line: Line::View(1), t: 2.0, tolerance: 0.01 })).unwrap();
+        assert!(e.cuts[0].keyframes.iter().next().is_none());
+        assert!(matches!(e.apply(&key(KeyOp::Follow { cut: 1, t: 2.0, follow: None, tolerance: 0.01, aims: Vec::new() })), Err(OpError::NotFound(_))));
     }
 
     #[test]

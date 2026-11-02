@@ -1420,7 +1420,7 @@ reaches for (the user's question «what else may be missing for sound?»):
   itself; «Move to SFX 2 / SFX» in the menu. The lane always shows, empty
   or not (rows are fixed per track).
 - **The duck's depth** (46f): **built 2026-11-02** (`1cbbd13`, `9167d66`),
-  waiting for the check. The default is now 18 dB (was 12; the guides
+  confirmed by the user the same day. The default is now 18 dB (was 12; the guides
   give 15–20, WCAG 20). Measured on the test project with `rosmo360
   mixcheck` (which now prints every speech stretch's gap, not only the
   failing ones) after a duck at each depth. The music under the voice:

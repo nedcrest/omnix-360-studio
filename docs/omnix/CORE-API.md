@@ -155,6 +155,9 @@ and the mix's trims all assume edit time = clip time. One
 
 ## Order of work
 
+Steps 6 and 9 come first, as the operations API (`OPS-API.md`,
+2026-11-02: researched, its own order of work); 7, 8 and 10 after.
+
 One commit each, behaviour unchanged unless the step says so. Tests
 (`TESTING.md`) come first, so each step lands on a net.
 

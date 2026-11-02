@@ -10,7 +10,8 @@
 use super::{App, Message, Selection, icon_button, tip};
 use crate::grade::{EffectKey, Grade, grade_at};
 use crate::overlay::{MotionKey, Place, place_at};
-use crate::text::{Colour, Outline, TextAlign};
+use crate::model::ops::{Op, items::ItemOp};
+use crate::text::{Colour, Outline, Text, TextAlign};
 use crate::view::Ease;
 use iced::widget::{button, column, container, pick_list, row, rule, scrollable, slider, text, toggler, tooltip};
 use iced::{Alignment, Element, Length};
@@ -296,25 +297,18 @@ impl App {
                 let edits = action.is_edit();
                 self.text_content.perform(action);
                 let words = self.text_content.text().trim_end_matches('\n').to_owned();
-                if edits && self.selected_text().is_some_and(|t| t.content != words) {
+                if edits && let Some((item, text)) = self.selected_text().filter(|(_, t)| t.content != words) {
                     // A run of typing is one undo step, until something else is done.
                     self.edit.begin();
-                    if let Some(text) = self.selected_text() {
-                        text.content = words;
-                    }
+                    self.op(Op::Item(ItemOp::SetText { item, text: Text { content: words, ..text } }));
                 }
             }
             EffectMsg::Text(change) => {
-                // No text selected, no undo step.
-                if self.selected_text().is_none() {
-                    return;
-                }
+                let Some((item, mut text)) = self.selected_text() else { return };
                 // Sliders are one undo step a drag, the rest one a click.
-                match change {
-                    TextChange::Size(_) | TextChange::OutlineWidth(_) => self.edit.begin(),
-                    _ => self.edit.checkpoint(),
+                if matches!(change, TextChange::Size(_) | TextChange::OutlineWidth(_)) {
+                    self.edit.begin();
                 }
-                let Some(text) = self.selected_text() else { return };
                 match change {
                     TextChange::Font(f) => text.font = f,
                     TextChange::Size(v) => text.size = v,
@@ -334,6 +328,7 @@ impl App {
                     }
                     TextChange::Shadow(on) => text.shadow = on,
                 }
+                self.op(Op::Item(ItemOp::SetText { item, text }));
             }
             // On an overlay a keyframe holds both where it is and its look.
             EffectMsg::Key => {
@@ -449,9 +444,10 @@ impl App {
     }
 
     /// The selected overlay's text, if it's a text overlay.
-    fn selected_text(&mut self) -> Option<&mut crate::text::Text> {
-        let i = self.selection.item()?;
-        self.edit.item_mut(i)?.text.as_mut()
+    /// The selected text item's id and text.
+    fn selected_text(&self) -> Option<(crate::project::Id, Text)> {
+        let it = self.edit.item(self.selection.item()?)?;
+        Some((it.id, it.text.clone()?))
     }
 
     /// The text panel, at the player's left while a text item is selected:

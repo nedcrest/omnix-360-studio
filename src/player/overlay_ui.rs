@@ -3,6 +3,8 @@
 //! the on-screen handles, and their blocks on the timeline.
 
 use super::*;
+use crate::model::ops::items::ItemOp;
+use crate::model::ops::{End, Op};
 
 /// A small picture of an overlay for its timeline block: 48 px high,
 /// over a dark checker so transparency shows.
@@ -136,16 +138,10 @@ impl App {
             Message::OverlayPicked(paths) if !paths.is_empty() => {
                 // Folded, the lane opens to show what came.
                 self.folds.overlay = false;
-                self.edit.checkpoint();
                 // One after another from the playhead, each where it fits.
-                let mut at = self.position();
-                let lane = self.edit.lane_mut(crate::overlay::Track::Overlay);
-                for input in paths {
-                    lane.items.push(crate::overlay::Item { id: 0, input, text: None, at, start: 0.0, end: ffmpeg::PICTURE_SECONDS, motion: Vec::new(), effects: Vec::new() });
-                    let i = lane.items.len() - 1;
-                    lane.items[i].at = lane.place(i, at);
-                    at = lane.items[i].ends();
-                    self.selection = Selection::Item((crate::overlay::Track::Overlay, i));
+                let added = self.op(Op::Item(ItemOp::AddPictures { inputs: paths, at: self.position(), len: ffmpeg::PICTURE_SECONDS }));
+                if let Some(r) = added.and_then(|o| o.made).and_then(|id| self.item_ref(id)) {
+                    self.selection = Selection::Item(r);
                 }
             }
             Message::OverlayPicked(_) => {}
@@ -160,15 +156,15 @@ impl App {
                 }
             }
             Message::OverlayMove((track, i), at) => {
-                if self.edit.item((track, i)).is_some() {
+                if let Some(item) = self.edit.item((track, i)).map(|it| it.id) {
                     self.edit.begin();
-                    self.edit.lane_mut(track).move_to(i, at);
+                    self.op(Op::Item(ItemOp::Move { item, at }));
                 }
             }
             Message::OverlayTrim((track, i), start, t) => {
-                if self.edit.item((track, i)).is_some() {
+                if let Some(item) = self.edit.item((track, i)).map(|it| it.id) {
                     self.edit.begin();
-                    self.edit.lane_mut(track).trim(i, start, t, edit::MIN_CUT, ffmpeg::PICTURE_MOST);
+                    self.op(Op::Item(ItemOp::Trim { item, end: if start { End::In } else { End::Out }, t, most: ffmpeg::PICTURE_MOST }));
                 }
             }
             Message::OverlayJump(at) => {
@@ -209,13 +205,10 @@ impl App {
             }
             Message::AddText => {
                 self.folds.text = false;
-                self.edit.checkpoint();
-                let at = self.position();
-                let lane = self.edit.lane_mut(crate::overlay::Track::Text);
-                lane.items.push(crate::overlay::Item { id: 0, input: PathBuf::new(), text: Some(Default::default()), at, start: 0.0, end: ffmpeg::PICTURE_SECONDS, motion: Vec::new(), effects: Vec::new() });
-                let i = lane.items.len() - 1;
-                lane.items[i].at = lane.place(i, at);
-                self.selection = Selection::Item((crate::overlay::Track::Text, i));
+                let added = self.op(Op::Item(ItemOp::AddText { text: Default::default(), at: self.position(), len: ffmpeg::PICTURE_SECONDS }));
+                if let Some(r) = added.and_then(|o| o.made).and_then(|id| self.item_ref(id)) {
+                    self.selection = Selection::Item(r);
+                }
                 // Its words and look are set in the text panel, open now.
                 self.text_of = None;
             }

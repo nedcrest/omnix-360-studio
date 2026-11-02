@@ -462,4 +462,24 @@ mod tests {
         assert_eq!(app.edit.cuts[1].id, first);
         assert!(app.edit.undo() && app.edit.undo() && app.edit.cuts[0].end == 2.0 && !app.edit.undo());
     }
+
+    /// After a delete, «… deleted · Undo» shows; Undo takes it back and the
+    /// note goes; an older note's timer leaves a newer one alone.
+    #[test]
+    fn a_delete_offers_its_undo() {
+        let mut app = app();
+        app.edit.voice.clips.push(crate::project::MusicClip { input: "nowhere/take.wav".into(), at: 0.0, start: 0.0, end: 3.0, ..Default::default() });
+        app.edit.voice.clips.push(crate::project::MusicClip { input: "nowhere/take.wav".into(), at: 4.0, start: 0.0, end: 3.0, ..Default::default() });
+        app.edit.settle_ids();
+        app.selection = Selection::Clip(SoundTrack::Voice, 0);
+        let _ = app.update(Message::DeleteCut);
+        assert_eq!(app.toast.map(|t| t.0), Some("Sound deleted"));
+        let first = app.toast.unwrap().1;
+        app.selection = Selection::Clip(SoundTrack::Voice, 0);
+        let _ = app.update(Message::DeleteCut);
+        let _ = app.update(Message::ToastGone(first));
+        assert!(app.toast.is_some(), "the newer note stays");
+        let _ = app.update(Message::Undo);
+        assert!(app.toast.is_none() && app.edit.voice.clips.len() == 1);
+    }
 }

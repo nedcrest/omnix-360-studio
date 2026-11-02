@@ -163,17 +163,36 @@ impl App {
                     Selection::None if self.clip.is_some() => Selection::Cut(self.current),
                     s => s,
                 };
+                let what = match s {
+                    Selection::Cut(_) => "Cut deleted",
+                    Selection::Clip(..) => "Sound deleted",
+                    Selection::Point(..) => "Point deleted",
+                    Selection::Item(_) => "Overlay deleted",
+                    Selection::None => return Task::none(),
+                };
+                let done = self.edit.delete(s);
                 if let Selection::Cut(i) = s {
                     // The cut after it, now at `i`, stays selected.
-                    if self.edit.delete(s) {
+                    if done {
                         self.after_edit(self.edit.offset(i.min(self.edit.cuts.len())));
                     }
                 } else {
-                    self.edit.delete(s);
                     self.selection = Selection::None;
+                }
+                // Undo a moment away, without knowing Ctrl+Z (pack 2).
+                if done {
+                    let n = self.toast.map_or(0, |(_, n)| n + 1);
+                    self.toast = Some((what, n));
+                    return Task::perform(super::blocking(|| std::thread::sleep(std::time::Duration::from_secs(6))), move |_| Message::ToastGone(n));
+                }
+            }
+            Message::ToastGone(n) => {
+                if self.toast.is_some_and(|(_, m)| m == n) {
+                    self.toast = None;
                 }
             }
             Message::Undo | Message::Redo => {
+                self.toast = None;
                 let at = self.position();
                 let changed = if matches!(message, Message::Undo) { self.edit.undo() } else { self.edit.redo() };
                 if changed {

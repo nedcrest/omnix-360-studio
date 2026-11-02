@@ -60,10 +60,12 @@ impl App {
         };
         // One line: wrapped, a long one stood the whole top bar on end.
         let message = self.save_status.as_ref().map(|s| text(s.clone()).style(text::secondary).wrapping(text::Wrapping::None));
+        // After a delete: what went, and Undo one click away.
+        let toast = self.toast.map(|(what, _)| row![text(what).wrapping(text::Wrapping::None), iced::widget::button(text("Undo").size(13)).padding([2, 8]).on_press(Message::Undo)].spacing(8).align_y(Alignment::Center));
         let status: Element<'_, Message> = match &self.loading {
             Some(_) => self.loading_bar(140.0),
             // What decodes and shows matters for 360 footage: shown while framing.
-            None => row![].push(message).push(self.framing.then_some(showing)).push(self.framing.then_some(decode)).spacing(10).align_y(Alignment::Center).into(),
+            None => row![].push(toast).push(message).push(self.framing.then_some(showing)).push(self.framing.then_some(decode)).spacing(10).align_y(Alignment::Center).into(),
         };
         let shown_view = self.shown_view();
         let mut sources = Vec::new();

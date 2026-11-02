@@ -118,10 +118,8 @@ impl App {
             // A frame, as `,` and `.` (it was 5 s, thrown about unclearly:
             // gap 55).
             Key::Named(arrow @ (Named::ArrowLeft | Named::ArrowRight)) => {
-                self.follow = true;
                 let back = arrow == Named::ArrowLeft;
-                self.with_playback(|p| p.step(if back { -1.0 } else { 1.0 }));
-                return self.step_note(if back { "−1 f" } else { "+1 f" });
+                return self.step_frame(if back { -1.0 } else { 1.0 });
             }
             // With the strip showing, a field typed in may want them.
             Key::Named(arrow @ (Named::ArrowUp | Named::ArrowDown)) if self.angles_shown => {
@@ -183,11 +181,7 @@ impl App {
                 "]" if mods.alt() => return self.update(Message::TrimToPlayhead(false)),
                 "[" => return self.key_step(-1.0),
                 "]" => return self.key_step(1.0),
-                "," | "." => {
-                    self.follow = true;
-                    let frames = if c == "," { -1.0 } else { 1.0 };
-                    self.with_playback(|p| p.step(frames));
-                }
+                "," | "." => return self.step_frame(if c == "," { -1.0 } else { 1.0 }),
                 "+" | "=" => self.free_look().zoom_by(-1.0),
                 "-" => self.free_look().zoom_by(1.0),
                 "s" | "S" => {
@@ -217,6 +211,20 @@ impl App {
 }
 
 impl App {
+    /// A frame back (`frames` −1) or on, along the edit: within the cut, a
+    /// step of its playback; past its in or out point, the cut before or
+    /// after (a playback step went on into the trimmed-off footage).
+    fn step_frame(&mut self, frames: f64) -> Task<Message> {
+        self.follow = true;
+        let note = if frames < 0.0 { "−1 f" } else { "+1 f" };
+        let t = self.position() + frames / self.fps();
+        if self.edit.locate(t.max(0.0)).is_some_and(|(i, _)| i == self.current) {
+            self.with_playback(|p| p.step(frames));
+            return self.step_note(note);
+        }
+        self.seek_to(t, note)
+    }
+
     /// The playhead `dt` seconds on, said by it as `note` for a moment.
     fn seek_by(&mut self, dt: f64, note: &'static str) -> Task<Message> {
         self.seek_to(self.position() + dt, note)

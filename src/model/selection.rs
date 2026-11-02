@@ -1,8 +1,7 @@
 //! What's selected on the timeline: one thing at a time (`CORE-API.md` step
 //! 5). It was five loose `Option`s, each «select this» clearing the others
 //! by hand, and some forgot one: a picked overlay left the cut it was over
-//! selected too. Plain data beside `Edit`, so it moves to the core with it
-//! (step 7).
+//! selected too.
 
 use super::edit::Edit;
 use crate::overlay::ItemRef;

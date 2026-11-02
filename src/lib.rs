@@ -12,6 +12,7 @@ mod dissolve;
 mod dji;
 mod duck;
 mod mixdown;
+mod model;
 mod lufs;
 mod mixcheck;
 mod mixmeasure;

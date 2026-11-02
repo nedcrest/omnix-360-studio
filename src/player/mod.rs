@@ -3,7 +3,7 @@
 //! and rolling-shutter correction run in the view's shader.
 
 mod audio;
-mod edit;
+use crate::model::edit;
 mod export;
 mod gpu;
 mod audio_panel;
@@ -39,8 +39,7 @@ mod tracks;
 mod overlay_ui;
 mod cuts;
 mod record_ui;
-mod selection;
-use selection::Selection;
+use crate::model::selection::Selection;
 mod listen;
 mod mixcheck_ui;
 

@@ -38,6 +38,10 @@ use std::sync::Arc;
 /// a cut's edge.
 const DIAMOND: f32 = 6.0;
 const PICK: f32 = 7.0;
+/// How far inside a clip's end a press takes its edge (it was `PICK`, 7);
+/// a cut's edge also reaches as far outside, so an edge is a 24 px target
+/// (WCAG 2.5.8's least), however thin it is drawn (`TIMELINE-UX.md`).
+const EDGE: f32 = 12.0;
 /// The cut row's height at scale 1, and the gap between cut blocks.
 const CUTS: f32 = 40.0;
 /// The clips' own sound under them at scale 1: each cut's waveform and its
@@ -405,18 +409,7 @@ impl Timeline {
     /// Whether `x` is on cut `i`'s in edge (`Some(true)`) or out edge.
     fn edge_at(&self, i: usize, x: f32, b: Rectangle) -> Option<bool> {
         let c = &self.blocks[i];
-        let (l, r) = (self.x(c.from, b), self.x(c.from + c.len, b));
-        if r - l < 3.0 * PICK {
-            // Too narrow for a body: the nearer edge.
-            return Some(x - l < r - x);
-        }
-        if x - l <= PICK {
-            Some(true)
-        } else if r - x <= PICK {
-            Some(false)
-        } else {
-            None
-        }
+        edge_of(self.x(c.from, b), self.x(c.from + c.len, b), x)
     }
 
     /// The effect keyframe mark under `p` (they sit in a row under the
@@ -435,7 +428,7 @@ impl Timeline {
     fn edge_hit(&self, x: f32, b: Rectangle) -> Option<(usize, bool)> {
         (0..self.blocks.len()).rev().find_map(|i| {
             let (l, r) = self.block_x(&self.blocks[i], b);
-            (x >= l - PICK && x <= r + PICK).then(|| self.edge_at(i, x, b)).flatten().map(|e| (i, e))
+            (x >= l - EDGE && x <= r + EDGE).then(|| self.edge_at(i, x, b)).flatten().map(|e| (i, e))
         })
     }
 
@@ -446,16 +439,7 @@ impl Timeline {
     /// Whether `x` is on clip `i`'s in edge (`Some(true)`) or out edge.
     fn music_edge_at(&self, lane: usize, i: usize, x: f32, b: Rectangle) -> Option<bool> {
         let m = &self.sounds[lane].blocks[i];
-        let (l, r) = (self.x(m.from, b), self.x(m.from + m.len, b));
-        if r - l < 3.0 * PICK {
-            Some(x - l < r - x)
-        } else if x - l <= PICK {
-            Some(true)
-        } else if r - x <= PICK {
-            Some(false)
-        } else {
-            None
-        }
+        edge_of(self.x(m.from, b), self.x(m.from + m.len, b), x)
     }
 
     /// A volume line's dB to y on `lane` (its top and height) and back.
@@ -939,16 +923,7 @@ impl OverlayLane {
 
     fn edge_at(&self, i: usize, x: f32, b: Rectangle) -> Option<bool> {
         let o = &self.blocks()[i];
-        let (l, r) = (self.0.x(o.from, b), self.0.x(o.from + o.len, b));
-        if r - l < 3.0 * PICK {
-            Some(x - l < r - x)
-        } else if x - l <= PICK {
-            Some(true)
-        } else if r - x <= PICK {
-            Some(false)
-        } else {
-            None
-        }
+        edge_of(self.0.x(o.from, b), self.0.x(o.from + o.len, b), x)
     }
 
     fn folded(&self) -> bool {
@@ -1247,6 +1222,22 @@ fn lane_tag(frame: &mut Frame, name: &str, colour: iced::Color, mid: f32) {
 }
 
 /// A volume line on `lane` from `ends.0` to `ends.1` (x, dB) through
+/// Whether `x` takes the in edge (`Some(true)`) or out edge of a block
+/// drawn from `l` to `r`, or its body (`None`): `EDGE` inside each end,
+/// and anything outside that reaches it.
+/// A block narrower than three edges is split in thirds, so its middle
+/// still moves it; it used to be all edge, and couldn't be moved.
+fn edge_of(l: f32, r: f32, x: f32) -> Option<bool> {
+    let reach = if r - l < 3.0 * EDGE { (r - l) / 3.0 } else { EDGE };
+    if x - l <= reach {
+        Some(true)
+    } else if r - x <= reach {
+        Some(false)
+    } else {
+        None
+    }
+}
+
 /// `points` (x, dB; NaN x for one not shown), the `selected` one labelled
 /// with its level.
 fn draw_line(frame: &mut Frame, b: Rectangle, lane: Lane, colour: iced::Color, ends: ((f32, f64), (f32, f64)), points: &[(f32, f64)], selected: Option<usize>) {
@@ -1892,6 +1883,13 @@ mod tests {
         // The join at 7 s: the later cut's in edge.
         assert_eq!(t.edge_hit(x(7.0) + 1.0, b), Some((2, true)));
         assert_eq!(t.edge_hit(x(5.0), b), None);
+        // 12 px in from an end is still the edge; a narrow block is split
+        // in thirds, so its middle moves it.
+        assert_eq!(edge_of(100.0, 300.0, 111.0), Some(true));
+        assert_eq!(edge_of(100.0, 300.0, 113.0), None);
+        assert_eq!(edge_of(100.0, 130.0, 105.0), Some(true));
+        assert_eq!(edge_of(100.0, 130.0, 115.0), None);
+        assert_eq!(edge_of(100.0, 130.0, 125.0), Some(false));
         // The level line: y back to dB, every level outside 0 dB's ±1 dB
         // reachable on the narrow clip sound lane too.
         let lane = t.rows.cut_lane();

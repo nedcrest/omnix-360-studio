@@ -1432,6 +1432,27 @@ Items that toggle show their state (a tick) instead of changing their
 words. The lane's own menu (empty stretch) and the point and line menus
 keep their one or two items.
 
+### 48. Insta360 clips — idea, very far off (user, 2026-11-02)
+
+Asked about after «what format does our 360 stitch?» (DJI Osmo 360 `.OSV`
+only). User: "write it down as an idea for the future, but a very distant
+one". Not planned: the user's cameras are DJI (the decision of 2026-10-22).
+
+What it would take, as known on 2026-11-02 (not checked against the
+vendor's current terms):
+- **The files:** `.insv` video (MP4 with the two fisheye pictures; in some
+  modes one file per lens, `_00_` and `_10_`), `.insp` photos; gyro,
+  calibration and exposure written in a trailer at the end of the file.
+- **Insta360's Media SDK** (Linux too) is given on application, closed and
+  not freely redistributable: against the project's rule «no vendor SDKs or
+  registrations», so not that way.
+- **Without it:** telemetry-parser (which reads the DJI telemetry here)
+  already reads Insta360's gyro, as Gyroflow does. The lens calibration
+  isn't openly described: it would have to be read out of the trailer or
+  fitted from footage, the large part of the work (for DJI it comes ready
+  in the file).
+- Needs the camera or sample clips first.
+
 ## Format rule for all of these
 
 New fields only, each `#[serde(default, skip_serializing_if = …)]`, so every

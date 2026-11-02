@@ -3,7 +3,7 @@
 //! lane's empty stretch (the track's own menu). A cut's sound and a sound
 //! clip's are changed alike, through `project::Own` (gap 33f).
 //!
-//! Normalizing measures what each cut plays (`loudness::measure_cut`) and
+//! Normalizing measures what each cut plays (`loudness::measure_stretch`) and
 //! gives it the level that brings it to −16 LUFS, optionally evening it out
 //! first (`Cut::even`). It runs in a dialog over the window: what and how,
 //! Start, then a progress bar with Cancel, then what changed. One cut is
@@ -54,7 +54,7 @@ pub struct Dialog {
 #[derive(Debug)]
 enum State {
     Ready,
-    Running { todo: Vec<Own>, total: usize, done: usize, gains: Vec<f64>, silent: usize, failed: Vec<String>, cancelled: bool },
+    Running { todo: Vec<SoundRef>, total: usize, done: usize, gains: Vec<f64>, silent: usize, failed: Vec<String>, cancelled: bool },
     Done(String),
 }
 
@@ -66,7 +66,7 @@ pub enum SoundMsg {
     Even(bool),
     Start,
     /// One measured: its loudness and gain, `None` if silent.
-    Measured(Own, Result<Option<(f64, f64)>, String>),
+    Measured(SoundRef, Result<Option<(f64, f64)>, String>),
     Cancel,
     Close,
     /// A right-click menu, where the pointer is (window coordinates), or
@@ -125,26 +125,23 @@ impl App {
                     Scope::Own(_) => Vec::new(),
                     Scope::Track(which) => (0..self.edit.track(which).clips.len()).map(|i| Own::Clip(which, i)).collect(),
                 };
-                // One undo step for the whole run, before the first change.
-                // Each cut is evened out (or not) as it's measured, so a
-                // stopped run leaves the rest as they were.
-                self.edit.checkpoint();
+                // By id: an edit while it runs doesn't send a result to
+                // another cut. One undo step for the whole run (`begin`,
+                // ended in `measure_next`); each is applied as it's
+                // measured, so a stopped run leaves the rest as they were.
+                let todo: Vec<SoundRef> = todo.into_iter().filter_map(|o| SoundRef::of(o, &self.edit)).collect();
+                self.edit.begin();
                 let total = todo.len();
                 d.state = State::Running { todo: todo.into_iter().rev().collect(), total, done: 0, gains: Vec::new(), silent: 0, failed: Vec::new(), cancelled: false };
                 return self.measure_next();
             }
-            SoundMsg::Measured(own, result) => {
+            SoundMsg::Measured(sound, result) => {
                 let even = self.normalize.as_ref().is_some_and(|d| d.even);
-                if let Some(s) = self.edit.own_sound(own) {
-                    if result.is_ok() {
-                        *s.even = even;
-                    }
-                    if let Ok(Some((lufs, gain))) = &result {
-                        *s.gain = *gain;
-                        *s.loudness = Some(*lufs);
-                    }
+                if let Ok(measured) = &result {
+                    // Gone since (deleted mid-run): nothing to apply it to.
+                    let _ = self.edit.apply(&Op::Sound(SoundOp::Normalized { sound, lufs: measured.map(|(lufs, _)| lufs), even }));
                 }
-                let name = self.edit.own_file(own, false).map(|(f, ..)| super::clip_name(&f)).unwrap_or_default();
+                let name = sound.own(&self.edit).and_then(|own| self.edit.own_file(own, false)).map(|(f, ..)| super::clip_name(&f)).unwrap_or_default();
                 if let Some(Dialog { state: State::Running { done, gains, silent, failed, .. }, .. }) = self.normalize.as_mut() {
                     *done += 1;
                     match result {
@@ -206,7 +203,7 @@ impl App {
                     self.normalize = Some(Dialog { scope: Scope::Own(own), even: on, state: State::Ready });
                     return self.sound_ui(SoundMsg::Start);
                 }
-                self.set_sound(own, |s| *s.even = on);
+                self.sound_op(own, |sound| SoundOp::Normalized { sound, lufs: None, even: on });
             }
         }
         Task::none()
@@ -223,32 +220,22 @@ impl App {
         }
     }
 
-    /// Changes a cut's sound or a sound clip's as one undo step, closing
-    /// the menu.
-    fn set_sound(&mut self, own: Own, change: impl FnOnce(crate::project::OwnSound<'_>)) {
-        self.sound_menu = None;
-        if self.edit.own_line(own).is_some() {
-            self.edit.checkpoint();
-            if let Some(s) = self.edit.own_sound(own) {
-                change(s);
-            }
-            self.reload_cut_sound();
-        }
-    }
-
     /// Starts measuring the next cut, or ends the run with what changed.
     fn measure_next(&mut self) -> Task<Message> {
         let Some(Dialog { state, even, .. }) = self.normalize.as_mut() else { return Task::none() };
         let even = *even;
         let State::Running { todo, total, gains, silent, failed, cancelled, done } = state else { return Task::none() };
         let next = if *cancelled { None } else { todo.pop() };
-        let Some(own) = next else {
+        let Some(sound) = next else {
             *state = State::Done(summary(*done, *total, gains, *silent, failed, *cancelled));
+            self.edit.commit();
             return Task::none();
         };
         // Measured as it will sound: evened out or not as asked.
-        let Some((file, range, filter)) = self.edit.own_file(own, even) else { return Task::none() };
-        Task::perform(blocking(move || crate::loudness::measure_stretch(&file, range, filter.as_deref()).map_err(|e| format!("{e:#}"))), move |r| Message::Sound(SoundMsg::Measured(own, r)))
+        let Some((file, range, filter)) = sound.own(&self.edit).and_then(|own| self.edit.own_file(own, even)) else {
+            return Task::done(Message::Sound(SoundMsg::Measured(sound, Err("gone from the edit".into()))));
+        };
+        Task::perform(blocking(move || crate::loudness::measure_stretch(&file, range, filter.as_deref()).map_err(|e| format!("{e:#}"))), move |r| Message::Sound(SoundMsg::Measured(sound, r)))
     }
 
     /// The dialog over the window, if open.
@@ -414,6 +401,7 @@ mod tests {
         // Files that aren't there: the dialog's measuring finds no sound,
         // and the results are fed in below by hand.
         app.edit.cuts = vec![crate::project::Cut::new("nowhere/a.mp4".into(), 0.0, 2.0), crate::project::Cut::new("nowhere/b.mp4".into(), 0.0, 2.0)];
+        app.edit.settle_ids();
         app
     }
 
@@ -423,8 +411,8 @@ mod tests {
         let _ = app.sound_ui(SoundMsg::Open(Scope::All));
         let _ = app.sound_ui(SoundMsg::Start);
         assert!(matches!(app.normalize.as_ref().map(|d| &d.state), Some(State::Running { total: 2, .. })));
-        let _ = app.sound_ui(SoundMsg::Measured(Own::Cut(0), Ok(Some((-20.0, 4.0)))));
-        let _ = app.sound_ui(SoundMsg::Measured(Own::Cut(1), Ok(None)));
+        let _ = app.sound_ui(SoundMsg::Measured(SoundRef::Cut(1), Ok(Some((-20.0, 4.0)))));
+        let _ = app.sound_ui(SoundMsg::Measured(SoundRef::Cut(2), Ok(None)));
         let c = &app.edit.cuts[0];
         assert_eq!((c.gain, c.loudness, c.even), (4.0, Some(-20.0), true), "evened out by default");
         assert!(matches!(app.normalize.as_ref().map(|d| &d.state), Some(State::Done(s)) if s == "2 clips done. Level +4.0 dB. 1 without sound, left as they were."));
@@ -439,15 +427,16 @@ mod tests {
         let _ = app.sound_ui(SoundMsg::Open(Scope::All));
         let _ = app.sound_ui(SoundMsg::Start);
         let _ = app.sound_ui(SoundMsg::Cancel);
-        let _ = app.sound_ui(SoundMsg::Measured(Own::Cut(0), Ok(Some((-18.0, 2.0)))));
+        let _ = app.sound_ui(SoundMsg::Measured(SoundRef::Cut(1), Ok(Some((-18.0, 2.0)))));
         assert_eq!(app.edit.cuts[1].gain, 0.0, "the second never measured");
         assert!(matches!(app.normalize.as_ref().map(|d| &d.state), Some(State::Done(s)) if s.starts_with("Stopped after 1 of 2 clips")));
         // A sound clip's track, normalized the same way.
         app.edit.voice.clips.push(crate::project::MusicClip { input: "nowhere/take.wav".into(), at: 0.0, start: 0.0, end: 3.0, ..Default::default() });
+        app.edit.settle_ids();
         let _ = app.sound_ui(SoundMsg::Close);
         let _ = app.sound_ui(SoundMsg::Open(Scope::Track(SoundTrack::Voice)));
         let _ = app.sound_ui(SoundMsg::Start);
-        let _ = app.sound_ui(SoundMsg::Measured(Own::Clip(SoundTrack::Voice, 0), Ok(Some((-30.0, 14.0)))));
+        let _ = app.sound_ui(SoundMsg::Measured(SoundRef::Clip(3), Ok(Some((-30.0, 14.0)))));
         assert_eq!(app.edit.voice.clips[0].gain, 14.0);
     }
 

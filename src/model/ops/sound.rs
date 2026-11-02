@@ -47,6 +47,12 @@ pub enum SoundOp {
     LowerForVoice { sound: SoundRef },
     /// Its normal level.
     Restore { sound: SoundRef },
+    /// What normalizing measured, applied: evened out or not, and given the
+    /// level its loudness asks for (`normal_gain`). `lufs` is the
+    /// loudness measured as it will sound (`loudness::measure_stretch`,
+    /// evened if `even`); `None` for silence or not measured, which only
+    /// sets the evening.
+    Normalized { sound: SoundRef, lufs: Option<f64>, even: bool },
     /// The music lowered `depth` dB over these stretches of speech (edit
     /// time, as `duck::find_speech` measures them), replacing a duck before.
     Duck { depth: f64, speech: Vec<(f64, f64)> },
@@ -106,6 +112,24 @@ pub(super) fn apply(p: &mut Project, op: &SoundOp) -> Result<Outcome, OpError> {
                 *s.gain
             })?;
             said(format!("{sound}: normal level {db:+.1} dB"))
+        }
+        &SoundOp::Normalized { sound, lufs, even } => {
+            if lufs.is_some_and(|l| !l.is_finite()) {
+                return Err(OpError::OutOfRange { what: "loudness", value: lufs.unwrap(), least: f64::MIN, most: f64::MAX });
+            }
+            let db = change(p, sound, |s| {
+                *s.even = even;
+                if lufs.is_some() {
+                    *s.loudness = lufs;
+                    *s.gain = normal_gain(lufs);
+                }
+                *s.gain
+            })?;
+            let evened = if even { ", evened out" } else { "" };
+            said(match lufs {
+                Some(l) => format!("{sound}: {l:.1} LUFS, level {db:+.1} dB{evened}"),
+                None => format!("{sound}: level kept {db:+.1} dB{evened}"),
+            })
         }
         SoundOp::Duck { depth, speech } => {
             if !(0.0..=60.0).contains(depth) {
@@ -187,7 +211,7 @@ mod tests {
     #[test]
     fn ops_from_the_sound_twice_are_once() {
         let s = |e: &Edit| song(e);
-        for o in [|s| SoundOp::LowerForVoice { sound: s }, |s| SoundOp::Restore { sound: s }, |s| SoundOp::ShowLine { sound: s }, |_| SoundOp::Duck { depth: 18.0, speech: vec![(2.0, 5.0)] }] {
+        for o in [|s| SoundOp::LowerForVoice { sound: s }, |s| SoundOp::Restore { sound: s }, |s| SoundOp::ShowLine { sound: s }, |_| SoundOp::Duck { depth: 18.0, speech: vec![(2.0, 5.0)] }, |s| SoundOp::Normalized { sound: s, lufs: Some(-25.0), even: true }] {
             let (mut once, mut twice) = (edit(), edit());
             once.apply(&op(o(s(&once)))).unwrap();
             twice.apply(&op(o(s(&twice)))).unwrap();

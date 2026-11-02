@@ -1762,8 +1762,11 @@ Proposed for editing mode (framing keeps its keys), as Premiere and FCP:
 - Home / End the edit's start and end;
 - the step shown by the playhead for a moment («−1 f», «+1 s», «join»),
   as the drag readout is.
-To settle with the user: whether ← / → stay 5 s somewhere (Alt?), and
-the size of Shift's step.
+**Built 2026-11-03** (`915239d`), waiting for the user's check, with
+these defaults: the 5 s jump is gone (Alt+← / → move a cut since pack
+2); Shift's step is one second; ↑ / ↓ and Home only in editing (framing
+keeps pitch and the view's reset), End in editing too; a field of the
+angles strip being typed in keeps ↑ / ↓.
 
 ## Format rule for all of these
 

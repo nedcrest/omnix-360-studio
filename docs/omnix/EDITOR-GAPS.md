@@ -1439,6 +1439,15 @@ reaches for (the user's question «what else may be missing for sound?»):
   is the depth itself: 15 would sit on the check's edge, 18 clears it by
   3 dB. A settings.json that already holds a depth keeps it (the slider
   sets it, 3–30).
+  The user's check (2026-11-02): the slider was squeezed beside the
+  button (`a63143a`: now across the panel), and 20 then 18 lowered the
+  music 38 dB. Their rule, for every operation on sound: **start from
+  the original, never from the last result; a fix after it is by hand,
+  with the level.** So a clip remembers its duck (`ducked`) and the next
+  takes it out first (`c25cc9f`); «Lower for voice-over» sets the normal
+  level −12 dB instead of −12 from where it is (`0fcd9a3`). Normalize,
+  «Back to normal level» and «Continue the level» already started from
+  the file or its neighbour.
 
 ### 47. The sound menus in groups — idea (user, 2026-11-01)
 

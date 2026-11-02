@@ -13,6 +13,8 @@ pub mod cuts;
 pub mod items;
 pub mod keys;
 pub mod sound;
+#[cfg(test)]
+mod props;
 
 use super::edit::Edit;
 use crate::project::{Id, Own, Project, SoundTrack};

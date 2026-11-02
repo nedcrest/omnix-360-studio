@@ -1,0 +1,8 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc fa5a9ef3ff8ecb17850d6d08efff096afaa95d6673a5ed07438d39d5e249097b # shrinks to ops = [Sound(MovePoint { sound: Cut(0), from: 0.0, t: 0.0, db: -31.203527965298438 })]
+cc 426a9aa1672286d027cada49e8773e57642571ac59b5a8f3a51389ad28c78b19 # shrinks to ops = [Item(AddPictures { inputs: ["p.png", "q.png"], at: 11.758063601041425, len: 1.6549611253934415 }), Item(AddPictures { inputs: ["p.png", "q.png"], at: 6.476533619232805, len: 3.4309897559092923 }), Item(Trim { item: 9, end: In, t: 11.801837021077244, most: 3600.0 }), Item(Trim { item: 9, end: Out, t: 0.0, most: 3600.0 })]

@@ -1370,7 +1370,7 @@ tested, from measured numbers to findings; (2) the measuring: each lane
 rendered alone through the export's own mix graph (so «as heard» is the
 export's), its clips measured, plus `rosmo360 mixcheck`; (3) the view.
 Built 2026-11-01 (`40ed95b` rules, `c145a2d` measuring and CLI, `f159edb`
-view), waiting for the check. Defaults: the target is the Export panel's
+view), confirmed by the user 2026-11-02. Defaults: the target is the Export panel's
 loudness, else −14; a speech stretch's voice is the louder of the Voice
 lane and the clips' sound; the music under it the song covering most of
 it; measured when switched on and on «Measure again», not live. On the

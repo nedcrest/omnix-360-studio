@@ -224,17 +224,37 @@ added, not a new type; `Op` is tagged `"area"` and each area's enum
 "sound": {"clip": 4}, "db": -8}`; `Outcome` has only `summary` until a
 caller needs the ids it changed.
 
-## Later
+## Later: a review of the core (2026-11-02, the user asked after pack 2)
 
-- Ops for what's still a direct write: the edit's fades, the clip-sound
-  and track levels, the aspect, a project's load clean-up.
-- `Outcome` with the ids an op changed (only `made` now), and a
-  readable diff of a batch (`preview` in the sketch).
-- One tool per op for an agent (the schema has them as `oneOf`); query
-  tools beyond `describe` (`find_speech`, `mixcheck` already exist as
-  commands).
-- A journal of applied ops per undo step, to replay a player session as
-  a test.
+Soon (small each):
+1. **The selection by id.** `Selection::Cut(usize)` names an index while
+   ops name ids, so every move, delete and undo remaps it by hand
+   (`moved_index`, `still_valid`, `after_edit`). By id that class of «the
+   wrong thing selected after an edit» goes.
+2. **A colour track's key by id.** `follow_track` applies to `done.cut`,
+   the index when tracking began (a minute or two before); cuts moved
+   meanwhile put the key on another. Duck (version) and normalize (ids)
+   are already safe.
+3. **A bound on undo.** Each step keeps a copy of the project, with no
+   limit; cap it (~300 steps).
+4. **`normal_gain` in the core.** `model::ops::sound` reaches
+   `crate::loudness`, which runs ffmpeg; the boundary test sees only
+   direct imports. Move `normalizing_gain` and `MOST_GAIN` into the core.
+
+Later:
+5. **`ProjectOp`** for what's still a direct write: the edit's fades, the
+   clip-sound and track levels, the aspect, a project's load clean-up.
+   Needed for the AI and for the lane headers (gap 54).
+6. **A journal**: each undo step keeps its ops, so a player session can be
+   replayed as a test.
+7. **`check()` after every op in debug builds**, so the player catches a
+   broken project as the property test does.
+8. **The player's per-message `settle_ids`**: ops give ids themselves now.
+9. `Outcome` with the ids an op changed, a readable diff of a batch, one
+   tool per op for an agent, query tools beyond `describe`.
+
+Kept as they are: the enum per area, ids in the file, transactions, «from
+the original»: they held through 60 000 random sequences and packs 1–2.
 
 ## Bugs found while taking stock (fixed along the way)
 

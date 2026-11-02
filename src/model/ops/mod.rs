@@ -10,6 +10,7 @@
 
 pub mod clips;
 pub mod cuts;
+pub mod items;
 pub mod sound;
 
 use super::edit::Edit;
@@ -22,6 +23,7 @@ use std::fmt;
 pub enum Op {
     Cut(cuts::CutOp),
     Clip(clips::ClipOp),
+    Item(items::ItemOp),
     Sound(sound::SoundOp),
 }
 
@@ -109,6 +111,7 @@ fn apply(p: &mut Project, op: &Op) -> Result<Outcome, OpError> {
     match op {
         Op::Cut(op) => cuts::apply(p, op),
         Op::Clip(op) => clips::apply(p, op),
+        Op::Item(op) => items::apply(p, op),
         Op::Sound(op) => sound::apply(p, op),
     }
 }

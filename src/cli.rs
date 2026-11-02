@@ -97,7 +97,8 @@ pub(crate) enum Cmd {
     },
     /// Apply operations to a project: a JSON list of them, as the player
     /// makes them (`docs/omnix/OPS-API.md`), one step, all or none. Prints
-    /// what each did; writes the project with -o.
+    /// what each did; writes the project with -o. Without -o it is a dry
+    /// run: what they would do, or which is refused and why.
     Apply {
         project: PathBuf,
         ops: PathBuf,
@@ -107,6 +108,9 @@ pub(crate) enum Cmd {
     /// What a project holds, by id: the cuts, sound clips and overlays that
     /// operations name.
     Describe { project: PathBuf },
+    /// The JSON Schema of an ops file for `apply`: every operation, its
+    /// fields and what they mean (for an agent's tools, or an editor).
+    OpsSchema,
     /// Stitch one frame to an equirectangular PNG.
     Stitch {
         input: PathBuf,
@@ -596,6 +600,7 @@ pub(crate) fn run() -> Result<()> {
         Cmd::Duck { project, depth, output } => crate::duck::run(&project, depth, output.as_deref())?,
         Cmd::Apply { project, ops, output } => crate::apply::run(&project, &ops, output.as_deref())?,
         Cmd::Describe { project } => crate::apply::describe(&project)?,
+        Cmd::OpsSchema => println!("{}", crate::apply::schema()),
         Cmd::Mixcheck { project, target } => crate::mixmeasure::run_cli(&project, target)?,
         Cmd::Play { input, osv_size, hwaccel, stabilize, imu_axes, world_z_down } => {
             player::run(input, player::Launch { osv_size, hw: hwaccel, stabilize, imu_axes, world_z_down })?;

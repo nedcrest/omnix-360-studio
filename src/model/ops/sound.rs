@@ -16,7 +16,7 @@ pub fn normal_gain(loudness: Option<f64>) -> f64 {
     loudness.map_or(0.0, crate::loudness::normalizing_gain)
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(tag = "op", rename_all = "snake_case", deny_unknown_fields)]
 pub enum SoundOp {
     /// Its own level, dB (the level tag), from `OFF_DB` (silent) to

@@ -10,8 +10,9 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 /// Where a new cut goes.
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
+#[schemars(rename = "CutPlace")]
 pub enum Place {
     /// After the last cut.
     End,
@@ -22,7 +23,7 @@ pub enum Place {
     Join(f64),
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(tag = "op", rename_all = "snake_case", deny_unknown_fields)]
 pub enum CutOp {
     /// A cut of `input` from `start` to `end` (seconds in the clip), with

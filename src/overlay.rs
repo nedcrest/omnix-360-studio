@@ -113,7 +113,8 @@ impl Item {
 
 /// Where an item is: its centre on the frame (0..1 across and down), its
 /// size (1 fits the whole frame, keeping its shape) and its turn.
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+#[schemars(rename = "OverlayPlace")]
 pub struct Place {
     #[serde(default = "half")]
     pub x: f64,

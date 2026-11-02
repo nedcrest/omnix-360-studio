@@ -105,7 +105,7 @@ impl Sound {
 /// its arms in the `match`es the compiler then points to (`track`,
 /// `track_mut`, its name and colour, where a new clip goes). Everything else
 /// goes over `ALL`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum SoundTrack {
     Music,

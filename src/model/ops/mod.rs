@@ -21,7 +21,7 @@ use crate::project::{Id, Own, Project, SoundTrack};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(tag = "area", rename_all = "snake_case")]
 pub enum Op {
     Cut(cuts::CutOp),
@@ -33,7 +33,7 @@ pub enum Op {
 
 /// A sound that has its own level, line and fades: a cut's or a sound
 /// clip's, by id.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum SoundRef {
     Cut(Id),
@@ -82,7 +82,7 @@ fn said(summary: String) -> Result<Outcome, OpError> {
 }
 
 /// Which end of a cut, a clip or a fade.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum End {
     In,

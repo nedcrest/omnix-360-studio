@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 
 /// The effects' values; the default (all 0, opacity 1) is the picture
 /// untouched.
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct Grade {
     /// Stops, −3..3.
     #[serde(default, skip_serializing_if = "is_zero")]

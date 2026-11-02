@@ -13,7 +13,7 @@ use crate::view::{Ease, Follow, View};
 use serde::{Deserialize, Serialize};
 
 /// What has effects: a cut or an overlay/text item.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Graded {
     Cut(Id),
@@ -22,7 +22,7 @@ pub enum Graded {
 
 /// A row of keyframes: a cut's view, something's effects, or an item's
 /// motion.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Line {
     View(Id),
@@ -45,7 +45,7 @@ fn half_a_frame() -> f64 {
     1.0 / 60.0
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(tag = "op", rename_all = "snake_case", deny_unknown_fields)]
 pub enum KeyOp {
     /// The view shown at `t` in cut `cut`: the key within `tolerance` set

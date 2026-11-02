@@ -28,6 +28,13 @@ pub fn run(project: &Path, ops: &Path, output: Option<&Path>) -> Result<()> {
     Ok(())
 }
 
+/// The JSON Schema of an ops file: a list of `Op`, each field described by
+/// its doc comment, so an agent's tools come from the same types the
+/// player applies.
+pub fn schema() -> String {
+    serde_json::to_string_pretty(&schemars::schema_for!(Vec<Op>)).expect("a schema is JSON")
+}
+
 /// What `project` holds, a line each, by id: what ops name.
 pub fn describe(project: &Path) -> Result<()> {
     let p = Project::load(project)?;
@@ -59,4 +66,19 @@ pub fn describe(project: &Path) -> Result<()> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn the_schema_names_every_area_and_op_with_what_it_does() {
+        let schema = super::schema();
+        for word in ["\"cut\"", "\"clip\"", "\"sound\"", "\"item\"", "\"key\"", "\"split\"", "\"duck\"", "\"look_to_all\"", "\"set_text\""] {
+            assert!(schema.contains(word), "{word} missing");
+        }
+        assert!(schema.contains("replacing a duck before"), "doc comments become descriptions");
+        // And it is a schema an agent's tool list can take.
+        let v: serde_json::Value = serde_json::from_str(&schema).unwrap();
+        assert_eq!(v["type"], "array");
+    }
 }

@@ -14,7 +14,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::path::PathBuf;
 use std::fmt;
 
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, clap::ValueEnum)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, clap::ValueEnum, schemars::JsonSchema)]
 #[serde(rename_all = "kebab-case")]
 pub enum Projection {
     Perspective,
@@ -46,7 +46,7 @@ impl fmt::Display for Projection {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct View {
     pub yaw: f64,
     pub pitch: f64,
@@ -243,7 +243,7 @@ impl From<Aspect> for String {
 }
 
 /// How a keyframe moves on to the next one.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "kebab-case")]
 pub enum Ease {
     /// Eases out of this keyframe and into the next.
@@ -289,6 +289,15 @@ pub enum Follow {
     Stick,
     /// A subject tracked by colour (`rosmo360 track`): the CSV it wrote.
     Track(PathBuf),
+}
+
+impl schemars::JsonSchema for Follow {
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        "Follow".into()
+    }
+    fn json_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        schemars::json_schema!({ "type": "string", "description": "\"stick\": the selfie stick (whoever holds it); else the path of a colour track's CSV (rosmo360 track)" })
+    }
 }
 
 impl Serialize for Follow {

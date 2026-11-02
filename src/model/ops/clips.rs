@@ -8,7 +8,7 @@ use crate::project::{Id, Project, SoundTrack};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(tag = "op", rename_all = "snake_case", deny_unknown_fields)]
 pub enum ClipOp {
     /// `input` from `start` to `end` (its own time) on `track`, playing

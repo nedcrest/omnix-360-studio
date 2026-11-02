@@ -32,7 +32,7 @@ const FONT_FILES: [&[u8]; 9] = [
     include_bytes!("../fonts/PermanentMarker/PermanentMarker-Regular.ttf"),
 ];
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Text {
     pub content: String,
@@ -62,14 +62,14 @@ impl Default for Text {
 }
 
 /// A line drawn around the letters, `width` as a share of the text's size.
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Outline {
     pub colour: Colour,
     pub width: f64,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum TextAlign {
     Left,
@@ -108,6 +108,15 @@ impl Colour {
         }
         let v = u32::from_str_radix(s, 16).ok()?;
         Some(Colour([(v >> 16) as u8, (v >> 8) as u8, v as u8]))
+    }
+}
+
+impl schemars::JsonSchema for Colour {
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        "Colour".into()
+    }
+    fn json_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        schemars::json_schema!({ "type": "string", "pattern": "^#[0-9a-fA-F]{6}$", "description": "An sRGB colour, #rrggbb" })
     }
 }
 

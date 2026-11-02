@@ -208,6 +208,15 @@ User: would split into video tracks and sound tracks.
     needs the next cut's sound primed early (it already pre-rolls 3 s).
   - The full ungroup (independent items, group ids) can come later, if this
     falls short.
+- **What grouped and ungrouped look like** (user, 2026-11-02, checking
+  timeline pack 1): grouped, the selection frame goes round the picture
+  only, its sound under it without one: it goes with the picture. Once
+  ungrouped (or split, J/L), the sound gets a frame of its own when
+  selected, as any clip has: a sign that it now moves, trims and goes
+  on its own (taken away, slid, or kept under another picture cut into
+  its place). Pack 1's `selection_frame` and trim handles are what it
+  draws; the clip sound lane's block then takes presses for its own
+  edges.
 - **Connected clips** (from `TIMELINE-UX.md`, FCP / CapCut track linkage):
   overlays and voice-over attached to a cut, moving with it. Same data
   model as step B (a link between items), so it is designed with it and

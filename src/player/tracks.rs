@@ -223,11 +223,17 @@ impl App {
                 self.sound_menu = None;
                 self.ducking = true;
                 // Each voice's waveform (cached, or read once), off the UI thread.
-                let project = (*self.edit).clone();
-                return Task::perform(blocking(move || crate::duck::find_speech(&project).map_err(|e| format!("{e:#}"))), Message::Ducked);
+                let (project, version) = ((*self.edit).clone(), self.edit.version);
+                return Task::perform(blocking(move || crate::duck::find_speech(&project).map_err(|e| format!("{e:#}"))), move |r| Message::Ducked(version, r));
+            }
+            // The edit changed while the speech was found (a take moved):
+            // found again, so the music isn't lowered where speech was.
+            Message::Ducked(version, _) if version != self.edit.version => {
+                self.ducking = false;
+                return self.on_tracks(Message::Duck);
             }
             Message::Duck => {}
-            Message::Ducked(result) => {
+            Message::Ducked(_, result) => {
                 self.ducking = false;
                 match result {
                     Err(e) => self.error = Some(format!("Can't find the speech: {e}")),

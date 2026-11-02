@@ -338,7 +338,8 @@ enum Message {
     /// speech found (edit time), read off the UI thread.
     DuckDepth(f64),
     Duck,
-    Ducked(Result<Vec<(f64, f64)>, String>),
+    /// Where speech was found, in the edit as it was at `version`.
+    Ducked(u64, Result<Vec<(f64, f64)>, String>),
     /// A level slider let go.
     LevelDone,
     /// Start an empty edit (asking first if there are unsaved changes).

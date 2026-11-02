@@ -134,6 +134,8 @@ impl App {
                 );
             }
             Message::OverlayPicked(paths) if !paths.is_empty() => {
+                // Folded, the lane opens to show what came.
+                self.folds.overlay = false;
                 self.edit.checkpoint();
                 // One after another from the playhead, each where it fits.
                 let mut at = self.position();
@@ -207,6 +209,7 @@ impl App {
                 self.error = Some(format!("Couldn't read the overlay {}: {e}", key.trim_start_matches("file:")));
             }
             Message::AddText => {
+                self.folds.text = false;
                 self.edit.checkpoint();
                 let at = self.position();
                 let lane = self.edit.lane_mut(crate::overlay::Track::Text);

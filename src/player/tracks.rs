@@ -146,6 +146,9 @@ impl App {
                 // lane, so the two sound together (gap 46e).
                 let busy = |t: SoundTrack| self.edit.track(t).clips.iter().any(|c| at < c.ends() - 1e-6 && at + len > c.at + 1e-6);
                 let which = if which == SoundTrack::Sfx && busy(SoundTrack::Sfx) && !busy(SoundTrack::Sfx2) { SoundTrack::Sfx2 } else { which };
+                if which == SoundTrack::Sfx2 {
+                    self.folds.sfx2 = false;
+                }
                 let i = self.edit.track_mut(which).append(path.clone(), at, len);
                 self.selected_music = Some((which, i));
                 self.selected = None;

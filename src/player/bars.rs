@@ -284,6 +284,7 @@ impl App {
             listen: self.listen,
             check_marks: self.check_marks(),
             ruler: if self.ruler_large { timeline::RULER_LARGE } else { timeline::RULER_COMPACT },
+            folds: self.folds,
             video: self.edit.duration(),
             clips_db: self.edit.sound.volume,
             duration: self.edit.frame(),
@@ -295,7 +296,7 @@ impl App {
             overlays: self.overlay_blocks(crate::overlay::Track::Overlay),
             texts: self.overlay_blocks(crate::overlay::Track::Text),
             selected_overlay: self.selected_overlay,
-            rows: timeline::Rows::new(self.split, self.framing),
+            rows: timeline::Rows::new(self.split, self.framing, self.folds),
         }
         .view();
         timeline

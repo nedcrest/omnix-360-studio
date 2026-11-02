@@ -75,9 +75,12 @@ pub struct Rows {
     keys: f32,
     keys_top: f32,
     seek_top: f32,
-    /// A sound lane's height, and where the first starts.
+    /// A sound lane's height, and where the first starts; a folded lane
+    /// (SFX 2) is `FOLDED` high.
     music: f32,
     sounds_top: f32,
+    /// Whether each sound lane is folded (`SoundTrack::ALL`'s order).
+    folded: [bool; SOUND_LANES],
     height: f32,
     overlay: f32,
 }
@@ -85,7 +88,7 @@ pub struct Rows {
 impl Rows {
     /// `framing`: the View key row shows (it holds the view's keyframes);
     /// editing, it's left out and the lanes below move up.
-    pub fn new(scale: f32, framing: bool) -> Self {
+    pub fn new(scale: f32, framing: bool, folds: Folds) -> Self {
         let scale = scale.clamp(*SCALES.start(), *SCALES.end());
         let (cuts, music) = ((CUTS * scale).round(), (MUSIC * scale).round());
         let clip_sound = (CLIP_SOUND * scale).round();
@@ -93,24 +96,35 @@ impl Rows {
         let keys = if framing { KEYS } else { 0.0 };
         let seek_top = effects_top + EFFECTS + keys;
         let sounds_top = seek_top + SEEK;
-        let height = sounds_top + SOUND_LANES as f32 * music + SCROLL;
-        Rows { cuts, clip_sound, effects_top, keys_top: effects_top + EFFECTS, keys, seek_top, music, sounds_top, height, overlay: (OVERLAY * scale).round() }
+        let folded = SoundTrack::ALL.map(|w| w == SoundTrack::Sfx2 && folds.sfx2);
+        let lanes: f32 = folded.iter().map(|&f| if f { FOLDED } else { music }).sum();
+        let height = sounds_top + lanes + SCROLL;
+        Rows { cuts, clip_sound, effects_top, keys_top: effects_top + EFFECTS, keys, seek_top, music, sounds_top, folded, height, overlay: (OVERLAY * scale).round() }
     }
 
     /// Where sound lane `i` starts.
     fn sound_top(self, i: usize) -> f32 {
-        self.sounds_top + i as f32 * self.music
+        self.sounds_top + (0..i).map(|j| self.lane_h(j)).sum::<f32>()
+    }
+
+    /// Sound lane `i`'s height: thin while folded.
+    fn lane_h(self, i: usize) -> f32 {
+        if self.folded.get(i).copied().unwrap_or(false) { FOLDED } else { self.music }
+    }
+
+    /// The sound lanes' height together.
+    fn sounds_h(self) -> f32 {
+        (0..SOUND_LANES).map(|i| self.lane_h(i)).sum()
     }
 
     /// Where sound lane `i`'s volume line runs.
     fn sound_lane(self, i: usize) -> Lane {
-        (self.sound_top(i) + 4.0, self.music - 8.0)
+        (self.sound_top(i) + 4.0, self.lane_h(i) - 8.0)
     }
 
     /// The sound lane at height `y`, if any.
     fn sound_at_y(self, y: f32) -> Option<usize> {
-        let i = ((y - self.sounds_top) / self.music).floor();
-        (y >= self.sounds_top && i < SOUND_LANES as f32).then_some(i as usize)
+        (0..SOUND_LANES).find(|&i| y >= self.sound_top(i) && y < self.sound_top(i) + self.lane_h(i))
     }
 
     /// Where the cuts' volume lines run: over the clip sound lane.
@@ -293,6 +307,8 @@ pub struct Timeline {
     pub check_marks: Vec<(f64, f64, bool)>,
     /// The time ruler's height (`RULER_LARGE` or `RULER_COMPACT`).
     pub ruler: f32,
+    /// Which foldable lanes are folded to a thin row.
+    pub folds: Folds,
 }
 
 #[derive(Default)]
@@ -456,6 +472,9 @@ impl Timeline {
     /// A fade handle under `p` on sound lane `lane`: (clip, at its start).
     /// The handles sit along the clip's top, where its fades end.
     fn fade_at(&self, lane: usize, p: Point, b: Rectangle) -> Option<(usize, bool)> {
+        if self.rows.folded[lane] {
+            return None;
+        }
         let top = self.rows.sound_top(lane) + 2.0;
         if p.y > top + FADE_BAND {
             return None;
@@ -513,7 +532,7 @@ impl Timeline {
     fn owns_at_y(&self, y: f32) -> Vec<Own> {
         if self.rows.on_clip_sound(y) {
             (0..self.blocks.len()).map(Own::Cut).collect()
-        } else if let Some(li) = self.rows.sound_at_y(y) {
+        } else if let Some(li) = self.rows.sound_at_y(y).filter(|&li| !self.rows.folded[li]) {
             let which = self.sounds[li].which;
             (0..self.sounds[li].blocks.len()).map(|i| Own::Clip(which, i)).collect()
         } else {
@@ -621,7 +640,18 @@ impl Timeline {
         let palette = theme.extended_palette();
         let SoundLane { which, blocks, track } = &self.sounds[li];
         let colour = lane_colour(crate::mixcheck::Lane::Track(*which), theme);
-        let (top, h) = (self.rows.sound_top(li) + 2.0, self.rows.music - 4.0);
+        let (top, h) = (self.rows.sound_top(li) + 2.0, self.rows.lane_h(li) - 4.0);
+        if self.rows.folded[li] {
+            // Folded: where its clips are, thin, its name to open it.
+            let mid = self.rows.sound_top(li) + self.rows.lane_h(li) / 2.0;
+            for m in blocks {
+                let (l, r) = (self.x(m.from, b), self.x(m.from + m.len, b));
+                frame.fill(&Path::rounded_rectangle(Point::new(l, mid - 3.0), Size::new((r - l).max(2.0), 6.0), 2.0.into()), colour.scale_alpha(0.7));
+            }
+            lane_tag(frame, &self.sound_tag(li), colour, mid);
+            draw_listen(frame, &self.sound_tag(li), mid, &self.listen, super::listen::lane_of(*which));
+            return;
+        }
         let lane = Path::rounded_rectangle(Point::new(self.x(0.0, b), top), Size::new((self.x(self.duration, b) - self.x(0.0, b)).max(0.0), h), 4.0.into());
         frame.fill(&lane, palette.background.weak.color.scale_alpha(0.5));
         for (i, m) in blocks.iter().enumerate() {
@@ -685,7 +715,7 @@ impl Timeline {
             let x = self.x(self.video, b);
             let to = self.x(self.duration, b);
             frame.fill(&Path::rectangle(Point::new(x, top), Size::new((to - x).max(0.0), h)), iced::Color::from_rgba(0.0, 0.0, 0.0, 0.55));
-            frame.fill(&Path::rectangle(Point::new(x - 1.0, self.rows.sound_top(li)), Size::new(2.0, self.rows.music)), palette.background.base.text.scale_alpha(0.8));
+            frame.fill(&Path::rectangle(Point::new(x - 1.0, self.rows.sound_top(li)), Size::new(2.0, self.rows.lane_h(li))), palette.background.base.text.scale_alpha(0.8));
         }
         // Each clip's own line, inside it.
         for (i, m) in blocks.iter().enumerate() {
@@ -694,8 +724,8 @@ impl Timeline {
         for i in 0..blocks.len() {
             draw_tag(frame, self.level_tag_at(Own::Clip(*which, i), b), &blocks[i].level);
         }
-        lane_tag(frame, which.name(), colour, top + h / 2.0);
-        draw_listen(frame, which.name(), top + h / 2.0, &self.listen, super::listen::lane_of(*which));
+        lane_tag(frame, &self.sound_tag(li), colour, top + h / 2.0);
+        draw_listen(frame, &self.sound_tag(li), top + h / 2.0, &self.listen, super::listen::lane_of(*which));
     }
 
     /// An own volume line (a cut's or a sound clip's) inside its block on
@@ -780,9 +810,9 @@ impl Timeline {
                 (&c.level, c.from, c.len, self.rows.cuts + 1.0, self.rows.clip_sound - 2.0)
             }
             Own::Clip(which, i) => {
-                let li = self.sounds.iter().position(|l| l.which == which)?;
+                let li = self.sounds.iter().position(|l| l.which == which).filter(|&li| !self.rows.folded[li])?;
                 let m = self.sounds[li].blocks.get(i)?;
-                (&m.level, m.from, m.len, self.rows.sound_top(li) + 2.0, self.rows.music - 4.0)
+                (&m.level, m.from, m.len, self.rows.sound_top(li) + 2.0, self.rows.lane_h(li) - 4.0)
             }
         };
         let (l, r) = (self.x(from, b) + GAP / 2.0, self.x(from + len, b) - GAP / 2.0);
@@ -795,17 +825,40 @@ impl Timeline {
         Some(Rectangle::new(Point::new(x, top + h / 2.0 - 7.0), Size::new(w, 14.0)))
     }
 
+    /// Sound lane `li`'s name tag: with its fold arrow for SFX 2 («▸ SFX 2
+    /// (3)» folded, «▾ SFX 2» open), plain for the others.
+    fn sound_tag(&self, li: usize) -> String {
+        let lane = &self.sounds[li];
+        match lane.which {
+            SoundTrack::Sfx2 if self.rows.folded[li] => format!("▸ {} ({})", lane.which.name(), lane.blocks.len()),
+            SoundTrack::Sfx2 => format!("▾ {}", lane.which.name()),
+            w => w.name().to_owned(),
+        }
+    }
+
+    /// The fold toggle under `p`: a folded lane anywhere (but its solo and
+    /// mute), an open one on its name tag.
+    fn fold_at(&self, p: Point) -> Option<(FoldLane, bool)> {
+        let li = self.rows.sound_at_y(p.y)?;
+        if self.sounds[li].which != SoundTrack::Sfx2 {
+            return None;
+        }
+        let mid = self.rows.sound_top(li) + self.rows.lane_h(li) / 2.0;
+        let folded = self.rows.folded[li];
+        (folded || fold_tag(&self.sound_tag(li), mid).contains(p)).then_some((FoldLane::Sfx2, !folded))
+    }
+
     /// A sound lane's solo (`true`) or mute button under `p`: the lane
     /// (`listen::lane_of`) and which.
     fn listen_button_at(&self, p: Point) -> Option<(usize, bool)> {
         let (name, mid, lane) = if self.rows.on_clip_sound(p.y) {
-            ("Clip sound", self.rows.cuts + self.rows.clip_sound / 2.0, super::listen::CLIP_SOUND)
+            ("Clip sound".to_owned(), self.rows.cuts + self.rows.clip_sound / 2.0, super::listen::CLIP_SOUND)
         } else {
             let li = self.rows.sound_at_y(p.y)?;
             let which = self.sounds[li].which;
-            (which.name(), self.rows.sound_top(li) + self.rows.music / 2.0, super::listen::lane_of(which))
+            (self.sound_tag(li), self.rows.sound_top(li) + self.rows.lane_h(li) / 2.0, super::listen::lane_of(which))
         };
-        let [solo, mute] = listen_buttons(name, mid);
+        let [solo, mute] = listen_buttons(&name, mid);
         if solo.expand(1.0).contains(p) {
             Some((lane, true))
         } else {
@@ -896,9 +949,29 @@ impl OverlayLane {
         }
     }
 
-    /// The lane, and its keyframe rows once it has items.
+    fn folded(&self) -> bool {
+        match self.1 {
+            Track::Text => self.0.folds.text,
+            Track::Overlay => self.0.folds.overlay,
+        }
+    }
+
+    fn fold_lane(&self) -> FoldLane {
+        match self.1 {
+            Track::Text => FoldLane::Text,
+            Track::Overlay => FoldLane::Overlay,
+        }
+    }
+
+    /// The lane, and its keyframe rows once it has items; folded, a thin row.
     fn height(&self) -> f32 {
-        if self.blocks().is_empty() { self.0.rows.overlay } else { self.0.rows.overlay + EFFECTS + KEYS }
+        if self.folded() {
+            FOLDED
+        } else if self.blocks().is_empty() {
+            self.0.rows.overlay
+        } else {
+            self.0.rows.overlay + EFFECTS + KEYS
+        }
     }
 
     /// The keyframe mark under `p` in its row: the item, whether it's in
@@ -918,6 +991,21 @@ impl OverlayLane {
                 .find(|&(_, t)| (self.0.x(t, b) - p.x).abs() <= PICK)
                 .map(|(key, t)| (item, effects, key, t))
         })
+    }
+}
+
+impl OverlayLane {
+    /// Its name and colour.
+    fn name(&self) -> (&'static str, iced::Color) {
+        match self.1 {
+            Track::Overlay => ("Overlay", OVERLAY_COLOUR),
+            Track::Text => ("Text", TEXT_COLOUR),
+        }
+    }
+
+    /// Its tag's words: «▸ Text (2)» folded, «▾ Text» open.
+    fn tag_name(&self, name: &str) -> String {
+        if self.folded() { format!("▸ {name} ({})", self.blocks().len()) } else { format!("▾ {name}") }
     }
 }
 
@@ -951,6 +1039,11 @@ impl canvas::Program<Message> for OverlayLane {
             }
             Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
                 let p = cursor.position_in(bounds)?;
+                // Folded, a click anywhere opens it; open, its name folds it.
+                let (name, _) = self.name();
+                if self.folded() || fold_tag(&self.tag_name(name), (self.0.rows.overlay - 4.0) / 2.0 + 2.0).contains(p) {
+                    return Some(canvas::Action::publish(Message::Fold(self.fold_lane(), !self.folded())).and_capture());
+                }
                 if let Some((item, effects, key, at)) = self.key_at(p, bounds) {
                     // A jump there, and a drag retimes it.
                     *drag = OverlayDrag::Key { item, effects, key };
@@ -997,13 +1090,22 @@ impl canvas::Program<Message> for OverlayLane {
         let t = &self.0;
         let palette = theme.extended_palette();
         let mut frame = Frame::new(renderer, bounds.size());
+        let (name, colour) = self.name();
+        if self.folded() {
+            // Folded: where its items are, thin, and its name to open it.
+            let mid = FOLDED / 2.0;
+            for o in self.blocks() {
+                let (l, r) = (t.x(o.from, bounds), t.x(o.from + o.len, bounds));
+                frame.fill(&Path::rounded_rectangle(Point::new(l, mid - 3.0), Size::new((r - l).max(2.0), 6.0), 2.0.into()), colour.scale_alpha(0.7));
+            }
+            lane_tag(&mut frame, &self.tag_name(name), colour, mid);
+            let at = t.x(t.position, bounds);
+            frame.fill(&Path::rectangle(Point::new(at - 1.0, 0.0), Size::new(2.0, FOLDED)), palette.primary.strong.color);
+            return vec![frame.into_geometry()];
+        }
         let (top, h) = (2.0, self.0.rows.overlay - 4.0);
         let lane = Path::rounded_rectangle(Point::new(t.x(0.0, bounds), top), Size::new((t.x(t.duration, bounds) - t.x(0.0, bounds)).max(0.0), h), 4.0.into());
         frame.fill(&lane, palette.background.weak.color.scale_alpha(0.5));
-        let (name, colour) = match self.1 {
-            Track::Overlay => ("Overlay", OVERLAY_COLOUR),
-            Track::Text => ("Text", TEXT_COLOUR),
-        };
         for (i, o) in self.blocks().iter().enumerate() {
             let (l, r) = (t.x(o.from, bounds) + GAP / 2.0, t.x(o.from + o.len, bounds) - GAP / 2.0);
             if r < 0.0 || l > bounds.width {
@@ -1054,7 +1156,7 @@ impl canvas::Program<Message> for OverlayLane {
                 }
             }
         }
-        lane_tag(&mut frame, name, colour, top + h / 2.0);
+        lane_tag(&mut frame, &self.tag_name(name), colour, top + h / 2.0);
         let at = t.x(t.position, bounds);
         frame.fill(&Path::rectangle(Point::new(at - 1.0, 0.0), Size::new(2.0, self.height())), palette.primary.strong.color);
         vec![frame.into_geometry()]
@@ -1294,6 +1396,8 @@ impl canvas::Program<Message> for Marks {
                     Message::TimelinePan(start)
                 } else if let Some((lane, solo)) = self.listen_button_at(p) {
                     Message::Listen(lane, solo)
+                } else if let Some((lane, folded)) = self.fold_at(p) {
+                    Message::Fold(lane, folded)
                 } else if let Some((cut, key, t)) = self.effect_at(p, bounds) {
                     // A jump there, and a drag retimes it.
                     *drag = Drag::Effect { cut, key };
@@ -1526,7 +1630,7 @@ impl canvas::Program<Message> for Marks {
         }
         self.draw_clip_sound(&mut frame, theme, bounds);
         frame.fill(&Path::rectangle(Point::new(at - 1.0, 0.0), Size::new(2.0, self.rows.seek_top)), palette.primary.strong.color);
-        frame.fill(&Path::rectangle(Point::new(at - 1.0, self.rows.sounds_top), Size::new(2.0, SOUND_LANES as f32 * self.rows.music)), palette.primary.strong.color);
+        frame.fill(&Path::rectangle(Point::new(at - 1.0, self.rows.sounds_top), Size::new(2.0, self.rows.sounds_h())), palette.primary.strong.color);
         if self.zoomed() {
             let y = self.rows.height - SCROLL / 2.0 - SCROLL_BAR / 2.0;
             let pill = |l: f32, r: f32| Path::rounded_rectangle(Point::new(l, y), Size::new((r - l).max(SCROLL_BAR), SCROLL_BAR), (SCROLL_BAR / 2.0).into());
@@ -1690,10 +1794,11 @@ mod tests {
             selected_music: None, selected_point: None,
             video: 10.0, clips_db: 0.0, duration: 10.0, start: 0.0, span: 10.0, position: 0.0,
             selected: None, current: None, overlays: vec![], texts: vec![], selected_overlay: None,
-            rows: Rows::new(1.0, false),
+            rows: Rows::new(1.0, false, Folds { sfx2: false, ..Folds::default() }),
             listen: Default::default(),
             check_marks: vec![],
             ruler: RULER_LARGE,
+            folds: Folds::default(),
         };
         (t, Rectangle::new(Point::ORIGIN, Size::new(1000.0 + 2.0 * PICK, 300.0)))
     }
@@ -1702,7 +1807,7 @@ mod tests {
     fn solo_and_mute_sit_beside_each_sound_lanes_name() {
         let (t, _) = timeline();
         let li = t.sounds.iter().position(|l| l.which == SoundTrack::Voice).unwrap();
-        let mid = t.rows.sound_top(li) + t.rows.music / 2.0;
+        let mid = t.rows.sound_top(li) + t.rows.lane_h(li) / 2.0;
         let [solo, mute] = listen_buttons("Voice", mid);
         let voice = super::super::listen::lane_of(SoundTrack::Voice);
         assert_eq!(t.listen_button_at(solo.center()), Some((voice, true)));
@@ -1712,6 +1817,30 @@ mod tests {
         // Past them, and the level tags start beyond.
         assert_eq!(t.listen_button_at(Point::new(mute.x + 40.0, mid)), None);
         assert!(mute.x + mute.width < PICK + 125.0);
+    }
+
+    #[test]
+    fn sfx_2_folds_to_a_strip_that_opens_on_a_press() {
+        let (mut t, b) = timeline();
+        let li = t.sounds.iter().position(|l| l.which == SoundTrack::Sfx2).unwrap();
+        t.sounds[li].blocks.push(MusicBlock { label: "boom".into(), from: 2.0, start: 0.0, len: 1.0, wave: None, fade_in: 0.0, fade_out: 0.0, volume: vec![], even_wave: None, level: "0 dB".into() });
+        let open = t.rows;
+        t.rows = Rows::new(1.0, false, Folds::default());
+        assert_eq!(t.rows.lane_h(li), FOLDED);
+        assert_eq!(open.height - t.rows.height, open.lane_h(li) - FOLDED, "only SFX 2 shrinks");
+        assert_eq!(t.sound_tag(li), "▸ SFX 2 (1)");
+        // Folded: a press anywhere on it opens it, nothing on it is hit.
+        let mid = t.rows.sound_top(li) + FOLDED / 2.0;
+        assert_eq!(t.fold_at(Point::new(t.x(2.5, b), mid)), Some((FoldLane::Sfx2, false)));
+        assert_eq!(t.fade_at(li, Point::new(t.x(2.5, b), mid), b), None);
+        // Open: only its name folds it; the other lanes never fold.
+        t.rows = open;
+        assert_eq!(t.sound_tag(li), "▾ SFX 2");
+        let mid = t.rows.sound_top(li) + t.rows.lane_h(li) / 2.0;
+        assert_eq!(t.fold_at(fold_tag(&t.sound_tag(li), mid).center()), Some((FoldLane::Sfx2, true)));
+        assert_eq!(t.fold_at(Point::new(t.x(2.5, b), mid)), None);
+        let voice = t.sounds.iter().position(|l| l.which == SoundTrack::Voice).unwrap();
+        assert_eq!(t.fold_at(Point::new(PICK + 20.0, t.rows.sound_top(voice) + 5.0)), None);
     }
 
     #[test]
@@ -1731,11 +1860,11 @@ mod tests {
     fn the_rows_stack_top_to_bottom_at_every_scale() {
         for scale in [0.5, 0.75, 1.0, 2.0, 3.0, 5.0] {
             for framing in [false, true] {
-                let r = Rows::new(scale, framing);
+                let r = Rows::new(scale, framing, Folds::default());
                 assert!(r.cuts < r.effects_top && r.effects_top < r.seek_top && r.seek_top < r.sounds_top && r.sounds_top < r.height, "{scale} {framing}: {r:?}");
                 assert_eq!(r.keys > 0.0, framing, "the View row only while framing");
                 for i in 0..SOUND_LANES {
-                    let middle = r.sound_top(i) + r.music / 2.0;
+                    let middle = r.sound_top(i) + r.lane_h(i) / 2.0;
                     assert_eq!(r.sound_at_y(middle), Some(i));
                 }
                 assert_eq!(r.sound_at_y(r.sounds_top - 1.0), None);
@@ -1744,7 +1873,7 @@ mod tests {
             }
         }
         // Scaled outside its range, it holds at the ends.
-        assert_eq!(Rows::new(10.0, false).cuts, Rows::new(3.0, false).cuts);
+        assert_eq!(Rows::new(10.0, false, Folds::default()).cuts, Rows::new(3.0, false, Folds::default()).cuts);
     }
 
     #[test]
@@ -1821,7 +1950,7 @@ fn listen_buttons(name: &str, mid: f32) -> [Rectangle; 2] {
 
 /// Lane `lane`'s «S» and «M», lit when on: yellow solo, red mute.
 fn draw_listen(frame: &mut Frame, name: &str, mid: f32, listen: &super::listen::Listen, lane: usize) {
-    let [solo, mute] = listen_buttons(name, mid);
+    let [solo, mute] = listen_buttons(&name, mid);
     for (r, label, on, lit) in [(solo, "S", listen.solo[lane], iced::Color::from_rgb(0.95, 0.79, 0.3)), (mute, "M", listen.muted[lane], iced::Color::from_rgb(1.0, 0.3, 0.3))] {
         frame.fill(&Path::rounded_rectangle(r.position(), r.size(), 3.0.into()), if on { lit } else { iced::Color::from_rgba(0.0, 0.0, 0.0, 0.7) });
         let ink = if on { iced::Color::BLACK } else { iced::Color::from_rgba(1.0, 1.0, 1.0, 0.75) };
@@ -1954,4 +2083,46 @@ impl canvas::Program<Message> for Ruler {
             mouse::Interaction::default()
         }
     }
+}
+
+/// The lanes that fold to a thin row (gap 50: folded by default, the
+/// picture and its sound the lanes that matter most).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FoldLane {
+    Text,
+    Overlay,
+    Sfx2,
+}
+
+/// Which of them are folded.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Folds {
+    pub text: bool,
+    pub overlay: bool,
+    pub sfx2: bool,
+}
+
+impl Default for Folds {
+    fn default() -> Self {
+        Folds { text: true, overlay: true, sfx2: true }
+    }
+}
+
+impl Folds {
+    pub fn set(&mut self, lane: FoldLane, folded: bool) {
+        *match lane {
+            FoldLane::Text => &mut self.text,
+            FoldLane::Overlay => &mut self.overlay,
+            FoldLane::Sfx2 => &mut self.sfx2,
+        } = folded;
+    }
+}
+
+/// A folded lane's height.
+const FOLDED: f32 = 18.0;
+
+/// Where a lane's name tag is (`lane_tag`), centred on `mid`: a click
+/// there folds or opens a foldable lane.
+fn fold_tag(name: &str, mid: f32) -> Rectangle {
+    Rectangle::new(Point::new(PICK + 2.0, mid - 7.5), Size::new(name.chars().count() as f32 * 6.0 + 22.0, 15.0))
 }

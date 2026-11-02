@@ -48,7 +48,9 @@ the last two line for line); sampling a keyed value three times
 
 **E. Selection:** five loose `Option`s; «select this and clear the rest»
 written by hand about eight times across `tracks.rs`, `cuts.rs`,
-`overlay_ui.rs`, `record_ui.rs`, `file.rs`.
+`overlay_ui.rs`, `record_ui.rs`, `file.rs`. **Resolved 2026-11-02**
+(step 5): one `Selection`; an overlay picked no longer leaves its cut
+selected too.
 
 **F. Normalize twice:** the CLI's (`loudness::normalize`, cuts only) and
 the dialog's (`sound_ui.rs`); «apply what was measured» in both; Lower
@@ -119,11 +121,10 @@ pub fn clip_gain(track: &Music, i: usize, t: f64, video_end: f64) -> f64;
 ```
 
 ```rust
-// model/selection.rs
+// model/selection.rs (built in player/ beside Edit, step 5)
 pub enum Selection { None, Cut(usize), Clip(SoundTrack, usize), Point(Own, usize), Item(ItemRef) }
 impl Selection {
-    pub fn still_valid(self, p: &Project) -> Self;
-    pub fn after_move(self, from: usize, to: usize) -> Self;
+    pub fn still_valid(self, edit: &Edit) -> Self;
 }
 impl Edit { pub fn delete(&mut self, s: Selection) -> bool; } // the delete arms in one
 ```
@@ -163,7 +164,7 @@ One commit each, behaviour unchanged unless the step says so. Tests
 | 2 | **Done 2026-11-01** (`787aa8a`): `project::Line`, `line_mut`; `own_line_mut` from `own_sound` | S | low |
 | 3 | **Done 2026-11-01** (`2c49a99`): `OwnSound::set_fade`, one `Message::Fade`, one `Drag::Fade` | S | low |
 | 4 | **Done 2026-11-01** (`61b6a5a`), checked by the user (2026-11-01); then the track's line removed altogether at their ask (gap 33i, `c34ae65`): points are only ever on an own line, `PointAdd/Select/Move(Own, …)`, `Drag::Point`, one `selected_point`, one Del, one K | M | medium: drags, Ctrl+click, K |
-| 5 | `Selection` enum and `Edit::delete` | M | medium: ten files; removes a known source of bugs |
+| 5 | **Done 2026-11-02** (`7fc2c31`), waiting for the user's check: `player/selection.rs` (beside `edit.rs`, to move with it in step 7): `Selection`, `still_valid`, `Edit::delete`; four `App` fields became one. No `after_move`: a moved cut is selected outright | M | medium: ten files; removes a known source of bugs |
 | 6 | Normalize in the core: `OwnSound::{apply_measure, lower, restore}`, one runner with the measuring passed in; the CLI gains `--track` | S | low |
 | 7 | Moves: `edit.rs` → `model/`, `config_dir` → `fsutil`, `Waveform` → media, `gpu`/`render`/shaders → `src/gpu/`, `Cut::sound_file` → media | M | low logic risk |
 | 8 | `curve` with `Key`/`Lerp`; volume points, `change_effects`, `change_place` on it | M | low |

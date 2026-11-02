@@ -4,17 +4,23 @@
 //! project the same way.
 
 pub mod edit;
+pub mod ops;
 pub mod selection;
 
 #[cfg(test)]
 mod tests {
+    use std::path::{Path, PathBuf};
+
+    /// Every file under `dir`.
+    fn files(dir: &Path) -> Vec<PathBuf> {
+        std::fs::read_dir(dir).unwrap().map(|e| e.unwrap().path()).flat_map(|p| if p.is_dir() { files(&p) } else { vec![p] }).collect()
+    }
+
     /// The layer's one rule, checked: nothing here reaches the player,
     /// ffmpeg or iced.
     #[test]
     fn the_core_imports_no_player_media_or_window() {
-        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/model");
-        for entry in std::fs::read_dir(&dir).unwrap() {
-            let path = entry.unwrap().path();
+        for path in files(&Path::new(env!("CARGO_MANIFEST_DIR")).join("src/model")) {
             let text = std::fs::read_to_string(&path).unwrap();
             // Spelt in pieces, or this file would find itself.
             for banned in [["crate::", "player"].concat(), ["crate::", "ffmpeg"].concat(), ["iced", "::"].concat()] {

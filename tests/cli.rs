@@ -177,3 +177,39 @@ fn mixcheck_finds_music_too_loud_under_the_voice() {
     assert!(said.contains("Voice") && said.contains("speech"), "{said}");
     assert!(!quiet.contains("Music only"), "{quiet}");
 }
+
+#[test]
+fn ops_from_a_file_duck_the_music_and_twice_is_once() {
+    if !has_ffmpeg() {
+        return;
+    }
+    let d = dir("apply");
+    clip(&d, "a.mp4", 6.0, 440);
+    ffmpeg(&d, &["-f", "lavfi", "-i", "sine=f=660:d=3:sample_rate=48000,volume=-6dB", "take.wav"]);
+    ffmpeg(&d, &["-f", "lavfi", "-i", "sine=f=220:d=6:sample_rate=48000,volume=-6dB", "song.wav"]);
+    std::fs::write(d.join("edit.json"), r#"{"cuts": [{"input": "a.mp4", "in": 0, "out": 6, "mute": true}],
+        "voice": {"clips": [{"input": "take.wav", "at": 1, "in": 0, "out": 3}]},
+        "music": {"clips": [{"input": "song.wav", "at": 0, "in": 0, "out": 6}]}}"#).unwrap();
+    // Ids are given on load: the cut, then the song, then the take.
+    let held = omnix(&d, &["describe", "edit.json"]);
+    let duck = |depth: u32| format!(r#"[{{"area": "sound", "op": "duck", "depth": {depth}, "speech": [[1, 4]]}}]"#);
+    std::fs::write(d.join("20.json"), duck(20)).unwrap();
+    std::fs::write(d.join("18.json"), duck(18)).unwrap();
+    // 20, then 18, against 18 alone (user, 2026-11-02: from the original).
+    omnix(&d, &["apply", "edit.json", "20.json", "-o", "a.json"]);
+    let said = omnix(&d, &["apply", "a.json", "18.json", "-o", "b.json"]);
+    omnix(&d, &["apply", "edit.json", "18.json", "-o", "c.json"]);
+    let twice = omnix(&d, &["mixcheck", "b.json"]);
+    let once = omnix(&d, &["mixcheck", "c.json"]);
+    // An op on what isn't there is refused, and nothing is written.
+    std::fs::write(d.join("bad.json"), r#"[{"area": "sound", "op": "mute", "sound": {"cut": 42}, "on": true}]"#).unwrap();
+    let bad = Command::new(env!("CARGO_BIN_EXE_rosmo360")).current_dir(&d).args(["apply", "edit.json", "bad.json", "-o", "d.json"]).output().unwrap();
+    let wrote_bad = d.join("d.json").exists();
+    std::fs::remove_dir_all(&d).unwrap();
+    assert!(held.contains("cut #1") && held.contains("clip #2") && held.contains("clip #3"), "{held}");
+    assert!(said.contains("music 18 dB down under 1 stretches"), "{said}");
+    let speech = |s: &str| s.lines().find(|l| l.contains("speech to")).map(str::to_owned);
+    assert_eq!(speech(&twice), speech(&once), "{twice}\n{once}");
+    assert!(!twice.contains("Music only"), "{twice}");
+    assert!(!bad.status.success() && String::from_utf8_lossy(&bad.stderr).contains("no cut #42") && !wrote_bad);
+}

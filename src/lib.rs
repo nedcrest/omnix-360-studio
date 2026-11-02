@@ -5,6 +5,7 @@
 //! Map and plan: `docs/omnix/ARCHITECTURE.md`.
 
 mod align;
+mod apply;
 mod cache;
 mod capture;
 mod check;

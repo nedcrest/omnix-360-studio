@@ -465,9 +465,12 @@ impl Playback {
         if self.playing { self.shown_pts } else { self.anchor_pts }
     }
 
-    /// Where the seek bar should sit: under the pointer while dragging.
+    /// Where the seek bar should sit: under the pointer while dragging, and
+    /// paused, where it was put, before its frame has decoded (a click on
+    /// another clip showed the playhead at that clip's start a moment
+    /// first: the user, 2026-11-03).
     pub fn position(&self) -> f64 {
-        if self.scrub.is_some() { self.anchor_pts } else { self.shown_pts }
+        if self.scrub.is_some() || !self.playing { self.anchor_pts } else { self.shown_pts }
     }
 
     /// Turns the full-resolution paused frame on or off, swapping the one on

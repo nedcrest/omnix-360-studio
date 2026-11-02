@@ -898,6 +898,11 @@ impl App {
         self.edit.apply(&op).map_err(|e| self.error = Some(e.to_string())).ok()
     }
 
+    /// Which track the sound clip with id `id` is on, and where.
+    fn clip_index(&self, id: crate::project::Id) -> Option<(SoundTrack, usize)> {
+        SoundTrack::ALL.into_iter().find_map(|w| self.edit.track(w).clips.iter().position(|c| c.id == id).map(|i| (w, i)))
+    }
+
     /// Where the cut with id `id` is.
     fn cut_index(&self, id: crate::project::Id) -> Option<usize> {
         self.edit.cuts.iter().position(|c| c.id == id)

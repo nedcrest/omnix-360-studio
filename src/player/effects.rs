@@ -285,10 +285,10 @@ impl App {
             EffectMsg::Done => self.edit.commit(),
             EffectMsg::Lut(choice) => {
                 let Some((Target::Cut(i), _)) = target else { return };
-                self.edit.checkpoint();
-                let cut = &mut self.edit.cuts[i];
-                cut.lut = choice.name();
-                if let Err(e) = cut.resolve_lut() {
+                let cut = self.edit.cuts[i].id;
+                self.op(crate::model::ops::Op::Cut(crate::model::ops::cuts::CutOp::Lut { cut, lut: choice.name() }));
+                // Its file read here, in the player: the core only names it.
+                if let Err(e) = self.edit.cuts[i].resolve_lut() {
                     self.error = Some(format!("{e:#}"));
                 }
             }

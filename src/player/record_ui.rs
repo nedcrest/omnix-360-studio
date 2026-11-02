@@ -208,9 +208,11 @@ impl App {
                     Err(e) => self.record.error = Some(format!("The take wasn't saved: {e}")),
                     Ok((_, len)) if len - start < 0.1 => self.record.error = Some("Nothing was recorded after the countdown.".into()),
                     Ok((path, len)) => {
-                        self.edit.checkpoint();
-                        let i = self.edit.voice.append_part(path.clone(), at, start, len);
-                        self.selection = Selection::Clip(SoundTrack::Voice, i);
+                        use crate::model::ops::{Op, clips::ClipOp};
+                        let take = self.op(Op::Clip(ClipOp::Add { track: SoundTrack::Voice, input: path.clone(), at, start, end: len }));
+                        if let Some((w, i)) = take.and_then(|o| o.made).and_then(|id| self.clip_index(id)) {
+                            self.selection = Selection::Clip(w, i);
+                        }
                         return self.load_waveform(&path);
                     }
                 }

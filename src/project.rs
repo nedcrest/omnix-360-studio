@@ -374,12 +374,6 @@ impl Music {
         }
     }
 
-    /// Adds `len` seconds of `input` from its start, nearest `at` where it
-    /// fits (`place`), and returns its index.
-    pub fn append(&mut self, input: PathBuf, at: f64, len: f64) -> usize {
-        self.append_part(input, at, 0.0, len)
-    }
-
     /// Adds the file's `start`..`end` as a clip as near `at` as fits: a
     /// recorded take, its lead-in before the playback started left out.
     pub fn append_part(&mut self, input: PathBuf, at: f64, start: f64, end: f64) -> usize {
@@ -1036,9 +1030,6 @@ impl Project {
         }
     }
 
-    pub fn own_line_mut(&mut self, own: Own) -> Option<(&mut Vec<VolumeKey>, (f64, f64))> {
-        self.own_sound(own).map(|s| (s.volume, s.range))
-    }
 }
 
 /// The sound settings a cut and a sound clip share, borrowed to change
@@ -1130,7 +1121,7 @@ mod tests {
     fn everything_gets_an_id_once_and_a_split_half_a_new_one() {
         let mut p = Project::default();
         p.cuts = vec![Cut::new("a.mp4".into(), 0.0, 4.0), Cut { id: 7, ..Cut::new("b.mp4".into(), 0.0, 3.0) }];
-        p.music.append("song.wav".into(), 0.0, 10.0);
+        p.music.append_part("song.wav".into(), 0.0, 0.0, 10.0);
         p.text.push(crate::overlay::Lane::default());
         p.text[0].items.push(crate::overlay::Item { id: 0, input: PathBuf::new(), text: Some(Default::default()), at: 0.0, start: 0.0, end: 5.0, motion: Vec::new(), effects: Vec::new() });
         p.settle_ids();
@@ -1331,7 +1322,7 @@ mod tests {
     #[test]
     fn fades_stay_within_the_clip() {
         let mut p = Project::default();
-        p.music.append("a.wav".into(), 0.0, 10.0);
+        p.music.append_part("a.wav".into(), 0.0, 0.0, 10.0);
         let song = Own::Clip(SoundTrack::Music, 0);
         p.own_sound(song).unwrap().set_fade(true, 3.0);
         p.own_sound(song).unwrap().set_fade(false, 9.0);
@@ -1363,13 +1354,13 @@ mod tests {
     #[test]
     fn a_sound_appended_lands_where_it_fits() {
         let mut m = Music::default();
-        assert_eq!(m.append("a.wav".into(), 2.0, 5.0), 0);
+        assert_eq!(m.append_part("a.wav".into(), 2.0, 0.0, 5.0), 0);
         assert_eq!((m.clips[0].at, m.clips[0].end), (2.0, 5.0));
         // Wanted inside the first, nearer its end: it goes after it.
-        let i = m.append("b.wav".into(), 5.0, 1.0);
+        let i = m.append_part("b.wav".into(), 5.0, 0.0, 1.0);
         assert_eq!(m.clips[i].at, 7.0);
         // Nearer the first's start: it stops edge to edge before it.
-        let j = m.append("c.wav".into(), 2.5, 1.0);
+        let j = m.append_part("c.wav".into(), 2.5, 0.0, 1.0);
         assert_eq!(m.clips[j].at, 1.0);
     }
 
@@ -1410,9 +1401,9 @@ mod tests {
         p.cuts.push(Cut::new("a.mp4".into(), 2.0, 6.0));
         p.voice.clips.push(MusicClip { input: "take.wav".into(), at: 1.0, start: 0.5, end: 3.0, ..Default::default() });
         for (own, range) in [(Own::Cut(0), (2.0, 6.0)), (Own::Clip(SoundTrack::Voice, 0), (0.5, 3.0))] {
-            let (keys, r) = p.own_line_mut(own).unwrap();
-            assert_eq!(r, range);
-            add_volume_key(keys, range.0 + 1.0, -6.0);
+            let s = p.own_sound(own).unwrap();
+            assert_eq!(s.range, range);
+            add_volume_key(s.volume, range.0 + 1.0, -6.0);
             assert_eq!(p.own_line(own).unwrap().0.len(), 1);
         }
         assert!(p.own_line(Own::Clip(SoundTrack::Sfx, 0)).is_none());
@@ -1622,7 +1613,7 @@ mod tests {
     #[test]
     fn a_take_lands_without_its_lead_in() {
         let mut m = Music::default();
-        m.append("song.wav".into(), 10.0, 2.0);
+        m.append_part("song.wav".into(), 10.0, 0.0, 2.0);
         // 3.4 s recorded, the first 0.9 before the playback started.
         let i = m.append_part("take.wav".into(), 4.0, 0.9, 3.4);
         assert_eq!((m.clips[i].at, m.clips[i].start, m.clips[i].end), (4.0, 0.9, 3.4));

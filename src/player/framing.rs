@@ -170,13 +170,11 @@ impl App {
 
     /// Gives every D-Log M cut without a LUT the D-Log M one, one undo step.
     pub(super) fn lut_dlog_m_cuts(&mut self) {
-        let todo: Vec<usize> = (0..self.edit.cuts.len()).filter(|&i| self.edit.cuts[i].lut.is_none() && self.auto_lut(&self.edit.cuts[i].input).is_some()).collect();
-        if todo.is_empty() {
-            return;
-        }
-        self.edit.checkpoint();
-        for i in todo {
-            self.edit.cuts[i].lut = self.auto_lut(&self.edit.cuts[i].input.clone());
+        use crate::model::ops::{Op, cuts::CutOp};
+        // One undo step for them all.
+        let ops: Vec<Op> = self.edit.cuts.iter().filter(|c| c.lut.is_none()).filter_map(|c| Some(Op::Cut(CutOp::Lut { cut: c.id, lut: Some(self.auto_lut(&c.input)?) }))).collect();
+        if let Err((_, e)) = self.edit.batch(&ops) {
+            self.error = Some(e.to_string());
         }
     }
 
@@ -365,9 +363,8 @@ impl App {
             Message::Stab(mode) => {
                 // The playing cut's, and the one new cuts get.
                 self.opts.stabilize = mode;
-                if self.edit.cuts.get(self.current).is_some_and(|c| c.stabilize != Some(mode)) {
-                    self.edit.checkpoint();
-                    self.edit.cuts[self.current].stabilize = Some(mode);
+                if let Some(cut) = self.edit.cuts.get(self.current).map(|c| c.id) {
+                    self.op(crate::model::ops::Op::Cut(crate::model::ops::cuts::CutOp::Stabilize { cut, mode: Some(mode) }));
                 }
                 self.with_playback(|p| p.media.stab.set_mode(mode));
             }

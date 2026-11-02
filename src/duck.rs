@@ -305,7 +305,7 @@ mod tests {
         p.music.clips.push(crate::project::MusicClip { input: "s.wav".into(), at: 0.0, start: 0.0, end: 20.0, ..Default::default() });
         duck_music(&mut p.music, &[(5.0, 8.0)], 18.0);
         let own = crate::project::Own::Clip(crate::project::SoundTrack::Music, 0);
-        p.own_line_mut(own).unwrap().0.clear();
+        p.own_sound(own).unwrap().volume.clear();
         p.forget_duck(own);
         duck_music(&mut p.music, &[(5.0, 8.0)], 18.0);
         assert!(p.music.clips[0].volume.iter().all(|k| k.volume <= 1e-9), "{:?}", p.music.clips[0].volume);

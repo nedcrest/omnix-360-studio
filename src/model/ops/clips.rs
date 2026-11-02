@@ -31,7 +31,8 @@ pub enum ClipOp {
 pub(super) fn apply(p: &mut Project, op: &ClipOp) -> Result<Outcome, OpError> {
     match op {
         ClipOp::Add { track, input, at, start, end } => {
-            if !(*at >= 0.0 && end - start >= MIN_CUT) {
+            // Short is fine (a click); MIN_CUT is for splits and trims.
+            if !(*at >= 0.0 && end > start) {
                 return Err(OpError::Invalid(format!("a clip at {at} s from {start} to {end} s is empty or before the edit")));
             }
             let busy = |p: &Project, t: SoundTrack| p.track(t).clips.iter().any(|c| *at < c.ends() - 1e-6 && at + (end - start) > c.at + 1e-6);

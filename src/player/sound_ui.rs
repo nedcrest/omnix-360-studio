@@ -171,10 +171,11 @@ impl App {
             SoundMsg::Clean(own, on) => self.sound_op(own, |sound| SoundOp::Clean { sound, on }),
             SoundMsg::OtherSfx(from, i) => {
                 self.sound_menu = None;
-                let to = if from == SoundTrack::Sfx { SoundTrack::Sfx2 } else { SoundTrack::Sfx };
-                self.edit.checkpoint();
-                if let Some(j) = self.edit.move_clip(from, i, to) {
-                    self.selection = Selection::Clip(to, j);
+                let Some(clip) = self.edit.track(from).clips.get(i).map(|c| c.id) else { return Task::none() };
+                if self.edit.apply(&Op::Clip(crate::model::ops::clips::ClipOp::OtherSfx { clip })).is_ok()
+                    && let Some((w, j)) = self.clip_index(clip)
+                {
+                    self.selection = Selection::Clip(w, j);
                 }
             }
             SoundMsg::Continue(own) => self.sound_op(own, |sound| SoundOp::ContinueLevel { sound }),

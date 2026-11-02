@@ -218,7 +218,7 @@ mod tests {
     fn edit() -> Edit {
         let mut p = Project::default();
         p.cuts = vec![Cut::new("a.mp4".into(), 0.0, 4.0), Cut::new("b.mp4".into(), 0.0, 3.0)];
-        p.music.append("song.wav".into(), 0.0, 10.0);
+        p.music.append_part("song.wav".into(), 0.0, 0.0, 10.0);
         p.settle_ids();
         let mut e = Edit::default();
         e.replace(p);

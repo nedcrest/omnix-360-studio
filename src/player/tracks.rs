@@ -3,8 +3,8 @@
 //! level is tagged on the Clip sound lane.
 
 use super::*;
-use crate::model::ops::Op;
-use crate::model::ops::End;
+use crate::model::ops::clips::ClipOp;
+use crate::model::ops::{End, Op};
 use crate::model::ops::sound::SoundOp;
 
 /// The most a level tag turns a clip up, dB: as far as normalizing goes.
@@ -148,17 +148,15 @@ impl App {
             }
             Message::SoundProbed(_, path, _, Err(e)) => self.error = Some(format!("Can't add {}: {e}", path.display())),
             Message::SoundProbed(which, path, at, Ok(len)) => {
-                self.edit.checkpoint();
                 let at = at.unwrap_or_else(|| self.edit.track(which).end());
-                // A sound effect where one already plays goes on the second
-                // lane, so the two sound together (gap 46e).
-                let busy = |t: SoundTrack| self.edit.track(t).clips.iter().any(|c| at < c.ends() - 1e-6 && at + len > c.at + 1e-6);
-                let which = if which == SoundTrack::Sfx && busy(SoundTrack::Sfx) && !busy(SoundTrack::Sfx2) { SoundTrack::Sfx2 } else { which };
-                if which == SoundTrack::Sfx2 {
-                    self.folds.sfx2 = false;
+                // An SFX over another lands on SFX 2 (the op's rule): open it.
+                let added = self.op(Op::Clip(ClipOp::Add { track: which, input: path.clone(), at, start: 0.0, end: len }));
+                if let Some((w, i)) = added.and_then(|o| o.made).and_then(|id| self.clip_index(id)) {
+                    if w == SoundTrack::Sfx2 {
+                        self.folds.sfx2 = false;
+                    }
+                    self.selection = Selection::Clip(w, i);
                 }
-                let i = self.edit.track_mut(which).append(path.clone(), at, len);
-                self.selection = Selection::Clip(which, i);
                 return self.load_waveform(&path);
             }
             Message::Waveform(path, Ok(wave)) => {
@@ -195,13 +193,15 @@ impl App {
             Message::MusicTrim(which, i, ..) if i >= self.edit.track(which).clips.len() => {}
             Message::MusicMove(which, i, want, overlap) => {
                 self.edit.begin();
-                self.edit.track_mut(which).drag_to(i, want, overlap);
+                let clip = self.edit.track(which).clips[i].id;
+                self.op(Op::Clip(ClipOp::Move { clip, at: want, overlap }));
             }
             Message::MusicTrim(which, i, in_edge, t, overlap) => {
                 self.edit.begin();
                 // The file's length comes with its waveform.
-                let song = self.waveforms.get(&self.edit.track(which).clips[i].input).map_or(f64::INFINITY, |w| w.duration);
-                self.edit.track_mut(which).trim(i, in_edge, t, overlap, song, edit::MIN_CUT);
+                let c = &self.edit.track(which).clips[i];
+                let (clip, most) = (c.id, self.waveforms.get(&c.input).map_or(f64::INFINITY, |w| w.duration));
+                self.op(Op::Clip(ClipOp::Trim { clip, end: if in_edge { End::In } else { End::Out }, t, most, overlap }));
             }
             Message::Listen(lane, solo) => {
                 let l = &mut self.listen;

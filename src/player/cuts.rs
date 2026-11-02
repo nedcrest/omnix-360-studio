@@ -38,6 +38,22 @@ impl App {
         }
     }
 
+    /// Trims the selected (else playing) cut's in point (`start`) or out
+    /// point to edit time `at`, if it falls inside the cut; its index then.
+    pub(super) fn trim_to(&mut self, start: bool, at: f64) -> Option<usize> {
+        let i = self.selection.cut().unwrap_or(self.current);
+        let c = self.edit.cuts.get(i)?;
+        let t = c.start + at - self.edit.offset(i);
+        if t <= c.start || t >= c.end {
+            return None;
+        }
+        let most = self.library.iter().find(|m| m.input == c.input).map_or(f64::INFINITY, |m| m.duration);
+        let cut = c.id;
+        self.op(Op::Cut(CutOp::Trim { cut, end: if start { End::In } else { End::Out }, t, most }))?;
+        self.selection = Selection::Cut(i);
+        Some(i)
+    }
+
     /// Adds the whole clip as a cut where the bin's button said (else at
     /// the end) and selects it. The first clip starts playing, as opening a
     /// clip always did; later ones leave playback where it is.
@@ -101,6 +117,15 @@ impl App {
                         self.current = at(self.current);
                         self.selection = Selection::Cut(at(from));
                     }
+                }
+            }
+            Message::TrimToPlayhead(start) => {
+                if let Some(i) = self.trim_to(start, self.position()) {
+                    // On the frame trimmed to: the cut's new start, or its
+                    // end, where the playhead already was.
+                    self.follow = true;
+                    let at = if start { self.edit.cuts[i].start } else { self.edit.cuts[i].end - 1.0 / self.fps() };
+                    self.goto(i, at, false);
                 }
             }
             Message::Crossfade(i, seconds) => {

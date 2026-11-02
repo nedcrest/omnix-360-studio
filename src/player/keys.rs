@@ -34,8 +34,11 @@ pub(super) fn framing_only(message: &Message) -> bool {
 /// adds a volume point, which editing keeps.
 pub(super) fn framing_key(key: &Key, mods: keyboard::Modifiers, sound: bool) -> bool {
     match key.as_ref() {
-        Key::Named(Named::ArrowLeft | Named::ArrowRight) => mods.shift(),
+        // Alt+← / Alt+→ move the selected cut, an edit.
+        Key::Named(Named::ArrowLeft | Named::ArrowRight) => mods.shift() && !mods.alt(),
         Key::Named(Named::ArrowUp | Named::ArrowDown | Named::Home) => true,
+        // Alt+[ / Alt+] trim to the playhead, an edit.
+        Key::Character("[" | "]") if mods.alt() => false,
         Key::Character(c) if !mods.command() => match c {
             "k" | "K" => !sound,
             "q" | "Q" | "e" | "E" | "0" | "+" | "=" | "-" | "j" | "J" | "[" | "]" | "s" | "S" | "p" | "P" | "r" | "R" => true,
@@ -68,6 +71,12 @@ impl App {
             Key::Named(Named::Escape) if self.fullscreen => return self.update(Message::Fullscreen),
             // As the Play button: from the end of the edit, from the start.
             Key::Named(Named::Space) => return self.update(Message::Toggle),
+            // The selected cut one place left or right (a drag's key route).
+            Key::Named(arrow @ (Named::ArrowLeft | Named::ArrowRight)) if mods.alt() => {
+                let Some(i) = self.selection.cut() else { return Task::none() };
+                let to = if arrow == Named::ArrowLeft { i.checked_sub(1) } else { Some(i + 2).filter(|&to| to <= self.edit.cuts.len()) };
+                return to.map_or_else(Task::none, |to| self.update(Message::MoveCut(i, to)));
+            }
             Key::Named(Named::ArrowLeft) if mods.shift() => self.free_look().yaw -= 2.0 * step,
             Key::Named(Named::ArrowRight) if mods.shift() => self.free_look().yaw += 2.0 * step,
             Key::Named(arrow @ (Named::ArrowLeft | Named::ArrowRight)) => {
@@ -134,6 +143,8 @@ impl App {
                         return self.update(Message::KeyEase(Ease::ALL[(i + 1) % Ease::ALL.len()]));
                     }
                 }
+                "[" if mods.alt() => return self.update(Message::TrimToPlayhead(true)),
+                "]" if mods.alt() => return self.update(Message::TrimToPlayhead(false)),
                 "[" => return self.key_step(-1.0),
                 "]" => return self.key_step(1.0),
                 "," | "." => {

@@ -446,4 +446,20 @@ mod tests {
         assert_eq!(summary(1, 1, &[16.1], 0, &[], false), "1 clip done. Level +16.1 dB.");
         assert_eq!(summary(2, 39, &[1.0, 2.0], 1, &[], true), "Stopped after 2 of 39 clips. Levels from +1.0 to +2.0 dB. 1 without sound, left as they were.");
     }
+
+    /// Pack 2's key routes for drags: Alt+] trims the selected cut's end
+    /// to the playhead, Alt+[ its start; Alt+→ moves it one place.
+    #[test]
+    fn a_cut_trims_to_the_playhead_and_moves_by_keys() {
+        let mut app = app();
+        app.selection = Selection::Cut(0);
+        // The playhead 1.5 s into cut 0 (0..2 s).
+        assert_eq!(app.trim_to(false, 1.5), Some(0));
+        assert_eq!(app.edit.cuts[0].end, 1.5);
+        assert_eq!(app.trim_to(true, 9.0), None, "the playhead outside the cut: nothing");
+        let first = app.edit.cuts[0].id;
+        let _ = app.update(Message::MoveCut(0, 2));
+        assert_eq!(app.edit.cuts[1].id, first);
+        assert!(app.edit.undo() && app.edit.undo() && app.edit.cuts[0].end == 2.0 && !app.edit.undo());
+    }
 }

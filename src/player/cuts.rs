@@ -190,6 +190,11 @@ impl App {
                     return Task::perform(super::blocking(|| std::thread::sleep(std::time::Duration::from_secs(6))), move |_| Message::ToastGone(n));
                 }
             }
+            Message::StepsRested(n) => {
+                if n == self.steps {
+                    self.with_playback(|p| p.settle());
+                }
+            }
             Message::StepNoteGone(n) => {
                 if self.step_note.is_some_and(|(_, m)| m == n) {
                     self.step_note = None;

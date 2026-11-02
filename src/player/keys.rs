@@ -224,7 +224,11 @@ impl App {
         let t = self.aimed() + frames / self.fps();
         if self.edit.locate(t.max(0.0)).is_some_and(|(i, _)| i == self.current) {
             self.with_playback(|p| p.step(frames));
-            return self.step_note(note);
+            // The full frame once the steps rest (only the quick one meanwhile).
+            self.steps += 1;
+            let n = self.steps;
+            let rested = Task::perform(super::blocking(|| std::thread::sleep(std::time::Duration::from_millis(250))), move |_| Message::StepsRested(n));
+            return Task::batch([self.step_note(note), rested]);
         }
         self.seek_to(t, note)
     }

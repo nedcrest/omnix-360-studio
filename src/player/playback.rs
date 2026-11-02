@@ -292,13 +292,27 @@ impl Playback {
             self.start_stream(t);
             self.hold_sound();
         } else {
-            if self.stream.is_some() && self.preview_only {
-                self.preview_next = Some(t);
-            } else {
-                self.preview_only = true;
-                self.start_stream(t);
-            }
+            self.preview(t);
             self.request_still(t);
+        }
+    }
+
+    /// The quick picture at `t` while paused (from the proxy where there
+    /// is one), one decode in flight, the latest asked for next.
+    fn preview(&mut self, t: f64) {
+        if self.stream.is_some() && self.preview_only {
+            self.preview_next = Some(t);
+        } else {
+            self.preview_only = true;
+            self.start_stream(t);
+        }
+    }
+
+    /// The full-resolution frame where it has come to rest, once quick
+    /// steps stop (`step` shows only the quick picture).
+    pub fn settle(&mut self) {
+        if !self.playing && self.scrub.is_none() {
+            self.request_still(self.anchor_pts);
         }
     }
 
@@ -352,9 +366,17 @@ impl Playback {
     /// pressed faster than frames decode, each step used to start again
     /// from the old frame, asking for the same one, and the playhead stood
     /// still (the user, 2026-11-03).
+    ///
+    /// Only the quick picture: a full-resolution frame for every step kept
+    /// the decoder busy on frames already passed; `settle` asks for it
+    /// once the steps stop.
     pub fn step(&mut self, frames: f64) {
         if !self.playing {
-            self.seek(self.target() + frames / self.media.fps);
+            self.ended = false;
+            let t = self.snap(self.target() + frames / self.media.fps);
+            self.anchor_pts = t;
+            self.still_next = None;
+            self.preview(t);
         }
     }
 

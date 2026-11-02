@@ -2,7 +2,7 @@
 //! fades and line, and the auto-duck. The rules moved here from the
 //! player's sound menu and level tag (`OPS-API.md` phase 2).
 
-use super::{OpError, Outcome, SoundRef};
+use super::{End, OpError, Outcome, SoundRef, said};
 use crate::project::{OFF_DB, Own, OwnSound, Project};
 use serde::{Deserialize, Serialize};
 
@@ -14,13 +14,6 @@ pub const VOICE_OVER_DIP: f64 = -12.0;
 /// gave it (from what it measured), or 0 dB as recorded.
 pub fn normal_gain(loudness: Option<f64>) -> f64 {
     loudness.map_or(0.0, crate::loudness::normalizing_gain)
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum End {
-    In,
-    Out,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -72,7 +65,6 @@ pub enum SoundOp {
 }
 
 pub(super) fn apply(p: &mut Project, op: &SoundOp) -> Result<Outcome, OpError> {
-    let said = |summary: String| Ok(Outcome { summary });
     match op {
         &SoundOp::Level { sound, db } => {
             let most = crate::loudness::MOST_GAIN;
@@ -206,7 +198,7 @@ fn point(keys: &[crate::project::VolumeKey], t: f64) -> Option<usize> {
 
 fn switch(p: &mut Project, sound: SoundRef, on: bool, what: &str, flag: impl for<'a> FnOnce(OwnSound<'a>) -> &'a mut bool) -> Result<Outcome, OpError> {
     change(p, sound, |s| *flag(s) = on)?;
-    Ok(Outcome { summary: format!("{sound}: {what} {}", if on { "on" } else { "off" }) })
+    said(format!("{sound}: {what} {}", if on { "on" } else { "off" }))
 }
 
 fn forget_duck(p: &mut Project, sound: SoundRef) {

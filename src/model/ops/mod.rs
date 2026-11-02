@@ -8,6 +8,8 @@
 //! are absolute, and ops derived from the sound start from the original,
 //! so applying one twice is applying it once.
 
+pub mod clips;
+pub mod cuts;
 pub mod sound;
 
 use super::edit::Edit;
@@ -18,6 +20,8 @@ use std::fmt;
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "area", rename_all = "snake_case")]
 pub enum Op {
+    Cut(cuts::CutOp),
+    Clip(clips::ClipOp),
     Sound(sound::SoundOp),
 }
 
@@ -57,11 +61,26 @@ impl fmt::Display for SoundRef {
     }
 }
 
-/// What an op did, in words for a person or an agent: «sound clip #5:
-/// level −5.0 → −8.0 dB».
-#[derive(Clone, Debug, PartialEq)]
+/// What an op did, in words for a person or an agent («sound clip #5:
+/// level −5.0 → −8.0 dB»), and the id of what it made, if it made one (an
+/// added cut, a split's second half).
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct Outcome {
     pub summary: String,
+    pub made: Option<Id>,
+}
+
+/// An outcome that made nothing.
+fn said(summary: String) -> Result<Outcome, OpError> {
+    Ok(Outcome { summary, made: None })
+}
+
+/// Which end of a cut, a clip or a fade.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum End {
+    In,
+    Out,
 }
 
 /// Why an op was refused. The project is as it was.
@@ -88,6 +107,8 @@ impl std::error::Error for OpError {}
 /// Applies `op` to `p`, or leaves it as it was and says why.
 fn apply(p: &mut Project, op: &Op) -> Result<Outcome, OpError> {
     match op {
+        Op::Cut(op) => cuts::apply(p, op),
+        Op::Clip(op) => clips::apply(p, op),
         Op::Sound(op) => sound::apply(p, op),
     }
 }

@@ -4,7 +4,8 @@
 
 use super::*;
 use crate::model::ops::Op;
-use crate::model::ops::sound::{End, SoundOp};
+use crate::model::ops::End;
+use crate::model::ops::sound::SoundOp;
 
 /// The most a level tag turns a clip up, dB: as far as normalizing goes.
 const LEVEL_MOST: f64 = crate::loudness::MOST_GAIN;

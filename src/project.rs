@@ -105,7 +105,8 @@ impl Sound {
 /// its arms in the `match`es the compiler then points to (`track`,
 /// `track_mut`, its name and colour, where a new clip goes). Everything else
 /// goes over `ALL`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum SoundTrack {
     Music,
     Sfx,
@@ -862,6 +863,7 @@ impl Project {
     /// split): one past the highest, so ids aren't handed out twice while
     /// the highest stays. Order: cuts, each sound track, overlays, text.
     pub fn settle_ids(&mut self) {
+        let mut next = self.next_id();
         let mut ids: Vec<&mut Id> = Vec::new();
         ids.extend(self.cuts.iter_mut().map(|c| &mut c.id));
         let [music, sfx, sfx2, voice] = [&mut self.music, &mut self.sfx, &mut self.sfx2, &mut self.voice];
@@ -869,7 +871,6 @@ impl Project {
             ids.extend(t.clips.iter_mut().map(|c| &mut c.id));
         }
         ids.extend(self.overlays.iter_mut().chain(&mut self.text).flat_map(|l| &mut l.items).map(|i| &mut i.id));
-        let mut next = ids.iter().map(|id| **id).max().unwrap_or(0) + 1;
         let mut seen = std::collections::HashSet::new();
         for id in ids {
             if *id == 0 || !seen.insert(*id) {
@@ -878,6 +879,13 @@ impl Project {
                 next += 1;
             }
         }
+    }
+
+    /// The id the next new thing gets: one past the highest.
+    pub fn next_id(&self) -> Id {
+        let tracks = SoundTrack::ALL.iter().flat_map(|&w| self.track(w).clips.iter().map(|c| c.id));
+        let items = self.overlays.iter().chain(&self.text).flat_map(|l| &l.items).map(|i| i.id);
+        self.cuts.iter().map(|c| c.id).chain(tracks).chain(items).max().unwrap_or(0) + 1
     }
 
     /// Length of the edit in seconds.

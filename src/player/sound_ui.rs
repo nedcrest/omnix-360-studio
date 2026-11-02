@@ -164,9 +164,10 @@ impl App {
             },
             SoundMsg::Close => self.normalize = None,
             SoundMsg::Menu(at) => self.sound_menu = at,
-            // Twice at most: further down it would be as good as muted,
-            // without saying so.
-            SoundMsg::Lower(own) => self.set_sound(own, |s| *s.gain = (*s.gain + VOICE_OVER_DIP).max(normal_gain(*s.loudness) + 2.0 * VOICE_OVER_DIP)),
+            // From its normal level, not from where it is: pressed again it
+            // stays put (user, 2026-11-02: operations start from the
+            // original; further down is the level knob's job).
+            SoundMsg::Lower(own) => self.set_sound(own, |s| *s.gain = normal_gain(*s.loudness) + VOICE_OVER_DIP),
             SoundMsg::Restore(own) => self.set_sound(own, |s| *s.gain = normal_gain(*s.loudness)),
             SoundMsg::Mute(own, on) => self.set_sound(own, |s| *s.mute = on),
             SoundMsg::ShowLine(own) => self.set_sound(own, |s| {

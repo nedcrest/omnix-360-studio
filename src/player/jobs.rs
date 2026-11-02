@@ -9,7 +9,9 @@ use super::*;
 #[derive(Debug, Clone)]
 pub struct TrackDone {
     pub(super) path: PathBuf,
-    pub(super) cut: usize,
+    /// The tracked cut, by id: tracking takes a minute or two, and the cuts
+    /// may be moved or deleted meanwhile.
+    pub(super) cut: crate::project::Id,
     pub(super) t: f64,
     pub(super) found: usize,
     pub(super) rows: usize,
@@ -79,7 +81,7 @@ impl App {
     pub(super) fn start_track(&mut self, colour: crate::track::Colour, hex: String, dir: [f64; 3]) -> Task<Message> {
         use iced::futures::{SinkExt, StreamExt};
         let Some((cut, t)) = self.playing_cut() else { return Task::none() };
-        let (input, end, i) = (cut.input.clone(), cut.end, self.current);
+        let (input, end, i) = (cut.input.clone(), cut.end, cut.id);
         let folder = self.project.as_deref().unwrap_or(&input).parent().unwrap_or(Path::new("")).to_owned();
         let stem = input.file_stem().map_or_else(|| "clip".to_owned(), |s| s.to_string_lossy().into_owned());
         let path = folder.join(format!("{stem}-colour-{t:.1}s.csv"));
@@ -121,12 +123,11 @@ impl App {
     /// subject in the middle of the view.
     pub(super) fn follow_track(&mut self, done: TrackDone) {
         self.save_status = Some(format!("Tracked {}: found in {} of {} samples", done.colour, done.found, done.rows));
-        if done.cut >= self.edit.cuts.len() {
-            return;
-        }
+        // Gone from the edit meanwhile: the track's file stays, unused.
+        let Some(at) = self.cut_index(done.cut) else { return };
         self.followed.borrow_mut().remove(&done.path);
         let follow = Follow::Track(done.path);
-        let here = done.cut == self.current;
+        let here = at == self.current;
         let mut aims = if here { self.aims(done.t) } else { Vec::new() };
         let subject = if here { self.aim(&follow, done.t) } else { None };
         aims.push((follow.clone(), subject));
@@ -135,7 +136,7 @@ impl App {
             (view.yaw, view.pitch) = (yaw, pitch);
         }
         use crate::model::ops::{Op, keys::KeyOp};
-        let (cut, t, tolerance) = (self.edit.cuts[done.cut].id, done.t, self.tolerance());
+        let (cut, t, tolerance) = (done.cut, done.t, self.tolerance());
         // Keyed and made to follow: one undo step.
         self.ops(&[
             Op::Key(KeyOp::View { cut, t, view, tolerance, aims: aims.clone() }),

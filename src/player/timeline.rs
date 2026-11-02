@@ -168,7 +168,14 @@ const EFFECT_MARK: iced::Color = iced::Color::from_rgb(0.78, 0.55, 1.0);
 /// lane, a cut's over the clip sound lane under it.
 type Lane = (f32, f32);
 /// How far down from a sound clip's top its fade handles take the mouse.
-const FADE_BAND: f32 = 12.0;
+const FADE_BAND: f32 = 16.0;
+/// How far either side of a fade's knob a press takes it (pack 1: it was
+/// `PICK`, 7).
+const FADE_REACH: f32 = 10.0;
+/// A fade's knob stays this far inside its clip while the fade is shorter:
+/// at a join the two clips' knobs used to sit on one spot, one over the
+/// other (the user, 2026-11-02).
+const FADE_INSET: f32 = 8.0;
 /// The sound effects' clips (the second lane's a shade deeper); the
 /// music's are the theme's green. From the colour-blind-safe Okabe-Ito
 /// set, and every lane is named as well.
@@ -507,10 +514,11 @@ impl Timeline {
         let per_px = self.span / Self::width(b) as f64;
         self.sounds[lane].blocks.iter().enumerate().find_map(|(i, m)| {
             let (l, r) = (self.x(m.from, b), self.x(m.from + m.len, b));
-            let (fi, fo) = (l + (m.fade_in / per_px) as f32, r - (m.fade_out / per_px) as f32);
-            if (p.x - fi).abs() <= PICK && p.x >= l - 1.0 && p.x <= r + 1.0 {
+            let fi = fade_knob_x((l, r), l + (m.fade_in / per_px) as f32, true);
+            let fo = fade_knob_x((l, r), r - (m.fade_out / per_px) as f32, false);
+            if (p.x - fi).abs() <= FADE_REACH && p.x >= l - 1.0 && p.x <= r + 1.0 {
                 Some((i, true))
-            } else if (p.x - fo).abs() <= PICK && p.x >= l - 1.0 && p.x <= r + 1.0 {
+            } else if (p.x - fo).abs() <= FADE_REACH && p.x >= l - 1.0 && p.x <= r + 1.0 {
                 Some((i, false))
             } else {
                 None
@@ -528,11 +536,12 @@ impl Timeline {
         let per_px = self.span / Self::width(b) as f64;
         self.blocks.iter().enumerate().filter(|(_, c)| c.wave.is_some()).find_map(|(i, c)| {
             let (l, r) = self.block_x(c, b);
-            let (fi, fo) = (l + (c.fade_in / per_px) as f32, r - (c.fade_out / per_px) as f32);
+            let fi = fade_knob_x((l, r), l + (c.fade_in / per_px) as f32, true);
+            let fo = fade_knob_x((l, r), r - (c.fade_out / per_px) as f32, false);
             let inside = p.x >= l - 1.0 && p.x <= r + 1.0;
-            if inside && (p.x - fi).abs() <= PICK {
+            if inside && (p.x - fi).abs() <= FADE_REACH {
                 Some((i, true))
-            } else if inside && (p.x - fo).abs() <= PICK {
+            } else if inside && (p.x - fo).abs() <= FADE_REACH {
                 Some((i, false))
             } else {
                 None
@@ -1843,6 +1852,13 @@ impl Wave {
 /// A clip's fades, `len` seconds long between `l` and `r`: shaded above a
 /// line from its corner to where each fade ends, a handle there along the
 /// top (a white knob, also where there's no fade yet, to grab one).
+/// Where a fade's knob is drawn and pressed: at the fade's end (`at`), but
+/// at least `FADE_INSET` inside the clip's end (`l` for a fade in, `r` for
+/// a fade out), so neighbours' knobs don't stack at a join.
+fn fade_knob_x((l, r): (f32, f32), at: f32, fade_in: bool) -> f32 {
+    if fade_in { at.max(l + FADE_INSET) } else { at.min(r - FADE_INSET) }
+}
+
 fn draw_fades(frame: &mut Frame, (l, r): (f32, f32), top: f32, h: f32, len: f64, (fade_in, fade_out): (f64, f64)) {
     for (fade, at_start) in [(fade_in, true), (fade_out, false)] {
         let w = (fade / (len.max(1e-9)) * (r - l) as f64) as f32;
@@ -1857,7 +1873,7 @@ fn draw_fades(frame: &mut Frame, (l, r): (f32, f32), top: f32, h: f32, len: f64,
             frame.fill(&shade, iced::Color::from_rgba(0.0, 0.0, 0.0, 0.4));
             frame.stroke(&Path::line(Point::new(corner, top + h), Point::new(end, top)), Stroke::default().with_width(1.0).with_color(iced::Color::from_rgba(1.0, 1.0, 1.0, 0.7)));
         }
-        let knob = Path::circle(Point::new(end, top + 4.0), 3.5);
+        let knob = Path::circle(Point::new(fade_knob_x((l, r), end, at_start), top + 5.0), 4.5);
         frame.fill(&knob, iced::Color::WHITE);
         frame.stroke(&knob, Stroke::default().with_width(1.0).with_color(iced::Color::from_rgba(0.0, 0.0, 0.0, 0.7)));
     }
@@ -2014,6 +2030,10 @@ mod tests {
         let lane = t.rows.sound_lane(li);
         // Its fade-in handle along the top, where the 1 s fade ends.
         assert_eq!(t.fade_at(li, Point::new(x(3.0), t.rows.sound_top(li) + 4.0), b), Some((0, true)));
+        // Two clips meeting at 200 px with no fades: their knobs 16 px apart,
+        // not one over the other.
+        assert_eq!((fade_knob_x((100.0, 200.0), 200.0, false), fade_knob_x((200.0, 300.0), 200.0, true)), (192.0, 208.0));
+        assert_eq!(fade_knob_x((100.0, 200.0), 150.0, false), 150.0, "a longer fade's knob at its end");
         // Its point (file time 3 s is edit time 4 s), and its line.
         let own = Own::Clip(SoundTrack::Voice, 0);
         assert_eq!(t.sound_at(Point::new(x(4.0), Timeline::volume_y(lane, 0.0)), b), Some((own, 0)));

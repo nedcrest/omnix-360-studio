@@ -1703,6 +1703,37 @@ praise and curse. Then the parts below get ordered from it.
   safe-area guides for the aspect, a horizon line, a «look room» hint,
   smoothing a hand-keyed path.
 
+### 54. A header column for the lanes: what a whole lane does, at a glance — idea (user, 2026-11-02)
+
+User, after asking why the music's waveform showed a bright wave inside
+a darker, bigger one (the file and the heard sound, gap 33d: the Music
+lane's own level was −6 dB in the Audio panel while the clip read 0 dB):
+"add plain information about the whole lane; maybe keep about a
+centimetre on the left of the timelines for the main facts, and a click
+shows all of the lane's own settings, so there's no confusion".
+
+**Today.** Each sound lane has a tag floating over its left end («Music»,
+S, M, folded ▸/▾; gap 46d, 50b), drawn over whatever clip is there. The
+lane's own level lives only in the Audio panel; the clips' tags show
+their own level (gap 44). So a clip at «0 dB» can sound 6 dB down with
+nothing on the lane saying why.
+
+**Proposed** (as DAWs and Resolve do: track headers):
+- A fixed column (~1 cm, about 40–60 px at 100 %, with the UI scale)
+  left of every lane, picture and sound alike, that doesn't scroll with
+  the timeline: the lane's name, its level when it isn't 0 dB («−6 dB»),
+  S and M, fold ▸/▾; for sound lanes a small level bar after the mix
+  (from the meter, gap 46b's LUFS when measured).
+- A click opens the lane's own settings in one place: its level (the
+  Audio panel's slider), solo/mute, normalize every clip on it, auto-duck
+  (music), «what the mix check says about this lane» (gap 45), fold.
+- The floating tags go: the column holds them, and no clip is covered.
+- Picture lanes get the same header (cuts, overlay, text: name, fold,
+  what's on).
+
+Open when designing: the column's width against the timeline's own room
+at 1440 px; whether the playhead ruler (gap 50a) starts after it.
+
 ## Format rule for all of these
 
 New fields only, each `#[serde(default, skip_serializing_if = …)]`, so every

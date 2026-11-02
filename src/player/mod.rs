@@ -790,8 +790,9 @@ impl App {
             Message::Look { .. } | Message::Zoom(_) | Message::Fov(_) | Message::ResetView | Message::Key(..) | Message::AngleInput(..) | Message::AngleNudge(..) | Message::AngleArrow(..) | Message::AngleScrub(..)
         );
         let quiet = matches!(message, Message::Tick | Message::LoadingTick | Message::ViewSize(_) | Message::Modifiers(_) | Message::Record(record_ui::RecordMsg::Tick));
-        if !looking && !quiet {
-            self.auto_key_at = None;
+        // A look-around keyed by Auto keyframe ends: its undo step closes.
+        if !looking && !quiet && self.auto_key_at.take().is_some() {
+            self.edit.commit();
         }
         // A field shows what's typed only while it's being typed.
         if !quiet && !matches!(message, Message::AngleInput(..)) {

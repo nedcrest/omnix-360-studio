@@ -175,12 +175,12 @@ impl App {
             }
             Message::OverlayKeyMove(r, effects, key, t) => {
                 self.follow = true;
-                use crate::model::ops::keys::{Graded, KeyOp, Line};
+                use crate::model::ops::keys::{EXACT, Graded, KeyOp, Line};
                 let keys = |it: &crate::overlay::Item| if effects { it.effects.get(key).map(|k| k.t) } else { it.motion.get(key).map(|k| k.t) };
                 let Some((id, from)) = self.edit.item(r).and_then(|it| Some((it.id, keys(it)?))) else { return Task::none() };
                 self.edit.begin();
                 let line = if effects { Line::Effects(Graded::Item(id)) } else { Line::Motion(id) };
-                self.op(Op::Key(KeyOp::Retime { line, from, t, gap: 1.0 / self.fps(), tolerance: 1e-6 }));
+                self.op(Op::Key(KeyOp::Retime { line, from, t, gap: 1.0 / self.fps(), tolerance: EXACT }));
                 let Some(item) = self.edit.item(r) else { return Task::none() };
                 let local = keys(item);
                 // Follow the mark, so what it holds shows as it moves.

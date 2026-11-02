@@ -36,6 +36,10 @@ pub enum Line {
 /// this.
 pub type Aims = Vec<(Follow, Option<(f64, f64)>)>;
 
+/// The tolerance that names a key by the very time it has (a mark
+/// dragged, the key under the playhead found first): no other near it.
+pub const EXACT: f64 = 1e-6;
+
 /// Two keys this close (seconds) are one, unless an op says otherwise.
 fn half_a_frame() -> f64 {
     1.0 / 60.0

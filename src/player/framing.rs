@@ -3,6 +3,8 @@
 //! a colour, and the LUTs a cut is shown through.
 
 use super::*;
+use crate::model::ops::Op;
+use crate::model::ops::keys::{EXACT, KeyOp, Line};
 
 /// The Follow picker's choices for a keyframe.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -43,6 +45,14 @@ impl App {
     }
 
     /// The keyframe at the shown frame, if there is one.
+    /// The playing cut's id and the time of its view key under the
+    /// playhead: what a key op names.
+    fn current_key_time(&self) -> Option<(crate::project::Id, f64)> {
+        let k = self.current_key()?;
+        let cut = &self.edit.cuts[self.current];
+        Some((cut.id, cut.keyframes[k].t))
+    }
+
     pub(super) fn current_key(&self) -> Option<usize> {
         let (cut, t) = self.playing_cut()?;
         cut.keyframes.near(t, self.tolerance())
@@ -216,8 +226,8 @@ impl App {
             [k] if k.follow.is_none() && k.view != look => k.t,
             _ => return,
         };
-        self.edit.checkpoint();
-        self.edit.cuts[i].keyframes.set(at, look, 0.0, &|_, _| None);
+        let cut = self.edit.cuts[i].id;
+        self.op(Op::Key(KeyOp::View { cut, t: at, view: look, tolerance: 0.0, aims: Vec::new() }));
     }
 
     /// Keys the view shown at the playhead on the playing cut, or updates
@@ -226,8 +236,8 @@ impl App {
         let (view, tolerance) = (self.shown_view(), self.tolerance());
         let Some((_, t)) = self.playing_cut() else { return };
         let aims = self.aims(t);
-        if let Some(cut) = self.edit.cuts.get_mut(self.current) {
-            cut.keyframes.set(t, view, tolerance, &|f, _| aims.iter().find(|a| &a.0 == f).and_then(|a| a.1));
+        if let Some(cut) = self.edit.cuts.get(self.current).map(|c| c.id) {
+            self.op(Op::Key(KeyOp::View { cut, t, view, tolerance, aims }));
             self.follow = true;
         }
     }
@@ -242,8 +252,11 @@ impl App {
             return;
         }
         let Some((_, t)) = self.playing_cut() else { return };
+        // One undo step for a look-around at one time, closed in `update`
+        // when something else is done.
         if self.auto_key_at != Some((self.current, t)) {
-            self.edit.checkpoint();
+            self.edit.commit();
+            self.edit.begin();
             self.auto_key_at = Some((self.current, t));
         }
         self.key_view();
@@ -288,24 +301,15 @@ impl App {
                 }
             }
             Message::KeyMove(i, k, _) if self.edit.cuts.get(i).is_none_or(|c| k >= c.keyframes.len()) => {}
-            Message::KeyAdd => {
-                if self.playing_cut().is_some() {
-                    self.edit.checkpoint();
-                    self.key_view();
-                }
-            }
+            Message::KeyAdd => self.key_view(),
             Message::KeyDelete => {
-                if let Some(k) = self.current_key() {
-                    self.edit.checkpoint();
-                    self.edit.cuts[self.current].keyframes.remove(k);
+                if let Some((cut, t)) = self.current_key_time() {
+                    self.op(Op::Key(KeyOp::Delete { line: Line::View(cut), t, tolerance: EXACT }));
                 }
             }
             Message::KeyEase(ease) => {
-                if let Some(k) = self.current_key()
-                    && self.edit.cuts[self.current].keyframes[k].ease != ease
-                {
-                    self.edit.checkpoint();
-                    self.edit.cuts[self.current].keyframes.set_ease(k, ease);
+                if let Some((cut, t)) = self.current_key_time() {
+                    self.op(Op::Key(KeyOp::Ease { line: Line::View(cut), t, ease, tolerance: EXACT }));
                     self.follow = true;
                 }
             }
@@ -322,9 +326,8 @@ impl App {
                     // here follows it once tracked.
                     Aiming::Colour => return self.update(Message::PickColour),
                 };
-                let aims = self.aims(t);
-                self.edit.checkpoint();
-                self.edit.cuts[self.current].keyframes.set_follow(k, follow, &|f, _| aims.iter().find(|a| &a.0 == f).and_then(|a| a.1));
+                let (aims, cut, at) = (self.aims(t), self.edit.cuts[self.current].id, self.edit.cuts[self.current].keyframes[k].t);
+                self.op(Op::Key(KeyOp::Follow { cut, t: at, follow, tolerance: EXACT, aims }));
                 self.follow = true;
             }
             Message::KeyJump(i, k) => {
@@ -337,11 +340,10 @@ impl App {
             }
             Message::KeyMove(i, k, t) => {
                 self.follow = true;
+                let Some((cut, from)) = self.edit.cuts.get(i).and_then(|c| Some((c.id, c.keyframes.get(k)?.t))) else { return Task::none() };
                 self.edit.begin();
-                let gap = 1.0 / self.fps();
-                let Some(cut) = self.edit.cuts.get_mut(i) else { return Task::none() };
-                cut.keyframes.retime(k, t, gap);
-                let t = cut.keyframes[k].t;
+                self.op(Op::Key(KeyOp::Retime { line: Line::View(cut), from, t, gap: 1.0 / self.fps(), tolerance: EXACT }));
+                let t = self.edit.cuts[i].keyframes[k].t;
                 self.scrub_to(i, t);
             }
             Message::Look { yaw, pitch, roll } => {

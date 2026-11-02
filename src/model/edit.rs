@@ -128,18 +128,11 @@ impl Edit {
         }
     }
 
-    /// Remembers the edit as it is, for undo; call before each change.
-    pub fn checkpoint(&mut self) {
-        self.commit();
-        self.undo.push(self.snapshot());
-        self.redo.clear();
-        self.version += 1;
-    }
 
     /// Makes `change` one undo step if it says it changed anything; if it
     /// says not, the edit is as it was, with redo and the saved state
-    /// untouched. (Checkpoint-then-undo on a failed change wiped redo and
-    /// marked the edit unsaved.)
+    /// untouched. (Saving the edit first and undoing on a failed change
+    /// wiped redo and marked the edit unsaved.)
     pub fn attempt(&mut self, change: impl FnOnce(&mut Edit) -> bool) -> bool {
         self.commit();
         let before = self.snapshot();
@@ -349,8 +342,10 @@ mod tests {
         // A change of another kind ends the one under way first.
         e.begin();
         e.trim(0, true, 11.0, 20.0);
-        e.checkpoint();
-        e.cuts[1].crossfade = 0.5;
+        e.attempt(|e| {
+            e.cuts[1].crossfade = 0.5;
+            true
+        });
         assert!(e.undo() && e.cuts[0].start == 11.0 && e.undo() && e.cuts[0].start == 10.0);
     }
 
@@ -416,7 +411,7 @@ mod tests {
     #[test]
     fn splits_trims_moves_and_undoes() {
         let mut e = edit();
-        e.checkpoint();
+        e.begin();
         assert!(e.split(0, 12.0));
         assert!(!e.split(0, 11.9));
         assert_eq!((e.cuts[0].end, e.cuts[1].start, e.cuts.len()), (12.0, 12.0, 3));
@@ -427,6 +422,7 @@ mod tests {
         assert_eq!(e.cuts[0].input, PathBuf::from("b"));
         e.move_cut(0, 3);
         assert_eq!(e.cuts[2].input, PathBuf::from("b"));
+        e.commit();
         assert!(e.undo());
         assert_eq!(e.cuts.len(), 2);
         assert!(e.redo());
@@ -520,8 +516,10 @@ mod tests {
     fn a_change_that_fails_leaves_undo_redo_and_the_saved_state() {
         let mut e = Edit::default();
         e.cuts = vec![cut("a.mp4", 0.0, 10.0)];
-        e.checkpoint();
-        e.cuts[0].end = 8.0;
+        e.attempt(|e| {
+            e.cuts[0].end = 8.0;
+            true
+        });
         e.undo();
         let version = e.version;
         // Too near the in point to split: nothing changes, redo survives.

@@ -134,12 +134,13 @@ impl App {
         if let Some((yaw, pitch)) = subject {
             (view.yaw, view.pitch) = (yaw, pitch);
         }
-        let aim = |f: &Follow, _| aims.iter().find(|a| &a.0 == f).and_then(|a| a.1);
-        let tolerance = self.tolerance();
-        self.edit.checkpoint();
-        let keyframes = &mut self.edit.cuts[done.cut].keyframes;
-        let k = keyframes.set(done.t, view, tolerance, &aim);
-        keyframes.set_follow(k, Some(follow), &aim);
+        use crate::model::ops::{Op, keys::KeyOp};
+        let (cut, t, tolerance) = (self.edit.cuts[done.cut].id, done.t, self.tolerance());
+        // Keyed and made to follow: one undo step.
+        self.ops(&[
+            Op::Key(KeyOp::View { cut, t, view, tolerance, aims: aims.clone() }),
+            Op::Key(KeyOp::Follow { cut, t, follow: Some(follow), tolerance, aims }),
+        ]);
         self.follow = true;
     }
 

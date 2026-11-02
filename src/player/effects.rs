@@ -10,11 +10,8 @@
 use super::{App, Message, Selection, icon_button, tip};
 use crate::grade::{EffectKey, Grade, grade_at};
 use crate::overlay::{Place, place_at};
-use crate::model::ops::keys::{Graded, KeyOp, Line};
+use crate::model::ops::keys::{EXACT, Graded, KeyOp, Line};
 use crate::model::ops::{Op, items::ItemOp};
-
-/// A key named by the very time it has (a mark's drag): no other near it.
-const EXACT: f64 = 1e-6;
 use crate::text::{Colour, Outline, Text, TextAlign};
 use crate::view::Ease;
 use iced::widget::{button, column, container, pick_list, row, rule, scrollable, slider, text, toggler, tooltip};

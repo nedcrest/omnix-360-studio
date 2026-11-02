@@ -1453,6 +1453,36 @@ vendor's current terms):
   in the file).
 - Needs the camera or sample clips first.
 
+### 49. Several angles from one 360 clip, cut between like a multicam — idea (user, 2026-11-02)
+
+User: "a multi-shot cut of a 360 video. Different angles, to arrange on the
+timeline and cut between. The video row can be collapsible for a 360
+video: an inner editor-reframer, where we either pick one scene, or cut
+several scenes and with «selections» on the scenes' different rows choose
+what is shown on screen now; the sound under them is one, from the
+original."
+
+As multicam editing in Premiere or Final Cut, with the cameras virtual:
+one sphere, several views of it.
+- **The inner reframer.** A 360 cut's row folds open (▸, as gap 39's
+  groups) into its angles: rows A, B, C…, each a virtual camera with its
+  own view keyframes (yaw, pitch, FOV, projection; following the stick or
+  a tracked subject, gap 37). Folded, the cut looks as it does now.
+- **Choosing what shows.** Select a stretch on an angle's row and that
+  angle is on screen there; the stretches together are the cut's switches
+  (a row of coloured stretches above the angles shows which angle plays
+  when). A switch is a straight cut, or a 360 transition (a whip pan from
+  one angle to the next, gap 25e).
+- **One sound.** The clip's own sound plays straight through, untouched by
+  the switches.
+- **Later:** switching live while it plays (keys 1, 2, 3…, as multicam);
+  an angle per detected face or person (gaps 30, 37).
+- **Data, backward compatible:** a cut's optional `angles` (name and
+  keyframes each) and `switches` (clip time, angle); the cut's keyframes
+  as they are now are angle A, so old projects open unchanged. The player
+  and both exports take the camera from the angle playing at each frame;
+  CPU and GPU alike.
+
 ## Format rule for all of these
 
 New fields only, each `#[serde(default, skip_serializing_if = …)]`, so every

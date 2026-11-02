@@ -437,6 +437,28 @@ impl Timeline {
         })
     }
 
+    /// What a drag has done so far, for a readout by the pointer (pack 1):
+    /// how far the edge or clip went and its length or place now, from the
+    /// edit as it is, so a trim stopped by the file's end or a neighbour
+    /// says where it stopped.
+    fn readout(&self, drag: &Drag) -> Option<String> {
+        let edge = |start: f64, len: f64, at_in: bool| if at_in { start } else { start + len };
+        match *drag {
+            Drag::Trim { cut, start, from, .. } => self.blocks.get(cut).map(|c| format!("{} · {}", signed(edge(c.start, c.len, start) - from), seconds(c.len))),
+            Drag::MusicTrim { lane, clip, start, from, .. } => self.sounds.get(lane)?.blocks.get(clip).map(|m| format!("{} · {}", signed(edge(m.start, m.len, start) - from), seconds(m.len))),
+            Drag::MusicMove { lane, clip, at, .. } => self.sounds.get(lane)?.blocks.get(clip).map(|m| format!("{} · at {}", signed(m.from - at), clock(m.from))),
+            Drag::Crossfade { cut, .. } => self.blocks.get(cut).map(|c| format!("crossfade {}", seconds(c.crossfade))),
+            Drag::Fade { own, in_edge, .. } => {
+                let (fade_in, fade_out) = match own {
+                    Own::Cut(i) => self.blocks.get(i).map(|c| (c.fade_in, c.fade_out))?,
+                    Own::Clip(w, i) => self.sounds.iter().find(|l| l.which == w)?.blocks.get(i).map(|m| (m.fade_in, m.fade_out))?,
+                };
+                Some(format!("fade {}", seconds(if in_edge { fade_in } else { fade_out })))
+            }
+            _ => None,
+        }
+    }
+
     /// The selected cut's edge under `x`: only it has handles, so a press
     /// elsewhere on a cut moves or selects it.
     fn selected_edge(&self, x: f32, b: Rectangle) -> Option<(usize, bool)> {
@@ -1079,7 +1101,7 @@ impl canvas::Program<Message> for OverlayLane {
         }
     }
 
-    fn draw(&self, _: &OverlayDrag, renderer: &Renderer, theme: &Theme, bounds: Rectangle, _: mouse::Cursor) -> Vec<Geometry> {
+    fn draw(&self, drag: &OverlayDrag, renderer: &Renderer, theme: &Theme, bounds: Rectangle, cursor: mouse::Cursor) -> Vec<Geometry> {
         let t = &self.0;
         let palette = theme.extended_palette();
         let mut frame = Frame::new(renderer, bounds.size());
@@ -1152,6 +1174,18 @@ impl canvas::Program<Message> for OverlayLane {
         lane_tag(&mut frame, &self.tag_name(name), colour, top + h / 2.0);
         let at = t.x(t.position, bounds);
         frame.fill(&Path::rectangle(Point::new(at - 1.0, 0.0), Size::new(2.0, self.height())), palette.primary.strong.color);
+        // What the drag has done so far, by the pointer.
+        let said = match *drag {
+            OverlayDrag::Trim { item, start, from, .. } => self.blocks().get(item).map(|o| {
+                let edge = if start { o.start } else { o.start + o.len };
+                format!("{} · {}", signed(edge - from), seconds(o.len))
+            }),
+            OverlayDrag::Move { item, at, .. } => self.blocks().get(item).map(|o| format!("{} · at {}", signed(o.from - at), clock(o.from))),
+            _ => None,
+        };
+        if let (Some(p), Some(said)) = (cursor.position_in(bounds), said) {
+            readout(&mut frame, bounds, p, &said);
+        }
         vec![frame.into_geometry()]
     }
 
@@ -1238,6 +1272,34 @@ fn lane_tag(frame: &mut Frame, name: &str, colour: iced::Color, mid: f32) {
 }
 
 /// A volume line on `lane` from `ends.0` to `ends.1` (x, dB) through
+/// A signed change of time: «+0:01.2», «−0:00.4».
+fn signed(d: f64) -> String {
+    format!("{}{}", if d < -0.05 { '−' } else { '+' }, clock(d.abs()))
+}
+
+/// A length: «4.3 s», or «1:02.5» from a minute.
+fn seconds(s: f64) -> String {
+    if s < 60.0 { format!("{s:.1} s") } else { clock(s) }
+}
+
+/// A time on the edit: «0:12.3».
+fn clock(t: f64) -> String {
+    // Rounded to tenths first, or 59.96 s would read «0:60.0».
+    let t = (t.max(0.0) * 10.0).round() / 10.0;
+    let m = (t / 60.0).floor();
+    format!("{}:{:04.1}", m as u32, t - m * 60.0)
+}
+
+/// `said` on a dark tag beside the pointer `p`, kept inside `b`: what a
+/// drag has done so far (pack 1).
+fn readout(frame: &mut Frame, b: Rectangle, p: Point, said: &str) {
+    let w = said.chars().count() as f32 * 6.6 + 12.0;
+    let x = (p.x + 14.0).min(b.width - w - 2.0).max(2.0);
+    let y = (p.y - 26.0).max(2.0);
+    frame.fill(&Path::rounded_rectangle(Point::new(x, y), Size::new(w, 18.0), 4.0.into()), iced::Color::from_rgba(0.0, 0.0, 0.0, 0.8));
+    frame.fill_text(Text { content: said.to_owned(), position: Point::new(x + 6.0, y + 9.0), color: iced::Color::WHITE, size: 12.0.into(), font: iced::Font::MONOSPACE, align_y: Vertical::Center, ..Default::default() });
+}
+
 /// The selected clip's frame: thick in the accent colour, over a dark
 /// line so it stands off any picture or waveform (gap 7; WCAG 1.4.11's
 /// 3:1 against both). It was 2 px and easy to miss.
@@ -1577,7 +1639,7 @@ impl canvas::Program<Message> for Marks {
         }
     }
 
-    fn draw(&self, state: &State, renderer: &Renderer, theme: &Theme, bounds: Rectangle, _: mouse::Cursor) -> Vec<Geometry> {
+    fn draw(&self, state: &State, renderer: &Renderer, theme: &Theme, bounds: Rectangle, cursor: mouse::Cursor) -> Vec<Geometry> {
         let drag = &state.drag;
         let palette = theme.extended_palette();
         let mut frame = Frame::new(renderer, bounds.size());
@@ -1667,6 +1729,9 @@ impl canvas::Program<Message> for Marks {
             let (l, r) = self.scroll_thumb(bounds);
             let active = matches!(drag, Drag::Scroll { .. });
             frame.fill(&pill(l, r), if active { palette.primary.strong.color } else { palette.background.base.text.scale_alpha(0.5) });
+        }
+        if let (Some(p), Some(said)) = (cursor.position_in(bounds), self.readout(drag)) {
+            readout(&mut frame, bounds, p, &said);
         }
         vec![frame.into_geometry()]
     }
@@ -1930,6 +1995,7 @@ mod tests {
         assert_eq!(edge_of(100.0, 130.0, 105.0), Some(true));
         assert_eq!(edge_of(100.0, 130.0, 115.0), None);
         assert_eq!(edge_of(100.0, 130.0, 125.0), Some(false));
+        assert_eq!((signed(1.24), signed(-0.4), signed(0.0), seconds(4.31), seconds(62.5), clock(59.96)), ("+0:01.2".into(), "−0:00.4".into(), "+0:00.0".into(), "4.3 s".into(), "1:02.5".into(), "1:00.0".into()));
         // The level line: y back to dB, every level outside 0 dB's ±1 dB
         // reachable on the narrow clip sound lane too.
         let lane = t.rows.cut_lane();

@@ -454,7 +454,9 @@ impl Timeline {
             Drag::Trim { cut, start, from, .. } => self.blocks.get(cut).map(|c| format!("{} · {}", signed(edge(c.start, c.len, start) - from), seconds(c.len))),
             Drag::MusicTrim { lane, clip, start, from, .. } => self.sounds.get(lane)?.blocks.get(clip).map(|m| format!("{} · {}", signed(edge(m.start, m.len, start) - from), seconds(m.len))),
             Drag::MusicMove { lane, clip, at, .. } => self.sounds.get(lane)?.blocks.get(clip).map(|m| format!("{} · at {}", signed(m.from - at), clock(m.from))),
-            Drag::Crossfade { cut, .. } => self.blocks.get(cut).map(|c| format!("crossfade {}", seconds(c.crossfade))),
+            // At 0 it says which way: dragged into its own cut (as a sound's
+            // fade in is) it stays 0, which looked like nothing working.
+            Drag::Crossfade { cut, .. } => self.blocks.get(cut).map(|c| if c.crossfade > 0.0 { format!("crossfade {}", seconds(c.crossfade)) } else { "← onto the cut before".to_owned() }),
             Drag::Fade { own, in_edge, .. } => {
                 let (fade_in, fade_out) = match own {
                     Own::Cut(i) => self.blocks.get(i).map(|c| (c.fade_in, c.fade_out))?,

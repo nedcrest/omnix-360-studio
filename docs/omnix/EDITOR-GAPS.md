@@ -1489,7 +1489,7 @@ one sphere, several views of it.
   and both exports take the camera from the angle playing at each frame;
   CPU and GPU alike.
 
-### 50. A readable timeline: a time ruler, main lanes first, folding lanes — medium (user, 2026-11-02)
+### 50. A readable timeline: a time ruler, main lanes first, folding lanes — done, confirmed by the user 2026-11-02
 
 User: "the ruler is unreadable, there are no seconds on it, and it sits
 under «Effects». Separate it better, by best practice. Video and its clip
@@ -1518,9 +1518,10 @@ stay compact; the video group and the sound group are set apart
   sound lanes (`Rows::folded`, `lane_h`); its S/M buttons still work
   folded; a sound overflowing into SFX 2 opens it. Folded lanes take no
   fades, points, level tags or line presses.
-- **50d, groups.** A gap and a faint heading between the picture group
+- **50d, groups — done (`72b6ce3`).** A gap and a faint heading between the picture group
   (Text, Overlay, cuts, clip sound, key rows) and the sound group
-  (Voice, Music, SFX, SFX 2), so the eye finds the main lanes at once.
+  (Voice, Music, SFX, SFX 2), so the eye finds the main lanes at once:
+  16 px, a faint SOUND and a thin rule.
 - Later: Shift+press folds every foldable lane (Kdenlive); a lane's
   height dragged by its lower edge.
 

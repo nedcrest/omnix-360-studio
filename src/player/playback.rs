@@ -348,9 +348,13 @@ impl Playback {
         self.clock()
     }
 
+    /// From where the last step or seek asked, not from the frame shown:
+    /// pressed faster than frames decode, each step used to start again
+    /// from the old frame, asking for the same one, and the playhead stood
+    /// still (the user, 2026-11-03).
     pub fn step(&mut self, frames: f64) {
         if !self.playing {
-            self.seek(self.shown_pts + frames / self.media.fps);
+            self.seek(self.target() + frames / self.media.fps);
         }
     }
 

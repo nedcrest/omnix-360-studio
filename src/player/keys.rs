@@ -221,7 +221,7 @@ impl App {
     fn step_frame(&mut self, frames: f64) -> Task<Message> {
         self.follow = true;
         let note = if frames < 0.0 { "−1 f" } else { "+1 f" };
-        let t = self.position() + frames / self.fps();
+        let t = self.aimed() + frames / self.fps();
         if self.edit.locate(t.max(0.0)).is_some_and(|(i, _)| i == self.current) {
             self.with_playback(|p| p.step(frames));
             return self.step_note(note);
@@ -231,7 +231,14 @@ impl App {
 
     /// The playhead `dt` seconds on, said by it as `note` for a moment.
     fn seek_by(&mut self, dt: f64, note: &'static str) -> Task<Message> {
-        self.seek_to(self.position() + dt, note)
+        self.seek_to(self.aimed() + dt, note)
+    }
+
+    /// Where the playhead is headed on the edit: the frame asked for last,
+    /// which may still be decoding, so quick presses add up instead of each
+    /// starting again from the frame on screen.
+    fn aimed(&self) -> f64 {
+        self.playing_cut().map_or_else(|| self.position(), |(_, t)| self.edit.edit_time(self.current, t))
     }
 
     /// The playhead to edit time `t` (held within the edit), said by it.

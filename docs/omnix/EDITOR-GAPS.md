@@ -258,7 +258,7 @@ eight packs are in `TIMELINE-UX.md`. Item 7 (selection frame) is now part of
 its pack 1, and the bin's skimmer is shared with the timeline's. Keys that
 clash with the 360 view (J/K/L, ↑/↓, E/Q, S) wait for the user's choice.
 
-### 10. Two modes: Edit and Framing — built 2026-10-24 (`562dad6`), waiting for the user's test
+### 10. Two modes: Edit and Framing — built 2026-10-24 (`562dad6`); the base that gap 53 grows (user, 2026-11-02)
 
 The user's answer to the key clashes in `TIMELINE-UX.md`: Omnix is a video
 editor first. By default it is in **Edit** mode, where keys and the mouse
@@ -1114,7 +1114,7 @@ Shotcut is the warning: no device picker, no meter, and users get lost.
   - «Clean up voice» (footage-agent's cleaner, or `afftdn`);
   - enabling a disabled built-in card's profile.
 
-### 37. Object tracking — large (user, 2026-11-01)
+### 37. Object tracking — large (user, 2026-11-01); part of gap 53 (53b) since 2026-11-02
 
 User: "object tracking" (recalled with the speed ideas; no detail yet).
 
@@ -1486,7 +1486,7 @@ vendor's current terms):
   in the file).
 - Needs the camera or sample clips first.
 
-### 49. Several angles from one 360 clip, cut between like a multicam — idea (user, 2026-11-02)
+### 49. Several angles from one 360 clip, cut between like a multicam — idea (user, 2026-11-02); part of gap 53 (53c)
 
 User: "a multi-shot cut of a 360 video. Different angles, to arrange on the
 timeline and cut between. The video row can be collapsible for a 360
@@ -1637,6 +1637,47 @@ At 4K and 8K (gap 51) it gets worse.
 Unmeasured guess (`CLAUDE.md`): export 30–40 fps at either depth at
 1080p; full-res playback on the dev laptop.
 
+### 53. Framing grown up: best practices, faces, tracking, angles — idea, large (user, 2026-11-02)
+
+User, asked whether gap 10 (the Edit / Framing modes) counts as
+confirmed: "framing has to inherit best practices, and add face
+recognition, object tracking and so on (the multicam we described can
+hang here too)". So gap 10 is the base, not the end; milestone
+«Кадрування».
+
+**What there is (code facts).** The Framing switch (gap 10) with free
+look, view keyframes and their eases, stabilisation modes, projections
+(perspective to little planet, typed angles), Follow: the selfie stick
+(from the attitude) or a colour track (`rosmo360 track`, `src/track.rs`);
+ordinary videos framed by pan and zoom (`view::Crop`). Every view change
+is an op (`KeyOp::View`/`Follow`, OPS-API), so whatever comes next can
+key the view the same way.
+
+**First: research the best practices** (a written page, as
+`TIMELINE-UX.md` was for the timeline): how Insta360 Studio (Deep Track,
+its keyframe panel, «ViewFinder»), DJI Studio / LightCut, GoPro Player's
+reframe, Premiere's Auto Reframe, Final Cut's Smart Conform and
+Resolve's Smart Reframe frame a shot: what they key, how a subject is
+picked and corrected, how a 360 shot becomes a flat one, what users
+praise and curse. Then the parts below get ordered from it.
+
+**The parts, as they stand:**
+- **53a Faces and people.** Detect faces and bodies in the sphere (and in
+  flat videos); a detected person is something to follow, as the stick
+  and a colour are. footage-agent's gap 30 (who is in the frame, names
+  from Immich) can name them. Needs a model: an ONNX face/person detector
+  run in-process or by footage-agent; YOLO's AGPL is ruled out (`CLAUDE.md`
+  0.2.8), so a permissively licensed model.
+- **53b Object tracking** (gap 37, moved here): a box drawn on anything,
+  followed frame by frame, keys the view (or an overlay); corrected by
+  hand along its path.
+- **53c Angles as a multicam** (gap 49, moved here): one 360 clip, several
+  virtual cameras, cut between on the timeline; an angle per detected
+  person later (53a).
+- **53d Framing aids** to be taken from the research: rule-of-thirds and
+  safe-area guides for the aspect, a horizon line, a «look room» hint,
+  smoothing a hand-keyed path.
+
 ## Format rule for all of these
 
 New fields only, each `#[serde(default, skip_serializing_if = …)]`, so every
@@ -1669,33 +1710,39 @@ whenever a better grouping shows. `ROADMAP.md` shows the same as cards (field
 5. **B-roll і групи**: video on the overlay lane (cheap cutaway) → 4B
    group/ungroup + connected clips + 8 multi-select, one format change,
    designed as one.
-6. **Ритм і переходи**: 13 beats → 25a basic transitions with quick
+6. **Кадрування** (gap 53, user 2026-11-02): framing grown up from gap
+   10's switch: research the best practices first (Insta360 Studio, DJI
+   Studio, GoPro, Auto/Smart Reframe), then faces and people (53a, with
+   footage-agent's 30), object tracking (37 → 53b), angles as a multicam
+   (49 → 53c), framing aids. After B-roll and groups, as angles change the
+   format beside groups; reordered freely.
+7. **Ритм і переходи**: 13 beats → 25a basic transitions with quick
    placement → 25d stingers («перебивки») → 25c templates → 25b edge
    transitions → 25e 360 looks. Stingers come early because the user
    already has stinger clips (film burn, white noise).
-7. **Колір і текст**: 14 levels → 15 bars → 26 glow/blur → 6 vignette shapes →
+8. **Колір і текст**: 14 levels → 15 bars → 26 glow/blur → 6 vignette shapes →
    16 subtitles (needs 29) → text-based editing (needs 29).
-8. **Швидкість і автоматизація** (gap 31): constant speed per cut with
+9. **Швидкість і автоматизація** (gap 31): constant speed per cut with
    its sound following (atempo), measured for drift → speed ramps →
    automation lanes per value (the user's FL Studio idea). Large and
    careful; after B-roll and groups, since it touches the same time
    mapping. With it: 31b keep-the-pitch switch, 31e speed points on the
    main timeline, 31c the speed editor window, 31d right-click keyframes,
-   and 37 object tracking (it makes keyframes for the view and overlays,
-   the same automation idea).
-9. **Якість 360** (from `OPENOSV.md`, mostly needs 360 footage: one public
+   and the automation idea that 37 object tracking (now in «Кадрування»)
+   keys into.
+10. **Якість 360** (from `OPENOSV.md`, mostly needs 360 footage: one public
    sample now, the user's camera ~2027-02): 17 easing presets and 18 bundled
    LUT any time (small, useful now) → 24 file facts → 19 lens protectors →
    20 mask release → 21 tilt diagnostic → 22 sky seam field (patents first)
    → 23 DJI presets → Osmo 360 II.
-10. **Експорт** (gaps 51, 52; user, 2026-11-02): what the export makes
+11. **Експорт** (gaps 51, 52; user, 2026-11-02): what the export makes
    (4K and 8K, HEVC and AV1, bitrates, frame rates, sound, presets, HDR
    and 360 out) and how fast (the frames' path through the GPU). Before
    the AI edit, which needs it; reordered freely.
-11. **ШІ-монтаж** (gap 28, `AUTO-EDIT.md`): the user's main wish, but put
+12. **ШІ-монтаж** (gap 28, `AUTO-EDIT.md`): the user's main wish, but put
    last on purpose (user, 2026-10-23: "I wouldn't do AI functions yet:
    Omnix doesn't have its full working functionality"). The design stays
    ready. The pieces it needs arrive with the milestones above.
-12. **Інші платформи** (gap 40, user's question 2026-11-01): Mac and
+13. **Інші платформи** (gap 40, user's question 2026-11-01): Mac and
    Windows realistic (upstream builds both), Android a new UI over the
    same core. Not planned; no new Linux-only code without a stub.

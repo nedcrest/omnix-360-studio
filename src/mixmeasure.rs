@@ -157,6 +157,10 @@ pub fn run_cli(path: &std::path::Path, target: f64) -> Result<()> {
         };
         println!("{:7.2} s  {lane:<10}  {} LUFS, loudest {}{}", i.at, lufs(i.lufs), lufs(i.loudest), if i.speech { "  speech" } else { "" });
     }
+    for s in &m.speech {
+        let under: Vec<String> = s.under.iter().map(|&(_, l)| format!("music {l:.1} LUFS, {:.1} dB under", s.voice - l)).collect();
+        println!("{:7.2} s  speech to {:.2} s  voice {:.1} LUFS{}", s.from, s.to, s.voice, under.iter().map(|u| format!(", {u}")).collect::<String>());
+    }
     println!("film: {} LUFS, peak {:.1} dBFS", lufs(m.mix), m.peak);
     for f in crate::mixcheck::check(&m, &crate::mixcheck::Rules::at(target)) {
         println!("{:7.2} s  {}  {}", f.at, if f.severity == crate::mixcheck::Severity::Fix { "fix " } else { "hint" }, f.text);

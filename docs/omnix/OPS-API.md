@@ -226,7 +226,8 @@ caller needs the ids it changed.
 
 ## Later: a review of the core (2026-11-02, the user asked after pack 2)
 
-Soon (small each):
+Soon (small each) — **all four done 2026-11-03** (`82464d0` 4,
+`19a1bb7` 3, `ae1e7f3` 2, and the selection's commit 1):
 1. **The selection by id.** `Selection::Cut(usize)` names an index while
    ops name ids, so every move, delete and undo remaps it by hand
    (`moved_index`, `still_valid`, `after_edit`). By id that class of «the

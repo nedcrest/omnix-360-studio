@@ -11,6 +11,7 @@
 pub mod clips;
 pub mod cuts;
 pub mod items;
+pub mod keys;
 pub mod sound;
 
 use super::edit::Edit;
@@ -24,6 +25,7 @@ pub enum Op {
     Cut(cuts::CutOp),
     Clip(clips::ClipOp),
     Item(items::ItemOp),
+    Key(keys::KeyOp),
     Sound(sound::SoundOp),
 }
 
@@ -112,6 +114,7 @@ fn apply(p: &mut Project, op: &Op) -> Result<Outcome, OpError> {
         Op::Cut(op) => cuts::apply(p, op),
         Op::Clip(op) => clips::apply(p, op),
         Op::Item(op) => items::apply(p, op),
+        Op::Key(op) => keys::apply(p, op),
         Op::Sound(op) => sound::apply(p, op),
     }
 }

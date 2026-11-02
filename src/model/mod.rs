@@ -3,6 +3,7 @@
 //! player, the command line, an AI agent and the tests all change a
 //! project the same way.
 
+pub mod curve;
 pub mod edit;
 pub mod ops;
 pub mod selection;

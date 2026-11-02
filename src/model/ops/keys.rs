@@ -1,0 +1,211 @@
+//! Operations on effect and motion keyframes (`OPS-API.md` step 5): set
+//! the look or an overlay's place at a time, its ease, retime, delete,
+//! clear, the look to every cut. Values are whole and absolute, so a slider
+//! re-sent or an agent's retry changes nothing more. A keyframe is named by
+//! what it's on and its time (its own time: a cut's clip time, an item's).
+
+use super::{OpError, Outcome, said};
+use crate::grade::{EffectKey, Grade, grade_at};
+use crate::model::curve::{self, Key};
+use crate::overlay::{Item, Place};
+use crate::project::{Id, Project};
+use crate::view::Ease;
+use serde::{Deserialize, Serialize};
+
+/// What has effects: a cut or an overlay/text item.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Graded {
+    Cut(Id),
+    Item(Id),
+}
+
+/// A row of keyframes: something's effects, or an item's motion.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Line {
+    Effects(Graded),
+    Motion(Id),
+}
+
+/// Two keys this close (seconds) are one, unless an op says otherwise.
+fn half_a_frame() -> f64 {
+    1.0 / 60.0
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "op", rename_all = "snake_case", deny_unknown_fields)]
+pub enum KeyOp {
+    /// The look at `t`: the key within `tolerance` set to `grade`, or a new
+    /// one there.
+    Effects { on: Graded, t: f64, grade: Grade, #[serde(default = "half_a_frame")] tolerance: f64 },
+    /// An item's place at `t`, as `Effects`.
+    Motion { item: Id, t: f64, place: Place, #[serde(default = "half_a_frame")] tolerance: f64 },
+    /// How the key at `t` moves on to the next.
+    Ease { line: Line, t: f64, ease: Ease, #[serde(default = "half_a_frame")] tolerance: f64 },
+    /// The key at `from` to `t`, kept `gap` seconds clear of its neighbours
+    /// (order kept).
+    Retime { line: Line, from: f64, t: f64, gap: f64, #[serde(default = "half_a_frame")] tolerance: f64 },
+    Delete { line: Line, t: f64, #[serde(default = "half_a_frame")] tolerance: f64 },
+    /// Every key gone: a cut's or item's effects, and an item's motion.
+    Clear { on: Graded },
+    /// The look cut `cut` has at `t`, held by every other cut from its
+    /// start.
+    LookToAll { cut: Id, t: f64 },
+}
+
+pub(super) fn apply(p: &mut Project, op: &KeyOp) -> Result<Outcome, OpError> {
+    match *op {
+        KeyOp::Effects { on, t, grade, tolerance } => {
+            set(effects(p, on)?, t, grade, tolerance);
+            said(format!("{}: look set at {t:.2} s", name(on)))
+        }
+        KeyOp::Motion { item, t, place, tolerance } => {
+            set(&mut find_item(p, item)?.motion, t, place, tolerance);
+            said(format!("item #{item}: place set at {t:.2} s"))
+        }
+        KeyOp::Ease { line, t, ease, tolerance } => {
+            let i = index(p, line, t, tolerance)?;
+            match line {
+                Line::Effects(on) => effects(p, on)?[i].ease = ease,
+                Line::Motion(item) => find_item(p, item)?.motion[i].ease = ease,
+            }
+            said(format!("{}: key at {t:.2} s eases {ease:?}", line_name(line)))
+        }
+        KeyOp::Retime { line, from, t, gap, tolerance } => {
+            let i = index(p, line, from, tolerance)?;
+            match line {
+                Line::Effects(on) => crate::view::retime(effects(p, on)?, i, t, gap),
+                Line::Motion(item) => crate::view::retime(&mut find_item(p, item)?.motion, i, t, gap),
+            }
+            said(format!("{}: key at {from:.2} s moved to {t:.2} s", line_name(line)))
+        }
+        KeyOp::Delete { line, t, tolerance } => {
+            let i = index(p, line, t, tolerance)?;
+            match line {
+                Line::Effects(on) => {
+                    effects(p, on)?.remove(i);
+                }
+                Line::Motion(item) => {
+                    find_item(p, item)?.motion.remove(i);
+                }
+            }
+            said(format!("{}: key at {t:.2} s removed", line_name(line)))
+        }
+        KeyOp::Clear { on } => {
+            effects(p, on)?.clear();
+            if let Graded::Item(item) = on {
+                find_item(p, item)?.motion.clear();
+            }
+            said(format!("{}: keys cleared", name(on)))
+        }
+        KeyOp::LookToAll { cut, t } => {
+            let grade = grade_at(effects(p, Graded::Cut(cut))?, t);
+            for c in p.cuts.iter_mut().filter(|c| c.id != cut) {
+                c.effects = vec![EffectKey::make(c.start, grade)];
+            }
+            said(format!("cut #{cut}'s look at {t:.2} s on every other cut"))
+        }
+    }
+}
+
+/// The key within `tolerance` of `t` (or a new one) set to `v`.
+fn set<K: Key>(keys: &mut Vec<K>, t: f64, v: K::V, tolerance: f64) {
+    let i = curve::key_at(keys, t, tolerance);
+    *keys[i].value_mut() = v;
+}
+
+fn effects(p: &mut Project, on: Graded) -> Result<&mut Vec<EffectKey>, OpError> {
+    match on {
+        Graded::Cut(id) => p.cuts.iter_mut().find(|c| c.id == id).map(|c| &mut c.effects).ok_or_else(|| OpError::NotFound(format!("cut #{id}"))),
+        Graded::Item(id) => Ok(&mut find_item(p, id)?.effects),
+    }
+}
+
+fn find_item(p: &mut Project, id: Id) -> Result<&mut Item, OpError> {
+    p.overlays.iter_mut().chain(&mut p.text).flat_map(|l| &mut l.items).find(|it| it.id == id).ok_or_else(|| OpError::NotFound(format!("item #{id}")))
+}
+
+/// Where the key at `t` on `line` is.
+fn index(p: &mut Project, line: Line, t: f64, tolerance: f64) -> Result<usize, OpError> {
+    let found = match line {
+        Line::Effects(on) => curve::find(effects(p, on)?, t, tolerance),
+        Line::Motion(item) => curve::find(&find_item(p, item)?.motion, t, tolerance),
+    };
+    found.ok_or_else(|| OpError::NotFound(format!("key at {t:.2} s on {}", line_name(line))))
+}
+
+fn name(on: Graded) -> String {
+    match on {
+        Graded::Cut(id) => format!("cut #{id}"),
+        Graded::Item(id) => format!("item #{id}"),
+    }
+}
+
+fn line_name(line: Line) -> String {
+    match line {
+        Line::Effects(on) => format!("{}'s effects", name(on)),
+        Line::Motion(id) => format!("item #{id}'s motion"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::{Op, check};
+    use super::*;
+    use crate::model::edit::Edit;
+    use crate::project::Cut;
+
+    fn edit() -> Edit {
+        let mut p = Project::default();
+        p.cuts = vec![Cut::new("a.mp4".into(), 1.0, 5.0), Cut::new("b.mp4".into(), 0.0, 3.0)];
+        p.settle_ids();
+        let mut e = Edit::default();
+        e.replace(p);
+        e
+    }
+
+    fn key(o: KeyOp) -> Op {
+        Op::Key(o)
+    }
+
+    #[test]
+    fn a_look_set_twice_is_one_key_and_one_step() {
+        let mut e = edit();
+        let warm = Grade { temperature: 0.4, ..Grade::default() };
+        let set = key(KeyOp::Effects { on: Graded::Cut(1), t: 2.0, grade: warm, tolerance: 0.01 });
+        e.apply(&set).unwrap();
+        e.apply(&set).unwrap();
+        assert_eq!(e.cuts[0].effects.len(), 1);
+        assert!(e.undo() && e.cuts[0].effects.is_empty() && !e.undo());
+    }
+
+    #[test]
+    fn keys_ease_move_and_go_by_time() {
+        let mut e = edit();
+        let line = Line::Effects(Graded::Cut(1));
+        for t in [2.0, 3.0] {
+            e.apply(&key(KeyOp::Effects { on: Graded::Cut(1), t, grade: Grade::default(), tolerance: 0.01 })).unwrap();
+        }
+        e.apply(&key(KeyOp::Ease { line, t: 2.0, ease: Ease::Hold, tolerance: 0.01 })).unwrap();
+        assert_eq!(e.cuts[0].effects[0].ease, Ease::Hold);
+        // Dragged past its neighbour, it stops a gap short.
+        e.apply(&key(KeyOp::Retime { line, from: 2.0, t: 4.0, gap: 0.1, tolerance: 0.01 })).unwrap();
+        assert!((e.cuts[0].effects[0].t - 2.9).abs() < 1e-9);
+        assert!(matches!(e.apply(&key(KeyOp::Delete { line, t: 2.0, tolerance: 0.01 })), Err(OpError::NotFound(_))));
+        e.apply(&key(KeyOp::Delete { line, t: 2.9, tolerance: 0.01 })).unwrap();
+        assert_eq!(e.cuts[0].effects.len(), 1);
+        check(&e).unwrap();
+    }
+
+    #[test]
+    fn a_look_goes_to_every_other_cut_from_its_start() {
+        let mut e = edit();
+        let warm = Grade { temperature: 0.4, ..Grade::default() };
+        e.apply(&key(KeyOp::Effects { on: Graded::Cut(1), t: 2.0, grade: warm, tolerance: 0.01 })).unwrap();
+        e.apply(&key(KeyOp::LookToAll { cut: 1, t: 2.0 })).unwrap();
+        assert_eq!(e.cuts[1].effects, vec![EffectKey::make(0.0, warm)]);
+        e.apply(&key(KeyOp::Clear { on: Graded::Cut(2) })).unwrap();
+        assert!(e.cuts[1].effects.is_empty());
+    }
+}

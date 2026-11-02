@@ -151,7 +151,7 @@ impl App {
             Message::OverlayPicked(_) => {}
             Message::OverlaySelect(i) => {
                 // Typing in another overlay is a change of its own for undo.
-                self.dragging = false;
+                self.edit.commit();
                 match i {
                     Some(r) => self.selection = Selection::Item(r),
                     // An empty spot on its lane: only an item lets go.
@@ -161,13 +161,13 @@ impl App {
             }
             Message::OverlayMove((track, i), at) => {
                 if self.edit.item((track, i)).is_some() {
-                    self.begin_drag();
+                    self.edit.begin();
                     self.edit.lane_mut(track).move_to(i, at);
                 }
             }
             Message::OverlayTrim((track, i), start, t) => {
                 if self.edit.item((track, i)).is_some() {
-                    self.begin_drag();
+                    self.edit.begin();
                     self.edit.lane_mut(track).trim(i, start, t, edit::MIN_CUT, ffmpeg::PICTURE_MOST);
                 }
             }
@@ -179,7 +179,7 @@ impl App {
             }
             Message::OverlayKeyMove(r, effects, key, t) => {
                 self.follow = true;
-                self.begin_drag();
+                self.edit.begin();
                 let gap = 1.0 / self.fps();
                 let Some(item) = self.edit.item_mut(r) else { return Task::none() };
                 let local = if effects {

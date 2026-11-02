@@ -518,7 +518,7 @@ impl App {
                 }
             }
             Message::ScrubDone => {
-                self.dragging = false;
+                self.edit.commit();
                 self.with_playback(Playback::scrub_end);
                 if let Some((_, inc)) = &mut self.partner {
                     inc.playback.scrub_end();

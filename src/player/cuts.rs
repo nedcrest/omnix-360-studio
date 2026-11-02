@@ -84,7 +84,7 @@ impl App {
                 let Some(clip_len) = self.edit.cuts.get(i).and_then(|c| self.library.iter().find(|m| m.input == c.input)).map(|m| m.duration) else {
                     return Task::none();
                 };
-                self.begin_drag();
+                self.edit.begin();
                 self.edit.trim(i, start, t, clip_len);
                 let c = &self.edit.cuts[i];
                 // Show the frame at the edge being trimmed.
@@ -102,7 +102,7 @@ impl App {
                 }
             }
             Message::Crossfade(i, seconds) => {
-                self.begin_drag();
+                self.edit.begin();
                 self.edit.set_crossfade(i, seconds);
             }
             Message::ToggleCrossfade => {

@@ -541,8 +541,6 @@ struct App {
     export_loudness: Option<f64>,
     /// A running export: its cancel flag and how far it has got.
     exporting: Option<(Arc<std::sync::atomic::AtomicBool>, f32)>,
-    /// A trim or keyframe drag has saved the edit for undo already.
-    dragging: bool,
     /// Where an effect or overlay drag writes its key (gap 38).
     effect_pin: effects::Pin,
     /// Timeline zoom (1 shows the whole edit) and the edit time at its left
@@ -673,7 +671,6 @@ impl App {
             edit: edit::Edit::default(),
             current: 0,
             selection: Selection::None,
-            dragging: false,
             effect_pin: effects::Pin::default(),
             timeline_zoom: 1.0,
             timeline_start: 0.0,
@@ -891,14 +888,6 @@ impl App {
             Message::Sound(msg) => self.sound_ui(msg),
             Message::Record(msg) => self.record_ui(msg),
             Message::Check(msg) => self.mix_check(msg),
-        }
-    }
-
-    /// Saves the edit for undo once per drag.
-    fn begin_drag(&mut self) {
-        if !self.dragging {
-            self.edit.checkpoint();
-            self.dragging = true;
         }
     }
 

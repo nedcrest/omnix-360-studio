@@ -168,7 +168,7 @@ impl App {
                 if self.edit.own_line(own).is_none() {
                     return Task::none();
                 }
-                self.begin_drag();
+                self.edit.begin();
                 let Some((keys, (start, end))) = self.edit.own_line_mut(own) else { return Task::none() };
                 let i = crate::project::add_volume_key(keys, t.clamp(start, end), db);
                 self.select_point(own, i);
@@ -177,7 +177,7 @@ impl App {
             // A point gone mid-drag (an undo) is no undo step, nor an index panic.
             Message::PointMove(own, i, ..) if self.edit.own_line(own).is_none_or(|(keys, _)| i >= keys.len()) => {}
             Message::PointMove(own, i, t, db) => {
-                self.begin_drag();
+                self.edit.begin();
                 // Within its stretch of its file and between its
                 // neighbours: points keep their order.
                 if let Some((keys, range)) = self.edit.own_line_mut(own) {
@@ -188,11 +188,11 @@ impl App {
             Message::MusicMove(which, i, _, _) if i >= self.edit.track(which).clips.len() => {}
             Message::MusicTrim(which, i, ..) if i >= self.edit.track(which).clips.len() => {}
             Message::MusicMove(which, i, want, overlap) => {
-                self.begin_drag();
+                self.edit.begin();
                 self.edit.track_mut(which).drag_to(i, want, overlap);
             }
             Message::MusicTrim(which, i, in_edge, t, overlap) => {
-                self.begin_drag();
+                self.edit.begin();
                 // The file's length comes with its waveform.
                 let song = self.waveforms.get(&self.edit.track(which).clips[i].input).map_or(f64::INFINITY, |w| w.duration);
                 self.edit.track_mut(which).trim(i, in_edge, t, overlap, song, edit::MIN_CUT);
@@ -204,7 +204,7 @@ impl App {
             }
             Message::Level(own, db) => {
                 if self.edit.own_line(own).is_some() {
-                    self.begin_drag();
+                    self.edit.begin();
                     if let Some(s) = self.edit.own_sound(own) {
                         *s.gain = db.clamp(crate::project::OFF_DB, LEVEL_MOST);
                     }
@@ -212,7 +212,7 @@ impl App {
             }
             Message::Fade(own, in_edge, seconds) => {
                 if self.edit.own_line(own).is_some() {
-                    self.begin_drag();
+                    self.edit.begin();
                     if let Some(mut s) = self.edit.own_sound(own) {
                         s.set_fade(in_edge, seconds);
                     }
@@ -241,16 +241,16 @@ impl App {
                 }
             }
             Message::SoundLevel(db) => {
-                self.begin_drag();
+                self.edit.begin();
                 self.edit.sound.volume = db;
                 let v = self.clip_volume();
                 self.with_playback(|p| p.set_volume(v));
             }
             Message::TrackLevel(which, db) => {
-                self.begin_drag();
+                self.edit.begin();
                 self.edit.track_mut(which).volume = db;
             }
-            Message::LevelDone => self.dragging = false,
+            Message::LevelDone => self.edit.commit(),
             _ => {}
         }
         Task::none()

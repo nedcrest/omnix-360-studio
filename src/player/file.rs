@@ -168,7 +168,7 @@ impl App {
         self.placing.clear();
         self.picking = None;
         self.auto_key_at = None;
-        self.dragging = false;
+        self.edit.commit();
         self.save_status = None;
         self.timeline_zoom = 1.0;
         self.timeline_start = 0.0;

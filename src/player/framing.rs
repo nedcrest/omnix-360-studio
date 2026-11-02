@@ -339,7 +339,7 @@ impl App {
             }
             Message::KeyMove(i, k, t) => {
                 self.follow = true;
-                self.begin_drag();
+                self.edit.begin();
                 let gap = 1.0 / self.fps();
                 let Some(cut) = self.edit.cuts.get_mut(i) else { return Task::none() };
                 cut.keyframes.retime(k, t, gap);

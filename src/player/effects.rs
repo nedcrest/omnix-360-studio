@@ -260,8 +260,8 @@ impl App {
         match m {
             EffectMsg::Toggle => self.toggle_side(super::Side::Effects),
             EffectMsg::Set(p, v) => {
-                let starting = !self.dragging;
-                self.begin_drag();
+                let starting = !self.edit.changing();
+                self.edit.begin();
                 self.change_effects(starting, |g| {
                     let mut values = g.values();
                     values[p] = v;
@@ -269,8 +269,8 @@ impl App {
                 });
             }
             EffectMsg::Place(p, v) => {
-                let starting = !self.dragging;
-                self.begin_drag();
+                let starting = !self.edit.changing();
+                self.edit.begin();
                 self.change_place(starting, |place| {
                     let mut values = place.values();
                     values[p] = v;
@@ -278,11 +278,11 @@ impl App {
                 });
             }
             EffectMsg::Drag(to) => {
-                let starting = !self.dragging;
-                self.begin_drag();
+                let starting = !self.edit.changing();
+                self.edit.begin();
                 self.change_place(starting, |place| *place = to);
             }
-            EffectMsg::Done => self.dragging = false,
+            EffectMsg::Done => self.edit.commit(),
             EffectMsg::Lut(choice) => {
                 let Some((Target::Cut(i), _)) = target else { return };
                 self.edit.checkpoint();
@@ -298,16 +298,20 @@ impl App {
                 let words = self.text_content.text().trim_end_matches('\n').to_owned();
                 if edits && self.selected_text().is_some_and(|t| t.content != words) {
                     // A run of typing is one undo step, until something else is done.
-                    self.begin_drag();
+                    self.edit.begin();
                     if let Some(text) = self.selected_text() {
                         text.content = words;
                     }
                 }
             }
             EffectMsg::Text(change) => {
+                // No text selected, no undo step.
+                if self.selected_text().is_none() {
+                    return;
+                }
                 // Sliders are one undo step a drag, the rest one a click.
                 match change {
-                    TextChange::Size(_) | TextChange::OutlineWidth(_) => self.begin_drag(),
+                    TextChange::Size(_) | TextChange::OutlineWidth(_) => self.edit.begin(),
                     _ => self.edit.checkpoint(),
                 }
                 let Some(text) = self.selected_text() else { return };
@@ -419,11 +423,11 @@ impl App {
                 }
             }
             EffectMsg::FadeIn(v) => {
-                self.begin_drag();
+                self.edit.begin();
                 self.edit.fades.fade_in = v;
             }
             EffectMsg::FadeOut(v) => {
-                self.begin_drag();
+                self.edit.begin();
                 self.edit.fades.fade_out = v;
             }
             EffectMsg::Jump(cut, t) => {
@@ -433,7 +437,7 @@ impl App {
             }
             EffectMsg::KeyMove(cut, key, t) => {
                 self.follow = true;
-                self.begin_drag();
+                self.edit.begin();
                 let gap = 1.0 / self.fps();
                 let Some(c) = self.edit.cuts.get_mut(cut) else { return };
                 crate::view::retime(&mut c.effects, key, t, gap);

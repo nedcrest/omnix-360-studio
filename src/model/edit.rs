@@ -26,6 +26,9 @@ pub struct Edit {
     redo: Vec<Project>,
     /// Counts changes, so the app can tell whether the edit was saved.
     pub version: u64,
+    /// A change made of many small ones under way (a drag, a run of
+    /// typing): the edit before it, and the version then.
+    open: Option<(Project, u64)>,
 }
 
 impl std::ops::Deref for Edit {
@@ -92,8 +95,36 @@ impl Edit {
         std::mem::replace(&mut self.project, then)
     }
 
+    /// Starts a change made of many small ones (a drag, a run of typing),
+    /// to be one undo step at `commit`; while one is under way, this does
+    /// nothing. It counts as unsaved from the start, as the edit shows it.
+    pub fn begin(&mut self) {
+        if self.open.is_none() {
+            self.open = Some((self.snapshot(), self.version));
+            self.version += 1;
+        }
+    }
+
+    /// Whether a change begun is still under way.
+    pub fn changing(&self) -> bool {
+        self.open.is_some()
+    }
+
+    /// Ends the change begun: one undo step, or none if it changed nothing
+    /// (a press without a move used to leave an empty one).
+    pub fn commit(&mut self) {
+        let Some((before, version)) = self.open.take() else { return };
+        if before == self.project {
+            self.version = version;
+        } else {
+            self.undo.push(before);
+            self.redo.clear();
+        }
+    }
+
     /// Remembers the edit as it is, for undo; call before each change.
     pub fn checkpoint(&mut self) {
+        self.commit();
         self.undo.push(self.snapshot());
         self.redo.clear();
         self.version += 1;
@@ -104,6 +135,7 @@ impl Edit {
     /// untouched. (Checkpoint-then-undo on a failed change wiped redo and
     /// marked the edit unsaved.)
     pub fn attempt(&mut self, change: impl FnOnce(&mut Edit) -> bool) -> bool {
+        self.commit();
         let before = self.snapshot();
         if change(self) {
             self.undo.push(before);
@@ -117,6 +149,7 @@ impl Edit {
     }
 
     pub fn undo(&mut self) -> bool {
+        self.commit();
         let Some(then) = self.undo.pop() else { return false };
         let now = self.restore(then);
         self.redo.push(now);
@@ -125,6 +158,7 @@ impl Edit {
     }
 
     pub fn redo(&mut self) -> bool {
+        self.commit();
         let Some(then) = self.redo.pop() else { return false };
         let now = self.restore(then);
         self.undo.push(now);
@@ -135,6 +169,7 @@ impl Edit {
     /// Starts over with `project` (an opened or new one), forgetting undo.
     pub fn replace(&mut self, project: Project) {
         self.project = project;
+        self.open = None;
         self.undo.clear();
         self.redo.clear();
         self.version += 1;
@@ -289,6 +324,34 @@ mod tests {
         let mut e = Edit::default();
         e.cuts = vec![cut("a", 10.0, 14.0), cut("b", 2.0, 5.0)];
         e
+    }
+
+    #[test]
+    fn a_drag_is_one_undo_step_and_a_still_press_none() {
+        let mut e = edit();
+        let v = e.version;
+        // Pressed and let go without a move: no step, saved as it was.
+        e.begin();
+        assert!(e.changing() && e.version != v, "unsaved while under way");
+        e.commit();
+        assert!(!e.changing() && e.version == v && !e.undo());
+        // Many moves, one step back to before them.
+        e.begin();
+        for t in [11.0, 12.0, 13.0] {
+            e.trim(0, true, t, 20.0);
+            e.begin();
+        }
+        e.commit();
+        assert_eq!(e.cuts[0].start, 13.0);
+        assert!(e.undo());
+        assert_eq!(e.cuts[0].start, 10.0);
+        assert!(!e.undo(), "one step only");
+        // A change of another kind ends the one under way first.
+        e.begin();
+        e.trim(0, true, 11.0, 20.0);
+        e.checkpoint();
+        e.cuts[1].crossfade = 0.5;
+        assert!(e.undo() && e.cuts[0].start == 11.0 && e.undo() && e.cuts[0].start == 10.0);
     }
 
     #[test]

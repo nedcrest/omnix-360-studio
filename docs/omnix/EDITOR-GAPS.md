@@ -283,6 +283,15 @@ beyond, red at the file's end; the thick selection frame (gap 7); a
 readout by the pointer while trimming, moving, crossfading or fading.
 Defaults: a press on another clip's edge selects and moves it; pictures
 and text show yellow at their out edge (they have no end).
+
+**Pack 2 built 2026-11-02** (`994f949`, `afb5ac2`, `906cab3`, and the
+toast's commit), waiting for the user's check: the crossfade readout
+says «← onto the cut before» while it's 0 (the user dragged it inwards,
+as a sound's fade in); Alt+[ / Alt+] trim the selected (else playing)
+cut's start or end to the playhead, Alt+← / Alt+→ move it one place;
+Esc cancels a drag on the timeline (`Edit::cancel`, `drag_epoch`; not
+the effects sliders, iced's own); «… deleted · Undo» in the top bar
+for 6 s after a delete.
 ### 10. Two modes: Edit and Framing — built 2026-10-24 (`562dad6`); the base that gap 53 grows (user, 2026-11-02)
 
 The user's answer to the key clashes in `TIMELINE-UX.md`: Omnix is a video

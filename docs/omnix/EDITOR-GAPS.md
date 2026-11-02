@@ -757,6 +757,11 @@ choice. Keeps the edit magnetic: the blank is a cut like any other.
 The user also confirmed (2026-10-23): **the magnetic edit is handy.** Keep
 it the default; gaps happen only as blank cuts.
 
+Raised again by the user as a «spacer» (2026-11-03), with the same route:
+a black picture on the picture lane. With the ops API it is one
+`CutOp::Add` of the generated black picture (its length given, placed at
+the playhead or a join), so the AI edit and scripts get it too.
+
 ### 33. Right-click menu on a cut's sound — small-medium (user, 2026-10-24)
 
 Right-click on the Clip sound lane offers:

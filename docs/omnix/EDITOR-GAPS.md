@@ -285,13 +285,14 @@ Defaults: a press on another clip's edge selects and moves it; pictures
 and text show yellow at their out edge (they have no end).
 
 **Pack 2 built 2026-11-02** (`994f949`, `afb5ac2`, `906cab3`, and the
-toast's commit), waiting for the user's check: the crossfade readout
-says «← onto the cut before» while it's 0 (the user dragged it inwards,
-as a sound's fade in); Alt+[ / Alt+] trim the selected (else playing)
-cut's start or end to the playhead, Alt+← / Alt+→ move it one place;
-Esc cancels a drag on the timeline (`Edit::cancel`, `drag_epoch`; not
-the effects sliders, iced's own); «… deleted · Undo» in the top bar
-for 6 s after a delete.
+toast's commit), confirmed by the user the same day: the crossfade
+readout says «← onto the cut before» while it's 0 (the user dragged it
+inwards, as a sound's fade in); Alt+[ / Alt+] trim the selected (else
+playing) cut's start or end to the playhead, Alt+← / Alt+→ move it one
+place; Esc cancels a drag on the timeline (`Edit::cancel`,
+`drag_epoch`; not the effects sliders, iced's own); «… deleted · Undo»
+in the top bar for 6 s after a delete. From the check: gap 55.
+
 ### 10. Two modes: Edit and Framing — built 2026-10-24 (`562dad6`); the base that gap 53 grows (user, 2026-11-02)
 
 The user's answer to the key clashes in `TIMELINE-UX.md`: Omnix is a video
@@ -1744,6 +1745,25 @@ Decided (user, 2026-11-02): the ruler (gap 50a) starts after the column.
 Its width: 1–2 cm, to try out; not fixed to the user's 43-inch monitor,
 as they won't always edit on it, so it follows the UI scale and may be
 narrowed (or dragged) on a small screen.
+
+### 55. Moving the playhead by keys, in steps that make sense — small (user, 2026-11-02)
+
+User, after checking pack 2: "add the playhead line's movement too: now
+the left/right keys just throw the playhead back and forth in big steps
+(it isn't clear what they do)". Today ← / → seek ±5 s (`keys.rs`), with
+nothing saying how far; `,` `.` step a frame; Shift+← / → turn the view
+(framing only); ↑ / ↓ pitch (framing only).
+
+Proposed for editing mode (framing keeps its keys), as Premiere and FCP:
+- ← / → one frame (as `,` `.` are now);
+- Shift+← / → one second (or ten frames);
+- ↑ / ↓ the previous / next join (a cut's edge, a sound clip's or an
+  item's edge, later a marker);
+- Home / End the edit's start and end;
+- the step shown by the playhead for a moment («−1 f», «+1 s», «join»),
+  as the drag readout is.
+To settle with the user: whether ← / → stay 5 s somewhere (Alt?), and
+the size of Shift's step.
 
 ## Format rule for all of these
 

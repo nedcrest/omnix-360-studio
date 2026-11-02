@@ -15,6 +15,9 @@ use crate::project::{Cut, Project};
 /// The shortest a split or trim may leave a cut, in seconds.
 pub const MIN_CUT: f64 = 0.2;
 
+/// How many steps undo goes back.
+pub const UNDO_STEPS: usize = 300;
+
 #[derive(Default)]
 pub struct Edit {
     /// What's being edited. Its `aspect` isn't used: the app keeps the
@@ -93,6 +96,16 @@ impl Project {
 }
 
 impl Edit {
+    /// Keeps `before` as the latest undo step, forgetting the oldest past
+    /// `UNDO_STEPS`: each is a whole copy of the project, and a long
+    /// session's would otherwise grow without end.
+    fn remember(&mut self, before: Project) {
+        if self.undo.len() >= UNDO_STEPS {
+            self.undo.remove(0);
+        }
+        self.undo.push(before);
+    }
+
     fn snapshot(&self) -> Project {
         self.project.clone()
     }
@@ -123,7 +136,7 @@ impl Edit {
         if before == self.project {
             self.version = version;
         } else {
-            self.undo.push(before);
+            self.remember(before);
             self.redo.clear();
         }
     }
@@ -146,7 +159,7 @@ impl Edit {
         self.commit();
         let before = self.snapshot();
         if change(self) {
-            self.undo.push(before);
+            self.remember(before);
             self.redo.clear();
             self.version += 1;
             true
@@ -169,7 +182,7 @@ impl Edit {
         self.commit();
         let Some(then) = self.redo.pop() else { return false };
         let now = self.restore(then);
-        self.undo.push(now);
+        self.remember(now);
         self.version += 1;
         true
     }
@@ -364,6 +377,23 @@ mod tests {
         e.trim(0, true, 12.0, 20.0);
         e.cancel();
         assert!(!e.changing() && e.cuts[0].start == 10.0 && e.version == v && !e.undo());
+    }
+
+    #[test]
+    fn undo_keeps_the_latest_steps_only() {
+        let mut e = edit();
+        for n in 0..UNDO_STEPS + 5 {
+            e.attempt(|e| {
+                e.cuts[0].gain = n as f64;
+                true
+            });
+        }
+        let mut back = 0;
+        while e.undo() {
+            back += 1;
+        }
+        assert_eq!(back, UNDO_STEPS);
+        assert_eq!(e.cuts[0].gain, 4.0, "the oldest five forgotten");
     }
 
     #[test]

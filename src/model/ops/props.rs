@@ -71,6 +71,9 @@ fn cut_op() -> impl Strategy<Value = CutOp> {
         (id(), time()).prop_map(|(cut, t)| CutOp::Split { cut, t }),
         (id(), 0.0..4.0f64).prop_map(|(cut, seconds)| CutOp::Crossfade { cut, seconds }),
         id().prop_map(|cut| CutOp::Delete { cut }),
+        (id(), time(), "[a-z]{0,6}").prop_map(|(cut, t, note)| CutOp::Mark { cut, t, note }),
+        (id(), time(), time()).prop_map(|(cut, from, t)| CutOp::MoveMark { cut, from, t }),
+        (id(), time()).prop_map(|(cut, t)| CutOp::Unmark { cut, t }),
     ]
 }
 

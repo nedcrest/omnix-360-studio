@@ -49,7 +49,16 @@ pub enum CutOp {
     Stabilize { cut: Id, mode: Option<Mode> },
     Lut { cut: Id, lut: Option<String> },
     Delete { cut: Id },
+    /// A marker at `t` (clip time) with `note`: the one there (within
+    /// `SAME_MARK`) gets the note, else a new one.
+    Mark { cut: Id, t: f64, #[serde(default)] note: String },
+    /// The marker at `from` to `t`, within the cut.
+    MoveMark { cut: Id, from: f64, t: f64 },
+    Unmark { cut: Id, t: f64 },
 }
+
+/// Two markers closer than this (seconds) are one.
+pub const SAME_MARK: f64 = 1.0 / 60.0;
 
 pub(super) fn apply(p: &mut Project, op: &CutOp) -> Result<Outcome, OpError> {
     match op {
@@ -117,7 +126,45 @@ pub(super) fn apply(p: &mut Project, op: &CutOp) -> Result<Outcome, OpError> {
             p.remove(i);
             said(format!("cut #{cut} removed"))
         }
+        CutOp::Mark { cut, t, note } => {
+            let i = find(p, *cut)?;
+            let c = &mut p.cuts[i];
+            if !t.is_finite() {
+                return Err(OpError::Invalid(format!("a marker at {t} s")));
+            }
+            match mark_at(&c.marks, *t) {
+                Some(k) => c.marks[k].note = note.clone(),
+                None => {
+                    let k = c.marks.partition_point(|m| m.t <= *t);
+                    c.marks.insert(k, crate::project::Mark { t: *t, note: note.clone() });
+                }
+            }
+            said(format!("cut #{cut}: marker at {t:.2} s{}", if note.is_empty() { String::new() } else { format!(" «{note}»") }))
+        }
+        &CutOp::MoveMark { cut, from, t } => {
+            let i = find(p, cut)?;
+            let c = &mut p.cuts[i];
+            let k = mark_at(&c.marks, from).ok_or_else(|| OpError::NotFound(format!("marker at {from:.2} s on cut #{cut}")))?;
+            let mut m = c.marks.remove(k);
+            m.t = t.clamp(c.start, c.end);
+            let to = c.marks.partition_point(|n| n.t <= m.t);
+            let at = m.t;
+            c.marks.insert(to, m);
+            said(format!("cut #{cut}: marker {from:.2} s → {at:.2} s"))
+        }
+        &CutOp::Unmark { cut, t } => {
+            let i = find(p, cut)?;
+            let c = &mut p.cuts[i];
+            let k = mark_at(&c.marks, t).ok_or_else(|| OpError::NotFound(format!("marker at {t:.2} s on cut #{cut}")))?;
+            c.marks.remove(k);
+            said(format!("cut #{cut}: marker at {t:.2} s removed"))
+        }
     }
+}
+
+/// The marker within `SAME_MARK` of `t`.
+fn mark_at(marks: &[crate::project::Mark], t: f64) -> Option<usize> {
+    marks.iter().position(|m| (m.t - t).abs() < SAME_MARK)
 }
 
 /// Where cut `id` is.
@@ -169,6 +216,25 @@ mod tests {
             check(&e).unwrap();
         }
         assert!(e.cuts.is_empty() && !e.undo());
+    }
+
+    #[test]
+    fn markers_are_set_noted_moved_and_removed_by_time() {
+        let mut e = Edit::default();
+        let a = e.apply(&add("a", 4.0, Place::End)).unwrap().made.unwrap();
+        let mark = |t: f64, note: &str| Op::Cut(CutOp::Mark { cut: a, t, note: note.into() });
+        e.apply(&mark(3.0, "")).unwrap();
+        e.apply(&mark(1.0, "")).unwrap();
+        e.apply(&mark(1.005, "the castle")).unwrap();
+        assert_eq!(e.cuts[0].marks.iter().map(|m| (m.t, m.note.as_str())).collect::<Vec<_>>(), [(1.0, "the castle"), (3.0, "")], "one at 1 s, noted; in order");
+        e.apply(&Op::Cut(CutOp::MoveMark { cut: a, from: 1.0, t: 9.0 })).unwrap();
+        assert_eq!(e.cuts[0].marks.last().map(|m| m.t), Some(4.0), "kept within the cut, and in order");
+        e.apply(&Op::Cut(CutOp::Unmark { cut: a, t: 3.0 })).unwrap();
+        assert!(matches!(e.apply(&Op::Cut(CutOp::Unmark { cut: a, t: 3.0 })), Err(OpError::NotFound(_))));
+        // A split's halves both carry them; each shows its own stretch's.
+        e.apply(&Op::Cut(CutOp::Split { cut: a, t: 2.0 })).unwrap();
+        assert_eq!((e.cuts[0].marks.len(), e.cuts[1].marks.len()), (1, 1));
+        check(&e).unwrap();
     }
 
     #[test]

@@ -176,6 +176,9 @@ pub fn check(p: &Project) -> Result<(), String> {
             return Err(format!("cut #{} ends before it starts", c.id));
         }
         line(format!("cut #{}", c.id), &c.volume)?;
+        if c.marks.iter().any(|m| !m.t.is_finite()) || c.marks.windows(2).any(|w| w[0].t > w[1].t) {
+            return Err(format!("cut #{}'s markers aren't numbers in time order", c.id));
+        }
     }
     for w in SoundTrack::ALL {
         for c in &p.track(w).clips {

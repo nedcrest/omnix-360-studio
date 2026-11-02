@@ -43,6 +43,9 @@ pub fn describe(project: &Path) -> Result<()> {
     println!("cuts:");
     for (c, at) in p.cuts.iter().zip(offsets) {
         println!("  cut #{:<3} {:7.2}-{:7.2} s  {} {:.2}-{:.2}  level {:+.1} dB{}", c.id, at, at + c.len(), name(&c.input), c.start, c.end, c.gain, if c.mute { " muted" } else { "" });
+        for m in c.marks.iter().filter(|m| m.t >= c.start && m.t <= c.end) {
+            println!("    marker {:.2} s (clip) at {:.2} s{}", m.t, at + m.t - c.start, if m.note.is_empty() { String::new() } else { format!("  «{}»", m.note) });
+        }
     }
     for w in SoundTrack::ALL {
         let clips = &p.track(w).clips;

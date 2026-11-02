@@ -488,6 +488,15 @@ impl MusicClip {
     }
 }
 
+/// A marker on a cut: a time in its clip and a note (empty: just a mark).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Mark {
+    pub t: f64,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub note: String,
+}
+
 /// What names a cut, a sound clip or an overlay item (`OPS-API.md`).
 pub type Id = u32;
 
@@ -563,6 +572,10 @@ pub struct Cut {
     /// Its colour effects' keyframes, clip time, apart from the camera's.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub effects: Vec<crate::grade::EffectKey>,
+    /// Its markers, clip time in order, so they move with its footage as
+    /// keyframes do (gap 5): what to find, a note, a beat later.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub marks: Vec<Mark>,
     /// A LUT applied before the effects: a name in the LUT library, or a
     /// `.cube` file (relative to the project). D-Log M needs DJI's to look
     /// like Rec.709; a missing one leaves the cut as filmed, with a warning.
@@ -628,6 +641,7 @@ impl Cut {
             volume: Vec::new(),
             crossfade: 0.0,
             effects: Vec::new(),
+            marks: Vec::new(),
             lut: None,
             old_lut_strength: None,
             gain: 0.0,
@@ -806,6 +820,10 @@ impl Project {
                 bail!("an effect keyframe isn't a number");
             }
             cut.effects.sort_by(|a, b| a.t.total_cmp(&b.t));
+            if cut.marks.iter().any(|m| !m.t.is_finite()) {
+                bail!("a marker's time isn't a number");
+            }
+            cut.marks.sort_by(|a, b| a.t.total_cmp(&b.t));
         }
         project.settle_ids();
         Ok(project)

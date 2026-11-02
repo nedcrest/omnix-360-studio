@@ -95,7 +95,7 @@ impl App {
             Message::MoveCut(from, to) => {
                 if to != from && to != from + 1 {
                     self.edit.checkpoint();
-                    let at = |i: usize| edit::Edit::moved_index(from, to, i);
+                    let at = |i: usize| crate::project::Project::moved_index(from, to, i);
                     self.edit.move_cut(from, to);
                     self.current = at(self.current);
                     self.selection = Selection::Cut(at(from));

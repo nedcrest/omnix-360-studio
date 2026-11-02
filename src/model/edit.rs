@@ -45,7 +45,10 @@ impl std::ops::DerefMut for Edit {
     }
 }
 
-impl Edit {
+/// Reading and changing the edit's cuts and lanes: plain project rules,
+/// so operations (`model::ops`) apply them to a `Project` and the player
+/// through `Edit`'s deref alike.
+impl Project {
     /// The timeline's length: the video's, or the music's (or sound
     /// effects') while it runs on beyond it (the frame still to fill). The
     /// export ends with the video.
@@ -87,6 +90,9 @@ impl Edit {
         self.offset(i) + (clip_t - self.cuts[i].start)
     }
 
+}
+
+impl Edit {
     fn snapshot(&self) -> Project {
         self.project.clone()
     }
@@ -175,6 +181,9 @@ impl Edit {
         self.version += 1;
     }
 
+}
+
+impl Project {
     /// Every overlay lane, lowest first: the overlays', then the text's.
     pub fn lanes(&self) -> impl Iterator<Item = &Lane> {
         self.overlays.iter().chain(&self.text)
@@ -483,7 +492,7 @@ mod tests {
                 e.move_cut(from, to);
                 let mut seen = [false; 5];
                 for (i, name) in names.iter().enumerate() {
-                    let j = Edit::moved_index(from, to, i);
+                    let j = Project::moved_index(from, to, i);
                     assert_eq!(e.cuts[j].input, PathBuf::from(name), "from {from} to {to}: {name}");
                     seen[j] = true;
                 }
@@ -511,9 +520,9 @@ mod tests {
         let names: Vec<_> = e.cuts.iter().map(|c| c.input.to_string_lossy().into_owned()).collect();
         assert_eq!(names, ["a", "c", "d", "b", "e"]);
         // Each old index lands where its cut now is.
-        assert_eq!((0..5).map(|i| Edit::moved_index(1, 4, i)).collect::<Vec<_>>(), [0, 3, 1, 2, 4]);
+        assert_eq!((0..5).map(|i| Project::moved_index(1, 4, i)).collect::<Vec<_>>(), [0, 3, 1, 2, 4]);
         // And moving one earlier.
-        assert_eq!((0..5).map(|i| Edit::moved_index(3, 0, i)).collect::<Vec<_>>(), [1, 2, 3, 0, 4]);
+        assert_eq!((0..5).map(|i| Project::moved_index(3, 0, i)).collect::<Vec<_>>(), [1, 2, 3, 0, 4]);
     }
 
     #[test]

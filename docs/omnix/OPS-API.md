@@ -223,14 +223,10 @@ the user's to check.
 - Duck, normalize and colour-track results apply to the edit as it is
   when they arrive, without checking it's still the same.
 
-## Open questions for the user
+## Decided (user, 2026-11-02)
 
-1. **Ids in the project file**: an `"id"` on each cut, clip and item.
-   The alternative (ids only while the program runs) keeps the JSON
-   clean, but then `ops.json` for the CLI can't name things stably.
-2. **New dependencies**: `schemars` (schemas for the AI, step 6 of the
-   order) and `proptest` (property tests, dev only). Both pure Rust, no
-   wgpu.
-3. **Times** stay seconds as `f64`, compared within a tolerance. OTIO
-   uses rational time, but switching would touch everything for little
-   gain here.
+1. **Ids are saved in the project file**: an `"id"` on each cut, sound
+   clip and overlay/text item; a project without them gets them on load.
+2. **`schemars` and `proptest`** may be added: `proptest` (dev only) with
+   the first tests, `schemars` when the AI step comes.
+3. **Times stay `f64` seconds**, compared within a tolerance.

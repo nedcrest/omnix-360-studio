@@ -2,6 +2,7 @@
 //! messages only framing uses, so editing can't turn the view by accident.
 
 use super::*;
+use crate::model::ops::sound::SoundOp;
 
 /// Messages that only framing does: turning, zooming or keying the view,
 /// its angles, stabilisation, projection, colour tracking.
@@ -113,22 +114,17 @@ impl App {
                 // playing cut's.
                 "k" | "K" if self.selection.sound().is_some() => {
                     let own = self.selection.sound();
+                    // The playhead in that sound's file time: the selected
+                    // cut's, not the playing one's (K used to key that).
                     let at = match own {
-                        Some(Own::Cut(_)) => self.playing_cut().map(|(_, t)| (Own::Cut(self.current), t)),
-                        Some(own @ Own::Clip(which, c)) => self.edit.track(which).clips.get(c).map(|m| (own, m.start + self.position() - m.at)).filter(|(_, t)| self.edit.own_line(own).is_some_and(|(_, (s, e))| *t >= s && *t <= e)),
+                        Some(own @ Own::Cut(n)) => self.edit.cuts.get(n).map(|c| (own, c.start + self.position() - self.edit.offset(n))),
+                        Some(own @ Own::Clip(which, c)) => self.edit.track(which).clips.get(c).map(|m| (own, m.start + self.position() - m.at)),
                         None => None,
                     };
-                    let Some((own, t)) = at else { return Task::none() };
-                    // An undo step only if a point is added, not when one is
-                    // just selected.
-                    let mut i = 0;
-                    self.edit.attempt(|e| {
-                        let Some((keys, _)) = e.own_line_mut(own) else { return false };
-                        let n = keys.len();
-                        i = crate::project::volume_key_at(keys, t);
-                        keys.len() > n
-                    });
-                    self.select_point(own, i);
+                    let Some((own, t)) = at.filter(|&(own, t)| self.edit.own_line(own).is_some_and(|(_, (s, e))| t >= s && t <= e)) else { return Task::none() };
+                    // No undo step when one is there already: just selected.
+                    self.sound_op(own, |sound| SoundOp::PointAt { sound, t });
+                    self.select_point_at(own, t);
                 }
                 "k" | "K" => return self.update(Message::KeyAdd),
                 "j" | "J" => {

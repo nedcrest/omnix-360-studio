@@ -68,6 +68,8 @@ pub struct Outcome {
 #[derive(Clone, Debug, PartialEq)]
 pub enum OpError {
     NotFound(String),
+    /// It can't be done here, and why.
+    Invalid(String),
     OutOfRange { what: &'static str, value: f64, least: f64, most: f64 },
 }
 
@@ -75,6 +77,7 @@ impl fmt::Display for OpError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             OpError::NotFound(what) => write!(f, "no {what}"),
+            OpError::Invalid(why) => write!(f, "{why}"),
             OpError::OutOfRange { what, value, least, most } => write!(f, "{what} {value} is outside {least}..{most}"),
         }
     }

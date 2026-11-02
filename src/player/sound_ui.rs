@@ -177,13 +177,12 @@ impl App {
                     self.selection = Selection::Clip(to, j);
                 }
             }
-            SoundMsg::Continue(own) => {
-                self.sound_menu = None;
-                self.edit.attempt(|e| e.continue_level(own));
-            }
+            SoundMsg::Continue(own) => self.sound_op(own, |sound| SoundOp::ContinueLevel { sound }),
             SoundMsg::DeletePoint(own, i) => {
                 self.sound_menu = None;
-                self.edit.delete(Selection::Point(own, i));
+                if let Some(t) = self.edit.own_line(own).and_then(|(keys, _)| keys.get(i)).map(|k| k.t) {
+                    self.sound_op(own, |sound| SoundOp::DeletePoint { sound, t });
+                }
                 if self.selection.point().is_some() {
                     self.selection = Selection::None;
                 }

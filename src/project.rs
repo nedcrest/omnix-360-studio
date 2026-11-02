@@ -200,7 +200,7 @@ pub fn volume_at(keys: &[VolumeKey], t: f64) -> f64 {
 }
 
 /// Two volume points closer than this are one: K at a point selects it.
-const SAME_POINT: f64 = 0.01;
+pub const SAME_POINT: f64 = 0.01;
 
 /// Adds a volume point at `t`, `db`, in time order, and returns its index.
 /// A sound track's points and a cut's are both lists of these.

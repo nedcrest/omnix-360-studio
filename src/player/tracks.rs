@@ -94,6 +94,13 @@ impl App {
         }))
     }
 
+    /// Selects the point at `t` on `own`'s line, if there is one.
+    pub(super) fn select_point_at(&mut self, own: Own, t: f64) {
+        if let Some(i) = self.edit.own_line(own).and_then(|(keys, _)| keys.iter().position(|k| (k.t - t).abs() < crate::project::SAME_POINT)) {
+            self.select_point(own, i);
+        }
+    }
+
     /// Selects point `i` of a volume line, and nothing else.
     pub(super) fn select_point(&mut self, own: Own, i: usize) {
         self.selection = Selection::Point(own, i);
@@ -167,24 +174,20 @@ impl App {
                 self.selection = Selection::Clip(which, i);
             }
             Message::PointAdd(own, t, db) => {
-                if self.edit.own_line(own).is_none() {
-                    return Task::none();
-                }
+                let Some((_, (start, end))) = self.edit.own_line(own) else { return Task::none() };
+                // The drag that follows moves it: one undo step for both.
                 self.edit.begin();
-                let Some((keys, (start, end))) = self.edit.own_line_mut(own) else { return Task::none() };
-                let i = crate::project::add_volume_key(keys, t.clamp(start, end), db);
-                self.select_point(own, i);
+                let t = t.clamp(start, end);
+                self.sound_op(own, |sound| SoundOp::AddPoint { sound, t, db });
+                self.select_point_at(own, t);
             }
             Message::PointSelect(own, i) => self.select_point(own, i),
             // A point gone mid-drag (an undo) is no undo step, nor an index panic.
             Message::PointMove(own, i, ..) if self.edit.own_line(own).is_none_or(|(keys, _)| i >= keys.len()) => {}
             Message::PointMove(own, i, t, db) => {
                 self.edit.begin();
-                // Within its stretch of its file and between its
-                // neighbours: points keep their order.
-                if let Some((keys, range)) = self.edit.own_line_mut(own) {
-                    crate::project::move_volume_key(keys, i, t, db, range);
-                }
+                let from = self.edit.own_line(own).map_or(t, |(keys, _)| keys[i].t);
+                self.sound_op(own, |sound| SoundOp::MovePoint { sound, from, t, db });
             }
             // A stale index (the clip gone mid-drag) is no undo step.
             Message::MusicMove(which, i, _, _) if i >= self.edit.track(which).clips.len() => {}

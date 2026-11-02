@@ -47,6 +47,19 @@ pub enum SoundOp {
     LowerForVoice { sound: SoundRef },
     /// Its normal level.
     Restore { sound: SoundRef },
+    /// A point on its line at `t` (its file's time), at `db`; points are
+    /// told apart by time (`project::SAME_POINT`).
+    AddPoint { sound: SoundRef, t: f64, db: f64 },
+    /// A point on its line at `t` at the level the line has there, or the
+    /// one already there: what K does.
+    PointAt { sound: SoundRef, t: f64 },
+    /// The point at `from` moved to `t` and `db`, kept within its stretch
+    /// and between its neighbours.
+    MovePoint { sound: SoundRef, from: f64, t: f64, db: f64 },
+    DeletePoint { sound: SoundRef, t: f64 },
+    /// Its line started where what plays before it ends
+    /// (`Project::continue_level`).
+    ContinueLevel { sound: SoundRef },
     /// What normalizing measured, applied: evened out or not, and given the
     /// level its loudness asks for (`normal_gain`). `lufs` is the
     /// loudness measured as it will sound (`loudness::measure_stretch`,
@@ -113,6 +126,39 @@ pub(super) fn apply(p: &mut Project, op: &SoundOp) -> Result<Outcome, OpError> {
             })?;
             said(format!("{sound}: normal level {db:+.1} dB"))
         }
+        &SoundOp::AddPoint { sound, t, db } => {
+            within(p, sound, t)?;
+            change(p, sound, |s| crate::project::add_volume_key(s.volume, t, db))?;
+            said(format!("{sound}: point at {t:.2} s, {db:+.1} dB"))
+        }
+        &SoundOp::PointAt { sound, t } => {
+            within(p, sound, t)?;
+            let db = change(p, sound, |s| {
+                let i = crate::project::volume_key_at(s.volume, t);
+                s.volume[i].volume
+            })?;
+            said(format!("{sound}: point at {t:.2} s, {db:+.1} dB"))
+        }
+        &SoundOp::MovePoint { sound, from, t, db } => {
+            let now = change(p, sound, |s| {
+                let i = point(s.volume, from)?;
+                crate::project::move_volume_key(s.volume, i, t, db, s.range);
+                Some(s.volume[i])
+            })?
+            .ok_or_else(|| OpError::NotFound(format!("point at {from:.2} s on {sound}")))?;
+            said(format!("{sound}: point {from:.2} s → {:.2} s, {:+.1} dB", now.t, now.volume))
+        }
+        &SoundOp::DeletePoint { sound, t } => {
+            change(p, sound, |s| point(s.volume, t).map(|i| s.volume.remove(i)))?.ok_or_else(|| OpError::NotFound(format!("point at {t:.2} s on {sound}")))?;
+            said(format!("{sound}: point at {t:.2} s removed"))
+        }
+        &SoundOp::ContinueLevel { sound } => {
+            let own = sound.own(p).ok_or_else(|| OpError::NotFound(sound.to_string()))?;
+            if !p.continue_level(own) {
+                return Err(OpError::Invalid(format!("{sound}: nothing sounds before it to continue")));
+            }
+            said(format!("{sound}: line continues the level before it"))
+        }
         &SoundOp::Normalized { sound, lufs, even } => {
             if lufs.is_some_and(|l| !l.is_finite()) {
                 return Err(OpError::OutOfRange { what: "loudness", value: lufs.unwrap(), least: f64::MIN, most: f64::MAX });
@@ -145,6 +191,17 @@ pub(super) fn apply(p: &mut Project, op: &SoundOp) -> Result<Outcome, OpError> {
 fn change<T>(p: &mut Project, sound: SoundRef, f: impl FnOnce(OwnSound<'_>) -> T) -> Result<T, OpError> {
     let own: Own = sound.own(p).ok_or_else(|| OpError::NotFound(sound.to_string()))?;
     Ok(f(p.own_sound(own).expect("found just now")))
+}
+
+/// Refuses a time outside `sound`'s stretch of its file.
+fn within(p: &mut Project, sound: SoundRef, t: f64) -> Result<(), OpError> {
+    let (least, most) = change(p, sound, |s| s.range)?;
+    if (least..=most).contains(&t) { Ok(()) } else { Err(OpError::OutOfRange { what: "point time", value: t, least, most }) }
+}
+
+/// The point at `t` on `keys`, told apart by `SAME_POINT`.
+fn point(keys: &[crate::project::VolumeKey], t: f64) -> Option<usize> {
+    keys.iter().position(|k| (k.t - t).abs() < crate::project::SAME_POINT)
 }
 
 fn switch(p: &mut Project, sound: SoundRef, on: bool, what: &str, flag: impl for<'a> FnOnce(OwnSound<'a>) -> &'a mut bool) -> Result<Outcome, OpError> {
@@ -218,6 +275,27 @@ mod tests {
             twice.apply(&op(o(s(&twice)))).unwrap();
             assert_eq!(Project::clone(&once), Project::clone(&twice), "{:?}", o(s(&once)));
         }
+    }
+
+    #[test]
+    fn points_are_found_by_time() {
+        let mut e = edit();
+        let s = song(&e);
+        e.apply(&op(SoundOp::AddPoint { sound: s, t: 2.0, db: -6.0 })).unwrap();
+        e.apply(&op(SoundOp::PointAt { sound: s, t: 6.0 })).unwrap();
+        assert_eq!(e.music.clips[0].volume.len(), 2);
+        assert_eq!(e.music.clips[0].volume[1].volume, -6.0, "K keeps the line's level");
+        // K on a point already there adds none.
+        e.apply(&op(SoundOp::PointAt { sound: s, t: 6.005 })).unwrap();
+        assert_eq!(e.music.clips[0].volume.len(), 2);
+        // A move stops at its neighbour.
+        e.apply(&op(SoundOp::MovePoint { sound: s, from: 6.0, t: 1.0, db: -3.0 })).unwrap();
+        assert!(e.music.clips[0].volume[1].t > 2.0);
+        assert!(matches!(e.apply(&op(SoundOp::DeletePoint { sound: s, t: 4.0 })), Err(OpError::NotFound(_))));
+        assert!(matches!(e.apply(&op(SoundOp::AddPoint { sound: s, t: 11.0, db: 0.0 })), Err(OpError::OutOfRange { .. })));
+        e.apply(&op(SoundOp::DeletePoint { sound: s, t: 2.0 })).unwrap();
+        assert_eq!(e.music.clips[0].volume.len(), 1);
+        check(&e).unwrap();
     }
 
     #[test]

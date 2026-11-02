@@ -237,3 +237,39 @@ fn normalize_a_sound_track_through_ops() {
     assert_eq!(level(&held), level(&again));
     assert!(held.contains("cut #1") && held.contains("level +0.0 dB"), "the cut left alone: {held}");
 }
+
+#[test]
+fn ops_cut_and_rearrange_the_edit_and_the_export_follows() {
+    if !has_ffmpeg() {
+        return;
+    }
+    let d = dir("cutops");
+    clip(&d, "a.mp4", 4.0, 440);
+    clip(&d, "b.mp4", 3.0, 660);
+    ffmpeg(&d, &["-f", "lavfi", "-i", "sine=f=880:d=0.5:sample_rate=48000", "bell.wav"]);
+    // Cut #1 a (4 s), cut #2 b (3 s).
+    std::fs::write(d.join("edit.json"), r#"{"cuts": [{"input": "a.mp4", "in": 0, "out": 4}, {"input": "b.mp4", "in": 0, "out": 3}]}"#).unwrap();
+    // Split a at 1.5 s (its second half is #3), put b first, drop a's
+    // first half, trim b to 2 s, crossfade a's half in over 0.5 s, and a
+    // bell over SFX twice: the second lands on SFX 2.
+    std::fs::write(d.join("ops.json"), r#"[
+        {"area": "cut", "op": "split", "cut": 1, "t": 1.5},
+        {"area": "cut", "op": "move", "cut": 2, "before": 1},
+        {"area": "cut", "op": "delete", "cut": 1},
+        {"area": "cut", "op": "trim", "cut": 2, "end": "out", "t": 2, "most": 3},
+        {"area": "cut", "op": "crossfade", "cut": 3, "seconds": 0.5},
+        {"area": "clip", "op": "add", "track": "sfx", "input": "bell.wav", "at": 1, "start": 0, "end": 0.5},
+        {"area": "clip", "op": "add", "track": "sfx", "input": "bell.wav", "at": 1.2, "start": 0, "end": 0.5}
+    ]"#).unwrap();
+    let said = omnix(&d, &["apply", "edit.json", "ops.json", "-o", "out.json"]);
+    let held = omnix(&d, &["describe", "out.json"]);
+    // b 2 s, then a 1.5..4 (2.5 s) overlapping 0.5 s: 4 s, 120 frames.
+    omnix(&d, &["export", "out.json", "--cpu", "-o", "out.mp4", "--size", "320x180"]);
+    let frames: u32 = probe(&d, "out.mp4", "v", "nb_read_frames").parse().unwrap();
+    std::fs::remove_dir_all(&d).unwrap();
+    assert!(said.contains("the second half is cut #3"), "{said}");
+    let cuts: Vec<&str> = held.lines().filter(|l| l.contains("cut #")).collect();
+    assert!(cuts.len() == 2 && cuts[0].contains("cut #2") && cuts[0].contains("b.mp4 0.00-2.00") && cuts[1].contains("cut #3") && cuts[1].contains("a.mp4 1.50-4.00"), "{held}");
+    assert!(held.contains("SFX:") && held.contains("SFX 2:"), "{held}");
+    assert_eq!(frames, 120);
+}

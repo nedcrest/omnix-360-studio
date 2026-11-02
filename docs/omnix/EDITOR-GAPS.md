@@ -1489,6 +1489,41 @@ one sphere, several views of it.
   and both exports take the camera from the angle playing at each frame;
   CPU and GPU alike.
 
+### 50. A readable timeline: a time ruler, main lanes first, folding lanes — medium (user, 2026-11-02)
+
+User: "the ruler is unreadable, there are no seconds on it, and it sits
+under «Effects». Separate it better, by best practice. Video and its clip
+sound are the main lanes. Text and Overlay collapsible, folded by
+default; SFX 2 collapsible too. A bigger ruler with time labels, and a
+choice in Settings: compact (as now) or large."
+
+What editors do (checked 2026-11-02): the ruler is always on top and
+always visible, a press or drag on it moves the playhead (IMG.LY,
+Premiere, Resolve); lanes fold to a thin strip with a ▸ (Kdenlive,
+Resolve's track height; Shift folds all of a kind in Kdenlive); headers
+stay compact; the video group and the sound group are set apart
+(RailCut's sections).
+- **50a, ruler — done (`9b0e7ef`).** A ruler canvas over every lane:
+  minor ticks and labelled seconds (`1:05`, `1:05.5` when zoomed in,
+  80 px apart at least at any zoom); the playhead head on it drags to
+  scrub; mix-check findings marked at its foot. Settings › Timeline
+  «Large time ruler» (28 px, the default) or compact (16 px). The old
+  seek bar is a thin rule under the keyframe rows.
+- **50b, Text and Overlay fold — done (`fd4cfe7`).** Each folds to an
+  18 px strip (`FOLDED`) showing its items as bars and how many
+  («▸ Text (2)»); a press opens it, its open name «▾ Text» folds it.
+  Folded by default, kept in settings.json. Adding text or overlay
+  pictures opens the lane, so new work is never hidden.
+- **50c, SFX 2 folds — done (`fd4cfe7`).** The same strip among the
+  sound lanes (`Rows::folded`, `lane_h`); its S/M buttons still work
+  folded; a sound overflowing into SFX 2 opens it. Folded lanes take no
+  fades, points, level tags or line presses.
+- **50d, groups.** A gap and a faint heading between the picture group
+  (Text, Overlay, cuts, clip sound, key rows) and the sound group
+  (Voice, Music, SFX, SFX 2), so the eye finds the main lanes at once.
+- Later: Shift+press folds every foldable lane (Kdenlive); a lane's
+  height dragged by its lower edge.
+
 ## Format rule for all of these
 
 New fields only, each `#[serde(default, skip_serializing_if = …)]`, so every

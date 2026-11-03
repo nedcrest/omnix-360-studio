@@ -230,6 +230,15 @@ on the seek bar; M adds one at the playhead, click jumps. footage-agent then
 exports its flags («що знайти») and point marks into them
 (`footage_agent/export/omnix.py`).
 
+**Built 2026-11-03** (`5262bc4`, `dabd3b8`, `264a376`, `8188d53`), waiting for
+the user's check: `Cut::marks` ({t, note}, clip time) and `CutOp::Mark /
+MoveMark / Unmark`; M marks at the playhead (mute moved to Shift+M,
+FCP / Premiere / Resolve's key); flags on the time ruler (gap 50a)
+rather than the seek bar, with the note beside them; a click goes to
+one, a drag moves it within its cut; a double- or right-click opens a
+window to name or delete it; ↑ / ↓ stop at them. Left: footage-agent's
+flags exported into them; snapping to them (pack 3).
+
 ### 6. Vignette shapes — idea (user, 2026-10-22)
 
 Today there is one vignette: `Grade.vignette` (0..1, "Darker corners"),

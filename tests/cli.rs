@@ -301,3 +301,48 @@ fn a_blank_cut_goes_in_at_a_join_and_exports_black() {
     let most = mid.iter().copied().max().unwrap();
     assert!(most <= 20, "the blank shows black, brightest {most}");
 }
+
+/// `file`'s sound from `from` to `to` seconds, RMS dBFS.
+fn rms(dir: &Path, file: &str, from: f64, to: f64) -> f64 {
+    let filter = format!("atrim={from}:{to},astats=measure_perchannel=none:measure_overall=RMS_level");
+    let out = Command::new("ffmpeg").current_dir(dir).args(["-hide_banner", "-nostdin", "-i", file, "-af", &filter, "-vn", "-f", "null", "-"]).output().unwrap();
+    let text = String::from_utf8_lossy(&out.stderr);
+    text.lines().find_map(|l| l.split("RMS level dB:").nth(1)?.trim().parse().ok()).unwrap_or(-120.0)
+}
+
+#[test]
+fn a_cuts_sound_runs_under_the_next_picture_or_stops_short() {
+    if !has_ffmpeg() {
+        return;
+    }
+    let d = dir("jl");
+    // a: 3 s of tone; b: 2 s of silence. The edit: a's first 2 s, then b.
+    clip(&d, "a.mp4", 3.0, 440);
+    ffmpeg(&d, &[
+        "-f", "lavfi", "-i", "testsrc2=s=320x180:r=30:d=2", "-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo",
+        "-t", "2", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "b.mp4",
+    ]);
+    std::fs::write(d.join("edit.json"), r#"{"cuts": [{"input": "a.mp4", "in": 0, "out": 2}, {"input": "b.mp4", "in": 0, "out": 2}]}"#).unwrap();
+    // An L-cut: a's sound a second on, under b's picture.
+    std::fs::write(d.join("l.json"), r#"[{"area": "cut", "op": "sound_edge", "cut": 1, "end": "out", "t": 3, "most": 3}]"#).unwrap();
+    omnix(&d, &["apply", "edit.json", "l.json", "-o", "l-edit.json"]);
+    omnix(&d, &["export", "l-edit.json", "--cpu", "-o", "l.mp4", "--size", "320x180"]);
+    // Stopping short instead: a silent after 1 s, its picture going on.
+    std::fs::write(d.join("short.json"), r#"[{"area": "cut", "op": "sound_edge", "cut": 1, "end": "out", "t": 1, "most": 3}]"#).unwrap();
+    omnix(&d, &["apply", "edit.json", "short.json", "-o", "short-edit.json"]);
+    omnix(&d, &["export", "short-edit.json", "--cpu", "-o", "short.mp4", "--size", "320x180"]);
+    omnix(&d, &["export", "edit.json", "--cpu", "-o", "plain.mp4", "--size", "320x180"]);
+    let tone = rms(&d, "plain.mp4", 0.2, 1.8);
+    let (plain_b, l_b, l_later) = (rms(&d, "plain.mp4", 2.2, 2.8), rms(&d, "l.mp4", 2.2, 2.8), rms(&d, "l.mp4", 3.2, 3.8));
+    let (short_a, short_after) = (rms(&d, "short.mp4", 0.2, 0.8), rms(&d, "short.mp4", 1.2, 1.8));
+    let frames: u32 = probe(&d, "l.mp4", "v", "nb_read_frames").parse().unwrap();
+    std::fs::remove_dir_all(&d).unwrap();
+    // The picture keeps its joins: 4 s either way.
+    assert_eq!(frames, 120);
+    assert!(tone > -30.0, "a's tone {tone:.1} dB");
+    // Under b's first second: a's tone with the L-cut, silence without it
+    // or after it.
+    assert!(plain_b < -60.0 && l_later < -60.0, "plain {plain_b:.1}, after the L {l_later:.1}");
+    assert!((l_b - tone).abs() < 1.5, "L {l_b:.1} against the tone {tone:.1}");
+    assert!((short_a - tone).abs() < 1.5 && short_after < -60.0, "short: {short_a:.1} then {short_after:.1}");
+}

@@ -21,17 +21,7 @@ fn cut_sounds(project: &Project) -> Vec<Sound<'_>> {
         .cuts
         .iter()
         .enumerate()
-        .map(|(n, c)| Sound {
-            input: c.audio.as_deref().filter(|a| a.exists()).unwrap_or(&c.input),
-            start: c.start,
-            duration: Some(c.len()),
-            volume: &c.volume,
-            gain: c.sound_db(),
-            filter: c.sound_filter(),
-            crossfade: if n > 0 { c.crossfade } else { 0.0 },
-            fade_in: c.sound_fade_in,
-            fade_out: c.sound_fade_out,
-        })
+        .map(|(n, c)| Sound::of_cut(c, c.audio.as_deref().filter(|a| a.exists()).unwrap_or(&c.input), c.start, Some(c.len()), if n > 0 { c.crossfade } else { 0.0 }))
         .collect()
 }
 
@@ -93,7 +83,9 @@ pub fn measure(project: &Project, progress: &mut dyn FnMut(usize, usize)) -> Res
         let offsets = crate::project::offsets(&project.cuts);
         let mut ws: Vec<Window> = project.cuts.iter().zip(&offsets).map(|(c, &at)| window(at, at + c.len())).collect();
         let mut sp: Vec<Window> = speech.iter().map(|&(a, b)| window(a, b)).collect();
-        let mix = Mix { sound_db: project.sound.volume, tracks: vec![], length, fades: project.fades };
+        // With their sound past the pictures (J- and L-cuts).
+        let beyond = project.sound_beyond();
+        let mix = Mix { sound_db: project.sound.volume, tracks: beyond.iter().collect(), length, fades: project.fades };
         run(&cuts, &mix, &mut ws.iter_mut().chain(sp.iter_mut()).collect::<Vec<_>>())?;
         for ((n, c), w) in project.cuts.iter().enumerate().zip(ws) {
             items.push(Item { lane: Lane::ClipSound, own: Own::Cut(n), at: w.from, len: c.len(), lufs: w.loudness.integrated(), loudest: w.loudness.loudest(), speech: c.audio.is_some() && !c.mute });
@@ -122,7 +114,8 @@ pub fn measure(project: &Project, progress: &mut dyn FnMut(usize, usize)) -> Res
     }
     // The whole film, as the export makes it.
     let mut whole = window(0.0, length);
-    let mix = Mix { sound_db: project.sound.volume, tracks: SoundTrack::ALL.iter().map(|&w| project.track(w)).collect(), length, fades: project.fades };
+    let beyond = project.sound_beyond();
+    let mix = Mix { sound_db: project.sound.volume, tracks: SoundTrack::ALL.iter().map(|&w| project.track(w)).chain(&beyond).collect(), length, fades: project.fades };
     let peak = run(&cuts, &mix, &mut [&mut whole])?;
     progress(renders, renders);
     let speech = speech

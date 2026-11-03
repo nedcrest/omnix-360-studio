@@ -26,6 +26,11 @@ pub struct Sound<'a> {
     /// only in a mix; the fade out needs `duration`.
     pub fade_in: f64,
     pub fade_out: f64,
+    /// Seconds silent at its start and end: where its cut's sound stops
+    /// short of the picture (`Cut::sound_before`/`_after` negative); its
+    /// fades sit at the sound's edges inside them. Only in a mix.
+    pub head: f64,
+    pub tail: f64,
 }
 
 /// The mix's last stage: peaks held under −1.2 dBFS (0.87), so cuts raised
@@ -50,7 +55,27 @@ pub struct Mix<'a> {
     pub fades: crate::project::Fades,
 }
 
-impl Sound<'_> {
+impl<'a> Sound<'a> {
+    /// Cut `c`'s stretch under its picture, from `input` at clip time
+    /// `start` for `duration`: its level, points, filters and fades, and
+    /// silence where its sound stops short. A fade at an edge its sound runs
+    /// past belongs to the sound beyond (`Cut::sound_beyond`), not here.
+    pub fn of_cut(c: &'a crate::project::Cut, input: &'a Path, start: f64, duration: Option<f64>, crossfade: f64) -> Sound<'a> {
+        Sound {
+            input,
+            start,
+            duration,
+            volume: &c.volume,
+            gain: c.sound_db(),
+            filter: c.sound_filter(),
+            crossfade,
+            fade_in: if c.sound_before > 0.0 { 0.0 } else { c.sound_fade_in },
+            fade_out: if c.sound_after > 0.0 { 0.0 } else { c.sound_fade_out },
+            head: (-c.sound_before).max(0.0),
+            tail: (-c.sound_after).max(0.0),
+        }
+    }
+
     /// Whether its input gives sound: its clip's, or silence in its place
     /// (`Encoder::new`) where the clip has none and its length is known.
     pub(super) fn sounds(&self) -> bool {
@@ -113,13 +138,23 @@ pub(super) fn mixed(cmd: &mut Command, audio: &[Sound<'_>], mix: &Mix<'_>) -> Re
                 format!(",{}", level_filter(sound.gain, sound.volume, &format!("(t+{})", sound.start)))
             };
             let even = sound.filter.as_ref().map_or_else(String::new, |f| format!(",{f}"));
-            // Straight, as the player's `Cut::sound_fade`.
+            // Straight, as the player's `Cut::sound_fade`, at the sound's
+            // own edges; silent past them.
             let mut fades = String::new();
-            if sound.fade_in > 0.0 {
-                fades += &format!(",afade=t=in:st=0:d={}", sound.fade_in);
+            if sound.head > 0.0 {
+                fades += &format!(",volume=0:enable='lt(t,{})'", sound.head);
             }
-            if let (true, Some(d)) = (sound.fade_out > 0.0, sound.duration) {
-                fades += &format!(",afade=t=out:st={}:d={}", (d - sound.fade_out).max(0.0), sound.fade_out.min(d));
+            if sound.fade_in > 0.0 {
+                fades += &format!(",afade=t=in:st={}:d={}", sound.head, sound.fade_in);
+            }
+            if let Some(d) = sound.duration {
+                let end = d - sound.tail;
+                if sound.fade_out > 0.0 {
+                    fades += &format!(",afade=t=out:st={}:d={}", (end - sound.fade_out).max(0.0), sound.fade_out.min(end));
+                }
+                if sound.tail > 0.0 {
+                    fades += &format!(",volume=0:enable='gt(t,{end})'");
+                }
             }
             graph += &format!("[{i}:a:0]{stereo}{even}{}{level}{fades}[c{i}];", pad(sound));
         }
@@ -208,7 +243,7 @@ mod tests {
     use super::*;
 
     fn stretch<'a>(input: &'a Path, gain: f64, volume: &'a [crate::project::VolumeKey]) -> Sound<'a> {
-        Sound { input, start: 2.0, duration: Some(4.0), volume, gain, filter: None, crossfade: 0.0, fade_in: 0.0, fade_out: 0.0 }
+        Sound { input, start: 2.0, duration: Some(4.0), volume, gain, filter: None, crossfade: 0.0, fade_in: 0.0, fade_out: 0.0, head: 0.0, tail: 0.0 }
     }
 
     #[test]

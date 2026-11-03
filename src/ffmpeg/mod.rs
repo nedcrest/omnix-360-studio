@@ -869,7 +869,9 @@ impl Encoder {
         cmd.args(["-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", if deep { "rgb48le" } else { "rgb24" }]).args(["-s", &format!("{w}x{h}"), "-r", &fps.to_string(), "-i", "-"]);
         sound_inputs(&mut cmd, audio);
         // The music's inputs, before any output option.
-        let points = audio.iter().any(|s| !s.volume.is_empty() || s.crossfade > 0.0 || s.gain != 0.0 || s.filter.is_some());
+        // Anything a cut's stretch gets only in a mix: its fades and
+        // silences too, or a cut with only a fade exported without it.
+        let points = audio.iter().any(|s| !s.volume.is_empty() || s.crossfade > 0.0 || s.gain != 0.0 || s.filter.is_some() || s.fade_in > 0.0 || s.fade_out > 0.0 || s.head > 0.0 || s.tail > 0.0);
         let graph = mix.filter(|m| m.matters() || points).map(|m| mixed(&mut cmd, audio, m)).transpose()?;
         cmd.args(["-map", "0:v"]);
         if let Some(graph) = graph {

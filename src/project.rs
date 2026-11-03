@@ -802,6 +802,25 @@ pub fn settle_crossfades(cuts: &mut [Cut]) {
 }
 
 impl Project {
+    /// The cuts' sound past their pictures (`Cut::sound_beyond`), a track
+    /// each at the clips' level: one clip to a track, so the tail of one
+    /// cut and the head of the next both play where they overlap rather
+    /// than crossfade as a track's clips do.
+    pub fn sound_beyond(&self) -> Vec<Music> {
+        self.cuts
+            .iter()
+            .zip(offsets(&self.cuts))
+            .flat_map(|(c, at)| c.sound_beyond(at))
+            .filter(|c| c.at + c.end - c.start > 0.0)
+            .map(|c| {
+                // Before the edit's start (a J-cut on the first cut): only
+                // what falls inside it.
+                let early = (-c.at).max(0.0);
+                Music { volume: self.sound.volume, clips: vec![MusicClip { at: c.at + early, start: c.start + early, fade_in: (c.fade_in - early).max(0.0), ..c }], ..Default::default() }
+            })
+            .collect()
+    }
+
     /// How far faded to black cut `n` is at clip time `t`, 0..1.
     pub fn black_at(&self, n: usize, t: f64) -> f64 {
         let at = offsets(&self.cuts)[n] + t - self.cuts[n].start;

@@ -185,13 +185,17 @@ pub(crate) fn export(project: &project::Project, opts: &StitchOpts, out: &Export
             .map(|(n, &(i, start, frames))| {
                 let crossfade = if n > cuts.start { overlap[n] as f64 / fps } else { 0.0 };
                 let input = heard[n].unwrap_or(&pipelines[i].input);
-                ffmpeg::Sound { input, start, duration: Some(frames as f64 / fps), volume: &project.cuts[n].volume, gain: project.cuts[n].sound_db(), filter: project.cuts[n].sound_filter(), crossfade, fade_in: project.cuts[n].sound_fade_in, fade_out: project.cuts[n].sound_fade_out }
+                ffmpeg::Sound::of_cut(&project.cuts[n], input, start, Some(frames as f64 / fps), crossfade)
             })
             .collect();
         // The whole edit gets its mix; a file per cut is for another editor,
         // so its sound is left as recorded and the music goes beside it.
         let length = edit_seconds(&frames, &overlap, cuts.clone(), fps);
-        let mix = ffmpeg::Mix { sound_db: project.sound.volume, tracks: project::SoundTrack::ALL.map(|t| project.track(t)).to_vec(), length, fades: project.fades };
+        // The cuts' sound past their pictures (J- and L-cuts) mixed as sound
+        // clips at the clips' level, as the player plays it.
+        let beyond = project.sound_beyond();
+        let tracks = project::SoundTrack::ALL.map(|t| project.track(t)).into_iter().chain(&beyond).collect();
+        let mix = ffmpeg::Mix { sound_db: project.sound.volume, tracks, length, fades: project.fades };
         let mix = matches!(out.target, Target::One(_)).then_some(&mix);
         let mut encoder = ffmpeg::Encoder::new(&path, out.size, fps, &sound, mix, out.format, out.format == ffmpeg::Format::Resolve && gpu.is_some())?;
         // Overlays over the whole edit only; a file per cut has none.

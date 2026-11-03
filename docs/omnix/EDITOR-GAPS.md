@@ -1807,7 +1807,7 @@ praise and curse. Then the parts below get ordered from it.
   safe-area guides for the aspect, a horizon line, a «look room» hint,
   smoothing a hand-keyed path.
 
-### 54. A header column for the lanes: what a whole lane does, at a glance — built 2026-11-04 (`c6ee4b6`), waits for the user's check
+### 54. A header column for the lanes: what a whole lane does, at a glance — done 2026-11-04 (`c6ee4b6`, `8ec3df3`), confirmed by the user
 
 User, after asking why the music's waveform showed a bright wave inside
 a darker, bigger one (the file and the heard sound, gap 33d: the Music

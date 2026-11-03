@@ -2068,6 +2068,18 @@ when there is one and staying light on an integrated one (the laptop,
 gap 40). Goes with gap 64 (the preview's size). Milestone «Експорт»
 (the GPU fast path).
 
+### 66. The button groups in colours of their own — idea (user, 2026-11-04)
+
+User: "different colours for the groups of buttons for editing and for
+navigation, so what's needed is easier to find by colour patterns in the
+UI (now the buttons are all blue)". Builds on gap 59 (the bars grouped)
+and gap 43's palette proposal (`UI-COLOUR.md`, «Omnix Neutral» and the
+lanes' colours): a muted tint per group, e.g. adding at the playhead,
+cutting, history, playing and moving about, framing, panels, each the
+same wherever it appears (the shortcuts window's groups too), and never
+colour alone (icons and the groups' names stay). Milestone «Колір і
+текст» with the palette card.
+
 ## Format rule for all of these
 
 New fields only, each `#[serde(default, skip_serializing_if = …)]`, so every

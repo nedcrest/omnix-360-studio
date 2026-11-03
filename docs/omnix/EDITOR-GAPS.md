@@ -2033,6 +2033,17 @@ playhead rests. Pictures get none; 360 clips have their LRF.
 Left: a copy is made only while the cache is on; long clips take longer
 (roughly 1/15 of their length on the dev PC); no progress shown.
 
+### 64. The preview's size as a setting — idea (user, 2026-11-04)
+
+Today an ordinary video plays at 1920 px on its long side at most
+(`playback::FLAT_PLAY`), moves of the playhead show its 960 px copy (gap
+63), and a rested frame is full size if the file is bigger; a 360 clip
+plays its LRF (or the OSV at the Source picker's size). Idea: a Settings
+choice for the playing size of ordinary videos, e.g. 720p / 1080p /
+full, so a weak machine or a laptop plays smoothly (1080p stays the
+default), maybe with the scrub copy's size beside it. Kept in
+`settings.json`. Milestone «Інші платформи» (the laptop, the tablet).
+
 ## Format rule for all of these
 
 New fields only, each `#[serde(default, skip_serializing_if = …)]`, so every

@@ -28,6 +28,7 @@ const GROUPS: &[(&str, &[(&str, &str)])] = &[
             ("C", "split at the playhead (a sound clip if one is selected)"),
             ("M", "a marker at the playhead"),
             ("Alt+[ / Alt+]", "trim the start / end to the playhead"),
+            ("D", "select the cut under the playhead"),
             ("Alt+← / Alt+→", "move the selected cut one place"),
             ("Del", "delete what's selected (Shift+Del: the cut)"),
             ("Esc", "cancel a drag under way"),

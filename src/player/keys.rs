@@ -239,6 +239,9 @@ impl App {
                 "r" | "R" => return self.update(Message::RollingShutter(!self.rolling_shutter)),
                 // M marks, as in FCP, Premiere and Resolve (gap 5); mute
                 // moved to Shift+M, out of the way of a slip.
+                // D selects the cut under the playhead (Premiere's key): ↓ to a
+                // cut, D, then Alt+← moves it (gap 58).
+                "d" | "D" if !mods.command() => return self.update(Message::SelectAtPlayhead),
                 "m" | "M" if mods.shift() => return self.update(Message::Mute),
                 "m" | "M" => return self.update(Message::AddMark),
                 "p" | "P" => {
@@ -318,7 +321,7 @@ impl App {
     }
 
     /// Says `note` by the playhead for a moment (gap 55).
-    fn step_note(&mut self, note: &'static str) -> Task<Message> {
+    pub(super) fn step_note(&mut self, note: &'static str) -> Task<Message> {
         let n = self.step_note.map_or(0, |(_, n)| n + 1);
         self.step_note = Some((note, n));
         Task::perform(super::blocking(|| std::thread::sleep(std::time::Duration::from_millis(900))), move |_| Message::StepNoteGone(n))

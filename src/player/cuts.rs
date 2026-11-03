@@ -191,6 +191,13 @@ impl App {
                     return Task::perform(super::blocking(|| std::thread::sleep(std::time::Duration::from_secs(6))), move |_| Message::ToastGone(n));
                 }
             }
+            Message::SelectAtPlayhead => {
+                // The cut playing there (the one shown through a crossfade).
+                if self.playing_cut().is_some() {
+                    self.selection = Selection::cut_at(&self.edit, self.current);
+                    return self.step_note("selected");
+                }
+            }
             Message::AddMark => {
                 let Some((cut, t)) = self.playing_cut().map(|(c, t)| (c.id, t)) else { return Task::none() };
                 if self.op(Op::Cut(CutOp::Mark { cut, t, note: String::new() })).is_some() {

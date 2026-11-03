@@ -252,8 +252,8 @@ the frame grid (a sound clip's end, a marker): a stop counts only more
 than half a frame away now, and the playhead says what it stopped at
 («← marker», «← cut»), with a test walking every stop both ways; then,
 at the user's ask, only markers and cuts' joins stop it, not sound or
-overlay edges. Checked by the user 2026-11-03: all of it works; left to
-check, a cut moved and its markers going with it.
+overlay edges. Confirmed by the user 2026-11-03, a cut's markers going with it
+when it moves included.
 
 ### 6. Vignette shapes — idea (user, 2026-10-22)
 

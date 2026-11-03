@@ -499,4 +499,23 @@ mod tests {
         assert!(app.edit.cuts[0].marks.is_empty());
         assert!(app.edit.undo() && app.edit.cuts[0].marks[0].note == "the castle");
     }
+
+    #[test]
+    fn a_deleted_cut_comes_back_with_undo() {
+        let mut app = app();
+        app.selection = Selection::cut_at(&app.edit, 0);
+        let _ = app.update(Message::DeleteCut);
+        assert_eq!(app.edit.cuts.len(), 1);
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.edit.cuts.len(), 2, "back");
+        // Through a marker's drag before it, too.
+        let cut = app.edit.cuts[0].id;
+        app.edit.apply(&crate::model::ops::Op::Cut(crate::model::ops::cuts::CutOp::Mark { cut, t: 1.0, note: String::new() })).unwrap();
+        let _ = app.update(Message::MarkMove(0, 1.0, 1.5));
+        let _ = app.update(Message::ScrubDone);
+        app.selection = Selection::cut_at(&app.edit, 1);
+        let _ = app.update(Message::DeleteCut);
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.edit.cuts.len(), 2, "back after a marker drag");
+    }
 }

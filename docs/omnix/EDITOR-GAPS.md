@@ -1908,8 +1908,9 @@ What it would be:
   trash, never a file the edit still uses (the menu says which cuts use
   it). Also from the menu: add at the end / at the playhead / at the join
   (the bin's three buttons today), Info, Show in folder.
-- Drag a tile onto the timeline: the hard part in iced (no drag between
-  widgets); first the menu and E / W, the drag later.
+- No drag from a tile onto the timeline (user, 2026-11-03): the add
+  buttons do it, and most projects come already cut in footage-agent's
+  contact sheet.
 
 It grows the narrow bin panel (gap 2) rather than replacing it: the panel
 for quick adding while cutting, the view for sorting the material. Joins
@@ -1918,6 +1919,20 @@ previewed is the same place.
 
 Open question for the user: does «remove» mean to the trash, or only
 "hide from this project" (the file stays in the folder)?
+
+### 61. The contact sheet standalone, for DeX and tablets — far idea (user, 2026-11-03)
+
+User: one of the far ideas, footage-agent's contact sheet as a standalone
+app, so it can be used on Android DeX (the S26 Ultra workstation) or a
+tablet. Most projects are pre-cut there, so choosing and noting shots away
+from the PC is worth having.
+
+To find out when it comes up: what the sheet needs from the PC today
+(the clips' frames and proxies, `notes.json`), whether it can carry them
+along (a project folder copied or synced to the device) and write
+`notes.json` back for the PC to pick up; and the form: a web page served
+by the PC over Tailscale is the cheapest, an installable web app (PWA)
+works offline. Milestone «Інші платформи».
 
 ## Format rule for all of these
 

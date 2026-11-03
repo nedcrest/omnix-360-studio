@@ -2084,7 +2084,7 @@ when there is one and staying light on an integrated one (the laptop,
 gap 40). Goes with gap 64 (the preview's size). Milestone «Експорт»
 (the GPU fast path).
 
-### 66. The button groups in colours of their own — idea (user, 2026-11-04)
+### 66. The button groups in colours of their own — built 2026-11-04 (`5b85986`), waits for the user's check
 
 User: "different colours for the groups of buttons for editing and for
 navigation, so what's needed is easier to find by colour patterns in the
@@ -2095,6 +2095,15 @@ cutting, history, playing and moving about, framing, panels, each the
 same wherever it appears (the shortcuts window's groups too), and never
 colour alone (icons and the groups' names stay). Milestone «Колір і
 текст» with the palette card.
+
+**Built 2026-11-04** (`5b85986`): `icons::Tint` and `tint_button` (lighter
+hovered, darker pressed, faint disabled). Global slate `#4A505A` (app,
+project, export, window, the chevron), Move blue `#2F5F9E` (play, zoom,
+snapping), Add green `#3A7A50`, Cut amber `#9A6026`, History grey
+`#5E5E5E`, Look violet `#6E559E` (as the effect marks), Frame plum
+`#8A4678` (the framing row), Sound teal `#26787E` (as the clip sound).
+The shortcuts window shows each group's swatch. Panels' own buttons keep
+the theme's.
 
 ## Format rule for all of these
 

@@ -482,4 +482,21 @@ mod tests {
         let _ = app.update(Message::Undo);
         assert!(app.toast.is_none() && app.edit.voice.clips.len() == 1);
     }
+
+    /// A marker named in its window, then deleted, each one undo step.
+    #[test]
+    fn a_marker_is_named_and_deleted_in_its_window() {
+        let mut app = app();
+        let cut = app.edit.cuts[0].id;
+        app.edit.apply(&crate::model::ops::Op::Cut(crate::model::ops::cuts::CutOp::Mark { cut, t: 1.0, note: String::new() })).unwrap();
+        let _ = app.update(Message::MarkEdit(0, 1.0));
+        let _ = app.update(Message::MarkNote("  the castle ".into()));
+        let _ = app.update(Message::MarkSave);
+        assert!(app.mark_edit.is_none());
+        assert_eq!(app.edit.cuts[0].marks[0].note, "the castle");
+        let _ = app.update(Message::MarkEdit(0, 1.0));
+        let _ = app.update(Message::MarkDelete);
+        assert!(app.edit.cuts[0].marks.is_empty());
+        assert!(app.edit.undo() && app.edit.cuts[0].marks[0].note == "the castle");
+    }
 }

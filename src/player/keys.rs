@@ -57,6 +57,10 @@ impl App {
         if self.normalize.is_some() {
             return if escape { self.update(Message::Sound(sound_ui::SoundMsg::Cancel)) } else { Task::none() };
         }
+        // A marker's window open: Esc closes it; its field takes the rest.
+        if self.mark_edit.is_some() {
+            return if escape { self.update(Message::MarkClose) } else { Task::none() };
+        }
         // The shortcuts' list open: Esc, ? or F1 close it, the rest wait.
         let help = matches!(key.as_ref(), Key::Named(Named::F1) | Key::Character("?"));
         if self.shortcuts {

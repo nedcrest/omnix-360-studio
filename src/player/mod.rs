@@ -40,6 +40,7 @@ mod overlay_ui;
 mod cuts;
 mod record_ui;
 mod shortcuts;
+mod marks;
 use crate::model::selection::Selection;
 mod listen;
 mod mixcheck_ui;
@@ -395,6 +396,14 @@ enum Message {
     AddMark,
     /// Cut `.0`'s marker at clip time `.1` dragged to `.2`.
     MarkMove(usize, f64, f64),
+    /// Cut `.0`'s marker at clip time `.1` opened to name or delete
+    /// (a double-click or a right-click on its flag); its note typed;
+    /// saved; deleted; the window closed.
+    MarkEdit(usize, f64),
+    MarkNote(String),
+    MarkSave,
+    MarkDelete,
+    MarkClose,
     /// Frame step `.0` has rested: the full-resolution frame, if it was the
     /// last.
     StepsRested(u64),
@@ -529,6 +538,8 @@ struct App {
     toast: Option<(&'static str, u64)>,
     /// The keyboard and mouse shortcuts' window, open (gap 56).
     shortcuts: bool,
+    /// A marker being named in its window (gap 5).
+    mark_edit: Option<marks::Editing>,
     /// Counts frame steps by key; the full-resolution frame is asked for
     /// when the last one has rested a moment.
     steps: u64,
@@ -705,6 +716,7 @@ impl App {
             drag_epoch: 0,
             toast: None,
             shortcuts: false,
+            mark_edit: None,
             steps: 0,
             step_note: None,
             effect_pin: effects::Pin::default(),
@@ -907,6 +919,7 @@ impl App {
             m @ (Message::Export { .. } | Message::ExportTo { .. } | Message::ExportProgress { .. } | Message::ExportCancel { .. } | Message::PickColour { .. } | Message::PickArea { .. } | Message::AreaPicked { .. } | Message::TrackProgress { .. } | Message::TrackCancel { .. } | Message::Tracked { .. } | Message::ExportDone { .. } | Message::Save { .. } | Message::SaveTo { .. } | Message::Saved { .. }) => self.on_jobs(m),
             m @ (Message::Resolution { .. } | Message::ExportClips { .. } | Message::ExportGraded { .. } | Message::ExportFormat { .. } | Message::ExportLoudness { .. } | Message::Info { .. } | Message::InfoRead { .. } | Message::InfoClose { .. } | Message::Reveal { .. } | Message::CopyPath { .. } | Message::ExportPanel { .. } | Message::AudioPanel { .. } | Message::SettingsPanel { .. } | Message::Shortcuts { .. } | Message::AutoKey { .. } | Message::SplitDrag { .. } | Message::SplitDone { .. } | Message::SplitReset { .. } | Message::TenBit { .. } | Message::AddLut { .. } | Message::LutPicked { .. } | Message::RemoveLut { .. } | Message::DlogMLut { .. } | Message::UiScale { .. } | Message::ShowAngles { .. } | Message::RulerLarge { .. } | Message::Fold { .. } | Message::Modifiers { .. } | Message::ViewSize { .. } | Message::Aspect { .. } | Message::Theme { .. } | Message::Mute { .. } | Message::Volume { .. } | Message::Fullscreen { .. }) => self.on_panels(m),
             m @ (Message::BinPanel { .. } | Message::BinPin { .. } | Message::BinRefresh { .. } | Message::BinPreview { .. } | Message::BinStop { .. } | Message::BinMeta { .. } | Message::BinFrames { .. } | Message::BinAdd { .. }) => self.on_bin(m),
+            m @ (Message::MarkEdit { .. } | Message::MarkNote { .. } | Message::MarkSave | Message::MarkDelete | Message::MarkClose) => self.on_marks(m),
             m @ (Message::Tick { .. } | Message::TimelineZoom { .. } | Message::TimelineZoomTo { .. } | Message::TimelinePan { .. } | Message::Toggle { .. } | Message::Scrub { .. } | Message::ScrubDone { .. }) => self.on_transport(m),
             m @ (Message::Select { .. } | Message::Trim { .. } | Message::MoveCut { .. } | Message::AddMark { .. } | Message::MarkMove { .. } | Message::StepsRested { .. } | Message::ToastGone { .. } | Message::StepNoteGone { .. } | Message::TrimToPlayhead { .. } | Message::Crossfade { .. } | Message::ToggleCrossfade { .. } | Message::Split { .. } | Message::DeleteCut { .. } | Message::Undo { .. } | Message::Redo { .. }) => self.on_cuts(m),
             m @ (Message::LookDone { .. } | Message::Framing { .. } | Message::KeyMove { .. } | Message::KeyAdd { .. } | Message::KeyDelete { .. } | Message::KeyEase { .. } | Message::KeyFollow { .. } | Message::Stab { .. } | Message::Projection { .. } | Message::KeyJump { .. } | Message::Look { .. } | Message::Zoom { .. } | Message::Fov { .. } | Message::AngleInput { .. } | Message::AngleDone { .. } | Message::AngleScrubStart { .. } | Message::AngleScrubDone { .. } | Message::AngleScrub { .. } | Message::AngleNudge { .. } | Message::AngleArrow { .. } | Message::Source { .. } | Message::RollingShutter { .. } | Message::FullOnPause { .. } | Message::ResetView { .. }) => self.on_framing(m),
@@ -955,7 +968,7 @@ impl App {
             tooltip::Position::Top,
         );
         let window: Element<'_, Message> = column![self.top_bar(clip), self.picture(), divider, self.transport_bar(clip)].push(self.angles_strip().filter(|_| self.framing)).push(timeline).push(error.map(|e| container(e).padding([0, 10]))).push(credit()).into();
-        self.shortcuts_dialog(self.normalize_dialog(self.sound_menu_layer(window)))
+        self.shortcuts_dialog(self.mark_dialog(self.normalize_dialog(self.sound_menu_layer(window))))
     }
 }
 

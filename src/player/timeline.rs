@@ -2181,6 +2181,8 @@ pub struct RulerState {
     dragging: bool,
     /// A marker being dragged: its cut and its clip time now.
     mark: Option<(usize, f64)>,
+    /// The last press on a flag, for a double-click.
+    flag_click: Option<(std::time::Instant, usize, f64)>,
     /// `Timeline::drag_epoch` when the press began (Esc drops the drag).
     epoch: u64,
 }
@@ -2274,6 +2276,13 @@ impl canvas::Program<Message> for Ruler {
                 state.dragging = true;
                 // On a marker's flag: the playhead to it, and a drag moves it.
                 if let Some(&(cut, mt, x, _)) = t.flags(bounds).iter().find(|f| (f.2 - p.x).abs() <= MARK_REACH) {
+                    // Twice on it: its window, to name or delete it.
+                    let again = state.flag_click.is_some_and(|(at, c, m)| c == cut && m == mt && at.elapsed() < DOUBLE_CLICK);
+                    state.flag_click = Some((std::time::Instant::now(), cut, mt));
+                    if again {
+                        state.dragging = false;
+                        return Some(canvas::Action::publish(Message::MarkEdit(cut, mt)).and_capture());
+                    }
                     state.mark = Some((cut, mt));
                     return Some(canvas::Action::publish(Message::Scrub(t.t(x, bounds))).and_capture());
                 }
@@ -2292,6 +2301,12 @@ impl canvas::Program<Message> for Ruler {
             Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) if state.dragging => {
                 (state.dragging, state.mark) = (false, None);
                 Some(canvas::Action::publish(Message::ScrubDone).and_capture())
+            }
+            // A right-click on a flag: its window.
+            Mouse(mouse::Event::ButtonPressed(mouse::Button::Right)) => {
+                let p = cursor.position_in(bounds)?;
+                let &(cut, mt, ..) = t.flags(bounds).iter().find(|f| (f.2 - p.x).abs() <= MARK_REACH)?;
+                Some(canvas::Action::publish(Message::MarkEdit(cut, mt)).and_capture())
             }
             _ => None,
         }

@@ -1885,6 +1885,40 @@ opened (a little wider, the groups' names shown). **Built 2026-11-03**
 - A chevron at the transport row's start shows or hides every group's
   name above its buttons (`settings.json` `bar_labels`, off by default).
 
+### 60. The bin as a view of its own, in tiles — idea (user, 2026-11-03)
+
+User: "a separate view, instead of the playback screen: an edit bin. The
+project is made as folders from the start, so it would be logical to have
+it all in tiles. Click «Edit bin» and a window opens where, by drag and
+drop or a click and a context menu, you add or remove resources."
+
+What it would be:
+- A button (and a key) swaps the picture for the bin, as Mix check
+  already stands in the picture's place; the timeline stays below, so a
+  tile can be put on it.
+- Tiles by the project's folders (Footage, External video, Music,
+  Voice-over, Sound effects, Graphics, LUTs), big thumbnails with a size
+  slider, the length on each; the skimmer and ratings of gap 2 belong
+  here.
+- **Add**: drop files from the file manager onto the view (iced gives the
+  window's dropped files) or a «+» per folder; each file is copied into
+  the folder its kind belongs to (originals, like the Kos archive, only
+  read, never moved).
+- **Remove**: from the right-click menu; asked before, to the system's
+  trash, never a file the edit still uses (the menu says which cuts use
+  it). Also from the menu: add at the end / at the playhead / at the join
+  (the bin's three buttons today), Info, Show in folder.
+- Drag a tile onto the timeline: the hard part in iced (no drag between
+  widgets); first the menu and E / W, the drag later.
+
+It grows the narrow bin panel (gap 2) rather than replacing it: the panel
+for quick adding while cutting, the view for sorting the material. Joins
+the «Перегляд з біна у вікні Omnix» card: the view where a tile is
+previewed is the same place.
+
+Open question for the user: does «remove» mean to the trash, or only
+"hide from this project" (the file stays in the folder)?
+
 ## Format rule for all of these
 
 New fields only, each `#[serde(default, skip_serializing_if = …)]`, so every

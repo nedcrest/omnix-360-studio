@@ -2084,7 +2084,7 @@ when there is one and staying light on an integrated one (the laptop,
 gap 40). Goes with gap 64 (the preview's size). Milestone «Експорт»
 (the GPU fast path).
 
-### 66. The button groups in colours of their own — built 2026-11-04 (`5b85986`), waits for the user's check
+### 66. The button groups in colours of their own — done 2026-11-04 (`5b85986`), confirmed by the user
 
 User: "different colours for the groups of buttons for editing and for
 navigation, so what's needed is easier to find by colour patterns in the

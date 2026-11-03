@@ -218,6 +218,8 @@ pub struct Block {
     /// Its clip's length (infinite if not known): its handles say whether
     /// there is footage beyond each edge.
     pub most: f64,
+    /// Its markers: clip time and note (gap 5), drawn as flags on the ruler.
+    pub marks: Vec<(f64, String)>,
     /// Its keyframes within the cut: index into the cut's keyframes, clip
     /// time, and how it moves on to the next (drawn as its shape).
     /// Keyframes: index, clip time, ease, and whether it follows the stick.
@@ -473,6 +475,20 @@ impl Timeline {
             }
             _ => None,
         }
+    }
+
+    /// The markers in view, in edit order: their cut, clip time, x, note.
+    fn flags(&self, b: Rectangle) -> Vec<(usize, f64, f32, &str)> {
+        let mut flags: Vec<_> = self
+            .blocks
+            .iter()
+            .enumerate()
+            .flat_map(|(i, c)| c.marks.iter().filter(move |(t, _)| *t >= c.start && *t <= c.start + c.len).map(move |(t, note)| (i, *t, c.from + t - c.start, note.as_str())))
+            .map(|(i, t, at, note)| (i, t, self.x(at, b), note))
+            .filter(|f| f.2 >= 0.0 && f.2 <= b.width)
+            .collect();
+        flags.sort_by(|a, b| a.2.total_cmp(&b.2));
+        flags
     }
 
     /// The selected cut's edge under `x`: only it has handles, so a press
@@ -1909,7 +1925,7 @@ mod tests {
 
     fn block(from: f64, len: f64, crossfade: f64) -> Block {
         Block {
-            labels: vec![], from, len, start: 0.0, most: f64::INFINITY, keys: vec![], thumbs: vec![], sound: vec![], wave: None, even_wave: None,
+            labels: vec![], from, len, start: 0.0, most: f64::INFINITY, marks: vec![], keys: vec![], thumbs: vec![], sound: vec![], wave: None, even_wave: None,
             own_db: 0.0, gain: 0.0, fade_in: 0.0, fade_out: 0.0, level: "0 dB".into(), crossfade, effects: vec![],
         }
     }
@@ -2034,6 +2050,13 @@ mod tests {
         assert_eq!(edge_of(100.0, 130.0, 105.0), Some(true));
         assert_eq!(edge_of(100.0, 130.0, 115.0), None);
         assert_eq!(edge_of(100.0, 130.0, 125.0), Some(false));
+        // Markers: in their cut's stretch only, in edit order.
+        let mut t3 = timeline().0;
+        t3.blocks[2].marks = vec![(1.0, "late".into())];
+        t3.blocks[0].marks = vec![(2.0, String::new()), (5.0, "past its out".into())];
+        let f = t3.flags(b);
+        assert_eq!(f.iter().map(|f| (f.0, f.1)).collect::<Vec<_>>(), [(0, 2.0), (2, 1.0)]);
+        assert!((f[1].2 - x(8.0)).abs() < 0.01, "cut 2 starts at 7 s: its 1 s is 8 s");
         assert_eq!((signed(1.24), signed(-0.4), signed(0.0), seconds(4.31), seconds(62.5), clock(59.96)), ("+0:01.2".into(), "−0:00.4".into(), "+0:00.0".into(), "4.3 s".into(), "1:02.5".into(), "1:00.0".into()));
         // The level line: y back to dB, every level outside 0 dB's ±1 dB
         // reachable on the narrow clip sound lane too.
@@ -2156,7 +2179,17 @@ fn ruler_label(t: f64, step: f64) -> String {
 #[derive(Default)]
 pub struct RulerState {
     dragging: bool,
+    /// A marker being dragged: its cut and its clip time now.
+    mark: Option<(usize, f64)>,
+    /// `Timeline::drag_epoch` when the press began (Esc drops the drag).
+    epoch: u64,
 }
+
+/// Markers' colour on the ruler: apart from the playhead's and the lanes'.
+const MARK: iced::Color = iced::Color::from_rgb(0.94, 0.36, 0.62);
+
+/// How far either side of a marker's flag a press takes it.
+const MARK_REACH: f32 = 6.0;
 
 impl canvas::Program<Message> for Ruler {
     type State = RulerState;
@@ -2194,6 +2227,25 @@ impl canvas::Program<Message> for Ruler {
             let (a, b) = (t.x(from, bounds), t.x(to, bounds).max(t.x(from, bounds) + 3.0));
             frame.fill(&Path::rectangle(Point::new(a, h - 3.0), Size::new(b - a, 3.0)), colour);
         }
+        // The markers: a line down the ruler, a flag at its top, its note
+        // after it while there's room before the next.
+        let flags = t.flags(bounds);
+        for (n, &(_, _, x, note)) in flags.iter().enumerate() {
+            frame.fill(&Path::rectangle(Point::new(x - 0.75, 0.0), Size::new(1.5, h)), MARK);
+            let w = if large { 7.0 } else { 5.0 };
+            frame.fill(&Path::new(|p| {
+                p.move_to(Point::new(x, 0.0));
+                p.line_to(Point::new(x + w, w * 0.6));
+                p.line_to(Point::new(x, w * 1.2));
+                p.close();
+            }), MARK);
+            let room = flags.get(n + 1).map_or(bounds.width, |f| f.2) - x - w - 6.0;
+            let fits = (room / 6.0).max(0.0) as usize;
+            if !note.is_empty() && fits >= 3 {
+                let shown: String = if note.chars().count() > fits { note.chars().take(fits - 1).chain(std::iter::once('…')).collect() } else { note.to_owned() };
+                frame.fill_text(Text { content: shown, position: Point::new(x + w + 2.0, if large { h * 0.5 } else { h * 0.5 }), color: MARK, size: (if large { 11.0 } else { 9.0 }).into(), align_y: Vertical::Center, ..Default::default() });
+            }
+        }
         // The playhead's head: a tab to drag, its line on down the lanes.
         let at = t.x(t.position, bounds);
         let head = Path::new(|p| {
@@ -2211,15 +2263,34 @@ impl canvas::Program<Message> for Ruler {
 
     fn update(&self, state: &mut RulerState, event: &iced::Event, bounds: Rectangle, cursor: mouse::Cursor) -> Option<canvas::Action<Message>> {
         use iced::Event::Mouse;
+        let t = &self.0;
+        // Esc cancelled the drag in the app: let it go.
+        if state.epoch != t.drag_epoch {
+            (state.epoch, state.dragging, state.mark) = (t.drag_epoch, false, None);
+        }
         match event {
             Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
                 let p = cursor.position_in(bounds)?;
                 state.dragging = true;
-                Some(canvas::Action::publish(Message::Scrub(self.0.t(p.x, bounds))).and_capture())
+                // On a marker's flag: the playhead to it, and a drag moves it.
+                if let Some(&(cut, mt, x, _)) = t.flags(bounds).iter().find(|f| (f.2 - p.x).abs() <= MARK_REACH) {
+                    state.mark = Some((cut, mt));
+                    return Some(canvas::Action::publish(Message::Scrub(t.t(x, bounds))).and_capture());
+                }
+                Some(canvas::Action::publish(Message::Scrub(t.t(p.x, bounds))).and_capture())
             }
-            Mouse(mouse::Event::CursorMoved { position }) if state.dragging => Some(canvas::Action::publish(Message::Scrub(self.0.t(position.x - bounds.x, bounds))).and_capture()),
+            Mouse(mouse::Event::CursorMoved { position }) if state.dragging => {
+                let x = position.x - bounds.x;
+                if let Some((cut, from)) = state.mark {
+                    let c = t.blocks.get(cut)?;
+                    let to = (c.start + t.t(x, bounds) - c.from).clamp(c.start, c.start + c.len);
+                    state.mark = Some((cut, to));
+                    return Some(canvas::Action::publish(Message::MarkMove(cut, from, to)).and_capture());
+                }
+                Some(canvas::Action::publish(Message::Scrub(t.t(x, bounds))).and_capture())
+            }
             Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) if state.dragging => {
-                state.dragging = false;
+                (state.dragging, state.mark) = (false, None);
                 Some(canvas::Action::publish(Message::ScrubDone).and_capture())
             }
             _ => None,
@@ -2229,6 +2300,10 @@ impl canvas::Program<Message> for Ruler {
     fn mouse_interaction(&self, state: &RulerState, bounds: Rectangle, cursor: mouse::Cursor) -> mouse::Interaction {
         if state.dragging {
             mouse::Interaction::Grabbing
+        } else if let Some(p) = cursor.position_in(bounds)
+            && self.0.flags(bounds).iter().any(|f| (f.2 - p.x).abs() <= MARK_REACH)
+        {
+            mouse::Interaction::Grab
         } else if cursor.position_in(bounds).is_some() {
             mouse::Interaction::Pointer
         } else {

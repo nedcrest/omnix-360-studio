@@ -196,6 +196,14 @@ impl App {
                     self.save_status = None;
                 }
             }
+            Message::MarkMove(i, from, t) => {
+                let Some(cut) = self.edit.cuts.get(i).map(|c| c.id) else { return Task::none() };
+                // One undo step for the drag; the playhead follows the flag.
+                self.edit.begin();
+                self.op(Op::Cut(CutOp::MoveMark { cut, from, t }));
+                self.follow = true;
+                self.scrub_to(i, t);
+            }
             Message::StepsRested(n) => {
                 if n == self.steps {
                     self.with_playback(|p| p.settle());

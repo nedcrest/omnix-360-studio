@@ -254,7 +254,7 @@ impl App {
                 let level = level_tag(c.gain, c.mute, filter_tags(c.low_cut, c.clean, c.even));
                 // A picture lasts as long as it's trimmed to.
                 let most = self.library.iter().find(|m| m.input == c.input).map_or(f64::INFINITY, |m| if m.flat.is_some_and(|f| f.picture) { f64::INFINITY } else { m.duration });
-                timeline::Block { labels: cut_labels(c, self.opts.stabilize), from, len: c.end - c.start, start: c.start, most, keys, sound: c.volume.clone(), wave, even_wave, own_db: c.sound_db(), gain: c.gain, fade_in: c.sound_fade_in, fade_out: c.sound_fade_out, level, thumbs, crossfade: c.crossfade, effects: c.effects.iter().map(|k| k.t).collect() }
+                timeline::Block { labels: cut_labels(c, self.opts.stabilize), from, len: c.end - c.start, start: c.start, most, marks: c.marks.iter().map(|m| (m.t, m.note.clone())).collect(), keys, sound: c.volume.clone(), wave, even_wave, own_db: c.sound_db(), gain: c.gain, fade_in: c.sound_fade_in, fade_out: c.sound_fade_out, level, thumbs, crossfade: c.crossfade, effects: c.effects.iter().map(|k| k.t).collect() }
             })
             .collect();
         let (timeline_start, timeline_span) = self.timeline_window();

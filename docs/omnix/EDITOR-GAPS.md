@@ -1905,10 +1905,13 @@ What it would be:
   window's dropped files) or a «+» per folder; each file is copied into
   the folder its kind belongs to (originals, like the Kos archive, only
   read, never moved).
-- **Remove**: from the right-click menu; asked before, to the system's
-  trash, never a file the edit still uses (the menu says which cuts use
-  it). Also from the menu: add at the end / at the playhead / at the join
-  (the bin's three buttons today), Info, Show in folder.
+- **Remove** (decided by the user, 2026-11-03): from the right-click menu,
+  to the system's trash, asked first, and only for a file inside the
+  project's folder (a copy). Raw material outside it (the Kos archive, a
+  card) is never trashed: the menu only takes it out of the bin. A file
+  the edit still uses can't be removed (the menu says which cuts use it).
+  Also in the menu: add at the end / at the playhead / at the join (the
+  bin's three buttons today), Info, Show in folder.
 - No drag from a tile onto the timeline (user, 2026-11-03): the add
   buttons do it, and most projects come already cut in footage-agent's
   contact sheet.
@@ -1917,9 +1920,6 @@ It grows the narrow bin panel (gap 2) rather than replacing it: the panel
 for quick adding while cutting, the view for sorting the material. Joins
 the «Перегляд з біна у вікні Omnix» card: the view where a tile is
 previewed is the same place.
-
-Open question for the user: does «remove» mean to the trash, or only
-"hide from this project" (the file stays in the folder)?
 
 ### 61. The contact sheet standalone, for DeX and tablets — far idea (user, 2026-11-03)
 

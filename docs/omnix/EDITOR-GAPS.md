@@ -361,6 +361,21 @@ place; Esc cancels a drag on the timeline (`Edit::cancel`,
 `drag_epoch`; not the effects sliders, iced's own); «… deleted · Undo»
 in the top bar for 6 s after a delete. From the check: gap 55.
 
+**Pack 3 built 2026-11-03** (`62540fe`), waits for the user's check:
+snapping across the timeline, one rule for every drag
+(`Timeline::snap`): within 12 px (raised from 8 at the user's word) of
+the edit's ends, the playhead, the pictures' joins, cuts' sounds split
+from their pictures, markers, sound clips, overlays and text; never the
+dragged thing's own edges or what moves with it. What snaps: the
+playhead dragged, a cut's out edge (its in edge stays put on screen as
+it trims, so it doesn't), a cut's sound edge, sound clips moved and
+trimmed, overlays and text moved and trimmed, markers moved. A yellow
+line runs through every lane, the ruler and the markers' row where a
+drag snapped (`Message::Snapped`), gone at the drag's end or Esc. N
+toggles snapping (kept in `settings.json`), shown by the magnet button
+beside the zoom; Shift held lets one drag go free. Not yet: keyframe
+marks, and beats (gap 57).
+
 ### 10. Two modes: Edit and Framing — built 2026-10-24 (`562dad6`); the base that gap 53 grows (user, 2026-11-02)
 
 The user's answer to the key clashes in `TIMELINE-UX.md`: Omnix is a video

@@ -28,6 +28,41 @@ pub(super) fn framing_only(message: &Message) -> bool {
     )
 }
 
+/// The key as the shortcuts know it, whatever the keyboard layout: a
+/// letter, digit or sign that isn't Latin (Ukrainian «я» for Z, «с» for
+/// C) is taken by the key it is on, as on a US keyboard. Ctrl+Z did
+/// nothing with the Ukrainian layout on, nor did C, K, M… (the user,
+/// 2026-11-03). Named keys (arrows, Del) never depended on it.
+pub(super) fn latin(key: Key, physical: iced::keyboard::key::Physical, shift: bool) -> Key {
+    use iced::keyboard::key::{Code, Physical};
+    let Key::Character(c) = &key else { return key };
+    if c.is_ascii() {
+        return key;
+    }
+    let Physical::Code(code) = physical else { return key };
+    let letters = "abcdefghijklmnopqrstuvwxyz";
+    let codes = [Code::KeyA, Code::KeyB, Code::KeyC, Code::KeyD, Code::KeyE, Code::KeyF, Code::KeyG, Code::KeyH, Code::KeyI, Code::KeyJ, Code::KeyK, Code::KeyL, Code::KeyM, Code::KeyN, Code::KeyO, Code::KeyP, Code::KeyQ, Code::KeyR, Code::KeyS, Code::KeyT, Code::KeyU, Code::KeyV, Code::KeyW, Code::KeyX, Code::KeyY, Code::KeyZ];
+    let us = if let Some(i) = codes.iter().position(|&k| k == code) {
+        let l = &letters[i..i + 1];
+        if shift { l.to_uppercase() } else { l.to_owned() }
+    } else {
+        match (code, shift) {
+            (Code::BracketLeft, false) => "[",
+            (Code::BracketRight, false) => "]",
+            (Code::Comma, false) => ",",
+            (Code::Period, false) => ".",
+            (Code::Slash, true) => "?",
+            (Code::Slash, false) => "/",
+            (Code::Equal, false) => "=",
+            (Code::Equal, true) => "+",
+            (Code::Minus, false) => "-",
+            _ => return key,
+        }
+        .to_owned()
+    };
+    Key::Character(us.into())
+}
+
 /// Keys that only framing uses: looking around (Shift+←/→, ↑/↓, Q/E,
 /// Home, 0, + and −), keyframes (K, J, [ and ]), stabilisation (S),
 /// projection (P), rolling shutter (R). K with a sound selected (`sound`)
@@ -80,8 +115,6 @@ impl App {
             match key.as_ref() {
                 Key::Named(Named::ArrowLeft) if mods.shift() => return self.seek_by(-1.0, "−1 s"),
                 Key::Named(Named::ArrowRight) if mods.shift() => return self.seek_by(1.0, "+1 s"),
-                // A field of the angles strip being typed in keeps them.
-                Key::Named(arrow @ (Named::ArrowUp | Named::ArrowDown)) if self.angles_shown => return angles::arrow(if arrow == Named::ArrowUp { 1.0 } else { -1.0 }),
                 Key::Named(Named::ArrowUp) => return self.to_join(-1.0),
                 Key::Named(Named::ArrowDown) => return self.to_join(1.0),
                 Key::Named(Named::Home) => return self.seek_to(0.0, "start"),
@@ -313,5 +346,16 @@ mod tests {
         t.dedup();
         // a 0..4, b overlapping it from 3 to 6, the song 2.5..3.5, b's marker.
         assert_eq!(t, [0.0, 2.5, 3.0, 3.5, 4.0, 4.5, 6.0]);
+    }
+
+    #[test]
+    fn a_ukrainian_layout_s_keys_are_taken_by_where_they_sit() {
+        use iced::keyboard::key::{Code, Physical};
+        let k = |c: &str, code: Code, shift: bool| latin(Key::Character(c.into()), Physical::Code(code), shift);
+        assert_eq!(k("я", Code::KeyZ, false), Key::Character("z".into()));
+        assert_eq!(k("С", Code::KeyC, true), Key::Character("C".into()));
+        assert_eq!(k("х", Code::BracketLeft, false), Key::Character("[".into()));
+        assert_eq!(k("ю", Code::Period, false), Key::Character(".".into()));
+        assert_eq!(k("z", Code::KeyZ, false), Key::Character("z".into()), "Latin as it is");
     }
 }

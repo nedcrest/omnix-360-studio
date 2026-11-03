@@ -892,7 +892,7 @@ impl App {
 
     fn subscription(&self) -> Subscription<Message> {
         let keys = keyboard::listen().filter_map(|e| match e {
-            keyboard::Event::KeyPressed { key, modifiers, .. } => Some(Message::Key(key, modifiers)),
+            keyboard::Event::KeyPressed { key, physical_key, modifiers, .. } => Some(Message::Key(keys::latin(key, physical_key, modifiers.shift()), modifiers)),
             keyboard::Event::ModifiersChanged(m) => Some(Message::Modifiers(m)),
             _ => None,
         });

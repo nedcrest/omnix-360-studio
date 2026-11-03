@@ -321,6 +321,8 @@ pub struct Timeline {
     pub selected_overlay: Option<crate::overlay::ItemRef>,
     /// Moves on when Esc cancels a drag, so the canvases drop theirs.
     pub drag_epoch: u64,
+    /// The selected marker: its cut and clip time.
+    pub selected_mark: Option<(usize, f64)>,
     /// The playhead's last key step, said by it for a moment (gap 55).
     pub step_note: Option<&'static str>,
     /// The rows' heights, from the divider's scale.
@@ -474,6 +476,17 @@ impl Timeline {
                 Some(format!("fade {}", seconds(if in_edge { fade_in } else { fade_out })))
             }
             _ => None,
+        }
+    }
+
+    /// The markers' row's height: none without markers, a strip folded.
+    pub fn flags_height(&self) -> f32 {
+        if !self.blocks.iter().any(|c| c.marks.iter().any(|(t, _)| *t >= c.start && *t <= c.start + c.len)) {
+            0.0
+        } else if self.folds.marks {
+            FLAGS_FOLDED
+        } else {
+            FLAGS_OPEN
         }
     }
 
@@ -683,7 +696,8 @@ impl Timeline {
             iced::widget::container(canvas(lane).width(iced::Length::Fill).height(height)).clip(true)
         };
         let ruler = canvas(Ruler(t.clone())).width(iced::Length::Fill).height(t.ruler);
-        iced::widget::column![iced::widget::container(ruler).clip(true), lane(Track::Text), lane(Track::Overlay), iced::widget::container(layers).clip(true)].into()
+        let flags = canvas(Flags(t.clone())).width(iced::Length::Fill).height(t.flags_height());
+        iced::widget::column![iced::widget::container(flags).clip(true), iced::widget::container(ruler).clip(true), lane(Track::Text), lane(Track::Overlay), iced::widget::container(layers).clip(true)].into()
     }
 
     /// The sound lanes: each one's clips with their waveforms and handles,
@@ -1310,7 +1324,6 @@ fn lane_tag(frame: &mut Frame, name: &str, colour: iced::Color, mid: f32) {
     });
 }
 
-/// A volume line on `lane` from `ends.0` to `ends.1` (x, dB) through
 /// A signed change of time: «+0:01.2», «−0:00.4».
 fn signed(d: f64) -> String {
     format!("{}{}", if d < -0.05 { '−' } else { '+' }, clock(d.abs()))
@@ -1376,6 +1389,7 @@ fn edge_of(l: f32, r: f32, x: f32) -> Option<bool> {
     }
 }
 
+/// A volume line on `lane` from `ends.0` to `ends.1` (x, dB) through
 /// `points` (x, dB; NaN x for one not shown), the `selected` one labelled
 /// with its level.
 fn draw_line(frame: &mut Frame, b: Rectangle, lane: Lane, colour: iced::Color, ends: ((f32, f64), (f32, f64)), points: &[(f32, f64)], selected: Option<usize>) {
@@ -1942,7 +1956,7 @@ mod tests {
             sounds,
             selected_music: None, selected_point: None,
             video: 10.0, clips_db: 0.0, duration: 10.0, start: 0.0, span: 10.0, position: 0.0,
-            selected: None, current: None, overlays: vec![], texts: vec![], selected_overlay: None, drag_epoch: 0, step_note: None,
+            selected: None, current: None, overlays: vec![], texts: vec![], selected_overlay: None, drag_epoch: 0, step_note: None, selected_mark: None,
             rows: Rows::new(1.0, false, Folds { sfx2: false, ..Folds::default() }),
             listen: Default::default(),
             check_marks: vec![],
@@ -2179,19 +2193,143 @@ fn ruler_label(t: f64, step: f64) -> String {
 #[derive(Default)]
 pub struct RulerState {
     dragging: bool,
+}
+
+/// Markers' colour: apart from the playhead's and the lanes'.
+const MARK: iced::Color = iced::Color::from_rgb(0.97, 0.40, 0.66);
+
+/// How far either side of a marker's flag a press takes it.
+const MARK_REACH: f32 = 7.0;
+
+/// The markers' row over the ruler, open and folded (the user, 2026-11-03:
+/// flags on the ruler were covered by the playhead's head).
+pub const FLAGS_OPEN: f32 = 24.0;
+pub const FLAGS_FOLDED: f32 = 8.0;
+
+/// The markers' row: a flag on each marker's pole, its note beside it,
+/// over the ruler where the playhead's head doesn't cover them. A click
+/// selects one and puts the playhead there (Del then takes the marker,
+/// not the cut), a drag moves it within its cut, a double- or right-click
+/// opens its window; the name at the left folds the row to a strip.
+pub struct Flags(pub Arc<Timeline>);
+
+#[derive(Default)]
+pub struct FlagsState {
     /// A marker being dragged: its cut and its clip time now.
     mark: Option<(usize, f64)>,
     /// The last press on a flag, for a double-click.
-    flag_click: Option<(std::time::Instant, usize, f64)>,
+    click: Option<(std::time::Instant, usize, f64)>,
     /// `Timeline::drag_epoch` when the press began (Esc drops the drag).
     epoch: u64,
 }
 
-/// Markers' colour on the ruler: apart from the playhead's and the lanes'.
-const MARK: iced::Color = iced::Color::from_rgb(0.94, 0.36, 0.62);
+impl Flags {
+    /// Whether `p` is on the row's name (which folds it).
+    fn on_name(p: Point) -> bool {
+        p.x <= PICK + 82.0
+    }
+}
 
-/// How far either side of a marker's flag a press takes it.
-const MARK_REACH: f32 = 6.0;
+impl canvas::Program<Message> for Flags {
+    type State = FlagsState;
+
+    fn draw(&self, _: &FlagsState, renderer: &Renderer, theme: &Theme, bounds: Rectangle, _: mouse::Cursor) -> Vec<Geometry> {
+        let t = &self.0;
+        let mut frame = Frame::new(renderer, bounds.size());
+        let h = bounds.height;
+        frame.fill(&Path::rectangle(Point::ORIGIN, bounds.size()), theme.extended_palette().background.weak.color.scale_alpha(0.4));
+        let flags = t.flags(bounds);
+        let outline = Stroke::default().with_width(1.0).with_color(iced::Color::from_rgba(0.0, 0.0, 0.0, 0.8));
+        for (n, &(cut, mt, x, note)) in flags.iter().enumerate() {
+            let chosen = t.selected_mark.is_some_and(|(c, m)| c == cut && (m - mt).abs() < crate::model::ops::cuts::SAME_MARK);
+            frame.fill(&Path::rectangle(Point::new(x - 0.9, 0.0), Size::new(1.8, h)), MARK);
+            if t.folds.marks {
+                frame.fill(&Path::rectangle(Point::new(x - 2.5, 0.0), Size::new(5.0, h)), MARK);
+                continue;
+            }
+            // 15 % bigger than they were on the ruler, outlined to stand off.
+            let w = 9.5;
+            let pennant = Path::new(|p| {
+                p.move_to(Point::new(x, 2.0));
+                p.line_to(Point::new(x + w, 2.0 + w * 0.6));
+                p.line_to(Point::new(x, 2.0 + w * 1.2));
+                p.close();
+            });
+            frame.fill(&pennant, if chosen { iced::Color::WHITE } else { MARK });
+            frame.stroke(&pennant, if chosen { Stroke::default().with_width(2.0).with_color(MARK) } else { outline });
+            let room = flags.get(n + 1).map_or(bounds.width, |f| f.2) - x - w - 8.0;
+            let fits = (room / 7.0).max(0.0) as usize;
+            if !note.is_empty() && fits >= 3 {
+                let shown: String = if note.chars().count() > fits { note.chars().take(fits - 1).chain(std::iter::once('…')).collect() } else { note.to_owned() };
+                let wide = shown.chars().count() as f32 * 6.9 + 8.0;
+                frame.fill(&Path::rounded_rectangle(Point::new(x + w + 2.0, h / 2.0 - 8.0), Size::new(wide, 16.0), 3.0.into()), iced::Color::from_rgba(0.0, 0.0, 0.0, 0.65));
+                frame.fill_text(Text { content: shown, position: Point::new(x + w + 6.0, h / 2.0), color: MARK, size: 12.5.into(), align_y: Vertical::Center, ..Default::default() });
+            }
+        }
+        if !t.folds.marks {
+            lane_tag(&mut frame, "▾ Markers", MARK, h / 2.0);
+        } else {
+            frame.fill_text(Text { content: "▸ Markers".into(), position: Point::new(PICK + 4.0, h / 2.0), color: MARK, size: 9.0.into(), align_y: Vertical::Center, ..Default::default() });
+        }
+        vec![frame.into_geometry()]
+    }
+
+    fn update(&self, state: &mut FlagsState, event: &iced::Event, bounds: Rectangle, cursor: mouse::Cursor) -> Option<canvas::Action<Message>> {
+        use iced::Event::Mouse;
+        let t = &self.0;
+        // Esc cancelled the drag in the app: let it go.
+        if state.epoch != t.drag_epoch {
+            (state.epoch, state.mark) = (t.drag_epoch, None);
+        }
+        match event {
+            Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
+                let p = cursor.position_in(bounds)?;
+                let flag = t.flags(bounds).into_iter().find(|f| (f.2 - p.x).abs() <= MARK_REACH);
+                let Some((cut, mt, ..)) = flag else {
+                    return Flags::on_name(p).then(|| canvas::Action::publish(Message::Fold(FoldLane::Marks, !t.folds.marks)).and_capture());
+                };
+                // Twice on it: its window, to name or delete it.
+                let again = state.click.is_some_and(|(at, c, m)| c == cut && m == mt && at.elapsed() < DOUBLE_CLICK);
+                state.click = Some((std::time::Instant::now(), cut, mt));
+                if again {
+                    return Some(canvas::Action::publish(Message::MarkEdit(cut, mt)).and_capture());
+                }
+                state.mark = Some((cut, mt));
+                Some(canvas::Action::publish(Message::MarkSelect(cut, mt)).and_capture())
+            }
+            Mouse(mouse::Event::CursorMoved { position }) => {
+                let (cut, from) = state.mark?;
+                let c = t.blocks.get(cut)?;
+                let to = (c.start + t.t(position.x - bounds.x, bounds) - c.from).clamp(c.start, c.start + c.len);
+                state.mark = Some((cut, to));
+                Some(canvas::Action::publish(Message::MarkMove(cut, from, to)).and_capture())
+            }
+            Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => {
+                state.mark.take()?;
+                Some(canvas::Action::publish(Message::ScrubDone).and_capture())
+            }
+            Mouse(mouse::Event::ButtonPressed(mouse::Button::Right)) => {
+                let p = cursor.position_in(bounds)?;
+                let (cut, mt, ..) = t.flags(bounds).into_iter().find(|f| (f.2 - p.x).abs() <= MARK_REACH)?;
+                Some(canvas::Action::publish(Message::MarkEdit(cut, mt)).and_capture())
+            }
+            _ => None,
+        }
+    }
+
+    fn mouse_interaction(&self, state: &FlagsState, bounds: Rectangle, cursor: mouse::Cursor) -> mouse::Interaction {
+        let Some(p) = cursor.position_in(bounds) else { return mouse::Interaction::default() };
+        if state.mark.is_some() {
+            mouse::Interaction::Grabbing
+        } else if self.0.flags(bounds).iter().any(|f| (f.2 - p.x).abs() <= MARK_REACH) {
+            mouse::Interaction::Grab
+        } else if Flags::on_name(p) {
+            mouse::Interaction::Pointer
+        } else {
+            mouse::Interaction::default()
+        }
+    }
+}
 
 impl canvas::Program<Message> for Ruler {
     type State = RulerState;
@@ -2229,24 +2367,10 @@ impl canvas::Program<Message> for Ruler {
             let (a, b) = (t.x(from, bounds), t.x(to, bounds).max(t.x(from, bounds) + 3.0));
             frame.fill(&Path::rectangle(Point::new(a, h - 3.0), Size::new(b - a, 3.0)), colour);
         }
-        // The markers: a line down the ruler, a flag at its top, its note
-        // after it while there's room before the next.
-        let flags = t.flags(bounds);
-        for (n, &(_, _, x, note)) in flags.iter().enumerate() {
-            frame.fill(&Path::rectangle(Point::new(x - 0.75, 0.0), Size::new(1.5, h)), MARK);
-            let w = if large { 7.0 } else { 5.0 };
-            frame.fill(&Path::new(|p| {
-                p.move_to(Point::new(x, 0.0));
-                p.line_to(Point::new(x + w, w * 0.6));
-                p.line_to(Point::new(x, w * 1.2));
-                p.close();
-            }), MARK);
-            let room = flags.get(n + 1).map_or(bounds.width, |f| f.2) - x - w - 6.0;
-            let fits = (room / 6.0).max(0.0) as usize;
-            if !note.is_empty() && fits >= 3 {
-                let shown: String = if note.chars().count() > fits { note.chars().take(fits - 1).chain(std::iter::once('…')).collect() } else { note.to_owned() };
-                frame.fill_text(Text { content: shown, position: Point::new(x + w + 2.0, if large { h * 0.5 } else { h * 0.5 }), color: MARK, size: (if large { 11.0 } else { 9.0 }).into(), align_y: Vertical::Center, ..Default::default() });
-            }
+        // The markers' poles: their flags fly in the row above (`Flags`),
+        // clear of the playhead's head.
+        for f in t.flags(bounds) {
+            frame.fill(&Path::rectangle(Point::new(f.2 - 0.75, 0.0), Size::new(1.5, h)), MARK.scale_alpha(0.8));
         }
         // The playhead's head: a tab to drag, its line on down the lanes.
         let at = t.x(t.position, bounds);
@@ -2265,48 +2389,16 @@ impl canvas::Program<Message> for Ruler {
 
     fn update(&self, state: &mut RulerState, event: &iced::Event, bounds: Rectangle, cursor: mouse::Cursor) -> Option<canvas::Action<Message>> {
         use iced::Event::Mouse;
-        let t = &self.0;
-        // Esc cancelled the drag in the app: let it go.
-        if state.epoch != t.drag_epoch {
-            (state.epoch, state.dragging, state.mark) = (t.drag_epoch, false, None);
-        }
         match event {
             Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
                 let p = cursor.position_in(bounds)?;
                 state.dragging = true;
-                // On a marker's flag: the playhead to it, and a drag moves it.
-                if let Some(&(cut, mt, x, _)) = t.flags(bounds).iter().find(|f| (f.2 - p.x).abs() <= MARK_REACH) {
-                    // Twice on it: its window, to name or delete it.
-                    let again = state.flag_click.is_some_and(|(at, c, m)| c == cut && m == mt && at.elapsed() < DOUBLE_CLICK);
-                    state.flag_click = Some((std::time::Instant::now(), cut, mt));
-                    if again {
-                        state.dragging = false;
-                        return Some(canvas::Action::publish(Message::MarkEdit(cut, mt)).and_capture());
-                    }
-                    state.mark = Some((cut, mt));
-                    return Some(canvas::Action::publish(Message::Scrub(t.t(x, bounds))).and_capture());
-                }
-                Some(canvas::Action::publish(Message::Scrub(t.t(p.x, bounds))).and_capture())
+                Some(canvas::Action::publish(Message::Scrub(self.0.t(p.x, bounds))).and_capture())
             }
-            Mouse(mouse::Event::CursorMoved { position }) if state.dragging => {
-                let x = position.x - bounds.x;
-                if let Some((cut, from)) = state.mark {
-                    let c = t.blocks.get(cut)?;
-                    let to = (c.start + t.t(x, bounds) - c.from).clamp(c.start, c.start + c.len);
-                    state.mark = Some((cut, to));
-                    return Some(canvas::Action::publish(Message::MarkMove(cut, from, to)).and_capture());
-                }
-                Some(canvas::Action::publish(Message::Scrub(t.t(x, bounds))).and_capture())
-            }
+            Mouse(mouse::Event::CursorMoved { position }) if state.dragging => Some(canvas::Action::publish(Message::Scrub(self.0.t(position.x - bounds.x, bounds))).and_capture()),
             Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) if state.dragging => {
-                (state.dragging, state.mark) = (false, None);
+                state.dragging = false;
                 Some(canvas::Action::publish(Message::ScrubDone).and_capture())
-            }
-            // A right-click on a flag: its window.
-            Mouse(mouse::Event::ButtonPressed(mouse::Button::Right)) => {
-                let p = cursor.position_in(bounds)?;
-                let &(cut, mt, ..) = t.flags(bounds).iter().find(|f| (f.2 - p.x).abs() <= MARK_REACH)?;
-                Some(canvas::Action::publish(Message::MarkEdit(cut, mt)).and_capture())
             }
             _ => None,
         }
@@ -2315,10 +2407,6 @@ impl canvas::Program<Message> for Ruler {
     fn mouse_interaction(&self, state: &RulerState, bounds: Rectangle, cursor: mouse::Cursor) -> mouse::Interaction {
         if state.dragging {
             mouse::Interaction::Grabbing
-        } else if let Some(p) = cursor.position_in(bounds)
-            && self.0.flags(bounds).iter().any(|f| (f.2 - p.x).abs() <= MARK_REACH)
-        {
-            mouse::Interaction::Grab
         } else if cursor.position_in(bounds).is_some() {
             mouse::Interaction::Pointer
         } else {
@@ -2334,6 +2422,8 @@ pub enum FoldLane {
     Text,
     Overlay,
     Sfx2,
+    /// The markers' row over the ruler.
+    Marks,
 }
 
 /// Which of them are folded.
@@ -2342,11 +2432,12 @@ pub struct Folds {
     pub text: bool,
     pub overlay: bool,
     pub sfx2: bool,
+    pub marks: bool,
 }
 
 impl Default for Folds {
     fn default() -> Self {
-        Folds { text: true, overlay: true, sfx2: true }
+        Folds { text: true, overlay: true, sfx2: true, marks: false }
     }
 }
 
@@ -2356,6 +2447,7 @@ impl Folds {
             FoldLane::Text => &mut self.text,
             FoldLane::Overlay => &mut self.overlay,
             FoldLane::Sfx2 => &mut self.sfx2,
+            FoldLane::Marks => &mut self.marks,
         } = folded;
     }
 }

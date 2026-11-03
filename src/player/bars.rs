@@ -303,6 +303,7 @@ impl App {
             texts: self.overlay_blocks(crate::overlay::Track::Text),
             selected_overlay: self.selection.item(&self.edit),
             drag_epoch: self.drag_epoch,
+            selected_mark: self.selection.mark(&self.edit),
             step_note: self.step_note.map(|(n, _)| n),
             rows: timeline::Rows::new(self.split, self.framing, self.folds),
         }

@@ -47,7 +47,7 @@ const GROUPS: &[(&str, &[(&str, &str)])] = &[
             ("drag a level tag", "the clip's own level; double-click: back to normal"),
             ("right-click", "the sound or overlay menu"),
             ("drag a diamond or mark", "move the keyframe in time"),
-            ("click / drag a marker's flag", "go to it / move it (on the ruler)"),
+            ("click / drag a marker's flag", "select it, go to it / move it (the row over the ruler)"),
             ("double- or right-click a flag", "name the marker, or delete it"),
             ("scroll  /  Shift+scroll", "zoom the timeline / pan it"),
             ("Ctrl+= / Ctrl+− / Ctrl+0", "zoom in / out / the whole edit"),

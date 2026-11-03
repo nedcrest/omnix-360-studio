@@ -22,6 +22,8 @@ pub enum Selection {
     Point(SoundRef, f64),
     /// An overlay or text item, in the lane of its track the player shows.
     Item(Id),
+    /// The marker at clip time `.1` on cut `.0`.
+    Mark(Id, f64),
 }
 
 impl Selection {
@@ -46,6 +48,19 @@ impl Selection {
     /// Item `r` (in the lane the player shows) of `p`.
     pub fn item_at(p: &Project, r: ItemRef) -> Self {
         p.item(r).map_or(Selection::None, |it| Selection::Item(it.id))
+    }
+
+    /// The marker at clip time `t` on cut `i` of `p`.
+    pub fn mark_at(p: &Project, i: usize, t: f64) -> Self {
+        p.cuts.get(i).map_or(Selection::None, |c| Selection::Mark(c.id, t))
+    }
+
+    /// The selected marker's cut (its place in `p`) and clip time.
+    pub fn mark(self, p: &Project) -> Option<(usize, f64)> {
+        let Selection::Mark(id, t) = self else { return None };
+        let i = p.cuts.iter().position(|c| c.id == id)?;
+        let m = p.cuts[i].marks.iter().find(|m| (m.t - t).abs() < super::ops::cuts::SAME_MARK)?;
+        Some((i, m.t))
     }
 
     /// Where the selected cut is in `p`.
@@ -96,6 +111,7 @@ impl Selection {
             Selection::Clip(_) => self.clip(p).is_some(),
             Selection::Point(..) => self.point(p).is_some(),
             Selection::Item(_) => self.item(p).is_some(),
+            Selection::Mark(..) => self.mark(p).is_some(),
         };
         if there { self } else { Selection::None }
     }
@@ -115,6 +131,7 @@ impl Edit {
             Selection::Clip(clip) => Op::Clip(ClipOp::Delete { clip }),
             Selection::Point(sound, t) => Op::Sound(SoundOp::DeletePoint { sound, t }),
             Selection::Item(item) => Op::Item(ItemOp::Delete { item }),
+            Selection::Mark(cut, t) => Op::Cut(CutOp::Unmark { cut, t }),
         };
         self.apply(&op).is_ok()
     }

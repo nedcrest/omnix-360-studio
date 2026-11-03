@@ -518,4 +518,17 @@ mod tests {
         let _ = app.update(Message::Undo);
         assert_eq!(app.edit.cuts.len(), 2, "back after a marker drag");
     }
+
+    /// A flag clicked selects its marker: Del then takes the marker, not
+    /// the cut under the playhead (the user, 2026-11-03).
+    #[test]
+    fn del_after_a_flag_s_click_takes_the_marker() {
+        let mut app = app();
+        let cut = app.edit.cuts[0].id;
+        app.edit.apply(&crate::model::ops::Op::Cut(crate::model::ops::cuts::CutOp::Mark { cut, t: 1.0, note: String::new() })).unwrap();
+        let _ = app.update(Message::MarkSelect(0, 1.0));
+        let _ = app.update(Message::DeleteCut);
+        assert_eq!((app.edit.cuts.len(), app.edit.cuts[0].marks.len()), (2, 0));
+        assert_eq!(app.toast.map(|t| t.0), Some("Marker deleted"));
+    }
 }

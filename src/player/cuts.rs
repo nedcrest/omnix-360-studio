@@ -169,6 +169,7 @@ impl App {
                     Selection::Clip(..) => "Sound deleted",
                     Selection::Point(..) => "Point deleted",
                     Selection::Item(_) => "Overlay deleted",
+                    Selection::Mark(..) => "Marker deleted",
                     Selection::None => return Task::none(),
                 };
                 let at = s.cut(&self.edit);
@@ -198,11 +199,21 @@ impl App {
             }
             Message::MarkMove(i, from, t) => {
                 let Some(cut) = self.edit.cuts.get(i).map(|c| c.id) else { return Task::none() };
-                // One undo step for the drag; the playhead follows the flag.
+                // One undo step for the drag; the playhead follows the flag,
+                // and the selection (it names the marker by its time).
                 self.edit.begin();
                 self.op(Op::Cut(CutOp::MoveMark { cut, from, t }));
+                self.selection = Selection::Mark(cut, t);
                 self.follow = true;
                 self.scrub_to(i, t);
+            }
+            Message::MarkSelect(i, t) => {
+                self.selection = Selection::mark_at(&self.edit, i, t);
+                self.follow = true;
+                let at = self.edit.edit_time(i, t);
+                if let Some((i, t)) = self.edit.locate(at) {
+                    self.goto(i, t, false);
+                }
             }
             Message::StepsRested(n) => {
                 if n == self.steps {

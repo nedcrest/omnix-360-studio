@@ -60,6 +60,8 @@ pub struct Settings {
     pub ruler_large: bool,
     /// The bars' groups named above their buttons.
     pub bar_labels: bool,
+    /// Timeline drags snap to joins, markers and edges (N).
+    pub snapping: bool,
     /// The Text, Overlay and SFX 2 lanes folded to a thin row.
     pub fold_text: bool,
     pub fold_overlay: bool,
@@ -105,6 +107,7 @@ impl Default for Settings {
             duck_db: 18.0,
             ruler_large: true,
             bar_labels: false,
+            snapping: true,
             fold_text: true,
             fold_overlay: true,
             fold_sfx2: true,

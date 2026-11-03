@@ -155,6 +155,8 @@ const DRAG_FROM: f32 = 4.0;
 /// sound's edge snaps to it; Shift lets it go free, so the reach can be
 /// generous (user, 2026-11-03: 8 px was fiddly).
 const SNAP: f32 = 12.0;
+/// The line where a drag snapped: bright, apart from the playhead's colour.
+const SNAP_LINE: iced::Color = iced::Color::from_rgb(1.0, 0.85, 0.25);
 /// The volume line's range, dB, top to bottom of its lane (the bottom is
 /// silence), and a volume point's radius.
 const VOLUME_TOP: f64 = 6.0;
@@ -340,6 +342,37 @@ pub struct Timeline {
     pub ruler: f32,
     /// Which foldable lanes are folded to a thin row.
     pub folds: Folds,
+    /// Whether drags snap: N turns it off, Shift held lets one go free.
+    pub snapping: bool,
+    /// Where the drag under way has snapped, edit time: a line there
+    /// through every lane.
+    pub snap_line: Option<f64>,
+}
+
+/// What a snap target belongs to, so a drag never snaps to its own edges
+/// (or to what moves with it).
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Of {
+    Edit,
+    Playhead,
+    /// A cut's picture edge, its sound's edge, its markers.
+    Cut(usize),
+    CutSound(usize),
+    Mark(usize),
+    Sound(usize, usize),
+    Item(Track, usize),
+}
+
+/// The line where a drag has snapped, top to bottom of a canvas `h` high.
+fn draw_snap_line(frame: &mut Frame, t: &Timeline, b: Rectangle, h: f32) {
+    let Some(at) = t.snap_line else { return };
+    let x = t.x(at, b);
+    frame.fill(&Path::rectangle(Point::new(x - 1.0, 0.0), Size::new(2.0, h)), SNAP_LINE);
+}
+
+/// A message from a drag that may have snapped, with where (`Message::Snapped`).
+fn snapped(at: Option<(f64, f64)>, message: impl FnOnce(f64) -> Message) -> Message {
+    Message::Snapped(at.map(|(_, to)| to), Box::new(message(at.map_or(0.0, |(by, _)| by))))
 }
 
 #[derive(Default)]
@@ -662,38 +695,41 @@ impl Timeline {
     /// `lane`'s own: the start, the cut boundaries, the playhead, and every
     /// other sound clip's edges on any lane (an effect lines up with a beat
     /// of the song).
-    fn snap_targets(&self, lane: usize, clip: usize) -> Vec<f64> {
-        let mut at = vec![0.0, self.position];
-        at.extend(self.blocks.iter().flat_map(|c| [c.from, c.from + c.len]));
+    /// Where things snap, edit times, and whose they are: the edit's ends,
+    /// the playhead, the pictures' joins, cuts' sounds split from their
+    /// pictures, markers, sound clips, overlays and text.
+    fn snap_targets(&self) -> Vec<(f64, Of)> {
+        let mut at = vec![(0.0, Of::Edit), (self.duration, Of::Edit), (self.position, Of::Playhead)];
+        for (i, c) in self.blocks.iter().enumerate() {
+            at.extend([(c.from, Of::Cut(i)), (c.from + c.len, Of::Cut(i))]);
+            if c.sound_before != 0.0 || c.sound_after != 0.0 {
+                at.extend([(c.from - c.sound_before, Of::CutSound(i)), (c.from + c.len + c.sound_after, Of::CutSound(i))]);
+            }
+            at.extend(c.marks.iter().filter(|(t, _)| *t >= c.start && *t <= c.start + c.len).map(|(t, _)| (c.from + t - c.start, Of::Mark(i))));
+        }
         for (li, l) in self.sounds.iter().enumerate() {
-            at.extend(l.blocks.iter().enumerate().filter(|&(i, _)| (li, i) != (lane, clip)).flat_map(|(_, m)| [m.from, m.from + m.len]));
+            at.extend(l.blocks.iter().enumerate().flat_map(|(i, m)| [(m.from, Of::Sound(li, i)), (m.from + m.len, Of::Sound(li, i))]));
+        }
+        for (track, items) in [(Track::Overlay, &self.overlays), (Track::Text, &self.texts)] {
+            at.extend(items.iter().enumerate().flat_map(|(i, o)| [(o.from, Of::Item(track, i)), (o.from + o.len, Of::Item(track, i))]));
         }
         at
     }
 
-    /// How far to shift any of `edges` (edit times) onto the nearest snap
-    /// target within `SNAP` pixels, or 0.
-    fn snap(&self, lane: usize, clip: usize, edges: &[f64], per_px: f64) -> f64 {
+    /// The nearest snap within `SNAP` pixels for any of `edges` (edit
+    /// times), skipping targets `own` says move with the drag: how far to
+    /// shift, and where it lands. None while snapping is off or Shift held.
+    fn snap(&self, edges: &[f64], per_px: f64, own: impl Fn(Of) -> bool) -> Option<(f64, f64)> {
+        if !self.snapping {
+            return None;
+        }
         let reach = SNAP as f64 * per_px;
-        self.snap_targets(lane, clip)
-            .iter()
-            .flat_map(|t| edges.iter().map(move |e| t - e))
-            .filter(|d| d.abs() < reach)
-            .min_by(|a, b| a.abs().total_cmp(&b.abs()))
-            .unwrap_or(0.0)
-    }
-
-    /// How far to shift cut `cut`'s sound edge at edit time `edge` onto the
-    /// nearest of: a join of the pictures (its own edges too, so it comes
-    /// back to its picture), another cut's sound edge, a sound clip's edge,
-    /// the playhead, within `SNAP` pixels; or 0.
-    fn sound_snap(&self, cut: usize, edge: f64, per_px: f64) -> f64 {
-        let reach = SNAP as f64 * per_px;
-        let mut at = vec![0.0, self.position];
-        at.extend(self.blocks.iter().flat_map(|c| [c.from, c.from + c.len]));
-        at.extend(self.blocks.iter().enumerate().filter(|&(i, _)| i != cut).flat_map(|(_, c)| [c.from - c.sound_before, c.from + c.len + c.sound_after]));
-        at.extend(self.sounds.iter().flat_map(|l| l.blocks.iter().flat_map(|m| [m.from, m.from + m.len])));
-        at.iter().map(|t| t - edge).filter(|d| d.abs() < reach).min_by(|a, b| a.abs().total_cmp(&b.abs())).unwrap_or(0.0)
+        self.snap_targets()
+            .into_iter()
+            .filter(|&(_, of)| !own(of))
+            .flat_map(|(t, _)| edges.iter().map(move |e| (t - e, t)))
+            .filter(|(d, _)| d.abs() < reach)
+            .min_by(|a, b| a.0.abs().total_cmp(&b.0.abs()))
     }
 
     /// Where a moved cut would land: before the first cut whose middle is
@@ -1191,8 +1227,18 @@ impl canvas::Program<Message> for OverlayLane {
                 let x = position.x - bounds.x;
                 let message = match drag {
                     OverlayDrag::None => return None,
-                    OverlayDrag::Move { item, x0, at, per_px } => Message::OverlayMove((self.1, *item), *at + (x - *x0) as f64 * *per_px),
-                    OverlayDrag::Trim { item, start, x0, from, per_px } => Message::OverlayTrim((self.1, *item), *start, *from + (x - *x0) as f64 * *per_px),
+                    OverlayDrag::Move { item, x0, at, per_px } => {
+                        let (track, item) = (self.1, *item);
+                        let at = *at + (x - *x0) as f64 * *per_px;
+                        let len = self.blocks()[item].len;
+                        snapped(t.snap(&[at, at + len], *per_px, |of| of == Of::Item(track, item)), |by| Message::OverlayMove((track, item), at + by))
+                    }
+                    OverlayDrag::Trim { item, start, x0, from, per_px } => {
+                        let (track, item, start) = (self.1, *item, *start);
+                        let own_t = *from + (x - *x0) as f64 * *per_px;
+                        let o = &self.blocks()[item];
+                        snapped(t.snap(&[o.from - o.start + own_t], *per_px, |of| of == Of::Item(track, item)), |by| Message::OverlayTrim((track, item), start, own_t + by))
+                    }
                     OverlayDrag::Key { item, effects, key } => {
                         let o = &self.blocks()[*item];
                         let at = self.0.t(x, bounds).clamp(o.from, o.from + o.len);
@@ -1294,6 +1340,7 @@ impl canvas::Program<Message> for OverlayLane {
         if let (Some(p), Some(said)) = (cursor.position_in(bounds), said) {
             readout(&mut frame, bounds, p, &said);
         }
+        draw_snap_line(&mut frame, t, bounds, bounds.height);
         vec![frame.into_geometry()]
     }
 
@@ -1697,7 +1744,10 @@ impl canvas::Program<Message> for Marks {
                 let x = position.x - bounds.x;
                 let message = match drag {
                     Drag::None => return None,
-                    Drag::Playhead => Message::Scrub(self.t(x, bounds)),
+                    Drag::Playhead => {
+                        let t = self.t(x, bounds);
+                        snapped(self.snap(&[t], self.span / Timeline::width(bounds) as f64, |of| of == Of::Playhead), |by| Message::Scrub(t + by))
+                    }
                     Drag::Key { cut, key } => {
                         let c = &self.blocks[*cut];
                         let edit_t = self.t(x, bounds).clamp(c.from, c.from + c.len);
@@ -1708,14 +1758,23 @@ impl canvas::Program<Message> for Marks {
                         let edit_t = self.t(x, bounds).clamp(c.from, c.from + c.len);
                         Message::Effect(super::effects::EffectMsg::KeyMove(*cut, *key, c.start + edit_t - c.from))
                     }
-                    Drag::Trim { cut, start, x0, from, per_px } => Message::Trim(*cut, *start, *from + (x - *x0) as f64 * *per_px),
+                    Drag::Trim { cut, start, x0, from, per_px } => {
+                        let t = *from + (x - *x0) as f64 * *per_px;
+                        // Its out edge snaps; what comes after it moves with
+                        // it. Its in edge stays put on screen as it trims.
+                        let c = &self.blocks[*cut];
+                        let at = (!*start).then(|| self.snap(&[c.from + t - c.start], *per_px, |of| matches!(of, Of::Cut(j) | Of::CutSound(j) | Of::Mark(j) if j >= *cut))).flatten();
+                        let (cut, start) = (*cut, *start);
+                        snapped(at, |by| Message::Trim(cut, start, t + by))
+                    }
                     Drag::SoundEdge { cut, start, x0, from, per_px } => {
-                        // Onto a join or a neighbour's sound edge, unless
-                        // Shift is held for a free place.
+                        // Onto a join (its own picture's too, back home) or a
+                        // neighbour's sound edge.
                         let t = *from + (x - *x0) as f64 * *per_px;
                         let c = &self.blocks[*cut];
-                        let snap = if state.shift { 0.0 } else { self.sound_snap(*cut, c.from + t - c.start, *per_px) };
-                        Message::SoundEdge(*cut, *start, t + snap)
+                        let at = self.snap(&[c.from + t - c.start], *per_px, |of| of == Of::CutSound(*cut));
+                        let (cut, start) = (*cut, *start);
+                        snapped(at, |by| Message::SoundEdge(cut, start, t + by))
                     }
                     Drag::Move { x0, moved, to, .. } => {
                         *moved |= (x - *x0).abs() > DRAG_FROM;
@@ -1726,7 +1785,9 @@ impl canvas::Program<Message> for Marks {
                     Drag::MusicMove { lane, clip, x0, at, per_px } => {
                         let at = *at + (x - *x0) as f64 * *per_px;
                         let len = self.sounds[*lane].blocks[*clip].len;
-                        Message::MusicMove(self.sounds[*lane].which, *clip, at + self.snap(*lane, *clip, &[at, at + len], *per_px), state.shift)
+                        let (lane, clip, overlap) = (*lane, *clip, state.shift);
+                        let to = self.snap(&[at, at + len], *per_px, |of| of == Of::Sound(lane, clip));
+                        snapped(to, |by| Message::MusicMove(self.sounds[lane].which, clip, at + by, overlap))
                     }
                     Drag::Crossfade { cut, x0, from, per_px } => Message::Crossfade(*cut, *from + (*x0 - x) as f64 * *per_px),
                     Drag::Fade { own, in_edge, x0, from, per_px } => {
@@ -1751,7 +1812,9 @@ impl canvas::Program<Message> for Marks {
                         let m = &self.sounds[*lane].blocks[*clip];
                         let t = *from + (x - *x0) as f64 * *per_px;
                         let to_edit = m.from - m.start;
-                        Message::MusicTrim(self.sounds[*lane].which, *clip, *start, t + self.snap(*lane, *clip, &[t + to_edit], *per_px), state.shift)
+                        let (lane, clip, start, overlap) = (*lane, *clip, *start, state.shift);
+                        let to = self.snap(&[t + to_edit], *per_px, |of| of == Of::Sound(lane, clip));
+                        snapped(to, |by| Message::MusicTrim(self.sounds[lane].which, clip, start, t + by, overlap))
                     }
                 };
                 Some(canvas::Action::publish(message).and_capture())
@@ -1865,6 +1928,7 @@ impl canvas::Program<Message> for Marks {
         if let Some(note) = self.step_note {
             readout(&mut frame, bounds, Point::new(at - 14.0, 30.0), note);
         }
+        draw_snap_line(&mut frame, self, bounds, self.rows.height);
         vec![frame.into_geometry()]
     }
 
@@ -2032,6 +2096,8 @@ mod tests {
             check_marks: vec![],
             ruler: RULER_LARGE,
             folds: Folds::default(),
+            snapping: true,
+            snap_line: None,
         };
         (t, Rectangle::new(Point::ORIGIN, Size::new(1000.0 + 2.0 * PICK, 300.0)))
     }
@@ -2056,15 +2122,28 @@ mod tests {
     }
 
     #[test]
-    fn a_sound_edge_snaps_to_joins_and_the_next_cuts_sound() {
+    fn drags_snap_to_joins_sounds_and_markers_but_not_their_own_edges() {
         let (mut t, _) = timeline();
         // 100 px a second: a join 10 px off is taken, one 20 px off isn't.
         let per_px = 0.01;
-        assert!((t.sound_snap(0, 7.1, per_px) - -0.1).abs() < 1e-9);
-        assert_eq!(t.sound_snap(0, 7.2, per_px), 0.0);
-        // The next cut's sound starting half a second early, at 6.5 s.
+        let any = |_: Of| false;
+        let by = |s: Option<(f64, f64)>| s.map(|(by, _)| (by * 1000.0).round() / 1000.0);
+        assert_eq!(by(t.snap(&[7.1], per_px, any)), Some(-0.1));
+        assert_eq!(by(t.snap(&[7.25], per_px, any)), None);
+        // The next cut's sound starting half a second early, at 6.5 s, and
+        // a marker on the first cut at 1.5 s.
         t.blocks[2].sound_before = 0.5;
-        assert!((t.sound_snap(0, 6.47, per_px) - 0.03).abs() < 1e-9);
+        t.blocks[0].marks = vec![(1.5, String::new())];
+        assert_eq!(by(t.snap(&[6.47], per_px, any)), Some(0.03));
+        assert_eq!(by(t.snap(&[1.45], per_px, any)), Some(0.05));
+        // Its own edges aren't targets: the Voice clip (2..6) dragged by
+        // its start near 2 doesn't snap back onto itself.
+        let li = t.sounds.iter().position(|l| l.which == SoundTrack::Voice).unwrap();
+        assert_eq!(by(t.snap(&[2.05], per_px, any)), Some(-0.05));
+        assert_eq!(t.snap(&[2.05], per_px, |of| of == Of::Sound(li, 0)), None);
+        // Off (N, or Shift held): nothing snaps.
+        t.snapping = false;
+        assert_eq!(t.snap(&[7.01], per_px, any), None);
     }
 
     #[test]
@@ -2372,6 +2451,7 @@ impl canvas::Program<Message> for Flags {
         } else {
             frame.fill_text(Text { content: "▸ Markers".into(), position: Point::new(PICK + 4.0, h / 2.0), color: MARK, size: 9.0.into(), align_y: Vertical::Center, ..Default::default() });
         }
+        draw_snap_line(&mut frame, t, bounds, bounds.height);
         vec![frame.into_geometry()]
     }
 
@@ -2401,9 +2481,11 @@ impl canvas::Program<Message> for Flags {
             Mouse(mouse::Event::CursorMoved { position }) => {
                 let (cut, from) = state.mark?;
                 let c = t.blocks.get(cut)?;
-                let to = (c.start + t.t(position.x - bounds.x, bounds) - c.from).clamp(c.start, c.start + c.len);
+                let at = t.t(position.x - bounds.x, bounds);
+                let snap = t.snap(&[at], t.span / Timeline::width(bounds) as f64, |of| of == Of::Mark(cut));
+                let to = (c.start + at + snap.map_or(0.0, |(by, _)| by) - c.from).clamp(c.start, c.start + c.len);
                 state.mark = Some((cut, to));
-                Some(canvas::Action::publish(Message::MarkMove(cut, from, to)).and_capture())
+                Some(canvas::Action::publish(snapped(snap, |_| Message::MarkMove(cut, from, to))).and_capture())
             }
             Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => {
                 state.mark.take()?;
@@ -2485,6 +2567,7 @@ impl canvas::Program<Message> for Ruler {
             p.close();
         });
         frame.fill(&head, palette.primary.strong.color);
+        draw_snap_line(&mut frame, t, bounds, bounds.height);
         vec![frame.into_geometry()]
     }
 

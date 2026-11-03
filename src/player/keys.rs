@@ -138,6 +138,7 @@ impl App {
                     self.selection = self.selection.still_valid(&self.edit);
                 }
                 self.drag_epoch += 1;
+                self.snap_line = None;
                 if self.fullscreen {
                     return self.update(Message::Fullscreen);
                 }
@@ -242,6 +243,8 @@ impl App {
                 // D selects the cut under the playhead (Premiere's key): ↓ to a
                 // cut, D, then Alt+← moves it (gap 58).
                 "d" | "D" if !mods.command() => return self.update(Message::SelectAtPlayhead),
+                // N turns snapping on and off, as in Final Cut.
+                "n" | "N" if !mods.command() => return self.update(Message::Snapping),
                 "m" | "M" if mods.shift() => return self.update(Message::Mute),
                 "m" | "M" => return self.update(Message::AddMark),
                 "p" | "P" => {

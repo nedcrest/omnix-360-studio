@@ -51,6 +51,8 @@ const GROUPS: &[(&str, &[(&str, &str)])] = &[
             ("drag a diamond or mark", "move the keyframe in time"),
             ("click / drag a marker's flag", "select it, go to it / move it (the row over the ruler)"),
             ("double- or right-click a flag", "name the marker, or delete it"),
+            ("N", "snapping on / off (a yellow line where a drag lands)"),
+            ("Shift while dragging", "this drag free, no snapping"),
             ("scroll  /  Shift+scroll", "zoom the timeline / pan it"),
             ("Ctrl+= / Ctrl+− / Ctrl+0", "zoom in / out / the whole edit"),
         ],

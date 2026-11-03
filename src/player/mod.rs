@@ -472,6 +472,11 @@ enum Message {
     RulerLarge(bool),
     /// The bars' group names shown or hidden.
     BarLabels,
+    /// Snapping on the timeline on or off (N).
+    Snapping,
+    /// A timeline drag's message, and where it snapped (edit time), for
+    /// the line drawn there; `None` when it didn't.
+    Snapped(Option<f64>, Box<Message>),
     /// A foldable lane folded (`true`) or opened.
     Fold(timeline::FoldLane, bool),
     Modifiers(keyboard::Modifiers),
@@ -687,6 +692,10 @@ struct App {
     ruler_large: bool,
     /// The bars' groups named above their buttons.
     bar_labels: bool,
+    /// Timeline drags snap (N toggles; Shift held lets one go free).
+    snapping: bool,
+    /// Where the drag under way snapped, edit time: a line drawn there.
+    snap_line: Option<f64>,
     /// Which foldable lanes are folded.
     folds: timeline::Folds,
     ducking: bool,
@@ -777,6 +786,8 @@ impl App {
             duck_db: saved.duck_db.clamp(3.0, 30.0),
             ruler_large: saved.ruler_large,
             bar_labels: saved.bar_labels,
+            snapping: saved.snapping,
+            snap_line: None,
             folds: timeline::Folds { text: saved.fold_text, overlay: saved.fold_overlay, sfx2: saved.fold_sfx2, marks: saved.fold_marks },
             ducking: false,
             listen: Default::default(),
@@ -835,6 +846,7 @@ impl App {
             duck_db: self.duck_db,
             ruler_large: self.ruler_large,
             bar_labels: self.bar_labels,
+            snapping: self.snapping,
             fold_text: self.folds.text,
             fold_overlay: self.folds.overlay,
             fold_sfx2: self.folds.sfx2,
@@ -938,7 +950,7 @@ impl App {
         match message {
             m @ (Message::Open { .. } | Message::Picked { .. } | Message::Loaded { .. } | Message::OpenProject { .. } | Message::NewProject { .. } | Message::CloseRequested { .. } | Message::StopAndClose { .. } | Message::Confirmed { .. } | Message::ProjectPicked { .. } | Message::SaveProjectTo { .. } | Message::SaveProject { .. } | Message::LoadingTick { .. } | Message::Thumb { .. }) => self.on_file(m),
             m @ (Message::Export { .. } | Message::ExportTo { .. } | Message::ExportProgress { .. } | Message::ExportCancel { .. } | Message::PickColour { .. } | Message::PickArea { .. } | Message::AreaPicked { .. } | Message::TrackProgress { .. } | Message::TrackCancel { .. } | Message::Tracked { .. } | Message::ExportDone { .. } | Message::Save { .. } | Message::SaveTo { .. } | Message::Saved { .. }) => self.on_jobs(m),
-            m @ (Message::Resolution { .. } | Message::ExportClips { .. } | Message::ExportGraded { .. } | Message::ExportFormat { .. } | Message::ExportLoudness { .. } | Message::Info { .. } | Message::InfoRead { .. } | Message::InfoClose { .. } | Message::Reveal { .. } | Message::CopyPath { .. } | Message::ExportPanel { .. } | Message::AudioPanel { .. } | Message::SettingsPanel { .. } | Message::Shortcuts { .. } | Message::AutoKey { .. } | Message::SplitDrag { .. } | Message::SplitDone { .. } | Message::SplitReset { .. } | Message::TenBit { .. } | Message::AddLut { .. } | Message::LutPicked { .. } | Message::RemoveLut { .. } | Message::DlogMLut { .. } | Message::UiScale { .. } | Message::ShowAngles { .. } | Message::RulerLarge { .. } | Message::BarLabels | Message::Fold { .. } | Message::Modifiers { .. } | Message::ViewSize { .. } | Message::Aspect { .. } | Message::Theme { .. } | Message::Mute { .. } | Message::Volume { .. } | Message::Fullscreen { .. }) => self.on_panels(m),
+            m @ (Message::Resolution { .. } | Message::ExportClips { .. } | Message::ExportGraded { .. } | Message::ExportFormat { .. } | Message::ExportLoudness { .. } | Message::Info { .. } | Message::InfoRead { .. } | Message::InfoClose { .. } | Message::Reveal { .. } | Message::CopyPath { .. } | Message::ExportPanel { .. } | Message::AudioPanel { .. } | Message::SettingsPanel { .. } | Message::Shortcuts { .. } | Message::AutoKey { .. } | Message::SplitDrag { .. } | Message::SplitDone { .. } | Message::SplitReset { .. } | Message::TenBit { .. } | Message::AddLut { .. } | Message::LutPicked { .. } | Message::RemoveLut { .. } | Message::DlogMLut { .. } | Message::UiScale { .. } | Message::ShowAngles { .. } | Message::RulerLarge { .. } | Message::BarLabels | Message::Snapping | Message::Fold { .. } | Message::Modifiers { .. } | Message::ViewSize { .. } | Message::Aspect { .. } | Message::Theme { .. } | Message::Mute { .. } | Message::Volume { .. } | Message::Fullscreen { .. }) => self.on_panels(m),
             m @ (Message::BinPanel { .. } | Message::BinPin { .. } | Message::BinRefresh { .. } | Message::BinPreview { .. } | Message::BinStop { .. } | Message::BinMeta { .. } | Message::BinFrames { .. } | Message::BinAdd { .. }) => self.on_bin(m),
             m @ (Message::MarkEdit { .. } | Message::MarkNote { .. } | Message::MarkSave | Message::MarkDelete | Message::MarkClose) => self.on_marks(m),
             m @ (Message::Tick { .. } | Message::TimelineZoom { .. } | Message::TimelineZoomTo { .. } | Message::TimelinePan { .. } | Message::Toggle { .. } | Message::Scrub { .. } | Message::ScrubDone { .. }) => self.on_transport(m),
@@ -946,6 +958,10 @@ impl App {
             m @ (Message::LookDone { .. } | Message::Framing { .. } | Message::KeyMove { .. } | Message::KeyAdd { .. } | Message::KeyDelete { .. } | Message::KeyEase { .. } | Message::KeyFollow { .. } | Message::Stab { .. } | Message::Projection { .. } | Message::KeyJump { .. } | Message::Look { .. } | Message::Zoom { .. } | Message::Fov { .. } | Message::AngleInput { .. } | Message::AngleDone { .. } | Message::AngleScrubStart { .. } | Message::AngleScrubDone { .. } | Message::AngleScrub { .. } | Message::AngleNudge { .. } | Message::AngleArrow { .. } | Message::Source { .. } | Message::RollingShutter { .. } | Message::FullOnPause { .. } | Message::ResetView { .. }) => self.on_framing(m),
             m @ (Message::AddOverlay { .. } | Message::OverlayPicked { .. } | Message::OverlaySelect { .. } | Message::OverlayMove { .. } | Message::OverlayTrim { .. } | Message::OverlayJump { .. } | Message::OverlayKeyMove { .. } | Message::OverlayPicture { .. } | Message::AddText { .. }) => self.on_overlay_ui(m),
             m @ (Message::AddSound { .. } | Message::SoundPicked { .. } | Message::SoundProbed { .. } | Message::Waveform { .. } | Message::CutWave { .. } | Message::SelectMusic { .. } | Message::PointAdd { .. } | Message::PointSelect { .. } | Message::PointMove { .. } | Message::MusicMove { .. } | Message::MusicTrim { .. } | Message::Fade { .. } | Message::Level { .. } | Message::Listen { .. } | Message::SoundLevel { .. } | Message::TrackLevel { .. } | Message::DuckDepth { .. } | Message::Duck { .. } | Message::Ducked { .. } | Message::LevelDone { .. }) => self.on_tracks(m),
+            Message::Snapped(at, inner) => {
+                self.snap_line = at;
+                self.update(*inner)
+            }
             Message::Effect(e) => {
                 self.effect_message(e);
                 Task::none()

@@ -283,6 +283,8 @@ impl App {
             listen: self.listen,
             check_marks: self.check_marks(),
             ruler: if self.ruler_large { timeline::RULER_LARGE } else { timeline::RULER_COMPACT },
+            snapping: self.snapping && !self.modifiers.shift(),
+            snap_line: self.snap_line,
             folds: self.folds,
             video: self.edit.duration(),
             clips_db: self.edit.sound.volume,
@@ -423,6 +425,11 @@ impl App {
                 ),
                 tip(icon_button(ZOOM_IN, Some(Message::TimelineZoom(1.5, None))), text("Zoom the timeline in (Ctrl+=, or scroll on it)"), tooltip::Position::Top),
                 tip(icon_button(ZOOM_FIT, Some(Message::TimelineZoomTo(0.0))), text("Show the whole edit (Ctrl+0)"), tooltip::Position::Top),
+                tip(
+                    icon_button(if self.snapping { SNAP_ON } else { SNAP_OFF }, Some(Message::Snapping)),
+                    text(if self.snapping { "Snapping on: drags land on joins, markers, edges and the playhead (N turns it off; Shift held drags free)" } else { "Snapping off (N turns it on)" }),
+                    tooltip::Position::Top,
+                ),
             ]
             .spacing(12)
             .align_y(Alignment::Center),

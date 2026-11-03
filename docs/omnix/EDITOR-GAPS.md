@@ -240,6 +240,12 @@ User: would split into video tracks and sound tracks.
     split; the selected cut's sound edges dragged on the Clip sound lane
     (yellow / red handles, a readout); the sound menu's «Sound back to the
     picture's edges». The shortcuts window lists the drag.
+  - The edge snaps (user, 2026-11-03: lining it up by hand was fiddly)
+    within 8 px to the pictures' joins, other cuts' sound edges, sound
+    clips' edges, the playhead; Shift drags it free.
+  - **No sliding of a cut's sound** against its picture (user,
+    2026-11-03): the sealed, magnetic edit turned out handy, the cut never
+    breaks; another clip's sound comes in by cutting it on the timeline.
   - Found on the way and fixed: a cut whose only sound change was a fade
     exported without it (the mix path wasn't taken).
   - Not done: Premiere's Alt-drag on the picture's edge; a rolling split
@@ -1971,6 +1977,26 @@ along (a project folder copied or synced to the device) and write
 `notes.json` back for the PC to pick up; and the form: a web page served
 by the PC over Tailscale is the cheapest, an installable web app (PWA)
 works offline. Milestone «Інші платформи».
+
+### 62. Elements tied to their cut: sounds, music, voice-over, text and overlays move with it — idea (user, 2026-11-03)
+
+User: "group the sounds, music, voice-over, text and overlay with the
+video, so that once I've cut effects and music to it and drag the video
+along the timeline, its own elements move with it. They need ids of
+their own, since the same sound can be on the timeline many times under
+different videos, and so they aren't dragged by accident."
+
+Final Cut calls these connected clips; CapCut links them to the main
+track. What we have for it: every cut, sound clip and overlay has an id
+in the project since the ops API (`OPS-API.md`), so an element can name
+the cut it belongs to (an optional `tied_to: cut id`, kept relative: its
+offset from the cut's start). Moving, trimming away or deleting the cut
+then moves or asks about its elements; by id, so the same bell under
+two cuts belongs to each separately. The link shown on the timeline (a
+thin line or a corner mark to its cut), made and broken from the menu
+or a key, never by a drag alone. Designed with gap 4's connected clips
+and gap 8 (several selected), as one format change. Milestone «B-roll і
+групи».
 
 ## Format rule for all of these
 

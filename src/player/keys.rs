@@ -298,8 +298,8 @@ impl App {
     }
 
     /// The playhead to the previous (`dir` < 0) or next stop: a marker, a
-    /// cut's edge, a sound clip's or an overlay's, the edit's ends. Said by
-    /// the playhead as what it is («← marker»).
+    /// cut's edge, the edit's ends. Said by the playhead as what it is
+    /// («← marker»).
     pub(super) fn to_join(&mut self, dir: f64) -> Task<Message> {
         match next_stop(&stops(&self.edit), self.aimed(), dir, 1.0 / self.fps()) {
             Some((t, stop)) => {
@@ -308,10 +308,6 @@ impl App {
                     (Stop::Marker, false) => "marker →",
                     (Stop::Cut, true) => "← cut",
                     (Stop::Cut, false) => "cut →",
-                    (Stop::Sound, true) => "← sound",
-                    (Stop::Sound, false) => "sound →",
-                    (Stop::Overlay, true) => "← overlay",
-                    (Stop::Overlay, false) => "overlay →",
                     (Stop::Edge, true) => "start",
                     (Stop::Edge, false) => "end",
                 };
@@ -335,14 +331,13 @@ impl App {
 enum Stop {
     Marker,
     Cut,
-    Sound,
-    Overlay,
     Edge,
 }
 
-/// Every edit time something starts or ends at: the markers (shown ones),
-/// the cuts' joins, the sound clips' and overlay items' edges, the edit's
-/// start and end.
+/// Where ↑ / ↓ stop: the markers (shown ones), the cuts' joins, the
+/// edit's start and end. Not the sound clips' or overlays' edges: the
+/// user found the playhead caught mid-cut by a sound effect's end, with
+/// nothing there to see on the picture (2026-11-03).
 fn stops(edit: &crate::model::edit::Edit) -> Vec<(f64, Stop)> {
     let offsets = crate::project::offsets(&edit.cuts);
     let mut all = vec![(0.0, Stop::Edge), (edit.duration(), Stop::Edge)];
@@ -350,10 +345,6 @@ fn stops(edit: &crate::model::edit::Edit) -> Vec<(f64, Stop)> {
         all.extend([(at, Stop::Cut), (at + c.len(), Stop::Cut)]);
         all.extend(c.marks.iter().filter(|m| m.t >= c.start && m.t <= c.end).map(|m| (at + m.t - c.start, Stop::Marker)));
     }
-    for w in crate::project::SoundTrack::ALL {
-        all.extend(edit.track(w).clips.iter().flat_map(|c| [(c.at, Stop::Sound), (c.ends(), Stop::Sound)]));
-    }
-    all.extend(edit.lanes().flat_map(|l| &l.items).flat_map(|it| [(it.at, Stop::Overlay), (it.ends(), Stop::Overlay)]));
     all
 }
 
@@ -385,8 +376,8 @@ mod tests {
         let mut t: Vec<f64> = stops(&e).into_iter().map(|s| s.0).collect();
         t.sort_by(f64::total_cmp);
         t.dedup();
-        // a 0..4, b overlapping it from 3 to 6, the song 2.5..3.5, b's marker.
-        assert_eq!(t, [0.0, 2.5, 3.0, 3.5, 4.0, 4.5, 6.0]);
+        // a 0..4, b overlapping it from 3 to 6, b's marker; not the song.
+        assert_eq!(t, [0.0, 3.0, 4.0, 4.5, 6.0]);
     }
 
     #[test]
@@ -431,8 +422,8 @@ mod tests {
         assert_eq!(up.len(), distinct.len() - 1, "every stop but the end, from the end: {up:?}");
         assert_eq!(down.len(), distinct.len() - 1, "every stop but the start: {down:?}");
         assert!(up.windows(2).all(|w| w[0] > w[1]) && down.windows(2).all(|w| w[0] < w[1]));
-        // Named by what they are: the marker in b, the bell's end.
+        // Named by what they are; a sound effect's end is no stop.
         assert_eq!(next_stop(&all, snap(11.0), -1.0, frame).map(|s| s.1), Some(Stop::Marker), "b's 7.0123 s is the edit's 10.31 s");
-        assert_eq!(next_stop(&all, snap(7.5), -1.0, frame).map(|s| s.1), Some(Stop::Sound));
+        assert_eq!(next_stop(&all, snap(7.5), -1.0, frame), Some((5.7 + 3.7779 - 2.4, Stop::Marker)), "past the bell's end at 7.294 s");
     }
 }

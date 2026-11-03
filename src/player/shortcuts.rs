@@ -16,7 +16,7 @@ const GROUPS: &[(&str, &[(&str, &str)])] = &[
             ("Space", "play / pause"),
             ("← / →  or  , / .", "a frame back / on"),
             ("Shift+← / →", "a second back / on (editing)"),
-            ("↑ / ↓", "the previous / next join or marker (editing)"),
+            ("↑ / ↓", "the previous / next cut or marker (editing)"),
             ("Home / End", "the edit's start / end (editing)"),
             ("Shift+M", "mute"),
             ("F", "full screen"),

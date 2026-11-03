@@ -127,7 +127,7 @@ pub(crate) enum Cmd {
     },
     /// Play clips in a window with free look, stabilisation and rolling-shutter correction.
     ///
-    /// ← / →: a frame · editing: Shift+← / →: a second, ↑ / ↓: the previous / next join, Home / End ·
+    /// ← / →: a frame · editing: Shift+← / →: a second, ↑ / ↓: the previous / next cut or marker, Home / End ·
     /// framing: ↑ / ↓: pitch, Shift+← / →: yaw · drag: look around · right-drag or Q/E: roll ·
     /// scroll: zoom · space: play/pause · , .: frame step · S: stabilisation ·
     /// R: rolling shutter · P: projection · M: a marker · Shift+M: mute · 0: reset view · F: fullscreen · Ctrl+O: open ·

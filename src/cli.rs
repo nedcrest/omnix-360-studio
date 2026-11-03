@@ -111,6 +111,10 @@ pub(crate) enum Cmd {
     /// The JSON Schema of an ops file for `apply`: every operation, its
     /// fields and what they mean (for an agent's tools, or an editor).
     OpsSchema,
+    /// Makes the black picture a blank cut uses (`Blank.png` in DIR, kept
+    /// if there) and prints its path, for a cut `add` op: a gap in the
+    /// edit for a title, an overlay or a sound.
+    Blank { dir: PathBuf },
     /// Stitch one frame to an equirectangular PNG.
     Stitch {
         input: PathBuf,
@@ -603,6 +607,7 @@ pub(crate) fn run() -> Result<()> {
         Cmd::Apply { project, ops, output } => crate::apply::run(&project, &ops, output.as_deref())?,
         Cmd::Describe { project } => crate::apply::describe(&project)?,
         Cmd::OpsSchema => println!("{}", crate::apply::schema()),
+        Cmd::Blank { dir } => println!("{}", crate::blank::ensure(&dir)?.display()),
         Cmd::Mixcheck { project, target } => crate::mixmeasure::run_cli(&project, target)?,
         Cmd::Play { input, osv_size, hwaccel, stabilize, imu_axes, world_z_down } => {
             player::run(input, player::Launch { osv_size, hw: hwaccel, stabilize, imu_axes, world_z_down })?;

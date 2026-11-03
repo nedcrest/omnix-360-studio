@@ -6,6 +6,7 @@
 
 mod align;
 mod apply;
+mod blank;
 mod cache;
 mod capture;
 mod check;

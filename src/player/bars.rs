@@ -103,6 +103,7 @@ impl App {
             ),
             separator(),
             tip(icon_button(ADD_CLIP, Some(Message::Open)), text(open_hint), tooltip::Position::Bottom),
+            tip(icon_button(ADD_BLANK, Some(Message::AddBlank)), text("Add a blank (black) cut at the playhead: between cuts at a join, else it splits the cut"), tooltip::Position::Bottom),
             tip(
                 icon_button(ADD_MUSIC, Some(Message::AddSound(SoundTrack::Music))),
                 text(if self.edit.music.clips.is_empty() { "Add music under the edit" } else { "Add more music, after the last song" }),

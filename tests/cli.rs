@@ -273,3 +273,31 @@ fn ops_cut_and_rearrange_the_edit_and_the_export_follows() {
     assert!(held.contains("SFX:") && held.contains("SFX 2:"), "{held}");
     assert_eq!(frames, 120);
 }
+
+#[test]
+fn a_blank_cut_goes_in_at_a_join_and_exports_black() {
+    if !has_ffmpeg() {
+        return;
+    }
+    let d = dir("blank");
+    clip(&d, "a.mp4", 2.0, 440);
+    clip(&d, "b.mp4", 2.0, 660);
+    std::fs::write(d.join("edit.json"), r#"{"cuts": [{"input": "a.mp4", "in": 0, "out": 2}, {"input": "b.mp4", "in": 0, "out": 2}]}"#).unwrap();
+    let path = omnix(&d, &["blank", "08_graphics"]);
+    assert!(path.trim().ends_with("Blank.png"), "{path}");
+    // A second blank second at the join (2 s): a, blank, b.
+    std::fs::write(d.join("ops.json"), r#"[{"area": "cut", "op": "add", "input": "08_graphics/Blank.png", "start": 0, "end": 1, "place": {"at": 2}}]"#).unwrap();
+    omnix(&d, &["apply", "edit.json", "ops.json", "-o", "out.json"]);
+    let held = omnix(&d, &["describe", "out.json"]);
+    omnix(&d, &["export", "out.json", "--cpu", "-o", "out.mp4", "--size", "320x180"]);
+    let frames: u32 = probe(&d, "out.mp4", "v", "nb_read_frames").parse().unwrap();
+    // The middle of the blank second, as luma: black is video range's 16.
+    ffmpeg(&d, &["-ss", "2.5", "-i", "out.mp4", "-frames:v", "1", "-vf", "format=gray", "-f", "rawvideo", "mid.gray"]);
+    let mid = std::fs::read(d.join("mid.gray")).unwrap();
+    std::fs::remove_dir_all(&d).unwrap();
+    let cuts: Vec<&str> = held.lines().filter(|l| l.contains("cut #")).collect();
+    assert!(cuts.len() == 3 && cuts[1].contains("Blank.png") && cuts[1].contains("2.00-   3.00"), "{held}");
+    assert_eq!(frames, 150);
+    let most = mid.iter().copied().max().unwrap();
+    assert!(most <= 20, "the blank shows black, brightest {most}");
+}

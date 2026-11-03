@@ -96,6 +96,19 @@ impl App {
                 }
                 self.selection = Selection::cut_at(&self.edit, i);
             }
+            Message::AddBlank => {
+                // In the project's graphics folder, so it travels with the
+                // project; before the first save, in the cache.
+                let dir = self.project.as_deref().and_then(bin::root).map(|r| r.join("08_graphics")).or_else(|| crate::cache::dir().map(|d| d.join("blank"))).unwrap_or_else(std::env::temp_dir);
+                match crate::blank::ensure(&dir) {
+                    Ok(path) => {
+                        // Placed from the playhead now, as a bin button does.
+                        self.placing.insert(path.clone(), bin::Spot::At(self.position()));
+                        return self.update(Message::Picked(vec![path]));
+                    }
+                    Err(e) => self.error = Some(format!("Can't make the blank picture: {e:#}")),
+                }
+            }
             Message::Trim(i, start, t) => {
                 let Some(clip_len) = self.edit.cuts.get(i).and_then(|c| self.library.iter().find(|m| m.input == c.input)).map(|m| m.duration) else {
                     return Task::none();

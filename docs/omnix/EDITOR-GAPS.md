@@ -247,7 +247,11 @@ takes it rather than the cut under the playhead; flags and notes 15 %
 bigger, outlined (`768576a`). Found with it: shortcuts with letters did
 nothing in the Ukrainian layout (Ctrl+Z among them; fixed by the
 physical key, `keys::latin`), and ↑ / ↓ were lost in editing while the
-angles strip was on in Settings (`c05423d`).
+angles strip was on in Settings (`c05423d`). ↑ / ↓ then stood still at a stop off
+the frame grid (a sound clip's end, a marker): a stop counts only more
+than half a frame away now, and the playhead says what it stopped at
+(«← marker», «← cut», «← sound»…), with a test walking every stop both
+ways.
 
 ### 6. Vignette shapes — idea (user, 2026-10-22)
 

@@ -109,6 +109,14 @@ impl App {
                     Err(e) => self.error = Some(format!("Can't make the blank picture: {e:#}")),
                 }
             }
+            Message::SoundEdge(i, start, t) => {
+                let Some(c) = self.edit.cuts.get(i) else { return Task::none() };
+                let most = self.library.iter().find(|m| m.input == c.input).map_or(f64::INFINITY, |m| m.duration);
+                let cut = c.id;
+                // One undo step for the drag, ended by `ScrubDone`.
+                self.edit.begin();
+                self.op(Op::Cut(CutOp::SoundEdge { cut, end: if start { End::In } else { End::Out }, t, most }));
+            }
             Message::Trim(i, start, t) => {
                 let Some(clip_len) = self.edit.cuts.get(i).and_then(|c| self.library.iter().find(|m| m.input == c.input)).map(|m| m.duration) else {
                     return Task::none();

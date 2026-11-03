@@ -307,6 +307,9 @@ enum Message {
     OverlayPicture(String, Result<(Arc<crate::overlay::Picture>, Option<String>), String>),
     /// Add a blank (black) cut at the playhead (gap 32).
     AddBlank,
+    /// Cut `i`'s sound's start (`true`) or end dragged to clip time `t`,
+    /// its picture left where it is: a J- or L-cut (gap 4B).
+    SoundEdge(usize, bool, f64),
     /// Add a text overlay at the playhead.
     AddText,
     /// Add pictures to the overlay lane at the playhead.
@@ -530,6 +533,9 @@ struct App {
     sound_menu: Option<(sound_ui::Menu, iced::Point)>,
     /// Each sound track's streams, in `SoundTrack::ALL`'s order.
     music: [music::Player; SoundTrack::ALL.len()],
+    /// The cuts' sound past their pictures (J- and L-cuts), a stream each,
+    /// as `Project::sound_beyond` lists them.
+    beyond: Vec<music::Player>,
     /// Through a crossfade, the other cut of it alongside: its index and
     /// clip. Usually the next one, coming in over the playing cut; while
     /// paused with the incoming cut selected for editing, that one is the
@@ -720,6 +726,7 @@ impl App {
             even_waves: Default::default(),
             cut_waves_reading: 0,
             music: Default::default(),
+            beyond: Vec::new(),
             partner: None,
             edit: edit::Edit::default(),
             current: 0,
@@ -935,7 +942,7 @@ impl App {
             m @ (Message::BinPanel { .. } | Message::BinPin { .. } | Message::BinRefresh { .. } | Message::BinPreview { .. } | Message::BinStop { .. } | Message::BinMeta { .. } | Message::BinFrames { .. } | Message::BinAdd { .. }) => self.on_bin(m),
             m @ (Message::MarkEdit { .. } | Message::MarkNote { .. } | Message::MarkSave | Message::MarkDelete | Message::MarkClose) => self.on_marks(m),
             m @ (Message::Tick { .. } | Message::TimelineZoom { .. } | Message::TimelineZoomTo { .. } | Message::TimelinePan { .. } | Message::Toggle { .. } | Message::Scrub { .. } | Message::ScrubDone { .. }) => self.on_transport(m),
-            m @ (Message::Select { .. } | Message::AddBlank | Message::Trim { .. } | Message::MoveCut { .. } | Message::AddMark { .. } | Message::SelectAtPlayhead | Message::MarkMove { .. } | Message::MarkSelect { .. } | Message::StepsRested { .. } | Message::ToastGone { .. } | Message::StepNoteGone { .. } | Message::TrimToPlayhead { .. } | Message::Crossfade { .. } | Message::ToggleCrossfade { .. } | Message::Split { .. } | Message::DeleteCut { .. } | Message::Undo { .. } | Message::Redo { .. }) => self.on_cuts(m),
+            m @ (Message::Select { .. } | Message::AddBlank | Message::SoundEdge { .. } | Message::Trim { .. } | Message::MoveCut { .. } | Message::AddMark { .. } | Message::SelectAtPlayhead | Message::MarkMove { .. } | Message::MarkSelect { .. } | Message::StepsRested { .. } | Message::ToastGone { .. } | Message::StepNoteGone { .. } | Message::TrimToPlayhead { .. } | Message::Crossfade { .. } | Message::ToggleCrossfade { .. } | Message::Split { .. } | Message::DeleteCut { .. } | Message::Undo { .. } | Message::Redo { .. }) => self.on_cuts(m),
             m @ (Message::LookDone { .. } | Message::Framing { .. } | Message::KeyMove { .. } | Message::KeyAdd { .. } | Message::KeyDelete { .. } | Message::KeyEase { .. } | Message::KeyFollow { .. } | Message::Stab { .. } | Message::Projection { .. } | Message::KeyJump { .. } | Message::Look { .. } | Message::Zoom { .. } | Message::Fov { .. } | Message::AngleInput { .. } | Message::AngleDone { .. } | Message::AngleScrubStart { .. } | Message::AngleScrubDone { .. } | Message::AngleScrub { .. } | Message::AngleNudge { .. } | Message::AngleArrow { .. } | Message::Source { .. } | Message::RollingShutter { .. } | Message::FullOnPause { .. } | Message::ResetView { .. }) => self.on_framing(m),
             m @ (Message::AddOverlay { .. } | Message::OverlayPicked { .. } | Message::OverlaySelect { .. } | Message::OverlayMove { .. } | Message::OverlayTrim { .. } | Message::OverlayJump { .. } | Message::OverlayKeyMove { .. } | Message::OverlayPicture { .. } | Message::AddText { .. }) => self.on_overlay_ui(m),
             m @ (Message::AddSound { .. } | Message::SoundPicked { .. } | Message::SoundProbed { .. } | Message::Waveform { .. } | Message::CutWave { .. } | Message::SelectMusic { .. } | Message::PointAdd { .. } | Message::PointSelect { .. } | Message::PointMove { .. } | Message::MusicMove { .. } | Message::MusicTrim { .. } | Message::Fade { .. } | Message::Level { .. } | Message::Listen { .. } | Message::SoundLevel { .. } | Message::TrackLevel { .. } | Message::DuckDepth { .. } | Message::Duck { .. } | Message::Ducked { .. } | Message::LevelDone { .. }) => self.on_tracks(m),

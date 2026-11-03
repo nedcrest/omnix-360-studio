@@ -240,6 +240,10 @@ pub struct Block {
     /// Its sound's fades in and out, seconds.
     pub fade_in: f64,
     pub fade_out: f64,
+    /// Its sound past its picture before and after, seconds, or short of
+    /// it when negative (`Cut::sound_before`/`_after`: J- and L-cuts).
+    pub sound_before: f64,
+    pub sound_after: f64,
     /// Its own sound level as a short tag ("0 dB", "−12 · even", "muted"),
     /// the knob a drag turns.
     pub level: String,
@@ -369,6 +373,9 @@ pub enum Drag {
     Level { own: Own, y0: f32, from: f64 },
     /// Dragging cut `cut`'s effect keyframe `key` to another time.
     Effect { cut: usize, key: usize },
+    /// Dragging cut `cut`'s sound's start (`start`) or end on the clip
+    /// sound lane, at clip time `from` when pressed: a J- or L-cut.
+    SoundEdge { cut: usize, start: bool, x0: f32, from: f64, per_px: f64 },
 }
 
 #[derive(Default)]
@@ -463,6 +470,11 @@ impl Timeline {
         let edge = |start: f64, len: f64, at_in: bool| if at_in { start } else { start + len };
         match *drag {
             Drag::Trim { cut, start, from, .. } => self.blocks.get(cut).map(|c| format!("{} · {}", signed(edge(c.start, c.len, start) - from), seconds(c.len))),
+            // How far the sound runs past its picture's edge (or short of it).
+            Drag::SoundEdge { cut, start, .. } => self.blocks.get(cut).map(|c| {
+                let past = if start { c.sound_before } else { c.sound_after };
+                if past >= 0.0 { format!("sound {} past the picture", seconds(past)) } else { format!("sound {} short", seconds(-past)) }
+            }),
             Drag::MusicTrim { lane, clip, start, from, .. } => self.sounds.get(lane)?.blocks.get(clip).map(|m| format!("{} · {}", signed(edge(m.start, m.len, start) - from), seconds(m.len))),
             Drag::MusicMove { lane, clip, at, .. } => self.sounds.get(lane)?.blocks.get(clip).map(|m| format!("{} · at {}", signed(m.from - at), clock(m.from))),
             // At 0 it says which way: dragged into its own cut (as a sound's
@@ -573,7 +585,7 @@ impl Timeline {
         }
         let per_px = self.span / Self::width(b) as f64;
         self.blocks.iter().enumerate().filter(|(_, c)| c.wave.is_some()).find_map(|(i, c)| {
-            let (l, r) = self.block_x(c, b);
+            let (l, r) = self.sound_x(c, b);
             let fi = fade_knob_x((l, r), l + (c.fade_in / per_px) as f32, true);
             let fo = fade_knob_x((l, r), r - (c.fade_out / per_px) as f32, false);
             let inside = p.x >= l - 1.0 && p.x <= r + 1.0;
@@ -825,27 +837,39 @@ impl Timeline {
         let lane = Path::rounded_rectangle(Point::new(self.x(0.0, b), top), Size::new((self.x(self.video, b) - self.x(0.0, b)).max(0.0), h), 3.0.into());
         frame.fill(&lane, palette.background.weak.color.scale_alpha(0.35));
         for (i, c) in self.blocks.iter().enumerate() {
-            let (l, r) = self.block_x(c, b);
+            let (l, r) = self.sound_x(c, b);
             if r < 0.0 || l > b.width {
                 continue;
             }
             let block = Path::rounded_rectangle(Point::new(l, top), Size::new((r - l).max(1.0), h), 3.0.into());
             frame.fill(&block, SOUND_LINE.scale_alpha(if Some(i) == self.selected { 0.35 } else { 0.18 }));
+            // A sound split from its picture (J, L or short) gets a frame of
+            // its own: it no longer ends where the picture does.
+            if c.sound_before != 0.0 || c.sound_after != 0.0 {
+                frame.stroke(&block, Stroke::default().with_width(1.5).with_color(SOUND_LINE.scale_alpha(0.9)));
+            }
             let Some(w) = &c.wave else { continue };
             // As it's heard: evened out (once that's read), its level and
             // points, the clips' level; what the file holds faint behind.
-            let ramp = |t: f64| crate::project::fade_ramp(t - c.start, c.start + c.len - t, c.fade_in, c.fade_out);
+            let (from, len) = (c.start - c.sound_before, c.len + c.sound_before + c.sound_after);
+            let ramp = |t: f64| crate::project::fade_ramp(t - from, from + len - t, c.fade_in, c.fade_out);
             let heard = |t: f64| crate::mixdown::cut_gain(self.clips_db, c.own_db, crate::project::volume_at(&c.sound, t), ramp(t)) as f32;
-            let wave = Wave { left: l, right: r, top, height: h, start: c.start, len: c.len };
+            let wave = Wave { left: l, right: r, top, height: h, start: from, len };
             wave.draw(frame, b, w, c.even_wave.as_ref().unwrap_or(w), heard, palette.background.base.text.scale_alpha(0.6));
         }
         // Its sound's fades, a handle at each top corner as on sound clips.
         for c in &self.blocks {
-            let (l, r) = self.block_x(c, b);
+            let (l, r) = self.sound_x(c, b);
             if r < 0.0 || l > b.width || c.wave.is_none() {
                 continue;
             }
-            draw_fades(frame, (l, r), top, h, c.len, (c.fade_in, c.fade_out));
+            draw_fades(frame, (l, r), top, h, c.len + c.sound_before + c.sound_after, (c.fade_in, c.fade_out));
+        }
+        // The selected cut's sound edges, to drag apart from its picture:
+        // yellow where its clip has more sound, red at the file's end.
+        if let Some(c) = self.selected.and_then(|i| self.blocks.get(i)) {
+            let more = (c.start - c.sound_before > 0.01, c.start + c.len + c.sound_after < c.most - 0.01);
+            trim_handles(frame, self.sound_x(c, b), top, h, more);
         }
         // Each cut's level, where there's room: a tag at its left, so a
         // lowered or muted cut shows in words, not colour alone; dragged up
@@ -975,6 +999,23 @@ impl Timeline {
     /// A cut block's left and right edges.
     fn block_x(&self, c: &Block, b: Rectangle) -> (f32, f32) {
         (self.x(c.from, b) + GAP / 2.0, self.x(c.from + c.len, b) - GAP / 2.0)
+    }
+
+    /// Where a cut's sound is drawn on the clip sound lane: its picture's
+    /// stretch, wider or narrower by what runs past it or stops short.
+    fn sound_x(&self, c: &Block, b: Rectangle) -> (f32, f32) {
+        (self.x(c.from - c.sound_before, b) + GAP / 2.0, self.x(c.from + c.len + c.sound_after, b) - GAP / 2.0)
+    }
+
+    /// The selected cut's sound edge under `x` on the clip sound lane: in
+    /// (`true`) or out.
+    fn sound_edge_at(&self, x: f32, b: Rectangle) -> Option<(usize, bool)> {
+        let i = self.selected.filter(|&i| i < self.blocks.len())?;
+        let (l, r) = self.sound_x(&self.blocks[i], b);
+        if x < l - EDGE || x > r + EDGE {
+            return None;
+        }
+        edge_of(l, r, x).map(|start| (i, start))
     }
 }
 
@@ -1557,6 +1598,13 @@ impl canvas::Program<Message> for Marks {
                     let c = &self.blocks[cut];
                     *drag = Drag::Fade { own: Own::Cut(cut), in_edge, x0: p.x, from: if in_edge { c.fade_in } else { c.fade_out }, per_px: self.span / Timeline::width(bounds) as f64 };
                     Message::Select(cut)
+                } else if self.rows.on_clip_sound(p.y) && let Some((cut, start)) = self.sound_edge_at(p.x, bounds) {
+                    // The selected cut's sound edge: its sound alone runs on
+                    // past the picture or stops short (a J- or L-cut).
+                    let c = &self.blocks[cut];
+                    let from = if start { c.start - c.sound_before } else { c.start + c.len + c.sound_after };
+                    *drag = Drag::SoundEdge { cut, start, x0: p.x, from, per_px: self.span / Timeline::width(bounds) as f64 };
+                    Message::Select(cut)
                 } else if state.ctrl && let Some((own, key)) = self.sound_at(p, bounds) {
                     // Ctrl+click on a point takes it away, on any lane.
                     Message::Sound(super::sound_ui::SoundMsg::DeletePoint(own, key))
@@ -1647,6 +1695,7 @@ impl canvas::Program<Message> for Marks {
                         Message::Effect(super::effects::EffectMsg::KeyMove(*cut, *key, c.start + edit_t - c.from))
                     }
                     Drag::Trim { cut, start, x0, from, per_px } => Message::Trim(*cut, *start, *from + (x - *x0) as f64 * *per_px),
+                    Drag::SoundEdge { cut, start, x0, from, per_px } => Message::SoundEdge(*cut, *start, *from + (x - *x0) as f64 * *per_px),
                     Drag::Move { x0, moved, to, .. } => {
                         *moved |= (x - *x0).abs() > DRAG_FROM;
                         *to = self.drop_at(x, bounds);
@@ -1690,7 +1739,7 @@ impl canvas::Program<Message> for Marks {
                 Drag::None => None,
                 Drag::Move { cut, moved: true, to, .. } => Some(canvas::Action::publish(Message::MoveCut(cut, to)).and_capture()),
                 Drag::Move { .. } | Drag::Scroll { .. } => Some(canvas::Action::request_redraw().and_capture()),
-                Drag::Playhead | Drag::Key { .. } | Drag::Effect { .. } | Drag::Trim { .. } | Drag::MusicMove { .. } | Drag::MusicTrim { .. } | Drag::Fade { .. } | Drag::Point { .. } | Drag::Level { .. } | Drag::Crossfade { .. } => {
+                Drag::Playhead | Drag::Key { .. } | Drag::Effect { .. } | Drag::Trim { .. } | Drag::MusicMove { .. } | Drag::MusicTrim { .. } | Drag::Fade { .. } | Drag::Point { .. } | Drag::Level { .. } | Drag::Crossfade { .. } | Drag::SoundEdge { .. } => {
                     Some(canvas::Action::publish(Message::ScrubDone).and_capture())
                 }
             },
@@ -1800,7 +1849,7 @@ impl canvas::Program<Message> for Marks {
 
     fn mouse_interaction(&self, state: &State, bounds: Rectangle, cursor: mouse::Cursor) -> mouse::Interaction {
         match state.drag {
-            Drag::Trim { .. } | Drag::MusicTrim { .. } | Drag::Fade { .. } | Drag::Crossfade { .. } => mouse::Interaction::ResizingHorizontally,
+            Drag::Trim { .. } | Drag::MusicTrim { .. } | Drag::Fade { .. } | Drag::Crossfade { .. } | Drag::SoundEdge { .. } => mouse::Interaction::ResizingHorizontally,
             Drag::Level { .. } => mouse::Interaction::ResizingVertically,
             Drag::None => {
                 let Some(p) = cursor.position_in(bounds) else { return mouse::Interaction::default() };
@@ -1830,7 +1879,7 @@ impl canvas::Program<Message> for Marks {
                     };
                 }
                 if self.rows.on_clip_sound(p.y) {
-                    return if self.cut_fade_at(p, bounds).is_some() {
+                    return if self.cut_fade_at(p, bounds).is_some() || self.sound_edge_at(p.x, bounds).is_some() {
                         mouse::Interaction::ResizingHorizontally
                     } else if self.sound_at(p, bounds).is_some() {
                         mouse::Interaction::Grab
@@ -1940,7 +1989,7 @@ mod tests {
     fn block(from: f64, len: f64, crossfade: f64) -> Block {
         Block {
             labels: vec![], from, len, start: 0.0, most: f64::INFINITY, marks: vec![], keys: vec![], thumbs: vec![], sound: vec![], wave: None, even_wave: None,
-            own_db: 0.0, gain: 0.0, fade_in: 0.0, fade_out: 0.0, level: "0 dB".into(), crossfade, effects: vec![],
+            own_db: 0.0, gain: 0.0, fade_in: 0.0, fade_out: 0.0, sound_before: 0.0, sound_after: 0.0, level: "0 dB".into(), crossfade, effects: vec![],
         }
     }
 
@@ -1964,6 +2013,25 @@ mod tests {
             folds: Folds::default(),
         };
         (t, Rectangle::new(Point::ORIGIN, Size::new(1000.0 + 2.0 * PICK, 300.0)))
+    }
+
+    #[test]
+    fn the_selected_cuts_sound_edges_are_where_its_sound_runs() {
+        let (mut t, b) = timeline();
+        // The last cut (7..10 s) selected, its sound from half a second
+        // before its picture (a J-cut) to a second short of its end.
+        t.selected = Some(2);
+        (t.blocks[2].sound_before, t.blocks[2].sound_after) = (0.5, -1.0);
+        let (l, r) = t.sound_x(&t.blocks[2], b);
+        assert!((l - t.x(6.5, b)).abs() < 2.0 && (r - t.x(9.0, b)).abs() < 2.0, "{l} {r}");
+        assert_eq!(t.sound_edge_at(l + 2.0, b), Some((2, true)));
+        assert_eq!(t.sound_edge_at(r - 2.0, b), Some((2, false)));
+        // The picture's own edge is not the sound's, nor is the middle.
+        assert_eq!(t.sound_edge_at(t.x(7.5, b), b), None);
+        assert_eq!(t.sound_edge_at(t.x(10.0, b), b), None);
+        // Nothing for a cut not selected.
+        t.selected = Some(0);
+        assert_eq!(t.sound_edge_at(l + 2.0, b), None);
     }
 
     #[test]

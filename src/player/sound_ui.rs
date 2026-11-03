@@ -91,6 +91,8 @@ pub enum SoundMsg {
     Clean(Own, bool),
     /// A sound effect moved to the other SFX lane.
     OtherSfx(SoundTrack, usize),
+    /// Cut `i`'s sound back to its picture's edges (no J- or L-cut).
+    ToPicture(usize),
     /// A volume line's point `i` removed (Ctrl+click on it, or its menu).
     DeletePoint(Own, usize),
     /// A volume line removed, all its points.
@@ -169,6 +171,12 @@ impl App {
             SoundMsg::Original(own) => self.sound_op(own, |sound| SoundOp::Original { sound }),
             SoundMsg::LowCut(own, on) => self.sound_op(own, |sound| SoundOp::LowCut { sound, on }),
             SoundMsg::Clean(own, on) => self.sound_op(own, |sound| SoundOp::Clean { sound, on }),
+            SoundMsg::ToPicture(i) => {
+                self.sound_menu = None;
+                if let Some(cut) = self.edit.cuts.get(i).map(|c| c.id) {
+                    self.op(Op::Cut(crate::model::ops::cuts::CutOp::SoundToPicture { cut }));
+                }
+            }
             SoundMsg::OtherSfx(from, i) => {
                 self.sound_menu = None;
                 let Some(clip) = self.edit.track(from).clips.get(i).map(|c| c.id) else { return Task::none() };
@@ -332,6 +340,12 @@ impl App {
                 items.push(sound(if clean { "Stop cleaning up the noise".into() } else { "Clean up steady noise".into() }, SoundMsg::Clean(own, !clean)));
                 items.push(sound("Normalize…".into(), SoundMsg::Open(Scope::Own(own))));
                 items.push(sound("Back to the original".into(), SoundMsg::Original(own)));
+                // A sound split from its picture (a J- or L-cut, or short).
+                if let Own::Cut(i) = own
+                    && self.edit.cuts.get(i).is_some_and(|c| c.sound_before != 0.0 || c.sound_after != 0.0)
+                {
+                    items.push(sound("Sound back to the picture's edges".into(), SoundMsg::ToPicture(i)));
+                }
                 if let Own::Clip(which @ (SoundTrack::Sfx | SoundTrack::Sfx2), i) = own {
                     let to = if which == SoundTrack::Sfx { "SFX 2" } else { "SFX" };
                     items.push(sound(format!("Move to {to}"), SoundMsg::OtherSfx(which, i)));

@@ -27,6 +27,15 @@ impl App {
         for (player, which) in self.music.iter_mut().zip(SoundTrack::ALL) {
             player.follow(self.edit.track(which), t, self.edit.duration(), playing, self.listen.heard(listen::lane_of(which)));
         }
+        // The cuts' sound past their pictures, played as sound clips are, so
+        // a J-cut's head is heard under the cut before and an L-cut's tail
+        // under the cut after.
+        let beyond = self.edit.sound_beyond();
+        self.beyond.resize_with(beyond.len(), Default::default);
+        let heard = self.listen.heard(listen::CLIP_SOUND);
+        for (player, track) in self.beyond.iter_mut().zip(&beyond) {
+            player.follow(track, t, self.edit.duration(), playing, heard);
+        }
         self.meter.follow(playing);
         // The cut's own volume points move its level as it plays, and
         // through a crossfade the two cuts trade places, equal power.

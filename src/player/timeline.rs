@@ -682,6 +682,19 @@ impl Timeline {
             .unwrap_or(0.0)
     }
 
+    /// How far to shift cut `cut`'s sound edge at edit time `edge` onto the
+    /// nearest of: a join of the pictures (its own edges too, so it comes
+    /// back to its picture), another cut's sound edge, a sound clip's edge,
+    /// the playhead, within `SNAP` pixels; or 0.
+    fn sound_snap(&self, cut: usize, edge: f64, per_px: f64) -> f64 {
+        let reach = SNAP as f64 * per_px;
+        let mut at = vec![0.0, self.position];
+        at.extend(self.blocks.iter().flat_map(|c| [c.from, c.from + c.len]));
+        at.extend(self.blocks.iter().enumerate().filter(|&(i, _)| i != cut).flat_map(|(_, c)| [c.from - c.sound_before, c.from + c.len + c.sound_after]));
+        at.extend(self.sounds.iter().flat_map(|l| l.blocks.iter().flat_map(|m| [m.from, m.from + m.len])));
+        at.iter().map(|t| t - edge).filter(|d| d.abs() < reach).min_by(|a, b| a.abs().total_cmp(&b.abs())).unwrap_or(0.0)
+    }
+
     /// Where a moved cut would land: before the first cut whose middle is
     /// right of `x`.
     fn drop_at(&self, x: f32, b: Rectangle) -> usize {
@@ -1695,7 +1708,14 @@ impl canvas::Program<Message> for Marks {
                         Message::Effect(super::effects::EffectMsg::KeyMove(*cut, *key, c.start + edit_t - c.from))
                     }
                     Drag::Trim { cut, start, x0, from, per_px } => Message::Trim(*cut, *start, *from + (x - *x0) as f64 * *per_px),
-                    Drag::SoundEdge { cut, start, x0, from, per_px } => Message::SoundEdge(*cut, *start, *from + (x - *x0) as f64 * *per_px),
+                    Drag::SoundEdge { cut, start, x0, from, per_px } => {
+                        // Onto a join or a neighbour's sound edge, unless
+                        // Shift is held for a free place.
+                        let t = *from + (x - *x0) as f64 * *per_px;
+                        let c = &self.blocks[*cut];
+                        let snap = if state.shift { 0.0 } else { self.sound_snap(*cut, c.from + t - c.start, *per_px) };
+                        Message::SoundEdge(*cut, *start, t + snap)
+                    }
                     Drag::Move { x0, moved, to, .. } => {
                         *moved |= (x - *x0).abs() > DRAG_FROM;
                         *to = self.drop_at(x, bounds);
@@ -2032,6 +2052,18 @@ mod tests {
         // Nothing for a cut not selected.
         t.selected = Some(0);
         assert_eq!(t.sound_edge_at(l + 2.0, b), None);
+    }
+
+    #[test]
+    fn a_sound_edge_snaps_to_joins_and_the_next_cuts_sound() {
+        let (mut t, _) = timeline();
+        // 100 px a second: a join 5 px off is taken, one 20 px off isn't.
+        let per_px = 0.01;
+        assert!((t.sound_snap(0, 7.05, per_px) - -0.05).abs() < 1e-9);
+        assert_eq!(t.sound_snap(0, 7.6, per_px), 0.0);
+        // The next cut's sound starting half a second early, at 6.5 s.
+        t.blocks[2].sound_before = 0.5;
+        assert!((t.sound_snap(0, 6.47, per_px) - 0.03).abs() < 1e-9);
     }
 
     #[test]

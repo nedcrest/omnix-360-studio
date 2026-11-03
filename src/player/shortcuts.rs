@@ -42,7 +42,7 @@ const GROUPS: &[(&str, &[(&str, &str)])] = &[
             ("drag a clip", "move it"),
             ("Shift+drag a cut's start", "crossfade: out, onto the cut before"),
             ("Shift+drag a sound clip", "let it overlap its neighbour (a crossfade)"),
-            ("drag a cut's sound edge", "its sound alone past the picture or short of it: J / L cut (the cut selected)"),
+            ("drag a cut's sound edge", "its sound alone past the picture or short of it: J / L cut (the cut selected; it snaps to joins and the sounds beside, Shift: free)"),
             ("drag a fade knob", "fade in / out"),
             ("Ctrl+click a sound", "a volume point there"),
             ("Ctrl+click a point", "take it away"),

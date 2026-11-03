@@ -770,7 +770,7 @@ I want."
   and 31e on the main timeline; then the window 31c; 31d whenever the
   one-clip editor gets its menu.
 
-### 32. A blank stretch on the main lane — built 2026-11-03 (`1c2a457`), waits for the user's check
+### 32. A blank stretch on the main lane — done 2026-11-03 (`1c2a457`), confirmed by the user
 
 Asked by the user 2026-10-23, again as a «spacer» 2026-11-03: a black
 stretch on the main lane, room for an overlay, a title or a sound with a
@@ -1863,6 +1863,27 @@ Alt+←, but another cut is selected at the time. Some hotkey?" **Built
 2026-11-03**, confirmed by the user the same day (`eefa803`): D (Premiere's key)
 selects the cut under the playhead, the one shown through a crossfade;
 the playhead says «selected». So: ↓ to a cut, D, Alt+← / →.
+
+### 59. The bars' buttons grouped — small (user, 2026-11-03)
+
+User: the buttons are spread all over the window; group them, the global
+ones at the top, the timeline's at the bottom, where the row has the whole
+width; groups that can be shown collapsed (buttons split by groups) or
+opened (a little wider, the groups' names shown). **Built 2026-11-03**
+(`93ef86b`), waits for the user's check:
+- Top bar, global: App (settings, shortcuts) | Project (new, open, save,
+  save as) | Export (aspect, export) | 360 view (while framing a 360 cut)
+  … Mix (meter) | Window (interface size, fullscreen) | status.
+- Transport row, the timeline: Play (play, time, save frame) | Add at the
+  playhead (clip, blank, music, SFX, voice, overlay, text) | Cut (split,
+  delete, crossfade) | History | Look (effects) | Mode (Framing, Mix
+  check) … Timeline zoom | Sound.
+- Framing row (only while framing): Keyframe (key, delete, ease, reset,
+  follow, colour track, save sphere) | Angles (the typed strip; its FOV
+  field replaces the slider, which comes back when Settings hides the
+  strip).
+- A chevron at the transport row's start shows or hides every group's
+  name above its buttons (`settings.json` `bar_labels`, off by default).
 
 ## Format rule for all of these
 

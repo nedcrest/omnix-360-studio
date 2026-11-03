@@ -239,6 +239,16 @@ one, a drag moves it within its cut; a double- or right-click opens a
 window to name or delete it; ↑ / ↓ stop at them. Left: footage-agent's
 flags exported into them; snapping to them (pack 3).
 
+After the user's check (2026-11-03): the flags moved into a «Markers»
+row of their own over the ruler (the playhead's head covered them on
+it), folding to a strip, shown only with markers; the ruler keeps their
+poles. A click on a flag selects the marker (`Selection::Mark`), so Del
+takes it rather than the cut under the playhead; flags and notes 15 %
+bigger, outlined (`768576a`). Found with it: shortcuts with letters did
+nothing in the Ukrainian layout (Ctrl+Z among them; fixed by the
+physical key, `keys::latin`), and ↑ / ↓ were lost in editing while the
+angles strip was on in Settings (`c05423d`).
+
 ### 6. Vignette shapes — idea (user, 2026-10-22)
 
 Today there is one vignette: `Grade.vignette` (0..1, "Darker corners"),

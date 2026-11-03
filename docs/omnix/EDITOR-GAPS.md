@@ -1850,7 +1850,9 @@ Markers), S and M, folds, and a tall lane's own level under its name
 when not 0 dB («lane −6.0 dB»). A click or right-click on a sound lane's
 header opens its menu: the lane's level slider and what acts on the
 whole lane (normalize every clip, the music's duck); the clip sound's
-header: its level and «Normalize every cut». Left: a level bar from the
+header: its level and «Normalize every cut». Each lane's cell is
+tinted in its colour with a rule under it (`8ec3df3`, the user's ask on
+seeing it). Left: a level bar from the
 meter per lane, the mix check's verdict per lane, dragging the column's
 width, picture lanes' menus.
 

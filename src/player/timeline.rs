@@ -151,9 +151,10 @@ const SOUND_LANES: usize = SoundTrack::ALL.len();
 pub const SCALABLE: f32 = CUTS + CLIP_SOUND + SOUND_LANES as f32 * MUSIC + 2.0 * OVERLAY;
 /// A press on a cut that moves less than this is a click, not a drag.
 const DRAG_FROM: f32 = 4.0;
-/// A music edge dragged this close to a cut boundary, the playhead or
-/// another song's edge snaps to it.
-const SNAP: f32 = 8.0;
+/// An edge dragged this close to a cut boundary, the playhead or another
+/// sound's edge snaps to it; Shift lets it go free, so the reach can be
+/// generous (user, 2026-11-03: 8 px was fiddly).
+const SNAP: f32 = 12.0;
 /// The volume line's range, dB, top to bottom of its lane (the bottom is
 /// silence), and a volume point's radius.
 const VOLUME_TOP: f64 = 6.0;
@@ -2057,10 +2058,10 @@ mod tests {
     #[test]
     fn a_sound_edge_snaps_to_joins_and_the_next_cuts_sound() {
         let (mut t, _) = timeline();
-        // 100 px a second: a join 5 px off is taken, one 20 px off isn't.
+        // 100 px a second: a join 10 px off is taken, one 20 px off isn't.
         let per_px = 0.01;
-        assert!((t.sound_snap(0, 7.05, per_px) - -0.05).abs() < 1e-9);
-        assert_eq!(t.sound_snap(0, 7.6, per_px), 0.0);
+        assert!((t.sound_snap(0, 7.1, per_px) - -0.1).abs() < 1e-9);
+        assert_eq!(t.sound_snap(0, 7.2, per_px), 0.0);
         // The next cut's sound starting half a second early, at 6.5 s.
         t.blocks[2].sound_before = 0.5;
         assert!((t.sound_snap(0, 6.47, per_px) - 0.03).abs() < 1e-9);

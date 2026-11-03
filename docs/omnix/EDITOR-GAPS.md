@@ -206,8 +206,24 @@ User: would split into video tracks and sound tracks.
   - Export: each cut's sound stretch is cut by its own in/out and placed at
     its edit time in the mix, instead of joined end to end. The player
     needs the next cut's sound primed early (it already pre-rolls 3 s).
-  - The full ungroup (independent items, group ids) can come later, if this
-    falls short.
+  - **No full ungroup** (user, 2026-11-03): a sound can be pulled longer
+    from its own clip over the neighbour, and voice-over and music have
+    lanes of their own; independent sound items are not wanted.
+- **Best practices (looked up 2026-11-03):** Final Cut, magnetic like us,
+  keeps picture and sound linked and in sync: Expand Audio (Ctrl+S or a
+  double-click on the waveform) shows the sound's own edges, and dragging
+  one extends the sound over the neighbour; Align Audio to Video puts them
+  back; the clips need media beyond their in/out (handles). Premiere:
+  Alt-drag an edge (or Alt with the rolling edit) trims only the sound or
+  only the picture of a linked clip, no unlinking. Resolve unlinks with
+  the chain icon. Common to all: the split is a trim of the sound's edge
+  that keeps sync (never a slide), the overlapping sounds both play, and
+  a reset puts the sound back to the picture's edges. So for Omnix: drag
+  a cut's sound edge on the Clip sound lane (Alt-drag on the cut's edge
+  too, Premiere's way), short fades at the moved edges as the cut's sound
+  fades already do, «Sound to picture» in the sound menu to reset, the
+  edge stopping (red) at the clip's end. Later maybe a rolling split
+  (one drag lengthens one sound and shortens the next).
 - **What grouped and ungrouped look like** (user, 2026-11-02, checking
   timeline pack 1): grouped, the selection frame goes round the picture
   only, its sound under it without one: it goes with the picture. Once

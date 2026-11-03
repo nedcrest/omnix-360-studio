@@ -985,7 +985,14 @@ impl Timeline {
     fn draw_heads(&self, frame: &mut Frame, theme: &Theme) {
         draw_head_ground(frame, theme, self.rows.height);
         let ink = theme.extended_palette().background.base.text.scale_alpha(0.45);
-        lane_tag(frame, "Video", theme.extended_palette().primary.base.color, self.rows.cuts / 2.0);
+        let video = theme.extended_palette().primary.base.color;
+        head_cell(frame, 0.0, self.rows.cuts, video);
+        head_cell(frame, self.rows.cuts, self.rows.clip_sound, SOUND_LINE);
+        head_cell(frame, self.rows.effects_top, self.rows.seek_top - self.rows.effects_top, iced::Color::TRANSPARENT);
+        for li in 0..self.sounds.len() {
+            head_cell(frame, self.rows.sound_top(li), self.rows.lane_h(li), lane_colour(crate::mixcheck::Lane::Track(self.sounds[li].which), theme));
+        }
+        lane_tag(frame, "Video", video, self.rows.cuts / 2.0);
         let (top, h) = (self.rows.cuts + 1.0, self.rows.clip_sound - 2.0);
         lane_tag(frame, "Clip sound", SOUND_LINE, tag_mid(top, h));
         draw_listen(frame, "Clip sound", tag_mid(top, h), &self.listen, super::listen::CLIP_SOUND);
@@ -1312,6 +1319,7 @@ impl canvas::Program<Message> for OverlayLane {
             let at = t.x(t.position, bounds);
             frame.fill(&Path::rectangle(Point::new(at - 1.0, 0.0), Size::new(2.0, FOLDED)), palette.primary.strong.color);
             draw_head_ground(&mut frame, theme, FOLDED);
+            head_cell(&mut frame, 0.0, FOLDED, colour);
             lane_tag(&mut frame, &self.tag_name(name), colour, mid);
             return vec![frame.into_geometry()];
         }
@@ -1371,6 +1379,7 @@ impl canvas::Program<Message> for OverlayLane {
         let at = t.x(t.position, bounds);
         frame.fill(&Path::rectangle(Point::new(at - 1.0, 0.0), Size::new(2.0, self.height())), palette.primary.strong.color);
         draw_head_ground(&mut frame, theme, self.height());
+        head_cell(&mut frame, 0.0, self.height(), colour);
         lane_tag(&mut frame, &self.tag_name(name), colour, top + h / 2.0);
         if !self.blocks().is_empty() {
             head_rows(&mut frame, theme, self.0.rows.overlay, Some("Motion"));
@@ -1597,6 +1606,14 @@ fn draw_head_ground(frame: &mut Frame, theme: &Theme, h: f32) {
     let palette = theme.extended_palette();
     frame.fill(&Path::rectangle(Point::ORIGIN, Size::new(HEAD, h)), palette.background.base.color);
     frame.fill(&Path::rectangle(Point::new(HEAD - 1.0, 0.0), Size::new(1.0, h)), palette.background.strong.color);
+}
+
+/// A lane's cell in the header column, `top` to `top + h`: a light ground
+/// in the lane's colour and a rule under it, so each lane's header reads
+/// as its own (user, 2026-11-04).
+fn head_cell(frame: &mut Frame, top: f32, h: f32, colour: iced::Color) {
+    frame.fill(&Path::rectangle(Point::new(0.0, top + 1.0), Size::new(HEAD - 1.0, (h - 2.0).max(0.0))), colour.scale_alpha(0.13));
+    frame.fill(&Path::rectangle(Point::new(0.0, top + h - 1.0), Size::new(HEAD - 1.0, 1.0)), iced::Color::from_rgba(1.0, 1.0, 1.0, 0.12));
 }
 
 /// The keyframe rows' names (`draw_rows`'s), in the header column.
@@ -2550,6 +2567,7 @@ impl canvas::Program<Message> for Flags {
             }
         }
         draw_head_ground(&mut frame, theme, h);
+        head_cell(&mut frame, 0.0, h, MARK);
         if !t.folds.marks {
             lane_tag(&mut frame, "▾ Markers", MARK, h / 2.0);
         } else {

@@ -2044,6 +2044,30 @@ full, so a weak machine or a laptop plays smoothly (1080p stays the
 default), maybe with the scrub copy's size beside it. Kept in
 `settings.json`. Milestone «Інші платформи» (the laptop, the tablet).
 
+### 65. The player's work moved onto the GPU, with a setting for machines without one — idea (user, 2026-11-04)
+
+User, after gap 63: "smoother, not perfect. The graphics card sits idle
+while everything is ground on the CPU — for nothing. Make it a setting
+too (for when the program moves to a laptop without a dedicated card)."
+
+Where the player's CPU goes now, to measure before choosing:
+- ordinary videos' paused frames decode from the scrub copy in software
+  (gap 63: chosen because a GPU decoder takes 0.5-1 s to start, longer
+  than the copy's whole jump); playing, the file decodes on the GPU where
+  the probe found one, else in software;
+- every frame is downloaded from the GPU, scaled and converted on the
+  CPU, piped, and uploaded again (gap 52, zero-copy, is the cure);
+- thumbnails, waveforms, the seam measure, the sound are on the CPU.
+
+Ideas: keep one GPU decoder open and seek it instead of starting one per
+jump; scale and convert on the GPU (`scale_cuda` / `scale_vulkan`, which
+were slower once, measure again); then gap 52. A Settings choice
+«Decoding: automatic / GPU / CPU» (the CLI has `--hwaccel` already; the
+top bar's status icon says which is used), automatic picking the GPU
+when there is one and staying light on an integrated one (the laptop,
+gap 40). Goes with gap 64 (the preview's size). Milestone «Експорт»
+(the GPU fast path).
+
 ## Format rule for all of these
 
 New fields only, each `#[serde(default, skip_serializing_if = …)]`, so every

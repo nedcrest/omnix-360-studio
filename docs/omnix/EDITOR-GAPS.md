@@ -2013,6 +2013,26 @@ or a key, never by a drag alone. Designed with gap 4's connected clips
 and gap 8 (several selected), as one format change. Milestone «B-roll і
 групи».
 
+### 63. Quick copies of ordinary videos for the playhead — built 2026-11-04 (`3c06119`), waits for the user's check
+
+User (checking pack 3's snapping): dragging the playhead lagged and a
+core ran at 100 %. Measured: the test clips (phone-like H.264 1080p)
+have a keyframe every 8 s, so each jump of a paused playhead decoded up
+to 240 full frames (0.43 s, ~8 cores at 7.9 s into talk.mp4). The user
+had asked earlier for preview "from a proxy".
+
+Built: `player/scrub.rs`. An ordinary video, once opened, gets a copy in
+the clip cache (`<key>.scrub`, a kind of entry `cache move` / `clear`
+handle): 960 px, a keyframe every 6 frames, no sound, x264 ultrafast, as
+stored (turned and its colours handled on decoding, as the file's);
+about a second and a third of the size for the test clips. Paused frames
+(dragging the playhead, stepping by keys) decode from it in software:
+0.05 s a jump. The full frame still comes from the file once the
+playhead rests. Pictures get none; 360 clips have their LRF.
+
+Left: a copy is made only while the cache is on; long clips take longer
+(roughly 1/15 of their length on the dev PC); no progress shown.
+
 ## Format rule for all of these
 
 New fields only, each `#[serde(default, skip_serializing_if = …)]`, so every

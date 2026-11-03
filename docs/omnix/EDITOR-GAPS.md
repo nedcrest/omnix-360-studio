@@ -164,7 +164,7 @@ project: speech 5.7–11.7 s and 12.9–25.9 s, the music 12 dB down there.
 
 **Not yet:** two sound effects at once (a second SFX lane).
 
-### 4. The clip's sound as its own lane — 4A built with 3; 4B (J/L cuts) built 2026-11-03, waits for the user's check
+### 4. The clip's sound as its own lane — 4A built with 3; 4B (J/L cuts) done 2026-11-03, confirmed by the user
 
 User: would split into video tracks and sound tracks.
 - **Step A (small-medium):** draw a "Clip sound" lane under the cuts, with each
@@ -224,8 +224,8 @@ User: would split into video tracks and sound tracks.
   fades already do, «Sound to picture» in the sound menu to reset, the
   edge stopping (red) at the clip's end. Later maybe a rolling split
   (one drag lengthens one sound and shortens the next).
-- **Built 2026-11-03** (`71f1ef3` model and ops, `6ff67b4` export,
-  `4931abe` player), waits for the user's check:
+- **Done 2026-11-03** (`71f1ef3` model and ops, `6ff67b4` export,
+  `4931abe` player), confirmed by the user with the snapping:
   - `Cut::sound_before` / `sound_after` (seconds past the picture's edge,
     negative = short of it), `CutOp::SoundEdge { cut, end, t, most }` and
     `CutOp::SoundToPicture`. Trims carry them with the picture's edges
@@ -241,7 +241,7 @@ User: would split into video tracks and sound tracks.
     (yellow / red handles, a readout); the sound menu's «Sound back to the
     picture's edges». The shortcuts window lists the drag.
   - The edge snaps (user, 2026-11-03: lining it up by hand was fiddly)
-    within 8 px to the pictures' joins, other cuts' sound edges, sound
+    within 12 px (every edge's snap, raised from 8 at the user's word) to the pictures' joins, other cuts' sound edges, sound
     clips' edges, the playhead; Shift drags it free.
   - **No sliding of a cut's sound** against its picture (user,
     2026-11-03): the sealed, magnetic edit turned out handy, the cut never

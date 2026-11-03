@@ -38,6 +38,10 @@ use std::sync::Arc;
 /// a cut's edge.
 const DIAMOND: f32 = 6.0;
 const PICK: f32 = 7.0;
+/// The header column at the left of every lane (gap 54): each lane's name,
+/// solo and mute, fold, and its own level, fixed while the lanes scroll;
+/// time starts after it. Wide enough for «Clip sound» with S and M.
+pub const HEAD: f32 = 128.0;
 /// How far inside a clip's end a press takes its edge (it was `PICK`, 7);
 /// a cut's edge also reaches as far outside, so an edge is a 24 px target
 /// (WCAG 2.5.8's least), however thin it is drawn (`TIMELINE-UX.md`).
@@ -428,17 +432,17 @@ pub struct State {
 
 impl Timeline {
     fn width(b: Rectangle) -> f32 {
-        (b.width - 2.0 * PICK).max(1.0)
+        (b.width - HEAD - 2.0 * PICK).max(1.0)
     }
 
     /// Edit time to x, with room either side for diamonds at the ends.
     /// Times outside the window land outside the widget.
     fn x(&self, t: f64, b: Rectangle) -> f32 {
-        PICK + ((t - self.start) / self.span.max(1e-9)) as f32 * Self::width(b)
+        HEAD + PICK + ((t - self.start) / self.span.max(1e-9)) as f32 * Self::width(b)
     }
 
     fn t(&self, x: f32, b: Rectangle) -> f64 {
-        (self.start + ((x - PICK) / Self::width(b)) as f64 * self.span).clamp(0.0, self.duration)
+        (self.start + ((x - HEAD - PICK) / Self::width(b)) as f64 * self.span).clamp(0.0, self.duration)
     }
 
     fn zoomed(&self) -> bool {
@@ -448,7 +452,7 @@ impl Timeline {
     /// The scrollbar's thumb, left and right x.
     fn scroll_thumb(&self, b: Rectangle) -> (f32, f32) {
         let w = Self::width(b) as f64 / self.duration.max(1e-9);
-        (PICK + (self.start * w) as f32, PICK + ((self.start + self.span) * w) as f32)
+        (HEAD + PICK + (self.start * w) as f32, HEAD + PICK + ((self.start + self.span) * w) as f32)
     }
 
     fn block_at(&self, x: f32, b: Rectangle) -> Option<usize> {
@@ -783,8 +787,6 @@ impl Timeline {
                 let (l, r) = (self.x(m.from, b), self.x(m.from + m.len, b));
                 frame.fill(&Path::rounded_rectangle(Point::new(l, mid - 3.0), Size::new((r - l).max(2.0), 6.0), 2.0.into()), colour.scale_alpha(0.7));
             }
-            lane_tag(frame, &self.sound_tag(li), colour, mid);
-            draw_listen(frame, &self.sound_tag(li), mid, &self.listen, super::listen::lane_of(*which));
             return;
         }
         let lane = Path::rounded_rectangle(Point::new(self.x(0.0, b), top), Size::new((self.x(self.duration, b) - self.x(0.0, b)).max(0.0), h), 4.0.into());
@@ -857,8 +859,6 @@ impl Timeline {
         for i in 0..blocks.len() {
             draw_tag(frame, self.level_tag_at(Own::Clip(*which, i), b), &blocks[i].level);
         }
-        lane_tag(frame, &self.sound_tag(li), colour, top + h / 2.0);
-        draw_listen(frame, &self.sound_tag(li), top + h / 2.0, &self.listen, super::listen::lane_of(*which));
     }
 
     /// An own volume line (a cut's or a sound clip's) inside its block on
@@ -934,8 +934,7 @@ impl Timeline {
             frame.fill(&Path::rectangle(Point::new(l, top), Size::new(r - l, h)), iced::Color::from_rgba(0.0, 0.0, 0.0, 0.35));
         }
         self.draw_sound(frame, b);
-        lane_tag(frame, "Clip sound", SOUND_LINE, top + h / 2.0);
-        draw_listen(frame, "Clip sound", top + h / 2.0, &self.listen, super::listen::CLIP_SOUND);
+
     }
 
     /// Each cut's sound line on the clip sound lane, for cuts with points:
@@ -965,8 +964,8 @@ impl Timeline {
         if r - l < w + 12.0 || r < 0.0 || l > b.width {
             return None;
         }
-        // Past the lane's name and its solo and mute buttons.
-        let x = l.max(PICK + 125.0).min(r - w - 4.0);
+        // Inside its clip, past the header column.
+        let x = l.max(HEAD + PICK + 4.0).min(r - w - 4.0);
         Some(Rectangle::new(Point::new(x, top + h / 2.0 - 7.0), Size::new(w, 14.0)))
     }
 
@@ -981,6 +980,46 @@ impl Timeline {
         }
     }
 
+    /// The header column over the cut, clip sound, keyframe and sound
+    /// lanes: each lane's name, solo and mute, and its level when not 0 dB.
+    fn draw_heads(&self, frame: &mut Frame, theme: &Theme) {
+        draw_head_ground(frame, theme, self.rows.height);
+        let ink = theme.extended_palette().background.base.text.scale_alpha(0.45);
+        lane_tag(frame, "Video", theme.extended_palette().primary.base.color, self.rows.cuts / 2.0);
+        let (top, h) = (self.rows.cuts + 1.0, self.rows.clip_sound - 2.0);
+        lane_tag(frame, "Clip sound", SOUND_LINE, tag_mid(top, h));
+        draw_listen(frame, "Clip sound", tag_mid(top, h), &self.listen, super::listen::CLIP_SOUND);
+        head_level(frame, top, h, self.clips_db);
+        head_rows(frame, theme, self.rows.effects_top, (self.rows.keys > 0.0).then_some("View"));
+        frame.fill_text(Text { content: "SOUND".into(), position: Point::new(PICK + 4.0, self.rows.seek_top + SEEK / 2.0), color: ink, size: 9.5.into(), align_y: Vertical::Center, ..Default::default() });
+        for (li, lane) in self.sounds.iter().enumerate() {
+            let colour = lane_colour(crate::mixcheck::Lane::Track(lane.which), theme);
+            let (top, h) = (self.rows.sound_top(li) + 2.0, self.rows.lane_h(li) - 4.0);
+            let mid = if self.rows.folded[li] { self.rows.sound_top(li) + self.rows.lane_h(li) / 2.0 } else { tag_mid(top, h) };
+            lane_tag(frame, &self.sound_tag(li), colour, mid);
+            draw_listen(frame, &self.sound_tag(li), mid, &self.listen, super::listen::lane_of(lane.which));
+            if !self.rows.folded[li] {
+                head_level(frame, top, h, lane.track.volume);
+            }
+        }
+    }
+
+    /// The menu a sound lane's header opens: the lane's own level and what
+    /// acts on the whole lane.
+    fn head_menu(&self, p: Point) -> Option<super::sound_ui::Menu> {
+        use super::sound_ui::Menu;
+        if self.rows.on_clip_sound(p.y) {
+            Some(Menu::ClipSound)
+        } else {
+            self.rows.sound_at_y(p.y).map(|li| Menu::Track(self.sounds[li].which))
+        }
+    }
+
+    /// The middle of sound lane `li`'s name in the header (`tag_mid`).
+    fn sound_mid(&self, li: usize) -> f32 {
+        if self.rows.folded[li] { self.rows.sound_top(li) + self.rows.lane_h(li) / 2.0 } else { tag_mid(self.rows.sound_top(li) + 2.0, self.rows.lane_h(li) - 4.0) }
+    }
+
     /// The fold toggle under `p`: a folded lane anywhere (but its solo and
     /// mute), an open one on its name tag.
     fn fold_at(&self, p: Point) -> Option<(FoldLane, bool)> {
@@ -988,20 +1027,19 @@ impl Timeline {
         if self.sounds[li].which != SoundTrack::Sfx2 {
             return None;
         }
-        let mid = self.rows.sound_top(li) + self.rows.lane_h(li) / 2.0;
         let folded = self.rows.folded[li];
-        (folded || fold_tag(&self.sound_tag(li), mid).contains(p)).then_some((FoldLane::Sfx2, !folded))
+        (folded || fold_tag(&self.sound_tag(li), self.sound_mid(li)).contains(p)).then_some((FoldLane::Sfx2, !folded))
     }
 
     /// A sound lane's solo (`true`) or mute button under `p`: the lane
     /// (`listen::lane_of`) and which.
     fn listen_button_at(&self, p: Point) -> Option<(usize, bool)> {
         let (name, mid, lane) = if self.rows.on_clip_sound(p.y) {
-            ("Clip sound".to_owned(), self.rows.cuts + self.rows.clip_sound / 2.0, super::listen::CLIP_SOUND)
+            ("Clip sound".to_owned(), tag_mid(self.rows.cuts + 1.0, self.rows.clip_sound - 2.0), super::listen::CLIP_SOUND)
         } else {
             let li = self.rows.sound_at_y(p.y)?;
             let which = self.sounds[li].which;
-            (self.sound_tag(li), self.rows.sound_top(li) + self.rows.lane_h(li) / 2.0, super::listen::lane_of(which))
+            (self.sound_tag(li), self.sound_mid(li), super::listen::lane_of(which))
         };
         let [solo, mute] = listen_buttons(&name, mid);
         if solo.expand(1.0).contains(p) {
@@ -1202,6 +1240,10 @@ impl canvas::Program<Message> for OverlayLane {
                 if self.folded() || fold_tag(&self.tag_name(name), (self.0.rows.overlay - 4.0) / 2.0 + 2.0).contains(p) {
                     return Some(canvas::Action::publish(Message::Fold(self.fold_lane(), !self.folded())).and_capture());
                 }
+                // The rest of the header column: nothing there.
+                if p.x < HEAD {
+                    return None;
+                }
                 if let Some((item, effects, key, at)) = self.key_at(p, bounds) {
                     // A jump there, and a drag retimes it.
                     *drag = OverlayDrag::Key { item, effects, key };
@@ -1267,9 +1309,10 @@ impl canvas::Program<Message> for OverlayLane {
                 let (l, r) = (t.x(o.from, bounds), t.x(o.from + o.len, bounds));
                 frame.fill(&Path::rounded_rectangle(Point::new(l, mid - 3.0), Size::new((r - l).max(2.0), 6.0), 2.0.into()), colour.scale_alpha(0.7));
             }
-            lane_tag(&mut frame, &self.tag_name(name), colour, mid);
             let at = t.x(t.position, bounds);
             frame.fill(&Path::rectangle(Point::new(at - 1.0, 0.0), Size::new(2.0, FOLDED)), palette.primary.strong.color);
+            draw_head_ground(&mut frame, theme, FOLDED);
+            lane_tag(&mut frame, &self.tag_name(name), colour, mid);
             return vec![frame.into_geometry()];
         }
         let (top, h) = (2.0, self.0.rows.overlay - 4.0);
@@ -1325,9 +1368,13 @@ impl canvas::Program<Message> for OverlayLane {
                 }
             }
         }
-        lane_tag(&mut frame, &self.tag_name(name), colour, top + h / 2.0);
         let at = t.x(t.position, bounds);
         frame.fill(&Path::rectangle(Point::new(at - 1.0, 0.0), Size::new(2.0, self.height())), palette.primary.strong.color);
+        draw_head_ground(&mut frame, theme, self.height());
+        lane_tag(&mut frame, &self.tag_name(name), colour, top + h / 2.0);
+        if !self.blocks().is_empty() {
+            head_rows(&mut frame, theme, self.0.rows.overlay, Some("Motion"));
+        }
         // What the drag has done so far, by the pointer.
         let said = match *drag {
             OverlayDrag::Trim { item, start, from, .. } => self.blocks().get(item).map(|o| {
@@ -1539,17 +1586,43 @@ fn draw_rows(frame: &mut Frame, theme: &Theme, t: &Timeline, b: Rectangle, top: 
     let palette = theme.extended_palette();
     let (l, r) = (t.x(0.0, b).max(0.0), t.x(t.duration, b).min(b.width));
     let rows = [Some((top, EFFECTS, "Effects")), keys.map(|k| (top + EFFECTS, KEYS, k))];
-    for (y, h, name) in rows.into_iter().flatten() {
+    for (y, h, _) in rows.into_iter().flatten() {
         frame.fill(&Path::rectangle(Point::new(l, y + 1.0), Size::new((r - l).max(0.0), h - 2.0)), palette.background.weak.color.scale_alpha(0.25));
-        frame.fill_text(Text {
-            content: name.to_owned(),
-            position: Point::new(l.max(PICK) + 12.0, y + h / 2.0),
-            color: palette.background.base.text.scale_alpha(0.35),
-            size: 10.0.into(),
-            align_y: Vertical::Center,
-            ..Default::default()
-        });
     }
+}
+
+/// The header column's ground, over whatever lies under it as the lanes
+/// scroll: the canvas's full height, a rule at its right.
+fn draw_head_ground(frame: &mut Frame, theme: &Theme, h: f32) {
+    let palette = theme.extended_palette();
+    frame.fill(&Path::rectangle(Point::ORIGIN, Size::new(HEAD, h)), palette.background.base.color);
+    frame.fill(&Path::rectangle(Point::new(HEAD - 1.0, 0.0), Size::new(1.0, h)), palette.background.strong.color);
+}
+
+/// The keyframe rows' names (`draw_rows`'s), in the header column.
+fn head_rows(frame: &mut Frame, theme: &Theme, top: f32, keys: Option<&str>) {
+    let ink = theme.extended_palette().background.base.text.scale_alpha(0.45);
+    for (y, h, name) in [Some((top, EFFECTS, "Effects")), keys.map(|k| (top + EFFECTS, KEYS, k))].into_iter().flatten() {
+        frame.fill_text(Text { content: name.to_owned(), position: Point::new(PICK + 14.0, y + h / 2.0), color: ink, size: 10.0.into(), align_y: Vertical::Center, ..Default::default() });
+    }
+}
+
+/// Where a lane's name sits in the header: the middle of a short lane; in
+/// a tall one a little up, its level under it.
+fn tag_mid(top: f32, h: f32) -> f32 {
+    if h >= 34.0 { top + h / 2.0 - 6.0 } else { top + h / 2.0 }
+}
+
+/// A lane's own level under its name in the header, when it isn't 0 dB
+/// and the lane has room: so a clip reading «0 dB» on a lane at −6 dB
+/// isn't a puzzle (the user, 2026-11-02).
+fn head_level(frame: &mut Frame, top: f32, h: f32, db: f64) {
+    if h < 34.0 || db.abs() < 0.05 {
+        return;
+    }
+    let label = if db <= crate::project::OFF_DB { "lane off".to_owned() } else { format!("lane {db:+.1} dB").replace('-', "−") };
+    let colour = if db < 0.0 { iced::Color::from_rgb(0.98, 0.80, 0.18) } else { iced::Color::from_rgb(1.0, 0.55, 0.3) };
+    frame.fill_text(Text { content: label, position: Point::new(PICK + 4.0, tag_mid(top, h) + 15.0), color: colour, size: 10.0.into(), align_y: Vertical::Center, ..Default::default() });
 }
 
 /// A keyframe mark at (`x`, `y`) shaped by its ease: smooth a diamond,
@@ -1618,8 +1691,11 @@ impl canvas::Program<Message> for Marks {
             Mouse(mouse::Event::ButtonPressed(mouse::Button::Right)) => {
                 use super::sound_ui::{Menu, SoundMsg};
                 let p = cursor.position_in(bounds)?;
-                // A point or a line first: each has a menu of its own.
-                let menu = if let Some((own, i)) = self.sound_at(p, bounds) {
+                // A lane's header first, then a point or a line: each has a
+                // menu of its own.
+                let menu = if p.x < HEAD {
+                    self.head_menu(p)?
+                } else if let Some((own, i)) = self.sound_at(p, bounds) {
                     Menu::Point(own, i)
                 } else if let Some(own) = self.on_sound_line(p, bounds) {
                     Menu::Line(own)
@@ -1651,6 +1727,10 @@ impl canvas::Program<Message> for Marks {
                     Message::Listen(lane, solo)
                 } else if let Some((lane, folded)) = self.fold_at(p) {
                     Message::Fold(lane, folded)
+                } else if p.x < HEAD {
+                    // A lane's header: its own settings in one place.
+                    let menu = self.head_menu(p)?;
+                    Message::Sound(super::sound_ui::SoundMsg::Menu(Some((menu, cursor.position()?))))
                 } else if let Some((cut, key, t)) = self.effect_at(p, bounds) {
                     // A jump there, and a drag retimes it.
                     *drag = Drag::Effect { cut, key };
@@ -1891,9 +1971,7 @@ impl canvas::Program<Message> for Marks {
         let (x0, x1) = (self.x(0.0, bounds), self.x(self.duration, bounds));
         // Where the picture's lanes end and the sound's begin: the sound
         // group's name, then a rule across the edit (gap 50d).
-        let name = Text { content: "SOUND".into(), position: Point::new(PICK + 4.0, mid), color: palette.background.base.text.scale_alpha(0.45), size: 9.5.into(), align_y: Vertical::Center, ..Default::default() };
-        frame.fill_text(name);
-        let x0 = x0.max(PICK + 44.0);
+        let x0 = x0.max(HEAD + PICK);
         frame.fill(&Path::rectangle(Point::new(x0, mid - 0.5), Size::new((x1 - x0).max(0.0), 1.0)), palette.background.strong.color);
         let at = self.x(self.position, bounds);
         // The view's keyframes, while framing (their row is gone otherwise).
@@ -1917,11 +1995,12 @@ impl canvas::Program<Message> for Marks {
         if self.zoomed() {
             let y = self.rows.height - SCROLL / 2.0 - SCROLL_BAR / 2.0;
             let pill = |l: f32, r: f32| Path::rounded_rectangle(Point::new(l, y), Size::new((r - l).max(SCROLL_BAR), SCROLL_BAR), (SCROLL_BAR / 2.0).into());
-            frame.fill(&pill(PICK, PICK + Timeline::width(bounds)), palette.background.strong.color);
+            frame.fill(&pill(HEAD + PICK, HEAD + PICK + Timeline::width(bounds)), palette.background.strong.color);
             let (l, r) = self.scroll_thumb(bounds);
             let active = matches!(drag, Drag::Scroll { .. });
             frame.fill(&pill(l, r), if active { palette.primary.strong.color } else { palette.background.base.text.scale_alpha(0.5) });
         }
+        self.draw_heads(&mut frame, theme);
         if let (Some(p), Some(said)) = (cursor.position_in(bounds), self.readout(drag)) {
             readout(&mut frame, bounds, p, &said);
         }
@@ -1938,6 +2017,10 @@ impl canvas::Program<Message> for Marks {
             Drag::Level { .. } => mouse::Interaction::ResizingVertically,
             Drag::None => {
                 let Some(p) = cursor.position_in(bounds) else { return mouse::Interaction::default() };
+                // A sound lane's header opens its menu.
+                if p.x < HEAD {
+                    return if self.head_menu(p).is_some() || self.listen_button_at(p).is_some() || self.fold_at(p).is_some() { mouse::Interaction::Pointer } else { mouse::Interaction::default() };
+                }
                 if self.listen_button_at(p).is_some() {
                     return mouse::Interaction::Pointer;
                 }
@@ -2144,6 +2227,26 @@ mod tests {
         // Off (N, or Shift held): nothing snaps.
         t.snapping = false;
         assert_eq!(t.snap(&[7.01], per_px, any), None);
+    }
+
+    #[test]
+    fn time_starts_after_the_header_column_whose_lanes_open_their_menus() {
+        use super::super::sound_ui::Menu;
+        let (t, b) = timeline();
+        assert_eq!(t.x(0.0, b), HEAD + PICK);
+        assert!((t.t(HEAD + PICK + Timeline::width(b), b) - 10.0).abs() < 1e-6);
+        // A sound lane's header: its own menu; the clip sound's too.
+        let li = t.sounds.iter().position(|l| l.which == SoundTrack::Voice).unwrap();
+        let mid = t.rows.sound_top(li) + t.rows.lane_h(li) / 2.0;
+        assert_eq!(t.head_menu(Point::new(HEAD - 10.0, mid)), Some(Menu::Track(SoundTrack::Voice)));
+        assert_eq!(t.head_menu(Point::new(20.0, t.rows.cuts + t.rows.clip_sound / 2.0)), Some(Menu::ClipSound));
+        // The picture's row has none.
+        assert_eq!(t.head_menu(Point::new(20.0, t.rows.cuts / 2.0)), None);
+        // In a tall lane the name and its S and M sit a little up, its
+        // level under them; the buttons are where they're drawn.
+        let at = t.sound_mid(li);
+        let [solo, _] = listen_buttons(&t.sound_tag(li), at);
+        assert_eq!(t.listen_button_at(solo.center()), Some((super::super::listen::lane_of(SoundTrack::Voice), true)));
     }
 
     #[test]
@@ -2446,6 +2549,7 @@ impl canvas::Program<Message> for Flags {
                 frame.fill_text(Text { content: shown, position: Point::new(x + w + 6.0, h / 2.0), color: MARK, size: 12.5.into(), align_y: Vertical::Center, ..Default::default() });
             }
         }
+        draw_head_ground(&mut frame, theme, h);
         if !t.folds.marks {
             lane_tag(&mut frame, "▾ Markers", MARK, h / 2.0);
         } else {
@@ -2465,7 +2569,8 @@ impl canvas::Program<Message> for Flags {
         match event {
             Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
                 let p = cursor.position_in(bounds)?;
-                let flag = t.flags(bounds).into_iter().find(|f| (f.2 - p.x).abs() <= MARK_REACH);
+                // Flags scrolled under the header column aren't there.
+                let flag = t.flags(bounds).into_iter().filter(|f| f.2 >= HEAD).find(|f| (f.2 - p.x).abs() <= MARK_REACH);
                 let Some((cut, mt, ..)) = flag else {
                     return Flags::on_name(p).then(|| canvas::Action::publish(Message::Fold(FoldLane::Marks, !t.folds.marks)).and_capture());
                 };
@@ -2567,6 +2672,7 @@ impl canvas::Program<Message> for Ruler {
             p.close();
         });
         frame.fill(&head, palette.primary.strong.color);
+        draw_head_ground(&mut frame, theme, h);
         draw_snap_line(&mut frame, t, bounds, bounds.height);
         vec![frame.into_geometry()]
     }
@@ -2575,7 +2681,7 @@ impl canvas::Program<Message> for Ruler {
         use iced::Event::Mouse;
         match event {
             Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
-                let p = cursor.position_in(bounds)?;
+                let p = cursor.position_in(bounds).filter(|p| p.x >= HEAD)?;
                 state.dragging = true;
                 Some(canvas::Action::publish(Message::Scrub(self.0.t(p.x, bounds))).and_capture())
             }

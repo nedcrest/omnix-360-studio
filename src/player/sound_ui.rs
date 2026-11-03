@@ -38,6 +38,8 @@ pub enum Scope {
 pub enum Menu {
     Own(Own),
     Track(SoundTrack),
+    /// The clips' own sound as a lane (its header).
+    ClipSound,
     Point(Own, usize),
     Line(Own),
 }
@@ -364,11 +366,18 @@ impl App {
             }
             Menu::Track(which) => {
                 let track = self.edit.track(which);
+                items.push(lane_level(which.name(), track.volume, move |db| Message::TrackLevel(which, db)));
                 if !track.clips.is_empty() {
                     items.push(sound(format!("Normalize every clip on {}…", which.name()), SoundMsg::Open(Scope::Track(which))));
                 }
                 if which == SoundTrack::Music && !track.clips.is_empty() {
                     items.push(item(format!("Lower the music under speech (−{:.0} dB)", self.duck_db), Message::Duck));
+                }
+            }
+            Menu::ClipSound => {
+                items.push(lane_level("Clip sound", self.edit.sound.volume, Message::SoundLevel));
+                if !self.edit.cuts.is_empty() {
+                    items.push(sound(format!("Normalize every cut ({})…", self.edit.cuts.len()), SoundMsg::Open(Scope::All)));
                 }
             }
             // On their own, so a misplaced right-click only opens a menu.
@@ -387,6 +396,18 @@ impl App {
         stack![below, close, pin(opaque(menu)).position(Point::new(at.x, top))].into()
     }
 
+}
+
+/// A lane's own level in its menu: the name and level, and a slider (the
+/// Audio panel's, one undo step a drag).
+fn lane_level<'a>(name: &str, db: f64, set: impl Fn(f64) -> Message + 'a) -> Element<'a, Message> {
+    column![
+        text(format!("{name}: whole lane {}", super::db_label(db))).size(13),
+        iced::widget::slider(crate::project::OFF_DB..=6.0, db, set).step(0.5).on_release(Message::LevelDone),
+    ]
+    .spacing(4)
+    .padding([5, 10])
+    .into()
 }
 
 /// What a run changed, in a sentence or two.

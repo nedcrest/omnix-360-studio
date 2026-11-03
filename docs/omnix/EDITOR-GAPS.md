@@ -1869,8 +1869,9 @@ the playhead says «selected». So: ↓ to a cut, D, Alt+← / →.
 User: the buttons are spread all over the window; group them, the global
 ones at the top, the timeline's at the bottom, where the row has the whole
 width; groups that can be shown collapsed (buttons split by groups) or
-opened (a little wider, the groups' names shown). **Built 2026-11-03**
-(`93ef86b`), waits for the user's check:
+opened (a little wider, the groups' names shown). **Done 2026-11-03**
+(`93ef86b`), confirmed by the user ("fits for now"; they will tune the
+layout during real editing):
 - Top bar, global: App (settings, shortcuts) | Project (new, open, save,
   save as) | Export (aspect, export) | 360 view (while framing a 360 cut)
   … Mix (meter) | Window (interface size, fullscreen) | status.

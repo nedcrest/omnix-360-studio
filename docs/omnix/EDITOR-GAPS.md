@@ -1854,7 +1854,7 @@ footage-agent's Python with librosa / madmom / aubio); which vision model
 
 User: "I wind the playhead down to some cut and want to move it with
 Alt+←, but another cut is selected at the time. Some hotkey?" **Built
-2026-11-03** (`eefa803`), waiting for the user's check: D (Premiere's key)
+2026-11-03**, confirmed by the user the same day (`eefa803`): D (Premiere's key)
 selects the cut under the playhead, the one shown through a crossfade;
 the playhead says «selected». So: ↓ to a cut, D, Alt+← / →.
 

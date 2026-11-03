@@ -361,7 +361,7 @@ place; Esc cancels a drag on the timeline (`Edit::cancel`,
 `drag_epoch`; not the effects sliders, iced's own); «… deleted · Undo»
 in the top bar for 6 s after a delete. From the check: gap 55.
 
-**Pack 3 built 2026-11-03** (`62540fe`), waits for the user's check:
+**Pack 3 done 2026-11-03** (`62540fe`), confirmed by the user 2026-11-04:
 snapping across the timeline, one rule for every drag
 (`Timeline::snap`): within 12 px (raised from 8 at the user's word) of
 the edit's ends, the playhead, the pictures' joins, cuts' sounds split
@@ -2013,7 +2013,7 @@ or a key, never by a drag alone. Designed with gap 4's connected clips
 and gap 8 (several selected), as one format change. Milestone «B-roll і
 групи».
 
-### 63. Quick copies of ordinary videos for the playhead — built 2026-11-04 (`3c06119`), waits for the user's check
+### 63. Quick copies of ordinary videos for the playhead — done 2026-11-04 (`3c06119`), confirmed by the user ("smoother, not perfect": the rest is gap 65)
 
 User (checking pack 3's snapping): dragging the playhead lagged and a
 core ran at 100 %. Measured: the test clips (phone-like H.264 1080p)

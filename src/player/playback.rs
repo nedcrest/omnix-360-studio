@@ -276,11 +276,15 @@ impl Playback {
         self.preview_next = None;
         self.parked = None;
         self.preview_from = t;
-        let kind = match (&self.media.proxy, self.playing) {
-            (Some(p), false) => Kind::Lrf(p.clone()),
-            _ => self.kind(),
+        // Paused, the quick copies: a 360 clip's proxy, an ordinary video's
+        // copy for the playhead (`scrub`), decoded in software.
+        let scrub = self.media.flat.filter(|_| !self.playing).and_then(|flat| super::scrub::ready(&self.media.input).map(|p| (p, super::scrub::flat(&flat))));
+        let (kind, hw) = match (&self.media.proxy, self.playing, scrub) {
+            (Some(p), false, _) => (Kind::Lrf(p.clone()), self.media.hw),
+            (_, _, Some((path, flat))) => (Kind::Flat { path, flat, size: None, rate: None }, crate::ffmpeg::Hwaccel::Software),
+            _ => (self.kind(), self.media.hw),
         };
-        self.stream = match source::spawn(kind, self.media.hw, t, self.media.fps) {
+        self.stream = match source::spawn(kind, hw, t, self.media.fps) {
             Ok(s) => Some(s),
             Err(e) => {
                 self.error = Some(format!("{e:#}"));

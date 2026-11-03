@@ -33,7 +33,7 @@ use telemetry_parser::rig::CameraRig;
 const FORMAT: u32 = 2;
 const MAGIC: &[u8; 8] = b"rOsmo360";
 /// What entries are named, after the fingerprint.
-const KINDS: [&str; 4] = ["telemetry", "thumbs", "wave", "wave-even"];
+const KINDS: [&str; 5] = ["telemetry", "thumbs", "wave", "wave-even", "scrub"];
 
 static OFF: AtomicBool = AtomicBool::new(false);
 
@@ -141,6 +141,12 @@ pub fn store_waveform(song: &Path, kind: &str, step: f64, peaks: &[f32], duratio
             Ok(())
         });
     }
+}
+
+/// Where the player's quick copy of ordinary video `input` goes
+/// (`player::scrub`): an MP4 of its own, not an entry with a header.
+pub fn scrub(input: &Path) -> Option<PathBuf> {
+    entry(input, "scrub")
 }
 
 /// The entry of kind `kind` for `input`, unless the cache is off or there is

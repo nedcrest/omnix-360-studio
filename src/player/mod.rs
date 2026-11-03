@@ -39,6 +39,7 @@ mod tracks;
 mod overlay_ui;
 mod cuts;
 mod record_ui;
+mod scrub;
 mod shortcuts;
 mod marks;
 use crate::model::selection::Selection;

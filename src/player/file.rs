@@ -217,6 +217,9 @@ impl App {
                         let (input, duration) = (media.input.clone(), media.duration);
                         let thumbs = (!self.thumbs.contains_key(&input)).then(|| Task::run(thumbs::stream(media.clone()), |m| m));
                         self.thumbs.entry(input.clone()).or_default();
+                        if let Some(flat) = media.flat {
+                            super::scrub::make(input.clone(), flat);
+                        }
                         self.library.push(media);
                         self.mark_flat();
                         if self.loading_adds {

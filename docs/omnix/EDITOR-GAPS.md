@@ -1792,8 +1792,8 @@ Proposed for editing mode (framing keeps its keys), as Premiere and FCP:
 - Home / End the edit's start and end;
 - the step shown by the playhead for a moment («−1 f», «+1 s», «join»),
   as the drag readout is.
-**Built 2026-11-03** (`915239d`), waiting for the user's check, with
-these defaults: the 5 s jump is gone (Alt+← / → move a cut since pack
+**Built 2026-11-03** (`915239d`), confirmed by the user the same day
+(after the fixes under gap 5), with these defaults: the 5 s jump is gone (Alt+← / → move a cut since pack
 2); Shift's step is one second; ↑ / ↓ and Home only in editing (framing
 keeps pitch and the view's reset), End in editing too; a field of the
 angles strip being typed in keeps ↑ / ↓.
@@ -1801,8 +1801,8 @@ angles strip being typed in keeps ↑ / ↓.
 ### 56. A window of every shortcut, grouped — small (user, 2026-11-03)
 
 User, to check gap 55 and the rest at once: "make a separate element
-that opens a help with the shortcuts, grouped". **Built 2026-11-03**,
-waiting for the user's check: ? or F1, or a keyboard button beside
+that opens a help with the shortcuts, grouped". **Built 2026-11-03**;
+its button checked by the user, ? / F1 to check on a wired keyboard: ? or F1, or a keyboard button beside
 Settings, opens a window over the editor (`player/shortcuts.rs`): play
 and the playhead, cuts, the timeline's mouse gestures, sound, framing,
 panels and files. Esc, ?, F1 or a click outside closes it. Hidden until
@@ -1849,6 +1849,14 @@ the cutting in «ШІ-монтаж».
 Open when designing: which beat tracker (a Rust onset detector, or
 footage-agent's Python with librosa / madmom / aubio); which vision model
 (licence: permissive only, as for 53a); how the AI picks among the ways.
+
+### 58. Select the cut under the playhead by a key — small (user, 2026-11-03)
+
+User: "I wind the playhead down to some cut and want to move it with
+Alt+←, but another cut is selected at the time. Some hotkey?" **Built
+2026-11-03** (`eefa803`), waiting for the user's check: D (Premiere's key)
+selects the cut under the playhead, the one shown through a crossfade;
+the playhead says «selected». So: ↓ to a cut, D, Alt+← / →.
 
 ## Format rule for all of these
 

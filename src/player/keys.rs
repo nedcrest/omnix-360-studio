@@ -297,13 +297,26 @@ impl App {
         self.step_note(note)
     }
 
-    /// The playhead to the previous (`dir` < 0) or next join: where any
-    /// cut, sound clip or overlay starts or ends, and the edit's ends.
+    /// The playhead to the previous (`dir` < 0) or next stop: a marker, a
+    /// cut's edge, a sound clip's or an overlay's, the edit's ends. Said by
+    /// the playhead as what it is («← marker»).
     pub(super) fn to_join(&mut self, dir: f64) -> Task<Message> {
-        let now = self.position();
-        let t = joins(&self.edit).into_iter().filter(|&t| if dir < 0.0 { t < now - 1e-3 } else { t > now + 1e-3 }).min_by(|a, b| (a - now).abs().total_cmp(&(b - now).abs()));
-        match t {
-            Some(t) => self.seek_to(t, if dir < 0.0 { "← join" } else { "join →" }),
+        match next_stop(&stops(&self.edit), self.aimed(), dir, 1.0 / self.fps()) {
+            Some((t, stop)) => {
+                let note = match (stop, dir < 0.0) {
+                    (Stop::Marker, true) => "← marker",
+                    (Stop::Marker, false) => "marker →",
+                    (Stop::Cut, true) => "← cut",
+                    (Stop::Cut, false) => "cut →",
+                    (Stop::Sound, true) => "← sound",
+                    (Stop::Sound, false) => "sound →",
+                    (Stop::Overlay, true) => "← overlay",
+                    (Stop::Overlay, false) => "overlay →",
+                    (Stop::Edge, true) => "start",
+                    (Stop::Edge, false) => "end",
+                };
+                self.seek_to(t, note)
+            }
             None => Task::none(),
         }
     }
@@ -316,16 +329,44 @@ impl App {
     }
 }
 
-/// Every edit time where something starts or ends: the cuts' joins, the
-/// sound clips' and overlay items' edges, the markers, the edit's start
-/// and end.
-fn joins(edit: &crate::model::edit::Edit) -> Vec<f64> {
+/// What the playhead stops at with ↑ / ↓; where several meet, the first
+/// in this order names the stop.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum Stop {
+    Marker,
+    Cut,
+    Sound,
+    Overlay,
+    Edge,
+}
+
+/// Every edit time something starts or ends at: the markers (shown ones),
+/// the cuts' joins, the sound clips' and overlay items' edges, the edit's
+/// start and end.
+fn stops(edit: &crate::model::edit::Edit) -> Vec<(f64, Stop)> {
     let offsets = crate::project::offsets(&edit.cuts);
-    let cuts = edit.cuts.iter().zip(&offsets).flat_map(|(c, &at)| [at, at + c.len()]);
-    let sounds = crate::project::SoundTrack::ALL.into_iter().flat_map(|w| edit.track(w).clips.iter().flat_map(|c| [c.at, c.ends()]).collect::<Vec<_>>());
-    let items = edit.lanes().flat_map(|l| &l.items).flat_map(|it| [it.at, it.ends()]);
-    let marks = edit.cuts.iter().zip(&offsets).flat_map(|(c, &at)| c.marks.iter().filter(|m| m.t >= c.start && m.t <= c.end).map(move |m| at + m.t - c.start).collect::<Vec<_>>());
-    std::iter::once(0.0).chain(cuts).chain(sounds).chain(items).chain(marks).chain(std::iter::once(edit.duration())).collect()
+    let mut all = vec![(0.0, Stop::Edge), (edit.duration(), Stop::Edge)];
+    for (c, &at) in edit.cuts.iter().zip(&offsets) {
+        all.extend([(at, Stop::Cut), (at + c.len(), Stop::Cut)]);
+        all.extend(c.marks.iter().filter(|m| m.t >= c.start && m.t <= c.end).map(|m| (at + m.t - c.start, Stop::Marker)));
+    }
+    for w in crate::project::SoundTrack::ALL {
+        all.extend(edit.track(w).clips.iter().flat_map(|c| [(c.at, Stop::Sound), (c.ends(), Stop::Sound)]));
+    }
+    all.extend(edit.lanes().flat_map(|l| &l.items).flat_map(|it| [(it.at, Stop::Overlay), (it.ends(), Stop::Overlay)]));
+    all
+}
+
+/// The stop before `now` (`dir` < 0) or after it, more than half a
+/// `frame` away: the playhead lands on the frame nearest a stop, which can
+/// be a hair past it, and that stop counted as the next again, so ↑ stood
+/// still (the user, 2026-11-03). Several within half a frame are one, named
+/// by the first kind.
+fn next_stop(stops: &[(f64, Stop)], now: f64, dir: f64, frame: f64) -> Option<(f64, Stop)> {
+    let gap = frame / 2.0 + 1e-6;
+    let ahead = |t: f64| if dir < 0.0 { t < now - gap } else { t > now + gap };
+    let nearest = stops.iter().map(|s| s.0).filter(|&t| ahead(t)).min_by(|a, b| (a - now).abs().total_cmp(&(b - now).abs()))?;
+    stops.iter().filter(|s| (s.0 - nearest).abs() <= gap && ahead(s.0)).min_by_key(|s| s.1).map(|&(_, stop)| (nearest, stop))
 }
 
 #[cfg(test)]
@@ -334,14 +375,14 @@ mod tests {
     use crate::project::{Cut, MusicClip};
 
     #[test]
-    fn joins_are_every_edge_on_the_edit() {
+    fn stops_are_every_edge_and_marker_on_the_edit() {
         let mut e = crate::model::edit::Edit::default();
         e.cuts = vec![Cut::new("a".into(), 0.0, 4.0), Cut { crossfade: 1.0, ..Cut::new("b".into(), 0.0, 3.0) }];
         e.music.clips.push(MusicClip { input: "s".into(), at: 2.5, start: 0.0, end: 1.0, ..Default::default() });
         // A marker in b at its clip time 1 s (edit 4 s), and one past its out
         // point, not shown, not a stop.
         e.cuts[1].marks = vec![crate::project::Mark { t: 1.5, note: String::new() }, crate::project::Mark { t: 9.0, note: String::new() }];
-        let mut t = joins(&e);
+        let mut t: Vec<f64> = stops(&e).into_iter().map(|s| s.0).collect();
         t.sort_by(f64::total_cmp);
         t.dedup();
         // a 0..4, b overlapping it from 3 to 6, the song 2.5..3.5, b's marker.
@@ -357,5 +398,41 @@ mod tests {
         assert_eq!(k("х", Code::BracketLeft, false), Key::Character("[".into()));
         assert_eq!(k("ю", Code::Period, false), Key::Character(".".into()));
         assert_eq!(k("z", Code::KeyZ, false), Key::Character("z".into()), "Latin as it is");
+    }
+
+    /// ↑ from the end, the playhead landing on the nearest frame each time
+    /// as the player's does, visits every stop once, back to the start, and
+    /// ↓ every one on to the end: none stands still (the user found ↑ stuck
+    /// at a marker and a sound's end that weren't on a frame).
+    #[test]
+    fn up_and_down_visit_every_stop_and_never_stand_still() {
+        let mut e = crate::model::edit::Edit::default();
+        e.cuts = vec![Cut::new("a".into(), 0.0, 5.7), Cut::new("b".into(), 2.4, 8.4), Cut::new("c".into(), 0.0, 15.0)];
+        e.cuts[1].marks = vec![crate::project::Mark { t: 3.7779, note: String::new() }, crate::project::Mark { t: 7.0123, note: "the end of the talk".into() }];
+        e.cuts[0].marks = vec![crate::project::Mark { t: 4.1, note: String::new() }];
+        e.sfx.clips.push(MusicClip { input: "bell".into(), at: 5.7, start: 0.0, end: 1.594, ..Default::default() });
+        let frame = 1.0 / 30.0;
+        let snap = |t: f64| (t / frame).round() * frame;
+        let all: Vec<(f64, Stop)> = stops(&e);
+        let mut distinct: Vec<f64> = all.iter().map(|s| s.0).collect();
+        distinct.sort_by(f64::total_cmp);
+        distinct.dedup_by(|a, b| (*a - *b).abs() <= frame / 2.0);
+        let walk = |dir: f64, from: f64| {
+            let (mut now, mut seen) = (from, Vec::new());
+            while let Some((t, _)) = next_stop(&all, now, dir, frame) {
+                seen.push(t);
+                now = snap(t);
+                assert!(seen.len() <= distinct.len(), "stuck going {dir}: {seen:?}");
+            }
+            seen
+        };
+        let up = walk(-1.0, snap(e.duration()));
+        let down = walk(1.0, 0.0);
+        assert_eq!(up.len(), distinct.len() - 1, "every stop but the end, from the end: {up:?}");
+        assert_eq!(down.len(), distinct.len() - 1, "every stop but the start: {down:?}");
+        assert!(up.windows(2).all(|w| w[0] > w[1]) && down.windows(2).all(|w| w[0] < w[1]));
+        // Named by what they are: the marker in b, the bell's end.
+        assert_eq!(next_stop(&all, snap(11.0), -1.0, frame).map(|s| s.1), Some(Stop::Marker), "b's 7.0123 s is the edit's 10.31 s");
+        assert_eq!(next_stop(&all, snap(7.5), -1.0, frame).map(|s| s.1), Some(Stop::Sound));
     }
 }

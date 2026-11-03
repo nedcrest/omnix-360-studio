@@ -174,6 +174,8 @@ see only the plain ops.
   one batch, prints each outcome and the diff. `rosmo360 describe
   project.json`: what an op needs (ids, names, times), in short text.
   The existing `duck` and `normalize` become thin wrappers over it.
+  `rosmo360 blank DIR` makes the black picture of a blank cut (gap 32)
+  and prints its path for a cut `add` op.
 - **AI (later, milestone 10).** One tool per op from its JSON Schema
   (`schemars`, doc comments as the descriptions), read-only query tools
   (`describe`, `find_speech`, `mixcheck`), `preview`, `undo`.

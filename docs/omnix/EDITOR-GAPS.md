@@ -770,22 +770,28 @@ I want."
   and 31e on the main timeline; then the window 31c; 31d whenever the
   one-clip editor gets its menu.
 
-### 32. A blank stretch on the main lane — idea (user, 2026-10-23)
+### 32. A blank stretch on the main lane — built 2026-11-03 (`1c2a457`), waits for the user's check
 
-A button that puts a blank (black) cut of a chosen length at the playhead
-or at a join: room for an overlay, a title or a sound with a custom stinger
-over it. The user notes it can be done today by adding a picture or a GIF as
-a cut. Cheapest build: a generated black picture (pictures already work as
-cuts, 5 s by default), named "Blank" on the timeline, and maybe a colour
-choice. Keeps the edit magnetic: the blank is a cut like any other.
+Asked by the user 2026-10-23, again as a «spacer» 2026-11-03: a black
+stretch on the main lane, room for an overlay, a title or a sound with a
+custom stinger over it.
 
-The user also confirmed (2026-10-23): **the magnetic edit is handy.** Keep
-it the default; gaps happen only as blank cuts.
+How it works:
+- The top bar's **+Blank** (after +Clip) writes `Blank.png` (320×180,
+  black) once into the project's `08_graphics/` (before the first save,
+  the cache's `blank/`) and adds it as a cut at the playhead, by the
+  bin's route (`CutOp::Add`, `Place::At`). At a join it goes between the
+  cuts; mid-cut it splits the cut. It is a picture: 5 s, trimmed at will,
+  named «Blank» on the timeline from the file's stem. One file serves
+  every blank.
+- `rosmo360 blank DIR` makes the same file and prints its path, so a
+  script or an agent adds one with a cut `add` op.
+- **The magnetic edit stays** (user, 2026-10-23: "handy"): gaps happen
+  only as blank cuts.
 
-Raised again by the user as a «spacer» (2026-11-03), with the same route:
-a black picture on the picture lane. With the ops API it is one
-`CutOp::Add` of the generated black picture (its length given, placed at
-the playhead or a join), so the AI edit and scripts get it too.
+Decided by default: no colour choice and no length dialog (drag the edge;
+the user can ask for either). A blank made before the first save keeps
+its path in the cache.
 
 ### 33. Right-click menu on a cut's sound — small-medium (user, 2026-10-24)
 

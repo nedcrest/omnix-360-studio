@@ -611,6 +611,15 @@ pub struct Cut {
     pub sound_fade_in: f64,
     #[serde(default, skip_serializing_if = "is_zero")]
     pub sound_fade_out: f64,
+    /// Its sound starts this many seconds before its picture, under the
+    /// cut before (a J-cut), or after its picture starts when negative
+    /// (silence there). The picture's edges still make the joins.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub sound_before: f64,
+    /// Its sound runs on this long after its picture, under the cut after
+    /// (an L-cut), or stops short when negative.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub sound_after: f64,
     /// What normalizing measured of what the cut plays, LUFS, shown in
     /// Info; it says nothing about the sound once trimmed again.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -651,6 +660,8 @@ impl Cut {
             clean: false,
             sound_fade_in: 0.0,
             sound_fade_out: 0.0,
+            sound_before: 0.0,
+            sound_after: 0.0,
             loudness: None,
             flat: false,
             lut_applied: None,
@@ -685,9 +696,64 @@ impl Cut {
         Ok(())
     }
 
-    /// How loud its sound is at clip time `t` from its fades, 0..1.
+    /// How loud its sound is at clip time `t` under its picture, from its
+    /// fades, 0..1: silent where its sound stops short of the picture. A
+    /// fade at an edge past the picture belongs to the sound beyond it
+    /// (`sound_beyond`).
     pub fn sound_fade(&self, t: f64) -> f64 {
-        fade_ramp(t - self.start, self.end - t, self.sound_fade_in, self.sound_fade_out)
+        let (from, to) = self.sound_span();
+        if t < from || t > to {
+            return 0.0;
+        }
+        let fade_in = if self.sound_before > 0.0 { 0.0 } else { self.sound_fade_in };
+        let fade_out = if self.sound_after > 0.0 { 0.0 } else { self.sound_fade_out };
+        fade_ramp(t - from, to - t, fade_in, fade_out)
+    }
+
+    /// Where its sound starts and ends, clip time.
+    pub fn sound_span(&self) -> (f64, f64) {
+        (self.start - self.sound_before, self.end + self.sound_after)
+    }
+
+    /// Its sound beyond its picture, for a cut whose picture starts at edit
+    /// time `at`: the stretch before it (a J-cut) and after it (an L-cut),
+    /// as sound clips on the edit with the cut's own level, points and
+    /// filters, and its fade at the sound's outer edge. The player and the
+    /// export play them as they play sound clips, so the two sound alike.
+    pub fn sound_beyond(&self, at: f64) -> Vec<MusicClip> {
+        let like = |at: f64, start: f64, end: f64| MusicClip {
+            input: self.sound_file(),
+            at,
+            start,
+            end,
+            gain: self.gain,
+            even: self.even,
+            mute: self.mute,
+            low_cut: self.low_cut,
+            clean: self.clean,
+            volume: self.volume.clone(),
+            ..Default::default()
+        };
+        let mut beyond = Vec::new();
+        if self.sound_before > 0.0 {
+            beyond.push(MusicClip { fade_in: self.sound_fade_in.min(self.sound_before), ..like(at - self.sound_before, self.start - self.sound_before, self.start) });
+        }
+        if self.sound_after > 0.0 {
+            beyond.push(MusicClip { fade_out: self.sound_fade_out.min(self.sound_after), ..like(at + self.len(), self.end, self.end + self.sound_after) });
+        }
+        beyond
+    }
+
+    /// Keeps its sound within its clip (`0..most`) and at least `MIN_CUT`
+    /// long, after its picture's edges moved.
+    pub fn settle_sound(&mut self, most: f64) {
+        self.sound_before = self.sound_before.min(self.start);
+        self.sound_after = self.sound_after.min((most - self.end).max(0.0));
+        let (from, to) = self.sound_span();
+        if to - from < crate::model::edit::MIN_CUT {
+            self.sound_before = self.sound_before.max(0.0);
+            self.sound_after = self.sound_after.max(0.0);
+        }
     }
 
     pub fn len(&self) -> f64 {

@@ -74,6 +74,8 @@ fn cut_op() -> impl Strategy<Value = CutOp> {
         (id(), time(), "[a-z]{0,6}").prop_map(|(cut, t, note)| CutOp::Mark { cut, t, note }),
         (id(), time(), time()).prop_map(|(cut, from, t)| CutOp::MoveMark { cut, from, t }),
         (id(), time()).prop_map(|(cut, t)| CutOp::Unmark { cut, t }),
+        (id(), end(), time()).prop_map(|(cut, end, t)| CutOp::SoundEdge { cut, end, t, most: 6.0 }),
+        id().prop_map(|cut| CutOp::SoundToPicture { cut }),
     ]
 }
 

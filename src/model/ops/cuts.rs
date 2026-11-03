@@ -55,6 +55,14 @@ pub enum CutOp {
     /// The marker at `from` to `t`, within the cut.
     MoveMark { cut: Id, from: f64, t: f64 },
     Unmark { cut: Id, t: f64 },
+    /// Its sound's edge (`in`: where it starts, `out`: where it ends) to
+    /// clip time `t`, the picture where it is: past the picture's edge the
+    /// sound plays under the cut beside (a J- or L-cut), inside it the
+    /// picture goes on in silence. Kept within the clip (`most` is its
+    /// length) and at least `MIN_CUT` long.
+    SoundEdge { cut: Id, end: End, t: f64, most: f64 },
+    /// Its sound back to its picture's edges.
+    SoundToPicture { cut: Id },
 }
 
 /// Two markers closer than this (seconds) are one.
@@ -152,6 +160,26 @@ pub(super) fn apply(p: &mut Project, op: &CutOp) -> Result<Outcome, OpError> {
             c.marks.insert(to, m);
             said(format!("cut #{cut}: marker {from:.2} s → {at:.2} s"))
         }
+        &CutOp::SoundEdge { cut, end, t, most } => {
+            let i = find(p, cut)?;
+            if !t.is_finite() {
+                return Err(OpError::Invalid(format!("a sound edge at {t} s")));
+            }
+            let c = &mut p.cuts[i];
+            let (from, to) = c.sound_span();
+            match end {
+                End::In => c.sound_before = c.start - t.clamp(0.0, (to - MIN_CUT).max(0.0)),
+                End::Out => c.sound_after = t.clamp(from + MIN_CUT, most.max(from + MIN_CUT)) - c.end,
+            }
+            let (from, to) = c.sound_span();
+            said(format!("cut #{cut}: sound {from:.2}-{to:.2} s (picture {:.2}-{:.2})", c.start, c.end))
+        }
+        &CutOp::SoundToPicture { cut } => {
+            let i = find(p, cut)?;
+            let c = &mut p.cuts[i];
+            (c.sound_before, c.sound_after) = (0.0, 0.0);
+            said(format!("cut #{cut}: sound back to its picture"))
+        }
         &CutOp::Unmark { cut, t } => {
             let i = find(p, cut)?;
             let c = &mut p.cuts[i];
@@ -188,6 +216,36 @@ mod tests {
 
     fn names(e: &Edit) -> Vec<String> {
         e.cuts.iter().map(|c| format!("{}#{}", c.input.display(), c.id)).collect()
+    }
+
+    #[test]
+    fn a_cuts_sound_runs_past_its_picture_or_stops_short_within_its_clip() {
+        let mut e = Edit::default();
+        let a = e.apply(&add("a", 4.0, Place::End)).unwrap().made.unwrap();
+        e.apply(&Op::Cut(CutOp::Trim { cut: a, end: End::In, t: 1.0, most: 4.0 })).unwrap();
+        e.apply(&Op::Cut(CutOp::Trim { cut: a, end: End::Out, t: 3.0, most: 4.0 })).unwrap();
+        let edge = |end, t| Op::Cut(CutOp::SoundEdge { cut: a, end, t, most: 4.0 });
+        // An L-cut a second past the picture, and a J-cut further back than
+        // the clip has footage: stopped at its start.
+        e.apply(&edge(End::Out, 4.0)).unwrap();
+        e.apply(&edge(End::In, -2.0)).unwrap();
+        assert_eq!(e.cuts[0].sound_span(), (0.0, 4.0));
+        assert_eq!((e.cuts[0].sound_before, e.cuts[0].sound_after), (1.0, 1.0));
+        // The sound past the picture: before it at edit time -1 (the cut is
+        // first), after it from 2 s.
+        let beyond = e.cuts[0].sound_beyond(0.0);
+        assert_eq!(beyond.iter().map(|c| (c.at, c.start, c.end)).collect::<Vec<_>>(), [(-1.0, 0.0, 1.0), (2.0, 3.0, 4.0)]);
+        // Inside the picture: silence after 2.5 s, the picture going on.
+        e.apply(&edge(End::Out, 2.5)).unwrap();
+        assert_eq!(e.cuts[0].sound_fade(2.4), 1.0);
+        assert_eq!(e.cuts[0].sound_fade(2.6), 0.0);
+        // Never shorter than a cut can be, and back to the picture.
+        e.apply(&edge(End::In, 2.45)).unwrap();
+        let (from, to) = e.cuts[0].sound_span();
+        assert!((to - from - MIN_CUT).abs() < 1e-9, "{from}-{to}");
+        e.apply(&Op::Cut(CutOp::SoundToPicture { cut: a })).unwrap();
+        assert_eq!(e.cuts[0].sound_span(), (1.0, 3.0));
+        super::super::check(&e).unwrap();
     }
 
     #[test]

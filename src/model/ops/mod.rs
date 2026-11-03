@@ -176,6 +176,10 @@ pub fn check(p: &Project) -> Result<(), String> {
             return Err(format!("cut #{} ends before it starts", c.id));
         }
         line(format!("cut #{}", c.id), &c.volume)?;
+        let (from, to) = c.sound_span();
+        if !(from >= -1e-9 && to - from >= crate::model::edit::MIN_CUT - 1e-9) {
+            return Err(format!("cut #{}'s sound runs {from:.3}-{to:.3} s: before its clip or too short", c.id));
+        }
         if c.marks.iter().any(|m| !m.t.is_finite()) || c.marks.windows(2).any(|w| w[0].t > w[1].t) {
             return Err(format!("cut #{}'s markers aren't numbers in time order", c.id));
         }

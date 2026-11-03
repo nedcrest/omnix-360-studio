@@ -237,12 +237,18 @@ impl Project {
             return false;
         }
         // Each half keeps the sound fade at its own outer end.
+        // Each half keeps its sound past the picture at its outer end only.
         let mut second = c.clone();
         second.start = t;
         second.crossfade = 0.0;
         second.sound_fade_in = 0.0;
+        second.sound_before = 0.0;
         self.cuts[i].end = t;
         self.cuts[i].sound_fade_out = 0.0;
+        self.cuts[i].sound_after = 0.0;
+        // A sound stopping short of the picture may leave a half too little.
+        self.cuts[i].settle_sound(f64::INFINITY);
+        second.settle_sound(f64::INFINITY);
         self.cuts.insert(i + 1, second);
         crate::project::settle_crossfades(&mut self.cuts);
         true
@@ -259,6 +265,8 @@ impl Project {
         } else {
             c.end = t.clamp(c.start + MIN_CUT, clip_len.max(c.start + MIN_CUT));
         }
+        // The sound past the picture moves with its edge, within the clip.
+        c.settle_sound(clip_len);
         crate::project::settle_crossfades(&mut self.cuts);
     }
 

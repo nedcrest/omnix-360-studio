@@ -31,12 +31,10 @@ impl App {
         column![start, credit()].into()
     }
 
-    /// The top bar. Groups: settings | the project file | what to add |
+    /// The top bar: what is global. Groups: the app | the project file |
     /// the export; then, while framing a 360 cut, how it is steadied and
-    /// drawn; at the right the meter, the interface's size, fullscreen and
-    /// the status.
+    /// drawn; at the right the meter, the window and the status.
     pub(super) fn top_bar<'a>(&'a self, clip: &'a Clip) -> Element<'a, Message> {
-        let open_hint = if self.edit.cuts.is_empty() { "Open clips (Ctrl+O)" } else { "Add clips to the edit as cuts (Ctrl+O)" };
         let p = &clip.playback;
         let media = &p.media;
 
@@ -79,53 +77,44 @@ impl App {
             (None, Some(_)) => Source::Proxy,
             (size, _) => Source::Osv(size.unwrap_or(1920)),
         };
-        // Groups: settings | the project file | what to add | the export;
-        // then, while framing a 360 cut, how it is steadied and drawn.
+        // Global groups: the app | the project file | the export; then,
+        // while framing a 360 cut, how it is steadied and drawn. What acts
+        // on the timeline is in the transport row.
+        let open = self.bar_labels;
         let top = row![
-            tip(
-                icon_button(SETTINGS, Some(Message::SettingsPanel)),
-                text(if self.settings_open { "Close the Settings panel (Ctrl+,)" } else { "Settings (Ctrl+,)" }),
-                tooltip::Position::Bottom,
-            ),
-            tip(icon_button(KEYBOARD, Some(Message::Shortcuts)), text("Keyboard and mouse shortcuts (? or F1)"), tooltip::Position::Bottom),
+            group("App", open, row![
+                tip(
+                    icon_button(SETTINGS, Some(Message::SettingsPanel)),
+                    text(if self.settings_open { "Close the Settings panel (Ctrl+,)" } else { "Settings (Ctrl+,)" }),
+                    tooltip::Position::Bottom,
+                ),
+                tip(icon_button(KEYBOARD, Some(Message::Shortcuts)), text("Keyboard and mouse shortcuts (? or F1)"), tooltip::Position::Bottom),
+            ]),
             separator(),
-            tip(icon_button(NEW_PROJECT, Some(Message::NewProject)), text("Start a new, empty project (Ctrl+N)"), tooltip::Position::Bottom),
-            tip(icon_button(OPEN_PROJECT, Some(Message::OpenProject)), text("Open a saved edit (Ctrl+Shift+O)"), tooltip::Position::Bottom),
-            tip(
-                icon_button(SAVE, self.unsaved().then_some(Message::SaveProject(false))),
-                text("Save the edit: cuts, keyframes and shape (Ctrl+S)"),
-                tooltip::Position::Bottom,
-            ),
-            tip(
-                icon_button(SAVE_AS, (!self.edit.cuts.is_empty()).then_some(Message::SaveProject(true))),
-                text("Save the edit as a new project file (Ctrl+Shift+S)"),
-                tooltip::Position::Bottom,
-            ),
+            group("Project", open, row![
+                tip(icon_button(NEW_PROJECT, Some(Message::NewProject)), text("Start a new, empty project (Ctrl+N)"), tooltip::Position::Bottom),
+                tip(icon_button(OPEN_PROJECT, Some(Message::OpenProject)), text("Open a saved edit (Ctrl+Shift+O)"), tooltip::Position::Bottom),
+                tip(
+                    icon_button(SAVE, self.unsaved().then_some(Message::SaveProject(false))),
+                    text("Save the edit: cuts, keyframes and shape (Ctrl+S)"),
+                    tooltip::Position::Bottom,
+                ),
+                tip(
+                    icon_button(SAVE_AS, (!self.edit.cuts.is_empty()).then_some(Message::SaveProject(true))),
+                    text("Save the edit as a new project file (Ctrl+Shift+S)"),
+                    tooltip::Position::Bottom,
+                ),
+            ]),
             separator(),
-            tip(icon_button(ADD_CLIP, Some(Message::Open)), text(open_hint), tooltip::Position::Bottom),
-            tip(icon_button(ADD_BLANK, Some(Message::AddBlank)), text("Add a blank (black) cut at the playhead: between cuts at a join, else it splits the cut"), tooltip::Position::Bottom),
-            tip(
-                icon_button(ADD_MUSIC, Some(Message::AddSound(SoundTrack::Music))),
-                text(if self.edit.music.clips.is_empty() { "Add music under the edit" } else { "Add more music, after the last song" }),
-                tooltip::Position::Bottom,
-            ),
-            tip(icon_button(ADD_SFX, Some(Message::AddSound(SoundTrack::Sfx))), text("Add a sound effect at the playhead, on the SFX lane"), tooltip::Position::Bottom),
-            tip(
-                icon_button(ADD_VOICE, Some(Message::Record(super::record_ui::RecordMsg::Toggle))),
-                text(if self.side == Some(Side::Record) { "Close the voice-over panel" } else { "Voice-over: record one at the playhead, or add one from disk" }),
-                tooltip::Position::Bottom,
-            ),
-            tip(icon_button(ADD_OVERLAY, Some(Message::AddOverlay)), text("Add pictures over the picture, at the playhead (PNG transparency shows through)"), tooltip::Position::Bottom),
-            tip(icon_button(ADD_TEXT, Some(Message::AddText)), text("Add text over the picture, at the playhead (typed in the Text panel at the left)"), tooltip::Position::Bottom),
-            separator(),
-            self.export_controls(),
+            group("Export", open, self.export_controls()),
         ]
         // How a 360 clip is steadied and drawn: only while framing one; an
         // ordinary video or a picture has neither.
-        .push((self.framing && media.flat.is_none()).then(|| labelled("Stabilisation", pick_list(&Mode::ALL[..], Some(media.stab.mode()), Message::Stab))))
-        .push((self.framing && media.flat.is_none()).then(|| labelled("Projection", pick_list(&Projection::ALL[..], Some(shown_view.projection), Message::Projection))))
+        .push((self.framing && media.flat.is_none()).then(|| separator()))
         .push((self.framing && media.flat.is_none()).then(|| {
-            row![
+            let pickers = row![
+                labelled("Stabilisation", pick_list(&Mode::ALL[..], Some(media.stab.mode()), Message::Stab)),
+                labelled("Projection", pick_list(&Projection::ALL[..], Some(shown_view.projection), Message::Projection)),
                 tip(labelled("Source", pick_list(sources, Some(source), Message::Source)), text("Playback source: the proxy is quick, the OSV sharper"), tooltip::Position::Bottom),
                 tip(
                     toggler(self.full_on_pause).label("Full res").on_toggle(Message::FullOnPause),
@@ -134,13 +123,14 @@ impl App {
                 ),
             ]
             .spacing(12)
-            .align_y(Alignment::Center)
+            .align_y(Alignment::Center);
+            group("360 view", open, pickers)
         }))
         .push(row![
             space().width(Length::Fill),
             // Beside what's playing: the transport row is full at the
             // window's default width, and cut it off.
-            tip(
+            group("Mix", open, tip(
                 row![
                     canvas(self.meter.view()).width(meter::WIDTH).height(meter::HEIGHT),
                     // The loudest since play started, red past 0 dBFS.
@@ -159,7 +149,8 @@ impl App {
                     self.meter.lufs.integrated().map_or("–".to_string(), |i| format!("{i:.1} LUFS"))
                 )),
                 tooltip::Position::Bottom,
-            ),
+            )),
+            group("Window", open, row![
             tip(icon_button(TEXT_SMALLER, (self.ui_scale > *settings::UI_SCALE.start() + 1e-3).then_some(Message::UiScale(-1))), text("Make the interface smaller"), tooltip::Position::Bottom),
             tip(
                 button(text(format!("{:.0}%", self.ui_scale * 100.0)).size(12)).style(button::text).padding([2, 2]).on_press(Message::UiScale(0)),
@@ -172,6 +163,7 @@ impl App {
                 text(if self.fullscreen { "Leave fullscreen (F)" } else { "Fullscreen (F)" }),
                 tooltip::Position::Bottom,
             ),
+            ].spacing(12).align_y(Alignment::Center)),
             status
         ]
         .spacing(12)
@@ -312,15 +304,12 @@ impl App {
         timeline
     }
 
-    /// The transport row. Groups: play | cutting | undo | effects | the
-    /// Framing switch, and while it's on the view's keyframes and angles;
-    /// then the timeline's zoom and the mix.
+    /// The transport row: what acts on the timeline. Groups: play | add at
+    /// the playhead | cutting | history | effects | the Framing and Mix
+    /// check switches; then the timeline's zoom and the sound. The
+    /// chevron names the groups, here and in the top bar.
     pub(super) fn transport_bar<'a>(&'a self, clip: &'a Clip) -> Element<'a, Message> {
         let p = &clip.playback;
-        let current = self.current_key();
-        let aiming = current.map(|k| Aiming::of(&self.edit.cuts[self.current].keyframes[k].follow));
-        let shown_view = self.shown_view();
-        let (lo, hi) = shown_view.fov_range();
         // With a song selected, C splits that instead.
         let music = self.selection.clip(&self.edit).and_then(|(which, i)| self.edit.track(which).clips.get(i));
         let point = self.selection.point(&self.edit).is_some();
@@ -330,46 +319,15 @@ impl App {
             Some(c) => self.position() > c.at + edit::MIN_CUT && self.position() < c.ends() - edit::MIN_CUT,
             None => self.edit.cuts.get(self.current).is_some_and(|c| p.target() > c.start + edit::MIN_CUT && p.target() < c.end - edit::MIN_CUT),
         };
-        // Groups: play | cutting | undo | effects | the framing switch, and
-        // while it's on the view's keyframes and angles (for a 360 cut also
-        // following and colour tracking); then the timeline's zoom, the mix.
-        let flat = self.on_flat();
-        let framing_tools = self.framing.then(|| {
-            row![
-                tip(
-                    icon_button(KEY_ADD, Some(Message::KeyAdd)),
-                    text(if current.is_some() { "Update this keyframe with the view (K)" } else { "Add a keyframe with this view (K)" }),
-                    tooltip::Position::Top,
-                ),
-                tip(icon_button(KEY_DELETE, current.map(|_| Message::KeyDelete)), text("Delete this keyframe (Del)"), tooltip::Position::Top),
-                tip(
-                    pick_list(&Ease::ALL[..], current.map(|k| self.edit.cuts[self.current].keyframes[k].ease), Message::KeyEase).placeholder("Ease").width(96),
-                    text("How this keyframe moves on to the next (J cycles)"),
-                    // Below: the list opens upwards and the hint would cover it.
-                    tooltip::Position::Bottom,
-                ),
-                tip(labelled("FOV", slider(lo..=hi, shown_view.fov, Message::Fov).width(110)), text("Field of view: how wide the view is (scroll on the view)"), tooltip::Position::Top),
-                tip(icon_button(RESET_VIEW, Some(Message::ResetView)), text("Reset the view: straight ahead, level (0)"), tooltip::Position::Top),
-            ]
-            .push((!flat).then(|| {
-                tip(
-                    pick_list(&Aiming::ALL[..], aiming, Message::KeyFollow).placeholder("Follow").width(140),
-                    text("What this keyframe looks at: fixed angles, the selfie stick (whoever holds it), or a colour track (pick a new one by drawing a box over the subject)"),
-                    tooltip::Position::Bottom,
-                )
-            }))
-            .push((!flat).then(|| {
-                tip(
-                    icon_button(PICK, (self.clip.is_some() && self.tracking.is_none()).then_some(Message::PickColour)),
-                    text("Track a colour: draw a box over a subject (a jacket, a tent); the keyframe here then follows it"),
-                    tooltip::Position::Top,
-                )
-            }))
-            .push((!flat).then(|| tip(icon_button(SAVE_SPHERE, (!p.playing).then_some(Message::Save(Saving::Sphere))), text("Save the whole sphere as an equirect PNG (pause first)"), tooltip::Position::Top)))
-            .spacing(12)
-            .align_y(Alignment::Center)
-        });
+        let open = self.bar_labels;
+        let open_hint = if self.edit.cuts.is_empty() { "Open clips (Ctrl+O)" } else { "Add clips to the edit as cuts (Ctrl+O)" };
         let transport = row![
+            tip(
+                icon_button(if open { CHEVRON_DOWN } else { CHEVRON_RIGHT }, Some(Message::BarLabels)),
+                text(if open { "Hide the groups' names" } else { "Show the groups' names" }),
+                tooltip::Position::Top,
+            ),
+            group("Play", open, row![
             tip(
                 icon_button(if p.playing { PAUSE } else { PLAY }, Some(Message::Toggle)),
                 text(if p.playing { "Pause (Space)" } else { "Play (Space)" }),
@@ -383,7 +341,27 @@ impl App {
                 text("Save this frame as a PNG (pause first)"),
                 tooltip::Position::Top,
             ),
+            ].spacing(12).align_y(Alignment::Center)),
             separator(),
+            group("Add at the playhead", open, row![
+                tip(icon_button(ADD_CLIP, Some(Message::Open)), text(open_hint), tooltip::Position::Top),
+                tip(icon_button(ADD_BLANK, Some(Message::AddBlank)), text("Add a blank (black) cut at the playhead: between cuts at a join, else it splits the cut"), tooltip::Position::Top),
+                tip(
+                    icon_button(ADD_MUSIC, Some(Message::AddSound(SoundTrack::Music))),
+                    text(if self.edit.music.clips.is_empty() { "Add music under the edit" } else { "Add more music, after the last song" }),
+                    tooltip::Position::Top,
+                ),
+                tip(icon_button(ADD_SFX, Some(Message::AddSound(SoundTrack::Sfx))), text("Add a sound effect at the playhead, on the SFX lane"), tooltip::Position::Top),
+                tip(
+                    icon_button(ADD_VOICE, Some(Message::Record(super::record_ui::RecordMsg::Toggle))),
+                    text(if self.side == Some(Side::Record) { "Close the voice-over panel" } else { "Voice-over: record one at the playhead, or add one from disk" }),
+                    tooltip::Position::Top,
+                ),
+                tip(icon_button(ADD_OVERLAY, Some(Message::AddOverlay)), text("Add pictures over the picture, at the playhead (PNG transparency shows through)"), tooltip::Position::Top),
+                tip(icon_button(ADD_TEXT, Some(Message::AddText)), text("Add text over the picture, at the playhead (typed in the Text panel at the left)"), tooltip::Position::Top),
+            ].spacing(12).align_y(Alignment::Center)),
+            separator(),
+            group("Cut", open, row![
             tip(icon_button(SPLIT, can_split.then_some(Message::Split)), text(if music.is_some() { "Split the selected sound at the playhead (C)" } else { "Split the cut at the playhead (C)" }), tooltip::Position::Top),
             tip(
                 icon_button(DELETE_CUT, (self.selection != Selection::None).then_some(Message::DeleteCut)),
@@ -406,16 +384,20 @@ impl App {
                 }),
                 tooltip::Position::Top,
             ),
+            ].spacing(12).align_y(Alignment::Center)),
             separator(),
-            tip(icon_button(UNDO, Some(Message::Undo)), text("Undo (Ctrl+Z)"), tooltip::Position::Top),
-            tip(icon_button(REDO, Some(Message::Redo)), text("Redo (Ctrl+Shift+Z)"), tooltip::Position::Top),
+            group("History", open, row![
+                tip(icon_button(UNDO, Some(Message::Undo)), text("Undo (Ctrl+Z)"), tooltip::Position::Top),
+                tip(icon_button(REDO, Some(Message::Redo)), text("Redo (Ctrl+Shift+Z)"), tooltip::Position::Top),
+            ].spacing(12)),
             separator(),
-            tip(
+            group("Look", open, tip(
                 icon_button(EFFECTS, Some(Message::Effect(effects::EffectMsg::Toggle))),
                 text(if self.side == Some(Side::Effects) { "Close the Effects panel (G)" } else { "Effects: exposure, colour and tone of the cut, keyframed; fades for the edit (G)" }),
                 tooltip::Position::Top,
-            ),
+            )),
             separator(),
+            group("Mode", open, row![
             tip(
                 toggler(self.framing).label("Framing").on_toggle(Message::Framing),
                 text("Framing: the view's keyframes, field of view and angles; for a 360 clip also stabilisation, projection and tracking. Off: editing only, and the view can't be turned by accident."),
@@ -426,26 +408,93 @@ impl App {
                 text("The sound against the export's loudness target and the mixing rules, in the picture's place: each clip as loud as it is, what to fix outlined; a click takes you to it"),
                 tooltip::Position::Top,
             ),
+            ].spacing(12).align_y(Alignment::Center)),
         ]
-        .push(framing_tools)
         .push(space().width(Length::Fill))
-        .push(tip(icon_button(ZOOM_OUT, Some(Message::TimelineZoom(1.0 / 1.5, None))), text("Zoom the timeline out (Ctrl+−, or scroll on it)"), tooltip::Position::Top))
-        .push(tip(
-            slider(0.0..=1.0, self.timeline_zoom.ln() / self.timeline_most_zoom().ln().max(1e-9), Message::TimelineZoomTo).step(0.001).width(90),
-            text("Timeline zoom"),
-            tooltip::Position::Top,
+        .push(group(
+            "Timeline zoom",
+            open,
+            row![
+                tip(icon_button(ZOOM_OUT, Some(Message::TimelineZoom(1.0 / 1.5, None))), text("Zoom the timeline out (Ctrl+−, or scroll on it)"), tooltip::Position::Top),
+                tip(
+                    slider(0.0..=1.0, self.timeline_zoom.ln() / self.timeline_most_zoom().ln().max(1e-9), Message::TimelineZoomTo).step(0.001).width(90),
+                    text("Timeline zoom"),
+                    tooltip::Position::Top,
+                ),
+                tip(icon_button(ZOOM_IN, Some(Message::TimelineZoom(1.5, None))), text("Zoom the timeline in (Ctrl+=, or scroll on it)"), tooltip::Position::Top),
+                tip(icon_button(ZOOM_FIT, Some(Message::TimelineZoomTo(0.0))), text("Show the whole edit (Ctrl+0)"), tooltip::Position::Top),
+            ]
+            .spacing(12)
+            .align_y(Alignment::Center),
         ))
-        .push(tip(icon_button(ZOOM_IN, Some(Message::TimelineZoom(1.5, None))), text("Zoom the timeline in (Ctrl+=, or scroll on it)"), tooltip::Position::Top))
-        .push(tip(icon_button(ZOOM_FIT, Some(Message::TimelineZoomTo(0.0))), text("Show the whole edit (Ctrl+0)"), tooltip::Position::Top))
         .push(separator())
-        .push(tip(
+        .push(group("Sound", open, tip(
             icon_button(if self.muted { SPEAKER_MUTED } else { SPEAKER }, Some(Message::AudioPanel)),
             text(if self.side == Some(Side::Audio) { "Close the Audio panel" } else { "Audio: listening volume and the mix levels (M mutes)" }),
             tooltip::Position::Top,
-        ))
+        )))
         .spacing(12)
         .padding([4, 10])
         .align_y(Alignment::Center);
         transport.into()
     }
+
+    /// The framing row, while the Framing switch is on: the keyframe's
+    /// tools, then the typed angles (Settings may hide those).
+    pub(super) fn framing_row<'a>(&'a self, clip: &'a Clip) -> Element<'a, Message> {
+        let p = &clip.playback;
+        let current = self.current_key();
+        let aiming = current.map(|k| Aiming::of(&self.edit.cuts[self.current].keyframes[k].follow));
+        let shown_view = self.shown_view();
+        let (lo, hi) = shown_view.fov_range();
+        let flat = self.on_flat();
+        let strip = self.angles_strip();
+        let tools = row![
+            tip(
+                icon_button(KEY_ADD, Some(Message::KeyAdd)),
+                text(if current.is_some() { "Update this keyframe with the view (K)" } else { "Add a keyframe with this view (K)" }),
+                tooltip::Position::Top,
+            ),
+            tip(icon_button(KEY_DELETE, current.map(|_| Message::KeyDelete)), text("Delete this keyframe (Del)"), tooltip::Position::Top),
+            tip(
+                pick_list(&Ease::ALL[..], current.map(|k| self.edit.cuts[self.current].keyframes[k].ease), Message::KeyEase).placeholder("Ease").width(96),
+                text("How this keyframe moves on to the next (J cycles)"),
+                // Below: the list opens upwards and the hint would cover it.
+                tooltip::Position::Bottom,
+            ),
+        ]
+        // The strip has FOV typed; without it, the slider.
+        .push(strip.is_none().then(|| tip(labelled("FOV", slider(lo..=hi, shown_view.fov, Message::Fov).width(110)), text("Field of view: how wide the view is (scroll on the view)"), tooltip::Position::Top)))
+        .push(tip(icon_button(RESET_VIEW, Some(Message::ResetView)), text("Reset the view: straight ahead, level (0)"), tooltip::Position::Top))
+        .push((!flat).then(|| {
+            tip(
+                pick_list(&Aiming::ALL[..], aiming, Message::KeyFollow).placeholder("Follow").width(140),
+                text("What this keyframe looks at: fixed angles, the selfie stick (whoever holds it), or a colour track (pick a new one by drawing a box over the subject)"),
+                tooltip::Position::Bottom,
+            )
+        }))
+        .push((!flat).then(|| {
+            tip(
+                icon_button(PICK, (self.clip.is_some() && self.tracking.is_none()).then_some(Message::PickColour)),
+                text("Track a colour: draw a box over a subject (a jacket, a tent); the keyframe here then follows it"),
+                tooltip::Position::Top,
+            )
+        }))
+        .push((!flat).then(|| tip(icon_button(SAVE_SPHERE, (!p.playing).then_some(Message::Save(Saving::Sphere))), text("Save the whole sphere as an equirect PNG (pause first)"), tooltip::Position::Top)))
+        .spacing(12)
+        .align_y(Alignment::Center);
+        let open = self.bar_labels;
+        row![group("Keyframe", open, tools)]
+            .push(strip.map(|s| row![separator(), group("Angles", open, s)].spacing(12).align_y(Alignment::Center)))
+            .spacing(12)
+            .padding([2, 10])
+            .align_y(Alignment::Center)
+            .into()
+    }
+}
+
+/// A group of the bars' buttons; with the names shown (the transport
+/// row's chevron), its name above it.
+fn group<'a>(name: &'a str, open: bool, items: impl Into<Element<'a, Message>>) -> Element<'a, Message> {
+    if open { column![text(name).size(11).style(text::secondary), items.into()].spacing(2).into() } else { items.into() }
 }

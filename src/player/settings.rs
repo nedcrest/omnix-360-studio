@@ -58,6 +58,8 @@ pub struct Settings {
     pub duck_db: f64,
     /// The timeline's time ruler large (labels you can read) or compact.
     pub ruler_large: bool,
+    /// The bars' groups named above their buttons.
+    pub bar_labels: bool,
     /// The Text, Overlay and SFX 2 lanes folded to a thin row.
     pub fold_text: bool,
     pub fold_overlay: bool,
@@ -102,6 +104,7 @@ impl Default for Settings {
             record_play: true,
             duck_db: 18.0,
             ruler_large: true,
+            bar_labels: false,
             fold_text: true,
             fold_overlay: true,
             fold_sfx2: true,

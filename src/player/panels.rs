@@ -111,6 +111,7 @@ impl App {
             }
             Message::ShowAngles(on) => self.angles_shown = on,
             Message::RulerLarge(on) => self.ruler_large = on,
+            Message::BarLabels => self.bar_labels = !self.bar_labels,
             Message::Fold(lane, folded) => self.folds.set(lane, folded),
             Message::Modifiers(m) => self.modifiers = m,
             Message::ViewSize(size) => self.view_size = size,

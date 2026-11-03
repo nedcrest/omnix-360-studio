@@ -97,6 +97,18 @@ const GROUPS: &[(&str, &[(&str, &str)])] = &[
     ),
 ];
 
+/// The bars' tint of each group here (`Tint`).
+fn tint_of(group: &str) -> super::Tint {
+    use super::Tint;
+    match group {
+        "Play and the playhead" | "On the timeline (mouse)" => Tint::Move,
+        "Cuts" => Tint::Cut,
+        "Sound" => Tint::Sound,
+        "Framing (the Framing switch on)" => Tint::Frame,
+        _ => Tint::Global,
+    }
+}
+
 impl App {
     /// The shortcuts over `below`, while open.
     pub(super) fn shortcuts_dialog<'a>(&'a self, below: Element<'a, Message>) -> Element<'a, Message> {
@@ -105,7 +117,10 @@ impl App {
         }
         let group = |(name, keys): &(&'static str, &'static [(&'static str, &'static str)])| {
             let rows = keys.iter().map(|(k, what)| row![text(*k).font(Font::MONOSPACE).size(13).width(210), text(*what).size(13)].spacing(10).into());
-            column![text(*name).size(15), column(rows).spacing(4)].spacing(8)
+            // The group's tint, as its buttons wear it in the bars (gap 66).
+            let colour = tint_of(name).colour();
+            let swatch = container(space()).width(10).height(10).style(move |_| container::Style::default().background(colour).border(iced::Border { radius: 2.0.into(), ..Default::default() }));
+            column![row![swatch, text(*name).size(15)].spacing(8).align_y(Alignment::Center), column(rows).spacing(4)].spacing(8)
         };
         // Two columns, the groups in order down each.
         let half = GROUPS.len().div_ceil(2);

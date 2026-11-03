@@ -138,6 +138,64 @@ pub(super) fn icon_button<'a>(icon: &'static [u8], on_press: Option<Message>) ->
     button(svg_icon(icon)).padding(5).on_press_maybe(on_press).into()
 }
 
+/// The bars' groups' own tints (gap 66: all buttons were the same blue,
+/// and the user wanted to find a group by its colour). Muted, so the white
+/// icons read and the picture keeps the eye; a group has its tint wherever
+/// it appears. Never colour alone: the icons and the groups' names say it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(super) enum Tint {
+    /// The app, the project file, the export, the window.
+    Global,
+    /// Playing and moving about: play, the zoom, snapping.
+    Move,
+    /// Adding at the playhead.
+    Add,
+    /// Cutting: split, delete, crossfade.
+    Cut,
+    History,
+    /// The look: effects.
+    Look,
+    /// Framing: the view's keyframes.
+    Frame,
+    Sound,
+}
+
+impl Tint {
+    pub(super) fn colour(self) -> iced::Color {
+        let c = iced::Color::from_rgb8;
+        match self {
+            Tint::Global => c(0x4a, 0x50, 0x5a),
+            Tint::Move => c(0x2f, 0x5f, 0x9e),
+            Tint::Add => c(0x3a, 0x7a, 0x50),
+            Tint::Cut => c(0x9a, 0x60, 0x26),
+            Tint::History => c(0x5e, 0x5e, 0x5e),
+            Tint::Look => c(0x6e, 0x55, 0x9e),
+            Tint::Frame => c(0x8a, 0x46, 0x78),
+            Tint::Sound => c(0x26, 0x78, 0x7e),
+        }
+    }
+}
+
+/// An icon button in its group's tint: lighter hovered, darker pressed,
+/// faint when it can't be pressed.
+pub(super) fn tint_button<'a>(tint: Tint, icon: &'static [u8], on_press: Option<Message>) -> Element<'a, Message> {
+    let base = tint.colour();
+    let mix = move |to: f32, k: f32| iced::Color { r: base.r + (to - base.r) * k, g: base.g + (to - base.g) * k, b: base.b + (to - base.b) * k, a: 1.0 };
+    button(svg_icon(icon))
+        .padding(5)
+        .style(move |_: &iced::Theme, status| {
+            let background = match status {
+                button::Status::Hovered => mix(1.0, 0.15),
+                button::Status::Pressed => mix(0.0, 0.2),
+                button::Status::Disabled => base.scale_alpha(0.35),
+                button::Status::Active => base,
+            };
+            button::Style { background: Some(background.into()), text_color: iced::Color::WHITE, border: iced::Border { radius: 3.0.into(), ..Default::default() }, ..button::Style::default() }
+        })
+        .on_press_maybe(on_press)
+        .into()
+}
+
 /// An icon as the buttons show it.
 pub(super) fn svg_icon(icon: &'static [u8]) -> svg::Svg<'static> {
     svg(svg::Handle::from_memory(icon)).width(20).height(20)

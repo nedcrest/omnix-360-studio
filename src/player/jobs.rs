@@ -227,7 +227,7 @@ impl App {
                     tooltip::Position::Bottom,
                 ),
                 tip(
-                    icon_button(EXPORT, (!self.edit.cuts.is_empty()).then_some(Message::ExportPanel)),
+                    super::tint_button(super::Tint::Global, EXPORT, (!self.edit.cuts.is_empty()).then_some(Message::ExportPanel)),
                     text(if self.side == Some(Side::Export) { "Close the Export panel (Ctrl+E)" } else { "Export: resolution, format and clips, then the edit with sound (Ctrl+E)" }),
                     tooltip::Position::Bottom,
                 ),

@@ -200,7 +200,10 @@ impl App {
                 }
                 "g" | "G" => self.effect_message(effects::EffectMsg::Toggle),
                 "r" | "R" => return self.update(Message::RollingShutter(!self.rolling_shutter)),
-                "m" | "M" => return self.update(Message::Mute),
+                // M marks, as in FCP, Premiere and Resolve (gap 5); mute
+                // moved to Shift+M, out of the way of a slip.
+                "m" | "M" if mods.shift() => return self.update(Message::Mute),
+                "m" | "M" => return self.update(Message::AddMark),
                 "p" | "P" => {
                     let i = Projection::ALL.iter().position(|&p| p == self.shown_view().projection).unwrap_or(0);
                     return self.update(Message::Projection(Projection::ALL[(i + 1) % Projection::ALL.len()]));
@@ -277,13 +280,15 @@ impl App {
 }
 
 /// Every edit time where something starts or ends: the cuts' joins, the
-/// sound clips' and overlay items' edges, the edit's start and end.
+/// sound clips' and overlay items' edges, the markers, the edit's start
+/// and end.
 fn joins(edit: &crate::model::edit::Edit) -> Vec<f64> {
     let offsets = crate::project::offsets(&edit.cuts);
     let cuts = edit.cuts.iter().zip(&offsets).flat_map(|(c, &at)| [at, at + c.len()]);
     let sounds = crate::project::SoundTrack::ALL.into_iter().flat_map(|w| edit.track(w).clips.iter().flat_map(|c| [c.at, c.ends()]).collect::<Vec<_>>());
     let items = edit.lanes().flat_map(|l| &l.items).flat_map(|it| [it.at, it.ends()]);
-    std::iter::once(0.0).chain(cuts).chain(sounds).chain(items).chain(std::iter::once(edit.duration())).collect()
+    let marks = edit.cuts.iter().zip(&offsets).flat_map(|(c, &at)| c.marks.iter().filter(|m| m.t >= c.start && m.t <= c.end).map(move |m| at + m.t - c.start).collect::<Vec<_>>());
+    std::iter::once(0.0).chain(cuts).chain(sounds).chain(items).chain(marks).chain(std::iter::once(edit.duration())).collect()
 }
 
 #[cfg(test)]
@@ -296,10 +301,13 @@ mod tests {
         let mut e = crate::model::edit::Edit::default();
         e.cuts = vec![Cut::new("a".into(), 0.0, 4.0), Cut { crossfade: 1.0, ..Cut::new("b".into(), 0.0, 3.0) }];
         e.music.clips.push(MusicClip { input: "s".into(), at: 2.5, start: 0.0, end: 1.0, ..Default::default() });
+        // A marker in b at its clip time 1 s (edit 4 s), and one past its out
+        // point, not shown, not a stop.
+        e.cuts[1].marks = vec![crate::project::Mark { t: 1.5, note: String::new() }, crate::project::Mark { t: 9.0, note: String::new() }];
         let mut t = joins(&e);
         t.sort_by(f64::total_cmp);
         t.dedup();
-        // a 0..4, b overlapping it from 3 to 6, the song 2.5..3.5.
-        assert_eq!(t, [0.0, 2.5, 3.0, 3.5, 4.0, 6.0]);
+        // a 0..4, b overlapping it from 3 to 6, the song 2.5..3.5, b's marker.
+        assert_eq!(t, [0.0, 2.5, 3.0, 3.5, 4.0, 4.5, 6.0]);
     }
 }

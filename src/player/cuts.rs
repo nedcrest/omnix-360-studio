@@ -190,6 +190,12 @@ impl App {
                     return Task::perform(super::blocking(|| std::thread::sleep(std::time::Duration::from_secs(6))), move |_| Message::ToastGone(n));
                 }
             }
+            Message::AddMark => {
+                let Some((cut, t)) = self.playing_cut().map(|(c, t)| (c.id, t)) else { return Task::none() };
+                if self.op(Op::Cut(CutOp::Mark { cut, t, note: String::new() })).is_some() {
+                    self.save_status = None;
+                }
+            }
             Message::StepsRested(n) => {
                 if n == self.steps {
                     self.with_playback(|p| p.settle());

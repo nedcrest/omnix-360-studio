@@ -130,7 +130,7 @@ pub(crate) enum Cmd {
     /// ← / →: a frame · editing: Shift+← / →: a second, ↑ / ↓: the previous / next join, Home / End ·
     /// framing: ↑ / ↓: pitch, Shift+← / →: yaw · drag: look around · right-drag or Q/E: roll ·
     /// scroll: zoom · space: play/pause · , .: frame step · S: stabilisation ·
-    /// R: rolling shutter · P: projection · M: mute · 0: reset view · F: fullscreen · Ctrl+O: open ·
+    /// R: rolling shutter · P: projection · M: a marker · Shift+M: mute · 0: reset view · F: fullscreen · Ctrl+O: open ·
     /// K: keyframe the view here · [ ]: previous/next keyframe · Del: delete keyframe · J: its ease ·
     /// C: split the cut · Shift+Del: delete the selected cut · Alt+[ / Alt+]: trim its start / end to
     /// the playhead · Alt+← / Alt+→: move it one place · Ctrl+Z / Ctrl+Shift+Z: undo / redo ·

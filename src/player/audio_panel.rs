@@ -29,7 +29,7 @@ impl App {
             column![
                 text("Listening"),
                 row![
-                    tip(icon_button(if self.muted { SPEAKER_MUTED } else { SPEAKER }, Some(Message::Mute)), text(if self.muted { "Unmute (M)" } else { "Mute (M)" }), tooltip::Position::Bottom),
+                    tip(icon_button(if self.muted { SPEAKER_MUTED } else { SPEAKER }, Some(Message::Mute)), text(if self.muted { "Unmute (Shift+M)" } else { "Mute (Shift+M)" }), tooltip::Position::Bottom),
                     slider(0.0..=1.0, self.volume(), Message::Volume).step(0.01f32),
                     text(format!("{:.0}%", self.volume() * 100.0)).size(13).width(40),
                 ]

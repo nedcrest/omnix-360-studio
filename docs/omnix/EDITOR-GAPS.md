@@ -1807,7 +1807,7 @@ praise and curse. Then the parts below get ordered from it.
   safe-area guides for the aspect, a horizon line, a «look room» hint,
   smoothing a hand-keyed path.
 
-### 54. A header column for the lanes: what a whole lane does, at a glance — idea (user, 2026-11-02)
+### 54. A header column for the lanes: what a whole lane does, at a glance — built 2026-11-04 (`c6ee4b6`), waits for the user's check
 
 User, after asking why the music's waveform showed a bright wave inside
 a darker, bigger one (the file and the heard sound, gap 33d: the Music
@@ -1839,6 +1839,20 @@ Decided (user, 2026-11-02): the ruler (gap 50a) starts after the column.
 Its width: 1–2 cm, to try out; not fixed to the user's 43-inch monitor,
 as they won't always edit on it, so it follows the UI scale and may be
 narrowed (or dragged) on a small screen.
+
+**Built 2026-11-04** (`c6ee4b6`): `timeline::HEAD`, 128 px (to fit «Clip
+sound» with S and M at a readable size; one constant to tune), on every
+canvas of the timeline (lanes, overlay and text lanes, the markers' row,
+the ruler); time starts after it, and each canvas paints the column last
+so scrolled clips go under it. In it: the lanes' names (Video, Clip
+sound, Effects / View / Motion, SOUND, each sound lane, Overlay, Text,
+Markers), S and M, folds, and a tall lane's own level under its name
+when not 0 dB («lane −6.0 dB»). A click or right-click on a sound lane's
+header opens its menu: the lane's level slider and what acts on the
+whole lane (normalize every clip, the music's duck); the clip sound's
+header: its level and «Normalize every cut». Left: a level bar from the
+meter per lane, the mix check's verdict per lane, dragging the column's
+width, picture lanes' menus.
 
 ### 55. Moving the playhead by keys, in steps that make sense — small (user, 2026-11-02)
 

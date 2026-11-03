@@ -164,7 +164,7 @@ project: speech 5.7–11.7 s and 12.9–25.9 s, the music 12 dB down there.
 
 **Not yet:** two sound effects at once (a second SFX lane).
 
-### 4. The clip's sound as its own lane — 4A built with 3; 4B its own milestone
+### 4. The clip's sound as its own lane — 4A built with 3; 4B (J/L cuts) built 2026-11-03, waits for the user's check
 
 User: would split into video tracks and sound tracks.
 - **Step A (small-medium):** draw a "Clip sound" lane under the cuts, with each
@@ -224,6 +224,27 @@ User: would split into video tracks and sound tracks.
   fades already do, «Sound to picture» in the sound menu to reset, the
   edge stopping (red) at the clip's end. Later maybe a rolling split
   (one drag lengthens one sound and shortens the next).
+- **Built 2026-11-03** (`71f1ef3` model and ops, `6ff67b4` export,
+  `4931abe` player), waits for the user's check:
+  - `Cut::sound_before` / `sound_after` (seconds past the picture's edge,
+    negative = short of it), `CutOp::SoundEdge { cut, end, t, most }` and
+    `CutOp::SoundToPicture`. Trims carry them with the picture's edges
+    (kept within the clip); a split keeps each at its own outer end.
+  - The sound past the picture is played and mixed as sound clips
+    (`Cut::sound_beyond`, `Project::sound_beyond`: one to a track at the
+    clips' level, so a tail and the next head both play rather than
+    crossfade); under the picture, what stops short is silent
+    (`Cut::sound_fade`, `Sound::of_cut`'s `head`/`tail`). Fades sit at
+    the sound's own edges.
+  - Timeline: the cut's sound drawn over its own stretch, framed when
+    split; the selected cut's sound edges dragged on the Clip sound lane
+    (yellow / red handles, a readout); the sound menu's «Sound back to the
+    picture's edges». The shortcuts window lists the drag.
+  - Found on the way and fixed: a cut whose only sound change was a fade
+    exported without it (the mix path wasn't taken).
+  - Not done: Premiere's Alt-drag on the picture's edge; a rolling split
+    (one drag lengthening one sound and shortening the next); automatic
+    short fades at the moved edges (the fade knobs do it by hand).
 - **What grouped and ungrouped look like** (user, 2026-11-02, checking
   timeline pack 1): grouped, the selection frame goes round the picture
   only, its sound under it without one: it goes with the picture. Once

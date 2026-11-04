@@ -2084,6 +2084,17 @@ when there is one and staying light on an integrated one (the laptop,
 gap 40). Goes with gap 64 (the preview's size). Milestone «Експорт»
 (the GPU fast path).
 
+**Analysed 2026-11-04** (`GPU-PLAYER.md`, the user's ask): the decoding
+is not the load. Playing and dragging the playhead, the player's main
+thread (the interface) runs at 100 % of a core and ffmpeg at 5-15 %:
+every timeline canvas is redrawn from nothing on every frame, tessellated
+on the CPU, with no cache. CUDA already decodes (Vulkan crashes in this
+ffmpeg); for 4K and 2.7K the CPU scaling after the download is most of
+ffmpeg's cost, and `scale_cuda` before it cuts that 4-5×. For jumps a
+fresh GPU decoder starts in ~0.45 s, so the scrub copy in software (0.05
+s) stays. Order: measure the main thread's canvases, cache the timeline's
+still layers, scale on the GPU, then the Settings choice.
+
 ### 66. The button groups in colours of their own — done 2026-11-04 (`5b85986`), confirmed by the user
 
 User: "different colours for the groups of buttons for editing and for

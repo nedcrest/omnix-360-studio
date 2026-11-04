@@ -63,3 +63,15 @@ fn ids_given_to_a_real_sheet_add_only_ids() {
     }
     assert!(serde_json::to_string_pretty(&value).unwrap() == text, "more than ids changed");
 }
+
+/// What `check` finds in a real sheet (`RUSHIX_SHEET`, a copy), printed:
+/// problems already there block no op, but they're worth seeing.
+#[test]
+#[ignore]
+fn check_a_real_sheet() {
+    let path = std::env::var("RUSHIX_SHEET").expect("RUSHIX_SHEET names a copy of a notes.json");
+    let doc = Doc::parse(&std::fs::read_to_string(path).unwrap()).unwrap();
+    for p in doc.check() {
+        println!("problem: {p}");
+    }
+}

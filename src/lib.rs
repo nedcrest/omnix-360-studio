@@ -9,6 +9,10 @@
 //! for now) keep adding fields; none may be lost here. What a program
 //! reads is the typed view over it ([`Sheet`]).
 
+pub mod ops;
+
+pub use ops::{ClipOp, DayOp, MarkOp, Op, OpError, Outcome, RoleOp};
+
 use indexmap::IndexMap;
 use serde::Deserialize;
 use serde_json::Value;
@@ -92,7 +96,7 @@ impl Doc {
     }
 
     /// Every mark's object, clip by clip in the file's order.
-    fn marks(&self) -> impl Iterator<Item = &serde_json::Map<String, Value>> {
+    pub(crate) fn marks(&self) -> impl Iterator<Item = &serde_json::Map<String, Value>> {
         self.value.get("clips").and_then(Value::as_object).into_iter().flat_map(|c| c.values()).filter_map(|c| c.get("marks")?.as_array()).flatten().filter_map(Value::as_object)
     }
 
@@ -206,8 +210,9 @@ pub struct Role {
     pub title: String,
     #[serde(default)]
     pub en: String,
+    /// Its colour on the sheet's strips.
     #[serde(default)]
-    pub hint: String,
+    pub color: Option<String>,
 }
 
 /// The typed view of a sheet: days and clips in the file's order, a clip

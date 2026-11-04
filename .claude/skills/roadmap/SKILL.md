@@ -20,7 +20,9 @@ nothing be lost after a forced compact.
 - Code is done and needs the user's eyes or ears → `статус: чекає перевірки`
   (the page shows these in a band at the top).
 - The user confirms it works → move the card to `## Зроблено` with `коли:` and
-  `коміт:`; drop `статус`.
+  `коміт:`; drop `статус`. If that was the gap's last card anywhere on the
+  page, move its section from `EDITOR-GAPS.md` to `EDITOR-GAPS-DONE.md`
+  (same number) and set its row in the index to done.
 - The user throws in an idea → a card in `## Ідеї` (or `## Далі` / `## Потім`
   if they gave it an order), and the full idea in `EDITOR-GAPS.md`.
 - Order changes → move cards between columns. Keep `## Зараз` short.

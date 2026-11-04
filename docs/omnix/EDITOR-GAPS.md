@@ -1313,9 +1313,9 @@ one copy now, two later) and an Omnix project. Repo
 over from Python and how, the open decisions). Shares data with Omnix
 (`notes.json`, sidecars, the folder tree), later a small common crate.
 Takes in gap 34 (import from devices) and 61 (the sheet standalone).
-Milestone «Матеріал і бін». Under way from 2026-11-04 with the contact
-sheet's core (`rushix/docs/SHEET-CORE.md`, eight steps; Omnix
-moves onto it at step 7 and drops `notes.rs`).
+Milestone «Матеріал і бін». Its first piece, the contact
+sheet's core, was built 2026-11-04 (`rushix/docs/SHEET-CORE.md`), and
+Omnix's bin runs on it (`98f2795`).
 
 ## Format rule for all of these
 

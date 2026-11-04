@@ -2100,8 +2100,10 @@ by the user ("fire, mega smooth"; a short stutter, ~20 fps, only while a
 sound lane's level changes and its waveform is drawn anew): the lanes' canvas took 40 ms a frame (79 fullscreen),
 nearly all the waveforms; the sound lanes are now drawn once and kept
 (`canvas::Cache`, keyed by a hash of what they show). The main thread
-went from 100 % to 10-30 % while playing and dragging. Left: scale on the
-GPU for 4K and 2.7K; the Settings choice. Not now (user, 2026-11-04,
+went from 100 % to 10-30 % while playing and dragging. Then (`b81a37b`,
+waits for the user's check on 4K / 2.7K clips): with CUDA the frame is
+scaled on the GPU before it comes down (`scale_cuda`), 63-73 % of a core
+-> 14-15 % for 4K and 2.7K in the bench. Left: the Settings choice. Not now (user, 2026-11-04,
 "not critical"): the waveforms drawn as pictures on worker threads. It
 would end the stutter at a level change, but the new waveform would then
 show a moment late; seeing it at once is worth more while mixing.

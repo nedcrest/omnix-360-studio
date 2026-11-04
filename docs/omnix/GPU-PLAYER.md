@@ -153,7 +153,9 @@ place of it.
    the window change; the playhead, the snap line and readouts in a thin
    layer of their own redrawn every frame. Expected to take the main
    thread from 100 % to a fraction while playing.
-3. **Scale on the GPU** for files bigger than the preview (`scale_cuda`
-   before `hwdownload`): 4-5× less CPU for 4K and 2.7K.
+3. ~~Scale on the GPU~~: done (`b81a37b`): with CUDA, `scale_cuda` at the
+   stored frame's size before `hwdownload`, the turn after on the small
+   frame; checked against the software decode (within 3 levels of luma,
+   turned and not).
 4. Later: a Settings choice «Decoding: automatic / GPU / CPU» (gap 65),
    the preview's size (gap 64), and zero-copy (gap 52).

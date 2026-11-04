@@ -14,7 +14,7 @@
 //!     project.json            what the project is and where it came from
 //!     sheet.json              the contact sheet's marking (`Doc`)
 //!     analysis/<day>/<clip>.footage.json
-//!     thumbs/<day>/<clip>/0001.jpg …
+//!     thumbs/<day>/<clip>.jpg  a poster per clip, made when first shown
 //!     voice/<day>/<clip>/<recipe>.flac
 //! ```
 //!
@@ -67,6 +67,12 @@ impl Layout {
     }
     pub fn thumbs(&self) -> PathBuf {
         self.data().join("thumbs")
+    }
+    /// A clip's poster: `thumbs/<day>/<clip stem>.jpg`.
+    pub fn poster(&self, key: &str) -> PathBuf {
+        let p = Path::new(key);
+        let stem = p.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+        self.thumbs().join(p.parent().unwrap_or(Path::new(""))).join(format!("{stem}.jpg"))
     }
     pub fn voice(&self) -> PathBuf {
         self.data().join("voice")
@@ -130,6 +136,7 @@ mod tests {
         assert_eq!(l.key(Path::new("/q/01_footage/2030-05-01/A.MP4")), None);
         assert_eq!(l.clip("2030-05-01/A.MP4"), PathBuf::from("/p/01_footage/2030-05-01/A.MP4"));
         assert_eq!(l.sheet(), PathBuf::from("/p/dailix/sheet.json"));
+        assert_eq!(l.poster("2030-05-01/A.MP4"), PathBuf::from("/p/dailix/thumbs/2030-05-01/A.jpg"));
     }
 
     #[test]

@@ -111,6 +111,14 @@ impl Doc {
         self.value.get_mut("clips").and_then(Value::as_object_mut).into_iter().flat_map(|c| c.values_mut()).filter_map(|c| c.get_mut("marks")?.as_array_mut()).flatten().filter_map(Value::as_object_mut)
     }
 
+    /// Drops the web sheet's view state (`ui`: which days are folded): the
+    /// page's, not the marking's; a Dailix project doesn't carry it.
+    pub fn forget_view_state(&mut self) {
+        if let Some(top) = self.value.as_object_mut() {
+            top.shift_remove("ui");
+        }
+    }
+
     /// The typed view of the file as it stands.
     pub fn sheet(&self) -> Result<Sheet, Error> {
         Sheet::deserialize(&self.value).map_err(|e| Error::Shape(e.to_string()))

@@ -87,6 +87,9 @@ impl App {
         // A dialog or a menu open takes the keys: Esc closes it (or stops a
         // run), the rest wait.
         let escape = matches!(key.as_ref(), Key::Named(Named::Escape));
+        if self.asking.is_some() {
+            return if escape { self.cancel_ask() } else { Task::none() };
+        }
         if self.normalize.is_some() {
             return if escape { self.update(Message::Sound(sound_ui::SoundMsg::Cancel)) } else { Task::none() };
         }

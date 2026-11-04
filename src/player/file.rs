@@ -57,23 +57,13 @@ impl App {
     }
 
     /// Asks whether to save the edit before doing `then`.
-    pub(super) fn confirm(&self, then: Then) -> Task<Message> {
+    pub(super) fn confirm(&mut self, then: Then) -> Task<Message> {
         let name = self.project.as_ref().and_then(|p| p.file_name()).map_or_else(|| "this edit".to_owned(), |n| n.to_string_lossy().into_owned());
-        let ask = rfd::AsyncMessageDialog::new()
-            .set_level(rfd::MessageLevel::Warning)
-            .set_title("Unsaved changes")
-            .set_description(format!("Save the changes to {name} first?"))
-            .set_buttons(rfd::MessageButtons::YesNoCancelCustom("Save".into(), "Don't save".into(), "Cancel".into()));
-        Task::perform(ask.show(), move |answer| {
-            // Backends report custom buttons by label, some as yes/no.
-            let choice = match answer {
-                rfd::MessageDialogResult::Yes => Choice::Save,
-                rfd::MessageDialogResult::No => Choice::Discard,
-                rfd::MessageDialogResult::Custom(label) if label == "Save" => Choice::Save,
-                rfd::MessageDialogResult::Custom(label) if label == "Don't save" => Choice::Discard,
-                _ => Choice::Cancel,
-            };
-            Message::Confirmed(then, choice)
+        self.ask(super::ask::Ask {
+            title: "Unsaved changes".to_owned(),
+            text: format!("Save the changes to {name} first?"),
+            answers: vec![("Save".to_owned(), Message::Confirmed(then, Choice::Save)), ("Don't save".to_owned(), Message::Confirmed(then, Choice::Discard))],
+            cancel: Message::Confirmed(then, Choice::Cancel),
         })
     }
 
@@ -259,6 +249,8 @@ impl App {
                 self.loading_adds = false;
                 self.error = None;
             }
+            // A question up already: the close button again does nothing.
+            Message::CloseRequested if self.asking.is_some() => {}
             Message::CloseRequested if self.busy() => return self.confirm_stop(),
             Message::StopAndClose(stop) => {
                 if stop {

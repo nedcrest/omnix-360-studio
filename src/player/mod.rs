@@ -10,6 +10,7 @@ mod audio_panel;
 mod bin;
 mod bin_view;
 mod bin_player;
+mod ask;
 mod export_panel;
 mod handles;
 mod info;
@@ -433,6 +434,8 @@ enum Message {
     BinRefresh,
     /// The bin as a view of tiles in the picture's place.
     BinView(bin_view::BinMsg),
+    /// A question in the window answered (`ask.rs`).
+    Answer(Box<Message>),
     /// The bin view's own player.
     BinPlayer(bin_player::SourceMsg),
     /// Add a file from the bin where its kind goes.
@@ -563,6 +566,8 @@ struct App {
     /// «… deleted · Undo» in the top bar for a few seconds after a delete,
     /// and which one it is, so an older one's timer doesn't clear a newer.
     toast: Option<(&'static str, u64)>,
+    /// A question up in the window (`ask.rs`).
+    asking: Option<ask::Ask>,
     /// The keyboard and mouse shortcuts' window, open (gap 56).
     shortcuts: bool,
     /// A marker being named in its window (gap 5).
@@ -749,6 +754,7 @@ impl App {
             selection: Selection::None,
             drag_epoch: 0,
             toast: None,
+            asking: None,
             shortcuts: false,
             mark_edit: None,
             steps: 0,
@@ -979,6 +985,7 @@ impl App {
             m @ (Message::BinPanel { .. } | Message::BinPin { .. } | Message::BinRefresh { .. } | Message::BinPreview { .. } | Message::BinStop { .. } | Message::BinMeta { .. } | Message::BinFrames { .. } | Message::BinAdd { .. }) => self.on_bin(m),
             Message::BinView(msg) => self.on_bin_view(msg),
             Message::BinPlayer(msg) => self.on_source(msg),
+            Message::Answer(msg) => self.answer(*msg),
             m @ (Message::MarkEdit { .. } | Message::MarkNote { .. } | Message::MarkSave | Message::MarkDelete | Message::MarkClose) => self.on_marks(m),
             m @ (Message::Tick { .. } | Message::TimelineZoom { .. } | Message::TimelineZoomTo { .. } | Message::TimelinePan { .. } | Message::Toggle { .. } | Message::Scrub { .. } | Message::ScrubDone { .. }) => self.on_transport(m),
             m @ (Message::Select { .. } | Message::AddBlank | Message::SoundEdge { .. } | Message::Trim { .. } | Message::MoveCut { .. } | Message::AddMark { .. } | Message::SelectAtPlayhead | Message::MarkMove { .. } | Message::MarkSelect { .. } | Message::StepsRested { .. } | Message::ToastGone { .. } | Message::StepNoteGone { .. } | Message::TrimToPlayhead { .. } | Message::Crossfade { .. } | Message::ToggleCrossfade { .. } | Message::Split { .. } | Message::DeleteCut { .. } | Message::Undo { .. } | Message::Redo { .. }) => self.on_cuts(m),
@@ -1021,7 +1028,12 @@ impl App {
         self.edit.cuts.iter().position(|c| c.id == id)
     }
 
+    /// The window, and a question over it when one is asked (`ask.rs`).
     fn view(&self) -> Element<'_, Message> {
+        stack![self.window_view(), self.ask_layer()].into()
+    }
+
+    fn window_view(&self) -> Element<'_, Message> {
         let Some(clip) = &self.clip else { return self.start_screen() };
         let error = self.error.as_ref().map(|e| text(e.clone()).style(text::danger));
         let timeline = self.timeline_view();

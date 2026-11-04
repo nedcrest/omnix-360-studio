@@ -246,15 +246,13 @@ impl App {
     /// Asks whether to stop the running export or tracking and quit:
     /// quitting under it left a half-written video, and the crossfade's
     /// temporary frames (GBs at 2160p) in the temp folder.
-    pub(super) fn confirm_stop(&self) -> Task<Message> {
+    pub(super) fn confirm_stop(&mut self) -> Task<Message> {
         let what = if self.exporting.is_some() { "An export" } else { "Colour tracking" };
-        let ask = rfd::AsyncMessageDialog::new()
-            .set_level(rfd::MessageLevel::Warning)
-            .set_title("Still working")
-            .set_description(format!("{what} is still running. Stop it and quit?"))
-            .set_buttons(rfd::MessageButtons::OkCancelCustom("Stop and quit".into(), "Keep working".into()));
-        Task::perform(ask.show(), |answer| {
-            Message::StopAndClose(matches!(answer, rfd::MessageDialogResult::Ok) || matches!(&answer, rfd::MessageDialogResult::Custom(l) if l == "Stop and quit"))
+        self.ask(super::ask::Ask {
+            title: "Still working".to_owned(),
+            text: format!("{what} is still running. Stop it and quit?"),
+            answers: vec![("Stop and quit".to_owned(), Message::StopAndClose(true))],
+            cancel: Message::StopAndClose(false),
         })
     }
 

@@ -253,14 +253,11 @@ impl App {
             }
             BinMsg::Trash(path) => {
                 let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-                let ask = rfd::AsyncMessageDialog::new()
-                    .set_level(rfd::MessageLevel::Warning)
-                    .set_title("Move to trash")
-                    .set_description(format!("Move {name} from the project's folder to the trash? It can be restored from there."))
-                    .set_buttons(rfd::MessageButtons::OkCancelCustom("Move to trash".into(), "Keep it".into()));
-                return Task::perform(async move { ask.show().await }, move |answer| {
-                    let yes = matches!(answer, rfd::MessageDialogResult::Ok) || matches!(&answer, rfd::MessageDialogResult::Custom(l) if l == "Move to trash");
-                    Message::BinView(BinMsg::TrashAnswered(path.clone(), yes))
+                return self.ask(super::ask::Ask {
+                    title: "Move to trash".to_owned(),
+                    text: format!("Move {name} from the project's folder to the trash? It can be restored from there."),
+                    answers: vec![("Move to trash".to_owned(), Message::BinView(BinMsg::TrashAnswered(path.clone(), true)))],
+                    cancel: Message::BinView(BinMsg::TrashAnswered(path, false)),
                 });
             }
             BinMsg::TrashAnswered(path, true) => {

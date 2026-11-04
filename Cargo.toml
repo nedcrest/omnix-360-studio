@@ -1,5 +1,5 @@
 [package]
-name = "rushix-sheet"
+name = "dailix-sheet"
 version = "0.1.0"
 description = "The contact sheet's core: reading and changing notes.json, one way for every program that does"
 edition.workspace = true

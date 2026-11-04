@@ -1,7 +1,7 @@
-//! A Rushix project folder: the numbered folders are the user's, made for
+//! A Dailix project folder: the numbered folders are the user's, made for
 //! people to browse in a file manager; everything a program keeps (the
 //! marking, the analysis, thumbnails, cleaned voices) lives in one folder
-//! beside them, `rushix/` (user, 2026-11-04: footage-agent's projects
+//! beside them, `dailix/` (user, 2026-11-04: footage-agent's projects
 //! scattered `report/`, `analysis/`, `voice/` among the numbered ones).
 //!
 //! ```text
@@ -10,7 +10,7 @@
 //!   02_audio/music, 02_audio/voiceover
 //!   03_proxies/<day>/<clip>   the cameras' own light copies (DJI's LRF)
 //!   04_project … 09_luts
-//!   rushix/
+//!   dailix/
 //!     project.json            what the project is and where it came from
 //!     sheet.json              the contact sheet's marking (`Doc`)
 //!     analysis/<day>/<clip>.footage.json
@@ -52,9 +52,9 @@ impl Layout {
         Layout { root: root.into() }
     }
 
-    /// The folder of everything Rushix keeps.
+    /// The folder of everything Dailix keeps.
     pub fn data(&self) -> PathBuf {
-        self.root.join("rushix")
+        self.root.join("dailix")
     }
     pub fn project(&self) -> PathBuf {
         self.data().join("project.json")
@@ -78,7 +78,7 @@ impl Layout {
         self.root.join("03_proxies")
     }
 
-    /// Whether `root` is a Rushix project (it has `rushix/project.json`).
+    /// Whether `root` is a Dailix project (it has `dailix/project.json`).
     pub fn is_project(&self) -> bool {
         self.project().is_file()
     }
@@ -129,18 +129,18 @@ mod tests {
         assert_eq!(l.key(Path::new("/p/01_footage/A.MP4")), None);
         assert_eq!(l.key(Path::new("/q/01_footage/2030-05-01/A.MP4")), None);
         assert_eq!(l.clip("2030-05-01/A.MP4"), PathBuf::from("/p/01_footage/2030-05-01/A.MP4"));
-        assert_eq!(l.sheet(), PathBuf::from("/p/rushix/sheet.json"));
+        assert_eq!(l.sheet(), PathBuf::from("/p/dailix/sheet.json"));
     }
 
     #[test]
     fn creating_makes_what_is_missing_and_keeps_the_rest() {
-        let root = std::env::temp_dir().join(format!("rushix-layout-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("dailix-layout-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(root.join("06_external")).unwrap();
         std::fs::write(root.join("06_external/LICENSES.md"), "mine").unwrap();
         let l = Layout::new(&root);
         let made = l.create().unwrap();
-        assert!(root.join("02_audio/voiceover").is_dir() && root.join("rushix/thumbs").is_dir());
+        assert!(root.join("02_audio/voiceover").is_dir() && root.join("dailix/thumbs").is_dir());
         assert_eq!(std::fs::read_to_string(root.join("06_external/LICENSES.md")).unwrap(), "mine");
         assert!(!made.contains(&root.join("06_external")));
         assert!(l.create().unwrap().is_empty());

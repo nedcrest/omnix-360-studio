@@ -1,5 +1,5 @@
 //! The contact sheet's core: reading and changing its marking file,
-//! `notes.json`, one way for every program that does (Rushix itself,
+//! `notes.json`, one way for every program that does (Dailix itself,
 //! Omnix's bin, an AI, the tests). Design: `docs/SHEET-CORE.md`.
 //!
 //! The file is kept as it was read ([`Doc`]): the order of its keys, a

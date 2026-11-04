@@ -1,7 +1,7 @@
 //! A sheet read and written back unchanged is the same file, byte for
 //! byte: other programs write it too, and nothing of theirs may move or go.
 
-use rushix_sheet::{Doc, MarkKind, Rating};
+use dailix_sheet::{Doc, MarkKind, Rating};
 
 /// A made-up sheet in the form the sheet's server writes (Python's
 /// `json.dumps(indent=2, ensure_ascii=False)`), with what's easy to lose:
@@ -30,23 +30,23 @@ fn the_typed_view_reads_the_sample() {
     assert_eq!(sheet.roles[0].key, "x_мем");
 }
 
-/// A real sheet, named by `RUSHIX_SHEET`, read and written back: run by
-/// hand on a copy (`RUSHIX_SHEET=… cargo test -- --ignored`), so no one's
+/// A real sheet, named by `DAILIX_SHEET`, read and written back: run by
+/// hand on a copy (`DAILIX_SHEET=… cargo test -- --ignored`), so no one's
 /// marking is in the repo.
 #[test]
 #[ignore]
 fn a_real_sheet_read_and_written_back_is_the_same_file() {
-    let path = std::env::var("RUSHIX_SHEET").expect("RUSHIX_SHEET names a copy of a notes.json");
+    let path = std::env::var("DAILIX_SHEET").expect("DAILIX_SHEET names a copy of a notes.json");
     let text = std::fs::read_to_string(path).unwrap();
     assert!(Doc::parse(&text).unwrap().text() == text, "the round trip changed the file");
 }
 
-/// Ids given to a real sheet (`RUSHIX_SHEET`, a copy): only `id` keys are
+/// Ids given to a real sheet (`DAILIX_SHEET`, a copy): only `id` keys are
 /// added; taken out again, the file is as it was, byte for byte.
 #[test]
 #[ignore]
 fn ids_given_to_a_real_sheet_add_only_ids() {
-    let path = std::env::var("RUSHIX_SHEET").expect("RUSHIX_SHEET names a copy of a notes.json");
+    let path = std::env::var("DAILIX_SHEET").expect("DAILIX_SHEET names a copy of a notes.json");
     let text = std::fs::read_to_string(path).unwrap();
     let mut doc = Doc::parse(&text).unwrap();
     let given = doc.settle_ids();
@@ -64,12 +64,12 @@ fn ids_given_to_a_real_sheet_add_only_ids() {
     assert!(serde_json::to_string_pretty(&value).unwrap() == text, "more than ids changed");
 }
 
-/// What `check` finds in a real sheet (`RUSHIX_SHEET`, a copy), printed:
+/// What `check` finds in a real sheet (`DAILIX_SHEET`, a copy), printed:
 /// problems already there block no op, but they're worth seeing.
 #[test]
 #[ignore]
 fn check_a_real_sheet() {
-    let path = std::env::var("RUSHIX_SHEET").expect("RUSHIX_SHEET names a copy of a notes.json");
+    let path = std::env::var("DAILIX_SHEET").expect("DAILIX_SHEET names a copy of a notes.json");
     let doc = Doc::parse(&std::fs::read_to_string(path).unwrap()).unwrap();
     for p in doc.check() {
         println!("problem: {p}");

@@ -117,7 +117,7 @@ mod tests {
 
     impl Scratch {
         fn new(name: &str, text: &str) -> Scratch {
-            let dir = std::env::temp_dir().join(format!("rushix-store-{name}-{}", std::process::id()));
+            let dir = std::env::temp_dir().join(format!("dailix-store-{name}-{}", std::process::id()));
             let _ = std::fs::remove_dir_all(&dir);
             std::fs::create_dir_all(&dir).unwrap();
             std::fs::write(dir.join("notes.json"), text).unwrap();

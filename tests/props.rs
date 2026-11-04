@@ -4,7 +4,7 @@
 //! `PROPTEST_CASES=20000 cargo test --test props`.
 
 use proptest::prelude::*;
-use rushix_sheet::{ClipOp, DayOp, Doc, Edit, MarkOp, Op, RoleOp};
+use dailix_sheet::{ClipOp, DayOp, Doc, Edit, MarkOp, Op, RoleOp};
 
 const CLIPS: [&str; 3] = ["2030-05-01/a.mp4", "2030-05-01/b.mp4", "2030-05-02/c.mov"];
 

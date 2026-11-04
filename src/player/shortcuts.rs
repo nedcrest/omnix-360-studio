@@ -1,5 +1,5 @@
 //! The keyboard shortcuts and mouse gestures, grouped, in a window over
-//! the editor (gap 56): opened with ? or F1 or the keyboard button, closed
+//! the editor (gap 56): opened with F1 or the keyboard button, closed
 //! with Esc or a click outside. Hidden until asked for, so the interface
 //! stays without help text. Keep it in step with `keys.rs` and the
 //! timeline's presses.
@@ -92,7 +92,7 @@ const GROUPS: &[(&str, &[(&str, &str)])] = &[
             ("Ctrl+O", "add clips"),
             ("Ctrl+Shift+O", "open a project"),
             ("Ctrl+S / Ctrl+Shift+S", "save / save as"),
-            ("? or F1", "this list"),
+            ("F1", "this list"),
         ],
     ),
 ];

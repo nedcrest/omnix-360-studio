@@ -51,8 +51,6 @@ pub(super) fn latin(key: Key, physical: iced::keyboard::key::Physical, shift: bo
             (Code::BracketRight, false) => "]",
             (Code::Comma, false) => ",",
             (Code::Period, false) => ".",
-            (Code::Slash, true) => "?",
-            (Code::Slash, false) => "/",
             (Code::Equal, false) => "=",
             (Code::Equal, true) => "+",
             (Code::Minus, false) => "-",
@@ -96,8 +94,10 @@ impl App {
         if self.mark_edit.is_some() {
             return if escape { self.update(Message::MarkClose) } else { Task::none() };
         }
-        // The shortcuts' list open: Esc, ? or F1 close it, the rest wait.
-        let help = matches!(key.as_ref(), Key::Named(Named::F1) | Key::Character("?"));
+        // The shortcuts' list open: Esc or F1 close it, the rest wait. Not
+        // «?»: it never reached here on the user's keyboard (2026-11-04),
+        // and F1 is help everywhere.
+        let help = matches!(key.as_ref(), Key::Named(Named::F1));
         if self.shortcuts {
             return if escape || help { self.update(Message::Shortcuts) } else { Task::none() };
         }

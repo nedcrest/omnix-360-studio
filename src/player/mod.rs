@@ -396,7 +396,7 @@ enum Message {
     MoveCut(usize, usize),
     /// A delete's «Undo» note has had its time (its number).
     ToastGone(u64),
-    /// The shortcuts' window opened or closed (? or F1, its button).
+    /// The shortcuts' window opened or closed (F1, its button).
     Shortcuts,
     /// A marker at the playhead on the cut there (M).
     AddMark,

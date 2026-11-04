@@ -88,7 +88,7 @@ impl App {
                     text(if self.settings_open { "Close the Settings panel (Ctrl+,)" } else { "Settings (Ctrl+,)" }),
                     tooltip::Position::Bottom,
                 ),
-                tip(tint_button(Tint::Global, KEYBOARD, Some(Message::Shortcuts)), text("Keyboard and mouse shortcuts (? or F1)"), tooltip::Position::Bottom),
+                tip(tint_button(Tint::Global, KEYBOARD, Some(Message::Shortcuts)), text("Keyboard and mouse shortcuts (F1)"), tooltip::Position::Bottom),
             ]),
             separator(),
             group("Project", open, row![

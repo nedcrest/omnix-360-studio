@@ -1041,7 +1041,9 @@ What it would be:
   buttons do it, and most projects come already cut in footage-agent's
   contact sheet.
 
-Built 2026-11-04 (`bin_view.rs`; `c059e1f`, `cbaaea6`, `07c03b5`): the Bin
+Built 2026-11-04 (`bin_view.rs`; `c059e1f`, `cbaaea6`, `07c03b5`, `c5808fd`): the
+file picked shows at the right with its Info, the edge between dragged
+(user's ask the same day); a tile's click only shows, ▶ plays. The Bin
 toggle in the Mode group or Shift+B; every section shown, an empty one
 too, with its «+»; a drop goes to its kind's first section (Footage,
 Music, Graphics), since X11 drops carry no position; the tile says where

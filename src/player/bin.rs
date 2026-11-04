@@ -108,12 +108,12 @@ pub struct Preview {
     pub path: PathBuf,
     pub kind: Kind,
     pub frames: Vec<image::Handle>,
-    player: Option<Player>,
+    pub(super) player: Option<Player>,
 }
 
 /// An `ffplay` process, stopped when dropped: a preview never outlives the
 /// bin's hold on it.
-struct Player(Child);
+pub(super) struct Player(Child);
 
 impl Drop for Player {
     fn drop(&mut self) {
@@ -151,6 +151,14 @@ pub struct Bin {
     /// copy did.
     pub copying: usize,
     pub copied: Option<String>,
+    /// The bin view's right side (the file shown, its Info): its width,
+    /// whether its edge is being dragged, and the view's width last drawn
+    /// (to turn the pointer into a width).
+    pub side: f32,
+    pub gripping: bool,
+    pub width: std::cell::Cell<f32>,
+    /// What Info read of the file shown there (`None` while reading).
+    pub about: Option<(PathBuf, Option<Result<std::sync::Arc<super::info::File>, String>>)>,
     /// Loaded clips from outside the folder taken out of the bin's list
     /// (the clips stay loaded: an undo may bring back a cut of one).
     pub hidden: std::collections::HashSet<PathBuf>,
@@ -267,33 +275,63 @@ impl App {
         }))
     }
 
-    /// Previews `path`: a sound or a clip heard (a clip in a window of its
-    /// own), a clip's frames read into the strip. The same file again stops it.
-    pub(super) fn bin_preview(&mut self, path: PathBuf, kind: Kind) -> Task<Message> {
-        let same = self.bin.preview.as_mut().is_some_and(|p| p.path == path && p.playing());
-        self.stop_preview();
-        if same {
+    /// Shows `path`: a clip's frames read, what Info says of it read; and,
+    /// with `start`, a sound or a clip heard (a clip in a window of its
+    /// own). Started again while it plays, it stops; the file already shown
+    /// keeps what was read of it.
+    pub(super) fn bin_preview(&mut self, path: PathBuf, kind: Kind, start: bool) -> Task<Message> {
+        let same = self.bin.preview.as_ref().is_some_and(|p| p.path == path);
+        let was_playing = same && self.bin.preview.as_mut().is_some_and(Preview::playing);
+        if same && !start {
             return Task::none();
         }
-        let player = (kind != Kind::Picture).then(|| play(&path, kind)).flatten();
-        if player.is_none() && kind != Kind::Picture {
+        self.stop_preview();
+        if was_playing {
+            return Task::none();
+        }
+        let player = (start && kind != Kind::Picture).then(|| play(&path, kind)).flatten();
+        if start && player.is_none() && kind != Kind::Picture {
             self.error = Some("Can't preview: ffplay isn't installed (it comes with ffmpeg)".to_owned());
         }
-        self.bin.preview = Some(Preview { path: path.clone(), kind, frames: Vec::new(), player });
-        if kind != Kind::Clip {
+        if same {
+            if let Some(p) = &mut self.bin.preview {
+                p.player = player;
+            }
             return Task::none();
         }
+        self.bin.preview = Some(Preview { path: path.clone(), kind, frames: Vec::new(), player });
+        let about = self.read_about(path.clone(), kind);
+        if kind != Kind::Clip {
+            return about;
+        }
         let duration = self.bin.meta.get(&path).and_then(|m| m.duration).unwrap_or(10.0);
-        Task::perform(
+        let frames = Task::perform(
             blocking({
                 let path = path.clone();
                 // All at once: a frame of 2.7K HEVC takes about a second.
                 move || {
                     use rayon::prelude::*;
-                    (1..=PREVIEW_FRAMES).into_par_iter().filter_map(|i| frame(&path, duration * (i as f64 - 0.5) / PREVIEW_FRAMES as f64, 300)).collect::<Vec<_>>()
+                    (1..=PREVIEW_FRAMES).into_par_iter().filter_map(|i| frame(&path, duration * (i as f64 - 0.5) / PREVIEW_FRAMES as f64, 640)).collect::<Vec<_>>()
                 }
             }),
             move |frames| Message::BinFrames(path.clone(), frames),
+        );
+        Task::batch([frames, about])
+    }
+
+    /// Reads what Info says of `path`, for the bin view's side.
+    fn read_about(&mut self, path: PathBuf, kind: Kind) -> Task<Message> {
+        if self.bin.about.as_ref().is_some_and(|(p, f)| *p == path && f.as_ref().is_some_and(Result::is_ok)) {
+            return Task::none();
+        }
+        self.bin.about = Some((path.clone(), None));
+        let song = matches!(kind, Kind::Sound(_));
+        Task::perform(
+            blocking({
+                let path = path.clone();
+                move || super::info::read(&path, song).map(std::sync::Arc::new).map_err(|e| format!("{e:#}"))
+            }),
+            move |r| Message::BinView(super::bin_view::BinMsg::About(path.clone(), r)),
         )
     }
 
@@ -389,28 +427,33 @@ impl App {
             .padding([3, 4])
             .style(if selected { button::secondary } else { button::text })
             .on_press(Message::BinPreview(path.to_owned(), kind));
-        let add = |icon: &'static [u8], place: Place, hint: &'static str| -> Element<'a, Message> {
-            let icon = iced::widget::svg(iced::widget::svg::Handle::from_memory(icon)).width(16).height(16);
-            tip(button(icon).padding(4).on_press(Message::BinAdd(path.to_owned(), kind, place)), text(hint), tooltip::Position::Left)
-        };
-        let buttons: Element<'a, Message> = match kind {
-            Kind::Clip => row![
-                add(ADD_END, Place::End, "Add at the end of the edit"),
-                add(ADD_HERE, Place::Playhead, "Add at the playhead: the cut there is split around it"),
-                add(ADD_JOIN, Place::Join, "Add at the join of cuts nearest the playhead"),
-            ]
-            .spacing(2)
-            .into(),
-            Kind::Sound(_) => row![
-                add(ADD_END, Place::End, "Add on the music lane after the last song"),
-                add(ADD_HERE, Place::Playhead, "Add on the music lane at the playhead"),
-                add(ADD_JOIN, Place::Join, "Add on the music lane at the join of cuts nearest the playhead"),
-            ]
-            .spacing(2)
-            .into(),
-            Kind::Picture => add(ADD_HERE, Place::Playhead, "Add over the picture at the playhead"),
-        };
-        row![body, buttons].spacing(4).align_y(Alignment::Center).into()
+        row![body, add_buttons(path, kind)].spacing(4).align_y(Alignment::Center).into()
+    }
+}
+
+/// A file's add buttons: at the end, at the playhead, at the join (a
+/// picture only at the playhead).
+pub(super) fn add_buttons<'a>(path: &Path, kind: Kind) -> Element<'a, Message> {
+    let add = |icon: &'static [u8], place: Place, hint: &'static str| -> Element<'a, Message> {
+        let icon = iced::widget::svg(iced::widget::svg::Handle::from_memory(icon)).width(16).height(16);
+        tip(button(icon).padding(4).on_press(Message::BinAdd(path.to_owned(), kind, place)), text(hint), tooltip::Position::Left)
+    };
+    match kind {
+        Kind::Clip => row![
+            add(ADD_END, Place::End, "Add at the end of the edit"),
+            add(ADD_HERE, Place::Playhead, "Add at the playhead: the cut there is split around it"),
+            add(ADD_JOIN, Place::Join, "Add at the join of cuts nearest the playhead"),
+        ]
+        .spacing(2)
+        .into(),
+        Kind::Sound(_) => row![
+            add(ADD_END, Place::End, "Add on the music lane after the last song"),
+            add(ADD_HERE, Place::Playhead, "Add on the music lane at the playhead"),
+            add(ADD_JOIN, Place::Join, "Add on the music lane at the join of cuts nearest the playhead"),
+        ]
+        .spacing(2)
+        .into(),
+        Kind::Picture => add(ADD_HERE, Place::Playhead, "Add over the picture at the playhead"),
     }
 }
 
@@ -468,7 +511,7 @@ impl App {
                 self.bin.open |= self.bin.pinned;
             }
             Message::BinRefresh => return self.rescan_bin(),
-            Message::BinPreview(path, kind) => return self.bin_preview(path, kind),
+            Message::BinPreview(path, kind) => return self.bin_preview(path, kind, true),
             Message::BinStop => self.stop_preview(),
             Message::BinMeta(read) => self.bin.meta.extend(read),
             Message::BinFrames(path, frames) => {

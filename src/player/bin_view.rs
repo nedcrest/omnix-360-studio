@@ -15,6 +15,12 @@ use std::path::{Path, PathBuf};
 /// A tile's width: the slider's range and where it starts.
 pub const TILE: std::ops::RangeInclusive<f32> = 140.0..=420.0;
 pub const TILE_DEFAULT: f32 = 220.0;
+/// The right side's default width, and the least it and the tiles keep.
+pub const SIDE_DEFAULT: f32 = 460.0;
+const MIN_SIDE: f32 = 260.0;
+const MIN_TILES: f32 = 200.0;
+/// The edge between them: wide enough to grab.
+const GRIP: f32 = 9.0;
 
 /// The bin view's messages.
 #[derive(Debug, Clone)]
@@ -31,6 +37,12 @@ pub enum BinMsg {
     Info(PathBuf, Kind),
     /// A menu item chosen: the menu closes, then the item's message.
     Pick(Box<Message>),
+    /// The edge between the tiles and the file shown pressed (true) or let go.
+    Grip(bool),
+    /// What Info read of the file shown.
+    About(PathBuf, Result<std::sync::Arc<super::info::File>, String>),
+    /// A tile clicked: the file shown at the right, not played.
+    Show(PathBuf, Kind),
     /// A file dropped on the window from a file manager.
     Dropped(PathBuf),
     /// A section's «+»: pick files to copy into its folder.
@@ -122,7 +134,23 @@ impl App {
                 }
             }
             BinMsg::Tile(w) => self.bin.tile = w.clamp(*TILE.start(), *TILE.end()),
-            BinMsg::Pointer(p) => self.bin.pointer = p,
+            BinMsg::Pointer(p) => {
+                self.bin.pointer = p;
+                if self.bin.gripping {
+                    let width = self.bin.width.get();
+                    self.bin.side = width - p.x - GRIP / 2.0;
+                    self.bin.side = self.side_width(width);
+                }
+            }
+            BinMsg::Grip(on) => self.bin.gripping = on,
+            BinMsg::Show(path, kind) => return self.bin_preview(path, kind, false),
+            BinMsg::About(path, file) => {
+                if let Some((p, f)) = &mut self.bin.about
+                    && *p == path
+                {
+                    *f = Some(file);
+                }
+            }
             BinMsg::Menu(m) => self.bin.menu = m.map(|(path, kind)| (path, kind, self.bin.pointer)),
             BinMsg::Pick(m) => {
                 self.bin.menu = None;
@@ -237,6 +265,18 @@ impl App {
     /// The bin in tiles, in the picture's place.
     pub(super) fn bin_view(&self) -> Element<'_, Message> {
         let to = |m: BinMsg| Message::BinView(m);
+        // The view's width, to turn the pointer's place into the side's width.
+        let view = iced::widget::responsive(move |size| {
+            self.bin.width.set(size.width);
+            self.bin_body()
+        });
+        let view = mouse_area(view).on_move(move |p| to(BinMsg::Pointer(p))).on_release(to(BinMsg::Grip(false)));
+        self.bin_menu_layer(view.into())
+    }
+
+    /// The bin view's head, its tiles, and the file shown at the right.
+    fn bin_body(&self) -> Element<'_, Message> {
+        let to = |m: BinMsg| Message::BinView(m);
         let size = tip(
             slider(TILE, self.bin.tile, move |w| to(BinMsg::Tile(w))).width(140),
             text("The tiles' size"),
@@ -254,11 +294,7 @@ impl App {
             head = head.push(text(note.clone()).size(13).style(text::success));
         }
         let head = head.push(space().width(Length::Fill)).push(size).push(refresh).push(close);
-        let mut body = column![head].spacing(10);
-
-        if let Some(p) = &self.bin.preview {
-            body = body.push(container(self.preview_box(p)).max_width(640));
-        }
+        let mut body = column![].spacing(10);
         match &self.bin.read {
             None => body = body.push(text("Save the project to see its folder here.").size(13).style(text::secondary)),
             // Every section, an empty one too: its «+» is where to add.
@@ -273,8 +309,71 @@ impl App {
         if !loaded.is_empty() {
             body = body.push(rule::horizontal(1)).push(self.section_tiles("Loaded clips", Kind::Clip, &loaded, false));
         }
-        let view = mouse_area(container(scrollable(body.padding(14)).width(Length::Fill).height(Length::Fill)).width(Length::Fill).height(Length::Fill)).on_move(move |p| to(BinMsg::Pointer(p)));
-        self.bin_menu_layer(view.into())
+        let tiles = scrollable(body.padding([0, 14])).width(Length::Fill).height(Length::Fill);
+        // The file shown at the right, beside the tiles, once one is picked;
+        // the edge between them dragged shares the width.
+        let below: Element<'_, Message> = match &self.bin.preview {
+            None => tiles.into(),
+            Some(p) => {
+                let side = self.side_width(self.bin.width.get());
+                let grip = mouse_area(container(rule::vertical(1)).width(GRIP).height(Length::Fill).center_x(GRIP))
+                    .on_press(to(BinMsg::Grip(true)))
+                    .interaction(iced::mouse::Interaction::ResizingHorizontally);
+                row![tiles, grip, container(self.side_pane(p)).width(side).height(Length::Fill)].into()
+            }
+        };
+        column![container(head).padding([10, 14]), below].into()
+    }
+
+    /// The right side's width in a view `width` wide: as dragged, but
+    /// leaving room for a column of tiles and for the file shown.
+    fn side_width(&self, width: f32) -> f32 {
+        self.bin.side.min(width - GRIP - MIN_TILES).max(MIN_SIDE)
+    }
+
+    /// The file shown at the right: its pictures (a clip's frames, the
+    /// picture, a sound's note), play and stop, the add buttons, and what
+    /// Info reads of it.
+    fn side_pane<'a>(&'a self, p: &'a super::bin::Preview) -> Element<'a, Message> {
+        let name = p.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        let playing = p.player.is_some();
+        let play: Element<'a, Message> = match p.kind {
+            Kind::Picture => space().into(),
+            _ => tip(
+                button(text(if playing { "■" } else { "▶" }).size(14)).padding([2, 10]).on_press(if playing { Message::BinStop } else { Message::BinPreview(p.path.clone(), p.kind) }),
+                text(if playing { "Stop" } else if p.kind == Kind::Clip { "Play (in a window of its own)" } else { "Play" }),
+                tooltip::Position::Bottom,
+            ),
+        };
+        let mut col = column![text(name).size(15), row![play, space().width(Length::Fill), super::bin::add_buttons(&p.path, p.kind)].align_y(Alignment::Center)].spacing(8);
+        match p.kind {
+            Kind::Clip if p.frames.is_empty() => col = col.push(text("Reading frames…").size(12).style(text::secondary)),
+            Kind::Clip => {
+                for pair in p.frames.chunks(2) {
+                    col = col.push(row(pair.iter().map(|h| image(h.clone()).width(Length::FillPortion(1)).into())).spacing(4));
+                }
+            }
+            Kind::Picture => {
+                if let Some(h) = self.bin.meta.get(&p.path).and_then(|m| m.thumb.clone()) {
+                    col = col.push(image(h).width(Length::Fill));
+                }
+            }
+            Kind::Sound(_) => col = col.push(container(text("♪").size(64)).width(Length::Fill).center_x(Length::Fill)),
+        }
+        col = col.push(rule::horizontal(1));
+        let line = |label: &'static str, value: String| row![text(label).size(13).style(text::secondary).width(96), text(value).size(13).width(Length::Fill)].spacing(6);
+        col = col.push(line("In the edit", uses(&self.edit, &p.path).unwrap_or_else(|| "not used".to_owned())));
+        match self.bin.about.as_ref().filter(|(path, _)| *path == p.path).map(|(_, f)| f) {
+            None | Some(None) => col = col.push(text("Reading…").size(13).style(text::secondary)),
+            Some(Some(Err(e))) => col = col.push(text(e.clone()).size(13).style(text::danger)),
+            Some(Some(Ok(file))) => {
+                col = col.push(line("Kind", file.kind.to_owned()));
+                for (label, value) in &file.rows {
+                    col = col.push(line(label, value.clone()));
+                }
+            }
+        }
+        container(scrollable(col.padding(12))).height(Length::Fill).style(container::rounded_box).into()
     }
 
     /// The clips loaded that the folder's scan doesn't list: a project's
@@ -327,7 +426,7 @@ impl App {
         let tile = button(column![picture, info].spacing(4))
             .padding(4)
             .style(if selected { button::secondary } else { button::text })
-            .on_press(Message::BinPreview(path.to_owned(), kind));
+            .on_press(Message::BinView(BinMsg::Show(path.to_owned(), kind)));
         mouse_area(tile).on_right_press(Message::BinView(BinMsg::Menu(Some((path.to_owned(), kind))))).into()
     }
 

@@ -18,18 +18,11 @@ impl App {
                     info::Of::Cut(i) => self.edit.cuts.get(i).map(|c| c.input.clone()),
                     info::Of::Music(which, i) => self.edit.track(which).clips.get(i).map(|m| m.input.clone()),
                     info::Of::Overlay(r) => self.edit.item(r).filter(|it| it.text.is_none()).map(|it| it.input.clone()),
+                    // The bin opens its files with their path (`open_info`).
+                    info::Of::File(_) => None,
                 };
                 let Some(path) = path else { return Task::none() };
-                self.settings_open = false;
-                // Read once per file: another cut of it shows at once.
-                let file = self.info.take().filter(|i| i.path == path).and_then(|i| i.file).filter(|f| f.is_ok());
-                let read = file.is_none();
-                self.info = Some(info::Info { of, path: path.clone(), file });
-                if read {
-                    let song = matches!(of, info::Of::Music(..));
-                    let p = path.clone();
-                    return Task::perform(blocking(move || info::read(&p, song).map(Arc::new).map_err(|e| format!("{e:#}"))), move |r| Message::InfoRead(path.clone(), r));
-                }
+                return self.open_info(of, path);
             }
             Message::InfoRead(path, file) => {
                 if let Some(info) = &mut self.info
@@ -135,5 +128,20 @@ impl App {
             _ => {}
         }
         Task::none()
+    }
+
+    /// The Info panel on `path`, as `of` names it.
+    pub(super) fn open_info(&mut self, of: info::Of, path: PathBuf) -> Task<Message> {
+        self.settings_open = false;
+        // Read once per file: another cut of it shows at once.
+        let file = self.info.take().filter(|i| i.path == path).and_then(|i| i.file).filter(|f| f.is_ok());
+        let read = file.is_none();
+        self.info = Some(info::Info { of, path: path.clone(), file });
+        if !read {
+            return Task::none();
+        }
+        let song = matches!(of, info::Of::Music(..) | info::Of::File(true));
+        let p = path.clone();
+        Task::perform(blocking(move || info::read(&p, song).map(Arc::new).map_err(|e| format!("{e:#}"))), move |r| Message::InfoRead(path.clone(), r))
     }
 }

@@ -27,7 +27,8 @@ use std::process::{Child, Command, Stdio};
 const WIDTH: f32 = 360.0;
 /// The folded bin: a strip with the button that opens it.
 const FOLDED: f32 = 34.0;
-const THUMB_W: u32 = 96;
+/// Wide enough for the bin view's biggest tiles; the panel shows it small.
+const THUMB_W: u32 = 420;
 /// Frames in the preview strip of a clip.
 const PREVIEW_FRAMES: usize = 4;
 
@@ -139,6 +140,13 @@ pub struct Bin {
     pub read: Option<(Vec<Section>, PathBuf)>,
     pub meta: HashMap<PathBuf, Meta>,
     pub preview: Option<Preview>,
+    /// Shown as tiles in the picture's place (`bin_view.rs`).
+    pub view: bool,
+    /// The tiles' width there.
+    pub tile: f32,
+    /// The pointer over the view, and a tile's menu open at it.
+    pub pointer: iced::Point,
+    pub menu: Option<(PathBuf, Kind, iced::Point)>,
 }
 
 /// The project's folder for a project file at `project`.
@@ -195,7 +203,7 @@ fn label(path: &Path) -> String {
     path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()
 }
 
-fn clock(seconds: f64) -> String {
+pub(super) fn clock(seconds: f64) -> String {
     let s = seconds.round() as u64;
     format!("{}:{:02}", s / 60, s % 60)
 }
@@ -337,7 +345,7 @@ impl App {
     }
 
     /// The file being previewed: its frames, and Stop while it plays.
-    fn preview_box<'a>(&'a self, p: &'a Preview) -> Element<'a, Message> {
+    pub(super) fn preview_box<'a>(&'a self, p: &'a Preview) -> Element<'a, Message> {
         let name = p.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
         let mut col = column![row![text(name).size(13).width(Length::Fill), button(text("■").size(13)).padding([0, 6]).style(button::text).on_press(Message::BinStop)].align_y(Alignment::Center)].spacing(4);
         match p.kind {

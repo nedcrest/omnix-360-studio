@@ -21,6 +21,8 @@ pub enum Of {
     /// A clip on a sound track: the music or the sound effects.
     Music(crate::project::SoundTrack, usize),
     Overlay(ItemRef),
+    /// A file of the bin, wherever the edit uses it; a sound if true.
+    File(bool),
 }
 
 /// The panel's file, and what's been read about it (`None` while reading).
@@ -263,6 +265,7 @@ impl App {
                 let Some(it) = self.edit.item(r).filter(|it| it.input == info.path) else { return rows };
                 rows.push(("On the edit", span(it.at, it.at + it.end - it.start)));
             }
+            Of::File(_) => rows.push(("In the edit", super::bin_view::uses(&self.edit, &info.path).unwrap_or_else(|| "not used".to_owned()))),
         }
         rows
     }

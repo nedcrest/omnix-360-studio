@@ -38,6 +38,8 @@ pub struct Settings {
     pub dlog_m_lut: Option<String>,
     /// The bin is pinned open (`bin.rs`).
     pub bin_pinned: bool,
+    /// The bin view's tile width (`bin_view.rs`).
+    pub bin_tile: f32,
     /// How tall the timeline's lanes are, as the divider above the
     /// transport row left them (`timeline::Rows`).
     pub timeline_scale: f32,
@@ -97,6 +99,7 @@ impl Default for Settings {
             ten_bit: false,
             dlog_m_lut: None,
             bin_pinned: false,
+            bin_tile: super::bin_view::TILE_DEFAULT,
             timeline_scale: 1.0,
             view_angles: true,
             ui_scale: UI_DEFAULT,

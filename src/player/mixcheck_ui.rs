@@ -47,6 +47,8 @@ impl App {
         match msg {
             CheckMsg::Toggle(on) => {
                 self.check.on = on;
+                // One view in the picture's place at a time.
+                self.bin.view &= !on;
                 if on && self.check.measured.is_none() {
                     return self.mix_check(CheckMsg::Again);
                 }

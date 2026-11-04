@@ -204,7 +204,13 @@ impl App {
         };
         let view = container(view).width(Length::Fill).height(Length::Fill).style(|_| container::background(iced::Color::BLACK));
         // The mix check stands in the picture's place while it's on.
-        let view: Element<'_, Message> = if self.check.on { container(self.mix_check_view()).width(Length::Fill).height(Length::Fill).into() } else { view.into() };
+        let view: Element<'_, Message> = if self.bin.view {
+            self.bin_view()
+        } else if self.check.on {
+            container(self.mix_check_view()).width(Length::Fill).height(Length::Fill).into()
+        } else {
+            view.into()
+        };
         let view: Element<'_, Message> = match self.side {
             Some(Side::Effects) => row![view, self.effects_panel()].into(),
             Some(Side::Export) => row![view, self.export_panel()].into(),
@@ -219,8 +225,9 @@ impl App {
             Some(panel) => row![panel, view].into(),
             None => view,
         };
-        // The bin, a panel of its own at the far left, beside whichever.
-        let view: Element<'_, Message> = row![self.bin_panel(), view].into();
+        // The bin, a panel of its own at the far left, beside whichever;
+        // not while the bin itself fills the picture's place.
+        let view: Element<'_, Message> = if self.bin.view { view } else { row![self.bin_panel(), view].into() };
         view
     }
 
@@ -408,6 +415,11 @@ impl App {
             tip(
                 toggler(self.check.on).label("Mix check").on_toggle(|on| Message::Check(super::mixcheck_ui::CheckMsg::Toggle(on))),
                 text("The sound against the export's loudness target and the mixing rules, in the picture's place: each clip as loud as it is, what to fix outlined; a click takes you to it"),
+                tooltip::Position::Top,
+            ),
+            tip(
+                toggler(self.bin.view).label("Bin").on_toggle(|_| Message::BinView(super::bin_view::BinMsg::Toggle)),
+                text("The project's media in tiles, in the picture's place (Shift+B)"),
                 tooltip::Position::Top,
             ),
             ].spacing(12).align_y(Alignment::Center)),

@@ -86,6 +86,7 @@ const GROUPS: &[(&str, &[(&str, &str)])] = &[
         &[
             ("G", "effects"),
             ("B", "bin"),
+            ("Shift+B", "bin in tiles, in the picture's place"),
             ("Ctrl+,", "settings"),
             ("Ctrl+E", "export"),
             ("Ctrl+N", "new project"),

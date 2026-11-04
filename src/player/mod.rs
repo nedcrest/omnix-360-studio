@@ -8,6 +8,7 @@ mod export;
 mod gpu;
 mod audio_panel;
 mod bin;
+mod bin_view;
 mod export_panel;
 mod handles;
 mod info;
@@ -429,6 +430,8 @@ enum Message {
     BinPanel,
     /// Read the project's folder again.
     BinRefresh,
+    /// The bin as a view of tiles in the picture's place.
+    BinView(bin_view::BinMsg),
     /// Add a file from the bin where its kind goes.
     BinAdd(PathBuf, bin::Kind, bin::Place),
     /// Pin the bin open, or unpin it.
@@ -797,7 +800,7 @@ impl App {
             modifiers: keyboard::Modifiers::default(),
             scrubbing: None,
             settings_open: false,
-            bin: bin::Bin { open: saved.bin_pinned, pinned: saved.bin_pinned, ..Default::default() },
+            bin: bin::Bin { open: saved.bin_pinned, pinned: saved.bin_pinned, tile: saved.bin_tile, ..Default::default() },
             fullscreen: false,
             volume: saved.volume,
             muted: saved.muted,
@@ -837,6 +840,7 @@ impl App {
             ten_bit: self.ten_bit,
             dlog_m_lut: self.dlog_m_lut.clone(),
             bin_pinned: self.bin.pinned,
+            bin_tile: self.bin.tile,
             timeline_scale: self.split_kept,
             view_angles: self.angles_shown,
             ui_scale: self.ui_scale,
@@ -953,6 +957,7 @@ impl App {
             m @ (Message::Export { .. } | Message::ExportTo { .. } | Message::ExportProgress { .. } | Message::ExportCancel { .. } | Message::PickColour { .. } | Message::PickArea { .. } | Message::AreaPicked { .. } | Message::TrackProgress { .. } | Message::TrackCancel { .. } | Message::Tracked { .. } | Message::ExportDone { .. } | Message::Save { .. } | Message::SaveTo { .. } | Message::Saved { .. }) => self.on_jobs(m),
             m @ (Message::Resolution { .. } | Message::ExportClips { .. } | Message::ExportGraded { .. } | Message::ExportFormat { .. } | Message::ExportLoudness { .. } | Message::Info { .. } | Message::InfoRead { .. } | Message::InfoClose { .. } | Message::Reveal { .. } | Message::CopyPath { .. } | Message::ExportPanel { .. } | Message::AudioPanel { .. } | Message::SettingsPanel { .. } | Message::Shortcuts { .. } | Message::AutoKey { .. } | Message::SplitDrag { .. } | Message::SplitDone { .. } | Message::SplitReset { .. } | Message::TenBit { .. } | Message::AddLut { .. } | Message::LutPicked { .. } | Message::RemoveLut { .. } | Message::DlogMLut { .. } | Message::UiScale { .. } | Message::ShowAngles { .. } | Message::RulerLarge { .. } | Message::BarLabels | Message::Snapping | Message::Fold { .. } | Message::Modifiers { .. } | Message::ViewSize { .. } | Message::Aspect { .. } | Message::Theme { .. } | Message::Mute { .. } | Message::Volume { .. } | Message::Fullscreen { .. }) => self.on_panels(m),
             m @ (Message::BinPanel { .. } | Message::BinPin { .. } | Message::BinRefresh { .. } | Message::BinPreview { .. } | Message::BinStop { .. } | Message::BinMeta { .. } | Message::BinFrames { .. } | Message::BinAdd { .. }) => self.on_bin(m),
+            Message::BinView(msg) => self.on_bin_view(msg),
             m @ (Message::MarkEdit { .. } | Message::MarkNote { .. } | Message::MarkSave | Message::MarkDelete | Message::MarkClose) => self.on_marks(m),
             m @ (Message::Tick { .. } | Message::TimelineZoom { .. } | Message::TimelineZoomTo { .. } | Message::TimelinePan { .. } | Message::Toggle { .. } | Message::Scrub { .. } | Message::ScrubDone { .. }) => self.on_transport(m),
             m @ (Message::Select { .. } | Message::AddBlank | Message::SoundEdge { .. } | Message::Trim { .. } | Message::MoveCut { .. } | Message::AddMark { .. } | Message::SelectAtPlayhead | Message::MarkMove { .. } | Message::MarkSelect { .. } | Message::StepsRested { .. } | Message::ToastGone { .. } | Message::StepNoteGone { .. } | Message::TrimToPlayhead { .. } | Message::Crossfade { .. } | Message::ToggleCrossfade { .. } | Message::Split { .. } | Message::DeleteCut { .. } | Message::Undo { .. } | Message::Redo { .. }) => self.on_cuts(m),

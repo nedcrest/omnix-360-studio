@@ -71,6 +71,22 @@ three layers on every lane, tessellated anew on every frame, twice the
 work at twice the width; the frame rate halves in fullscreen, as the
 user saw. Nothing else is worth touching first.
 
+### After keeping the sound lanes (`8a2177d`)
+
+The sound lanes and the clip sound lane drawn once into a `canvas::Cache`
+and kept while what they show holds. The same sampling, the player run
+the same way (a window, then fullscreen, playing and dragging):
+
+| Phase (by the trace) | Main thread before | after |
+|---|---|---|
+| Playing, window | 95-102 % | 10-28 % |
+| Dragging the playhead, window | 60-100 % | 10-17 % |
+| Playing, fullscreen | ~100 % | 17-30 % |
+| Dragging, fullscreen | ~100 % | 8-26 % |
+
+Mean over the busy seconds 15 % of a core, at most 30 %; ffmpeg as
+before (0-45 %, the peaks at cut changes).
+
 ## 2. Decoding: software against CUDA, as the player runs ffmpeg
 
 The player's command (`ffmpeg::yuv`): decode, then for a GPU decode
@@ -130,7 +146,9 @@ place of it.
 ## What to do, in order
 
 1. ~~Measure the main thread~~: done, above: the waveforms.
-2. **Cache the timeline's still layers** (`canvas::Cache`): waveforms,
+2. ~~Cache the timeline's still layers~~: done for the sound lanes
+   (`8a2177d`), above; the rest of the timeline costs under 1 ms. Was:
+   (`canvas::Cache`): waveforms,
    blocks, thumbnails and headers redrawn only when the edit, the zoom or
    the window change; the playhead, the snap line and readouts in a thin
    layer of their own redrawn every frame. Expected to take the main

@@ -67,8 +67,15 @@ pub struct Sheet {
 }
 
 impl Sheet {
-    /// The sheet of the project folder `root`, if it has one.
+    /// The sheet of the project folder `root`, if it has one: a Dailix
+    /// project's (`dailix/sheet.json`, clips keyed under `01_footage`),
+    /// else footage-agent's (`report/notes.json`, keyed under the archive
+    /// it names, then `01_footage`).
     pub fn of(root: &Path) -> Option<Sheet> {
+        let dailix = dailix_sheet::Layout::new(root);
+        if dailix.is_project() && dailix.sheet().is_file() {
+            return Some(Sheet { store: Store::new(dailix.sheet()), bases: vec![dailix.footage()] });
+        }
         let file = root.join("report").join("notes.json");
         if !file.is_file() {
             return None;
@@ -184,6 +191,21 @@ mod tests {
         assert_eq!(s.key(Path::new("/a/2026-08-21/x.MP4")).as_deref(), Some("2026-08-21/x.MP4"));
         assert_eq!(s.key(Path::new("/p/01_footage/2026-08-22/y.MP4")).as_deref(), Some("2026-08-22/y.MP4"));
         assert_eq!(s.key(Path::new("/elsewhere/z.MP4")), None);
+    }
+
+    #[test]
+    fn a_dailix_project_is_found_first() {
+        let dir = std::env::temp_dir().join(format!("omnix-notes-dailix-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let layout = dailix_sheet::Layout::new(&dir);
+        layout.create().unwrap();
+        std::fs::write(layout.project(), "{}").unwrap();
+        std::fs::write(layout.sheet(), r#"{"clips": {"2030-05-01/a.mp4": {"marks": [{"t": 1, "end": 2, "note": "", "id": "m1"}]}}}"#).unwrap();
+        // An old sheet beside it is ignored.
+        sheet_in(&dir, r#"{"clips": {}}"#);
+        let s = Sheet::of(&dir).unwrap();
+        assert_eq!(s.segments(&dir.join("01_footage/2030-05-01/a.mp4")).unwrap().len(), 1);
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

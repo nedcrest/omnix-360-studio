@@ -419,6 +419,12 @@ pub enum Drag {
 #[derive(Default)]
 pub struct State {
     drag: Drag,
+    /// The sound lanes and the clip sound lane, drawn once and kept until
+    /// what they show changes (`sound_key`): their waveforms took 40 ms a
+    /// frame in a window and 79 ms fullscreen, on every frame while playing
+    /// or dragging the playhead (`GPU-PLAYER.md`).
+    sounds: canvas::Cache,
+    sounds_key: std::cell::Cell<u64>,
     /// `Timeline::drag_epoch` when the drag began: moved on (Esc), the drag
     /// is dropped.
     epoch: u64,
@@ -1020,6 +1026,45 @@ impl Timeline {
         } else {
             self.rows.sound_at_y(p.y).map(|li| Menu::Track(self.sounds[li].which))
         }
+    }
+
+    /// Everything the sound lanes and the clip sound lane are drawn from
+    /// (`draw_sounds`, `draw_clip_sound`), hashed: while it holds, their
+    /// kept drawing is right. The playhead isn't in it, so playing and
+    /// dragging the playhead never redraw them.
+    fn sound_key(&self, b: Rectangle, theme: &Theme) -> u64 {
+        use std::hash::{Hash, Hasher};
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        let f = |h: &mut std::collections::hash_map::DefaultHasher, v: f64| v.to_bits().hash(h);
+        for v in [self.start, self.span, self.clips_db, self.duration, self.video, b.width as f64, b.height as f64] {
+            f(&mut h, v);
+        }
+        let ptr = |w: &Option<Arc<music::Waveform>>| w.as_ref().map_or(0, |w| Arc::as_ptr(w) as usize);
+        for c in &self.blocks {
+            for v in [c.from, c.len, c.start, c.most, c.sound_before, c.sound_after, c.fade_in, c.fade_out, c.own_db, c.gain, c.crossfade] {
+                f(&mut h, v);
+            }
+            for k in &c.sound {
+                f(&mut h, k.t);
+                f(&mut h, k.volume);
+            }
+            (ptr(&c.wave), ptr(&c.even_wave)).hash(&mut h);
+            c.level.hash(&mut h);
+        }
+        for l in &self.sounds {
+            format!("{:?}{:?}", l.which, l.track).hash(&mut h);
+            for m in &l.blocks {
+                for v in [m.from, m.start, m.len, m.most, m.fade_in, m.fade_out] {
+                    v.to_bits().hash(&mut h);
+                }
+                for k in &m.volume {
+                    (k.t.to_bits(), k.volume.to_bits()).hash(&mut h);
+                }
+                (ptr(&m.wave), ptr(&m.even_wave), &m.label, &m.level).hash(&mut h);
+            }
+        }
+        format!("{:?}{:?}{:?}{:?}{:?}", self.rows, self.selected, self.selected_music, self.selected_point, theme.extended_palette().background.base.color).hash(&mut h);
+        h.finish()
     }
 
     /// The middle of sound lane `li`'s name in the header (`tag_mid`).
@@ -1982,7 +2027,6 @@ impl canvas::Program<Message> for Marks {
             frame.fill(&Path::rectangle(Point::new(x - 1.5, 0.0), Size::new(3.0, self.rows.cuts)), palette.primary.strong.color);
         }
 
-        self.draw_sounds(&mut frame, theme, bounds);
         let mid = self.rows.seek_top + SEEK / 2.0;
         let keys_mid = self.rows.keys_top + KEYS / 2.0;
         let (x0, x1) = (self.x(0.0, bounds), self.x(self.duration, bounds));
@@ -2006,7 +2050,6 @@ impl canvas::Program<Message> for Marks {
                 }
             }
         }
-        self.draw_clip_sound(&mut frame, theme, bounds);
         frame.fill(&Path::rectangle(Point::new(at - 1.0, 0.0), Size::new(2.0, self.rows.seek_top)), palette.primary.strong.color);
         frame.fill(&Path::rectangle(Point::new(at - 1.0, self.rows.sounds_top), Size::new(2.0, self.rows.sounds_h())), palette.primary.strong.color);
         if self.zoomed() {
@@ -2025,7 +2068,17 @@ impl canvas::Program<Message> for Marks {
             readout(&mut frame, bounds, Point::new(at - 14.0, 30.0), note);
         }
         draw_snap_line(&mut frame, self, bounds, self.rows.height);
-        vec![frame.into_geometry()]
+        // The kept sound lanes under the rest: nothing else is drawn over
+        // their stretch but the playhead, the headers and the readouts.
+        let key = self.sound_key(bounds, theme);
+        if state.sounds_key.replace(key) != key {
+            state.sounds.clear();
+        }
+        let sounds = state.sounds.draw(renderer, bounds.size(), |frame| {
+            self.draw_sounds(frame, theme, bounds);
+            self.draw_clip_sound(frame, theme, bounds);
+        });
+        vec![sounds, frame.into_geometry()]
     }
 
     fn mouse_interaction(&self, state: &State, bounds: Rectangle, cursor: mouse::Cursor) -> mouse::Interaction {
@@ -2244,6 +2297,31 @@ mod tests {
         // Off (N, or Shift held): nothing snaps.
         t.snapping = false;
         assert_eq!(t.snap(&[7.01], per_px, any), None);
+    }
+
+    #[test]
+    fn the_kept_sound_lanes_redraw_for_what_they_show_never_for_the_playhead() {
+        let (mut t, b) = timeline();
+        let theme = Theme::KanagawaDragon;
+        let key = t.sound_key(b, &theme);
+        // Playing, dragging the playhead, snapping: the same drawing.
+        t.position = 7.3;
+        t.snap_line = Some(7.0);
+        assert_eq!(t.sound_key(b, &theme), key);
+        // What the lanes show: each redraws them.
+        let changed = |f: &dyn Fn(&mut Timeline)| {
+            let mut u = timeline().0;
+            f(&mut u);
+            u.sound_key(b, &theme) != key
+        };
+        assert!(changed(&|u| u.selected = Some(1)));
+        assert!(changed(&|u| u.start = 1.0));
+        assert!(changed(&|u| u.clips_db = -3.0));
+        assert!(changed(&|u| u.blocks[1].sound_after = 0.5));
+        assert!(changed(&|u| u.blocks[0].sound.push(crate::project::VolumeKey { t: 1.0, volume: -6.0 })));
+        assert!(changed(&|u| u.sounds[0].track.volume = -6.0));
+        assert!(changed(&|u| u.selected_point = Some((Own::Cut(0), 0))));
+        assert_ne!(t.sound_key(Rectangle::new(Point::ORIGIN, Size::new(b.width * 2.0, b.height)), &theme), key, "a wider window");
     }
 
     #[test]

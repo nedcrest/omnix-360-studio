@@ -19,6 +19,8 @@ pub const TILE_DEFAULT: f32 = 220.0;
 pub const SIDE_DEFAULT: f32 = 460.0;
 const MIN_SIDE: f32 = 260.0;
 const MIN_TILES: f32 = 200.0;
+/// The share of the view's height the pictures at the side take at most.
+const PICTURES: f32 = 0.5;
 /// The edge between them: wide enough to grab.
 const GRIP: f32 = 9.0;
 
@@ -137,7 +139,7 @@ impl App {
             BinMsg::Pointer(p) => {
                 self.bin.pointer = p;
                 if self.bin.gripping {
-                    let width = self.bin.width.get();
+                    let width = self.bin.size.get().width;
                     self.bin.side = width - p.x - GRIP / 2.0;
                     self.bin.side = self.side_width(width);
                 }
@@ -267,7 +269,7 @@ impl App {
         let to = |m: BinMsg| Message::BinView(m);
         // The view's width, to turn the pointer's place into the side's width.
         let view = iced::widget::responsive(move |size| {
-            self.bin.width.set(size.width);
+            self.bin.size.set(size);
             self.bin_body()
         });
         let view = mouse_area(view).on_move(move |p| to(BinMsg::Pointer(p))).on_release(to(BinMsg::Grip(false)));
@@ -315,7 +317,7 @@ impl App {
         let below: Element<'_, Message> = match &self.bin.preview {
             None => tiles.into(),
             Some(p) => {
-                let side = self.side_width(self.bin.width.get());
+                let side = self.side_width(self.bin.size.get().width);
                 let grip = mouse_area(container(rule::vertical(1)).width(GRIP).height(Length::Fill).center_x(GRIP))
                     .on_press(to(BinMsg::Grip(true)))
                     .interaction(iced::mouse::Interaction::ResizingHorizontally);
@@ -346,16 +348,22 @@ impl App {
             ),
         };
         let mut col = column![text(name).size(15), row![play, space().width(Length::Fill), super::bin::add_buttons(&p.path, p.kind)].align_y(Alignment::Center)].spacing(8);
+        // The pictures take at most half the view's height, however wide
+        // the side is dragged: past that they stop growing, and Info stays
+        // where it is.
+        let cap = (self.bin.size.get().height * PICTURES).max(120.0);
+        let fit = |h: &image::Handle, most: f32| container(image(h.clone()).width(Length::Fill)).max_height(most).center_x(Length::Fill);
         match p.kind {
             Kind::Clip if p.frames.is_empty() => col = col.push(text("Reading frames…").size(12).style(text::secondary)),
             Kind::Clip => {
+                let rows = p.frames.len().div_ceil(2).max(1) as f32;
                 for pair in p.frames.chunks(2) {
-                    col = col.push(row(pair.iter().map(|h| image(h.clone()).width(Length::FillPortion(1)).into())).spacing(4));
+                    col = col.push(row(pair.iter().map(|h| fit(h, cap / rows).width(Length::FillPortion(1)).into())).spacing(4));
                 }
             }
             Kind::Picture => {
                 if let Some(h) = self.bin.meta.get(&p.path).and_then(|m| m.thumb.clone()) {
-                    col = col.push(image(h).width(Length::Fill));
+                    col = col.push(fit(&h, cap));
                 }
             }
             Kind::Sound(_) => col = col.push(container(text("♪").size(64)).width(Length::Fill).center_x(Length::Fill)),

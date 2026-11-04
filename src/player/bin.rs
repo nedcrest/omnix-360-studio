@@ -152,11 +152,12 @@ pub struct Bin {
     pub copying: usize,
     pub copied: Option<String>,
     /// The bin view's right side (the file shown, its Info): its width,
-    /// whether its edge is being dragged, and the view's width last drawn
-    /// (to turn the pointer into a width).
+    /// whether its edge is being dragged, and the view's size last drawn
+    /// (to turn the pointer into a width, and to keep the pictures at the
+    /// side from pushing its Info out of sight).
     pub side: f32,
     pub gripping: bool,
-    pub width: std::cell::Cell<f32>,
+    pub size: std::cell::Cell<iced::Size>,
     /// What Info read of the file shown there (`None` while reading).
     pub about: Option<(PathBuf, Option<Result<std::sync::Arc<super::info::File>, String>>)>,
     /// Loaded clips from outside the folder taken out of the bin's list

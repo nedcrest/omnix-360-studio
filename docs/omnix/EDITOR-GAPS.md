@@ -93,7 +93,7 @@ done in part stays here until its last card is done.
 | 71 | Two viewers: the source and the edit; effects tried beside the original, then applied | below |
 | 72 | The contact sheet's next round: music hints, ready music, its flow, data for AI | below |
 | 73 | Multicam: several cameras as one clip, a module of its own; 360 angles the same way | below |
-| 74 | Footage Studio: the studio and contact sheet as a native Rust app of their own | below |
+| 74 | Rushix: the studio and contact sheet as a native Rust app of their own | below |
 
 ## Open gaps
 
@@ -1301,7 +1301,7 @@ source sequence, Resolve's multicam clip.
 Milestone «Мультикамерність» (new, 2026-11-04, after «Кадрування»: 73e
 builds on its angles). Needs the core API for the new cut kind.
 
-### 74. Footage Studio: the studio and contact sheet in Rust, a project of their own — idea, large (user, 2026-11-04)
+### 74. Rushix: the studio and contact sheet in Rust, a project of their own — idea, large (user, 2026-11-04)
 
 The user wants footage-agent's web contact sheet and Python server
 replaced by a native Rust app akin to Omnix (one set of tools; maybe
@@ -1309,12 +1309,12 @@ published some day), separate from Omnix because their needs differ:
 media from cards and phones into a staging place (TMP), chosen in the
 contact sheet, then moved into a categorised archive (disks, buckets;
 one copy now, two later) and an Omnix project. Repo
-`../footage-studio`, context `docs/CONTEXT.md` there (what moves
+`../rushix`, context `docs/CONTEXT.md` there (what moves
 over from Python and how, the open decisions). Shares data with Omnix
 (`notes.json`, sidecars, the folder tree), later a small common crate.
 Takes in gap 34 (import from devices) and 61 (the sheet standalone).
 Milestone «Матеріал і бін». Under way from 2026-11-04 with the contact
-sheet's core (`footage-studio/docs/SHEET-CORE.md`, eight steps; Omnix
+sheet's core (`rushix/docs/SHEET-CORE.md`, eight steps; Omnix
 moves onto it at step 7 and drops `notes.rs`).
 
 ## Format rule for all of these

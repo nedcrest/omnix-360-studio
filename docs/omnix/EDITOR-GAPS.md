@@ -2101,9 +2101,10 @@ sound lane's level changes and its waveform is drawn anew): the lanes' canvas to
 nearly all the waveforms; the sound lanes are now drawn once and kept
 (`canvas::Cache`, keyed by a hash of what they show). The main thread
 went from 100 % to 10-30 % while playing and dragging. Left: scale on the
-GPU for 4K and 2.7K; the waveforms drawn as pictures on worker threads
-(the user's multithreading idea), so a level change doesn't stutter
-either; the Settings choice.
+GPU for 4K and 2.7K; the Settings choice. Not now (user, 2026-11-04,
+"not critical"): the waveforms drawn as pictures on worker threads. It
+would end the stutter at a level change, but the new waveform would then
+show a moment late; seeing it at once is worth more while mixing.
 
 ### 66. The button groups in colours of their own — done 2026-11-04 (`5b85986`), confirmed by the user
 

@@ -1284,6 +1284,16 @@ Heavy computing goes off the UI thread with progress, as the colour
 track does; a face or person detector (footage-agent's gap 30 models)
 could seed the box later.
 
+**Which lane a tracked thing goes on** (user, 2026-11-04, asked; the
+answer agreed by default): by what it is, not by whether it's tracked.
+Pictures, emoji, icons, arrows and the cinematic bars (gap 15) on the
+overlay lane; any words (subtitles, titles, names, labels, a place's
+name following a person) on the text lane, which is drawn on top, so
+words are never covered by a picture, and subtitles (gap 16) land there
+already. Both lanes' items already have motion keys, so a track only
+writes those keys (position, and size as the subject nears); the same
+tracking serves either lane.
+
 ### 38. A slider dragged during playback makes a key per frame — bug, small (user, 2026-11-01)
 
 Seen in the test project's saved file: dragging the vignette slider while

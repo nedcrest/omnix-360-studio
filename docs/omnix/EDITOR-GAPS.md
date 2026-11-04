@@ -2182,6 +2182,30 @@ small panel of its own, updated while paused and a few times a second
 while playing (measured from the frame already decoded, so cheap).
 Milestone «Колір і текст», with gap 14, which it helps set by eye.
 
+### 70. The text and overlay lanes as groups of several lanes — idea (user, 2026-11-04)
+
+User: "turn a lane into a group of several lanes. Example: we arrive
+somewhere, the place's name and the time slide in at the side, and we
+talk at the same time, so subtitles run alongside. The same for the
+picture (overlay) lane."
+
+What's there: the project already keeps a list of lanes for each
+(`Project::overlays`, `Project::text`: `Vec<Lane>`, one item at a time per
+lane), and export burns them all in order; the player shows and edits
+only the first lane of each (`Edit::lane`, the timeline's one row each).
+
+Proposed: the Text row and the Overlay row each become a folding group
+(the header column's cell, gap 54: ▸ Text (3) / ▾ Text) holding its
+lanes, each with a header of its own (a name the user gives: «Titles»,
+«Subtitles», «Place and time»), S-like show / hide while editing, and
+«Add a lane» / «Remove the lane» in the group's header menu. Items move
+between lanes of the group by dragging up or down (or the menu); new
+items go to the lane under the selection, else the first with room at
+the playhead. Order is drawing order: the lane higher in the group on
+top. Subtitles (gap 16) get a lane of their own by default. No format
+change: lanes gain an optional `name`. Milestone «Колір і текст» (text
+and titles), and the overlay side with «B-roll і групи».
+
 ## Format rule for all of these
 
 New fields only, each `#[serde(default, skip_serializing_if = …)]`, so every

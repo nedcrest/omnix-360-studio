@@ -243,7 +243,7 @@ impl App {
                 let Some(m) = s.picked.and_then(|i| s.marks.get(i)).cloned() else { return Task::none() };
                 let path = s.path.clone();
                 let removed = match &self.bin.sheet {
-                    Some(sheet) if sheet.key(&path).is_some() => Some(sheet.remove(&path, &m)),
+                    Some(sheet) if sheet.key(&path).is_some() => Some(sheet.remove(&m)),
                     _ => None,
                 };
                 if let Some(Err(e)) = removed {
@@ -333,7 +333,7 @@ impl App {
                 let at = was.map(|w| w.index).filter(|&i| i < s.marks.len());
                 let index = at.unwrap_or(s.marks.len());
                 let (role, note) = at.map(|i| (s.marks[i].role.clone(), s.marks[i].note.clone())).unwrap_or_default();
-                let m = Segment { index, start, end: Some(end), role, note };
+                let m = Segment { index, id: None, start, end: Some(end), role, note };
                 match at {
                     Some(i) => s.marks[i] = m,
                     None => s.marks.push(m),
@@ -359,7 +359,7 @@ impl App {
         let note = note.unwrap_or_else(|| m.note.clone());
         let path = s.path.clone();
         let written = match &self.bin.sheet {
-            Some(sheet) if sheet.key(&path).is_some() => Some(sheet.describe(&path, &m, role.as_deref(), &note)),
+            Some(sheet) if sheet.key(&path).is_some() => Some(sheet.describe(&m, role.as_deref(), &note)),
             _ => None,
         };
         if let Some(Err(e)) = written {

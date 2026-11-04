@@ -13,6 +13,7 @@ use super::gpu::{self, Rig, Shown};
 use super::{App, Clip, Message, blocking};
 use super::media::Media;
 use super::playback::Playback;
+use crate::notes::Segment;
 use crate::stitch::M3;
 use crate::view::{Camera, Projection, View};
 use iced::widget::canvas::{self, Frame, Geometry, Path};
@@ -25,6 +26,29 @@ use std::sync::Arc;
 pub struct Source {
     pub path: PathBuf,
     pub clip: Option<Clip>,
+    /// The contact sheet's marks on it (`notes.rs`), the one picked on the
+    /// strip, and an in point set with I waiting for its O.
+    pub marks: Vec<Segment>,
+    pub picked: Option<usize>,
+    pub mark_in: Option<f64>,
+}
+
+/// The sheet's role colours (footage-agent's `report.html`), so a segment
+/// reads the same in both.
+const ROLES: [(&str, Color); 8] = [
+    ("talk", Color::from_rgb8(0xc0, 0x56, 0x3a)),
+    ("establish", Color::from_rgb8(0x4f, 0x8a, 0x6a)),
+    ("broll", Color::from_rgb8(0x6b, 0x7f, 0x9e)),
+    ("detail", Color::from_rgb8(0xc9, 0x8a, 0x5e)),
+    ("cut", Color::from_rgb8(0xb0, 0x7a, 0xa8)),
+    ("action", Color::from_rgb8(0xd2, 0x9a, 0x5e)),
+    ("reveal", Color::from_rgb8(0x7a, 0x6b, 0xab)),
+    ("reaction", Color::from_rgb8(0xd1, 0x8f, 0xa5)),
+];
+
+/// A segment's colour by its role; grey without one (or one of the user's own).
+pub fn role_colour(role: Option<&str>) -> Color {
+    role.and_then(|r| ROLES.iter().find(|(k, _)| *k == r)).map_or(Color::from_rgb8(0x9a, 0x9a, 0x9a), |(_, c)| *c)
 }
 
 /// The player's messages.
@@ -38,6 +62,8 @@ pub enum SourceMsg {
     Scrub(f64),
     /// The strip let go.
     ScrubDone,
+    /// A segment picked on the strip (its place in `marks`), or none.
+    Pick(Option<usize>),
 }
 
 impl App {
@@ -47,14 +73,26 @@ impl App {
         if self.bin.source.as_ref().is_some_and(|s| s.path == path) {
             return Task::none();
         }
+        let marks = self.sheet_marks(&path);
+        let source = |clip| Source { path: path.clone(), clip, marks, picked: None, mark_in: None };
         if let Some(media) = self.library.iter().find(|m| m.input == path) {
             let clip = self.source_clip(media.clone());
-            self.bin.source = Some(Source { path, clip: Some(clip) });
+            self.bin.source = Some(source(Some(clip)));
             return Task::none();
         }
-        self.bin.source = Some(Source { path: path.clone(), clip: None });
+        self.bin.source = Some(source(None));
         let opts = self.opts.clone();
         Task::perform(blocking(move || Media::load(path, &opts, &|_| {}).map_err(|e| format!("{e:#}"))), |r| Message::BinPlayer(SourceMsg::Loaded(Arc::new(r))))
+    }
+
+    /// The contact sheet's marks on `path` (none without a sheet). Read
+    /// here, on the UI thread: the sheet is a small file.
+    fn sheet_marks(&mut self, path: &std::path::Path) -> Vec<Segment> {
+        let Some(sheet) = &self.bin.sheet else { return Vec::new() };
+        sheet.segments(path).unwrap_or_else(|e| {
+            self.error = Some(format!("{e:#}"));
+            Vec::new()
+        })
     }
 
     fn source_clip(&self, media: Media) -> Clip {
@@ -109,6 +147,17 @@ impl App {
             SourceMsg::ScrubDone => {
                 if let Some(p) = self.source_playback() {
                     p.scrub_end();
+                }
+            }
+            SourceMsg::Pick(i) => {
+                let Some(s) = &mut self.bin.source else { return Task::none() };
+                s.picked = i.filter(|&i| i < s.marks.len());
+                // To its start, as the strip shows it picked.
+                if let Some(start) = s.picked.map(|i| s.marks[i].start)
+                    && let Some(p) = self.source_playback()
+                {
+                    let playing = p.playing;
+                    p.jump(start, playing);
                 }
             }
         }
@@ -195,6 +244,36 @@ impl shader::Program<Message> for Picture {
 pub struct Strip {
     pub at: f64,
     pub length: f64,
+    /// The sheet's segments (start, end or none for a point, colour), the
+    /// picked one's place among them, and an in point waiting for its out.
+    pub marks: Vec<(f64, Option<f64>, Color)>,
+    pub picked: Option<usize>,
+    pub mark_in: Option<f64>,
+}
+
+/// The band at the strip's top where segments show and are picked.
+const BAND: f32 = 12.0;
+/// How near a point mark a press picks it, in pixels.
+const NEAR: f32 = 5.0;
+
+impl Strip {
+    /// The segment under `x` in the band: the shortest one there, so one
+    /// inside another can still be picked; a point within `NEAR`.
+    fn mark_at(&self, x: f32, width: f32) -> Option<usize> {
+        let px = |t: f64| (t / self.length.max(1e-9)) as f32 * width;
+        self.marks
+            .iter()
+            .enumerate()
+            .filter(|(_, (s, e, _))| match e {
+                Some(e) => x >= px(*s) - 2.0 && x <= px(*e) + 2.0,
+                None => (x - px(*s)).abs() <= NEAR,
+            })
+            .min_by(|a, b| {
+                let len = |(s, e, _): &(f64, Option<f64>, Color)| e.map_or(0.0, |e| e - s);
+                len(a.1).total_cmp(&len(b.1))
+            })
+            .map(|(i, _)| i)
+    }
 }
 
 impl canvas::Program<Message> for Strip {
@@ -206,6 +285,10 @@ impl canvas::Program<Message> for Strip {
         match event {
             iced::Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
                 let p = cursor.position_over(bounds)?;
+                // The band picks a segment (or, pressed where none is, none).
+                if !self.marks.is_empty() && p.y - bounds.y < BAND {
+                    return Some(canvas::Action::publish(Message::BinPlayer(SourceMsg::Pick(self.mark_at(p.x - bounds.x, bounds.width)))).and_capture());
+                }
                 *dragging = true;
                 Some(canvas::Action::publish(Message::BinPlayer(SourceMsg::Scrub(time(p.x)))).and_capture())
             }
@@ -222,12 +305,34 @@ impl canvas::Program<Message> for Strip {
         let mut frame = Frame::new(renderer, bounds.size());
         let palette = theme.extended_palette();
         let (w, h) = (bounds.width, bounds.height);
-        let bar = h * 0.4;
-        let top = (h - bar) / 2.0;
+        let px = |t: f64| if self.length > 0.0 { (t / self.length).clamp(0.0, 1.0) as f32 * w } else { 0.0 };
+        // The segments in the band, the picked one full height and outlined
+        // down over the bar.
+        let band = if self.marks.is_empty() { 0.0 } else { BAND };
+        for (i, (s, e, colour)) in self.marks.iter().enumerate() {
+            let picked = self.picked == Some(i);
+            let (x0, x1) = (px(*s), e.map_or(px(*s) + 3.0, px));
+            let top = if picked { 0.0 } else { 3.0 };
+            frame.fill(&Path::rectangle(Point::new(x0, top), Size::new((x1 - x0).max(3.0), band - 2.0 - top)), *colour);
+            if picked {
+                frame.fill(&Path::rectangle(Point::new(x0, band), Size::new((x1 - x0).max(3.0), h - band)), Color { a: 0.25, ..*colour });
+            }
+        }
+        if let Some(t) = self.mark_in {
+            let x = px(t);
+            frame.fill(&Path::new(|b| {
+                b.move_to(Point::new(x, 0.0));
+                b.line_to(Point::new(x + 7.0, 0.0));
+                b.line_to(Point::new(x, band.max(8.0)));
+                b.close();
+            }), palette.primary.strong.color);
+        }
+        let bar = (h - band) * 0.4;
+        let top = band + (h - band - bar) / 2.0;
         frame.fill(&Path::rounded_rectangle(Point::new(0.0, top), Size::new(w, bar), (bar / 2.0).into()), palette.background.strong.color);
-        let x = if self.length > 0.0 { (self.at / self.length).clamp(0.0, 1.0) as f32 * w } else { 0.0 };
+        let x = px(self.at);
         frame.fill(&Path::rounded_rectangle(Point::new(0.0, top), Size::new(x.max(bar), bar), (bar / 2.0).into()), palette.primary.base.color);
-        frame.fill(&Path::rectangle(Point::new((x - 1.0).clamp(0.0, w - 2.0), 0.0), Size::new(2.0, h)), Color::WHITE);
+        frame.fill(&Path::rectangle(Point::new((x - 1.0).clamp(0.0, w - 2.0), band), Size::new(2.0, h - band)), Color::WHITE);
         vec![frame.into_geometry()]
     }
 

@@ -160,6 +160,11 @@ pub struct Bin {
     pub size: std::cell::Cell<iced::Size>,
     /// What Info read of the file shown there (`None` while reading).
     pub about: Option<(PathBuf, Option<Result<std::sync::Arc<super::info::File>, String>>)>,
+    /// Clips being added as one segment of them (the bin player's picked
+    /// one), till they're in.
+    pub spans: HashMap<PathBuf, (f64, f64)>,
+    /// The project folder's contact sheet, if it has one (`notes.rs`).
+    pub sheet: Option<crate::notes::Sheet>,
     /// The clip in the bin view's own player (`bin_player.rs`).
     pub source: Option<super::bin_player::Source>,
     /// Loaded clips from outside the folder taken out of the bin's list
@@ -267,6 +272,7 @@ impl App {
     /// pictures and lengths not read yet, a few files per thread.
     pub(super) fn rescan_bin(&mut self) -> Task<Message> {
         self.bin.read = self.project.as_deref().and_then(root).map(|r| (scan(&r), r));
+        self.bin.sheet = self.bin.read.as_ref().and_then(|(_, r)| crate::notes::Sheet::of(r));
         let Some((sections, _)) = &self.bin.read else { return Task::none() };
         let todo: Vec<(PathBuf, Kind)> = sections.iter().flat_map(|s| s.files.iter().map(move |f| (f.clone(), s.kind))).filter(|(f, _)| !self.bin.meta.contains_key(f)).collect();
         for (f, _) in &todo {
@@ -527,6 +533,13 @@ impl App {
                 // clip may take a while to load.
                 let spot = self.spot(place);
                 self.placing.insert(path.clone(), spot);
+                // The segment picked in the bin's player, if it's this clip's.
+                if let Some(s) = self.bin.source.as_ref().filter(|s| s.path == path)
+                    && let Some(m) = s.picked.and_then(|i| s.marks.get(i))
+                    && let Some(end) = m.end
+                {
+                    self.bin.spans.insert(path.clone(), (m.start, end));
+                }
                 return self.update(Message::Picked(vec![path]));
             }
             Message::BinAdd(path, Kind::Picture, _) => return self.update(Message::OverlayPicked(vec![path])),

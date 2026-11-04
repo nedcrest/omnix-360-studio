@@ -185,6 +185,7 @@ impl App {
         self.sound_menu = None;
         self.normalize = None;
         self.placing.clear();
+        self.bin.spans.clear();
         self.picking = None;
         self.auto_key_at = None;
         self.edit.commit();

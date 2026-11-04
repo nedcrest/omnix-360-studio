@@ -386,8 +386,26 @@ impl App {
                 let h = (room / aspect).min(cap);
                 let w = h * aspect;
                 col = col.push(container(iced::widget::shader(picture).width(w).height(h)).center_x(Length::Fill));
-                col = col.push(iced::widget::canvas(super::bin_player::Strip { at, length }).width(Length::Fill).height(18));
+                let source = self.bin.source.as_ref();
+                let marks: &[crate::notes::Segment] = source.map_or(&[], |s| &s.marks);
+                let strip = super::bin_player::Strip {
+                    at,
+                    length,
+                    marks: marks.iter().map(|m| (m.start, m.end, super::bin_player::role_colour(m.role.as_deref()))).collect(),
+                    picked: source.and_then(|s| s.picked),
+                    mark_in: source.and_then(|s| s.mark_in),
+                };
+                col = col.push(iced::widget::canvas(strip).width(Length::Fill).height(if marks.is_empty() { 18 } else { 30 }));
                 col = col.push(text(format!("{} / {}", fine_clock(at), fine_clock(length))).size(12).style(text::secondary));
+                // The picked segment: its role, span and the sheet's note.
+                if let Some(m) = source.and_then(|s| s.picked.and_then(|i| s.marks.get(i))) {
+                    let span = match m.end {
+                        Some(e) => format!("{} – {}", fine_clock(m.start), fine_clock(e)),
+                        None => fine_clock(m.start),
+                    };
+                    let head = [m.role.clone(), Some(span)].into_iter().flatten().collect::<Vec<_>>().join(" · ");
+                    col = col.push(column![text(head).size(13).color(super::bin_player::role_colour(m.role.as_deref())), text(m.note.clone()).size(13)].spacing(2));
+                }
             }
             Kind::Clip if p.frames.is_empty() => col = col.push(text("Reading frames…").size(12).style(text::secondary)),
             Kind::Clip => {

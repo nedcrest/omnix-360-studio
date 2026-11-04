@@ -60,7 +60,10 @@ impl App {
     pub(super) fn add_cut(&mut self, input: PathBuf, duration: f64) {
         // A picture has no length of its own: a few seconds, trimmed at will.
         let picture = self.library.iter().find(|m| m.input == input).and_then(|m| m.flat).is_some_and(|f| f.picture);
-        let end = if picture { ffmpeg::PICTURE_SECONDS } else { duration };
+        let (start, end) = match self.bin.spans.remove(&input) {
+            Some((s, e)) if !picture => (s.clamp(0.0, duration), e.clamp(0.0, duration)),
+            _ => (0.0, if picture { ffmpeg::PICTURE_SECONDS } else { duration }),
+        };
         let lut = self.auto_lut(&input);
         let spot = self.placing.remove(&input).unwrap_or(bin::Spot::End);
         let place = match spot {
@@ -68,7 +71,7 @@ impl App {
             bin::Spot::At(t) => Place::At(t),
             bin::Spot::Join(t) => Place::Join(t),
         };
-        let added = self.op(Op::Cut(CutOp::Add { input, start: 0.0, end, place, stabilize: Some(self.opts.stabilize), lut }));
+        let added = self.op(Op::Cut(CutOp::Add { input, start, end, place, stabilize: Some(self.opts.stabilize), lut }));
         let Some(i) = added.and_then(|o| o.made).and_then(|id| self.cut_index(id)) else { return };
         self.mark_flat();
         self.selection = Selection::cut_at(&self.edit, i);

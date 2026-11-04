@@ -49,6 +49,8 @@ pub enum BinMsg {
     About(PathBuf, Result<std::sync::Arc<super::info::File>, String>),
     /// A tile clicked: the file shown at the right, not played.
     Show(PathBuf, Kind),
+    /// The pointer out of the bin view: no tile is hovered.
+    Leave,
     /// The pointer onto a clip's tile, and off it.
     HoverIn(PathBuf),
     HoverOut(PathBuf),
@@ -174,6 +176,7 @@ impl App {
                 }
             }
             BinMsg::Grip(on) => self.bin.gripping = on,
+            BinMsg::Leave => self.bin.hover = None,
             BinMsg::HoverIn(path) => self.bin.hover = Some((path, std::time::Instant::now(), false)),
             BinMsg::HoverOut(path) => {
                 if self.bin.hover.as_ref().is_some_and(|(p, _, _)| *p == path) {
@@ -335,8 +338,12 @@ impl App {
             self.bin.size.set(size);
             self.bin_body()
         });
-        let view = mouse_area(view).on_move(move |p| to(BinMsg::Pointer(p))).on_release(to(BinMsg::Grip(false)));
-        self.bin_menu_layer(view.into())
+        let view = mouse_area(view).on_move(move |p| to(BinMsg::Pointer(p))).on_release(to(BinMsg::Grip(false))).on_exit(to(BinMsg::Leave));
+        // The layers are always there, empty when unused: wrapping the view
+        // only while a card or menu shows rebuilt its state each time (the
+        // tiles scrolled back to the top, a note lost its focus, the role
+        // list closed, a tile forgot the pointer was on it).
+        stack![view, self.hover_layer(), self.bin_menu_layer()].into()
     }
 
     /// The bin view's head, its tiles, and the file shown at the right.
@@ -559,9 +566,9 @@ impl App {
     }
 
     /// A hovered clip's frames beside the pointer, kept inside the view.
-    fn hover_layer<'a>(&'a self, below: Element<'a, Message>) -> Element<'a, Message> {
-        let Some((path, _, true)) = &self.bin.hover else { return below };
-        let Some(frames) = self.bin.hover_frames.get(path) else { return below };
+    fn hover_layer<'a>(&'a self) -> Element<'a, Message> {
+        let Some((path, _, true)) = &self.bin.hover else { return space().into() };
+        let Some(frames) = self.bin.hover_frames.get(path) else { return space().into() };
         let body: Element<'a, Message> = if frames.is_empty() {
             text("…").size(20).into()
         } else {
@@ -573,13 +580,12 @@ impl App {
         let p = self.bin.pointer;
         let x = (p.x + 16.0).min(room.width - w).max(0.0);
         let y = if p.y + 16.0 + h > room.height { (p.y - 16.0 - h).max(0.0) } else { p.y + 16.0 };
-        stack![below, pin(card).position(Point::new(x, y))].into()
+        pin(card).position(Point::new(x, y)).into()
     }
 
     /// A tile's menu at the pointer, if open: a click outside closes it.
-    fn bin_menu_layer<'a>(&'a self, below: Element<'a, Message>) -> Element<'a, Message> {
-        let below = self.hover_layer(below);
-        let Some((path, kind, at)) = &self.bin.menu else { return below };
+    fn bin_menu_layer<'a>(&'a self) -> Element<'a, Message> {
+        let Some((path, kind, at)) = &self.bin.menu else { return space().into() };
         let (kind, at) = (*kind, *at);
         let item = |label: &str, msg: Message| -> Element<'a, Message> { button(text(label.to_owned()).size(13)).style(button::text).width(Length::Fill).padding([5, 10]).on_press(Message::BinView(BinMsg::Pick(Box::new(msg)))).into() };
         let add = |place: Place| Message::BinAdd(path.clone(), kind, place);
@@ -614,7 +620,7 @@ impl App {
         }
         let menu = container(column(items).width(280)).padding(4).style(container::rounded_box);
         let close = mouse_area(container(space()).width(Length::Fill).height(Length::Fill)).on_press(Message::BinView(BinMsg::Menu(None))).on_right_press(Message::BinView(BinMsg::Menu(None)));
-        stack![below, close, pin(opaque(menu)).position(at)].into()
+        stack![close, pin(opaque(menu)).position(at)].into()
     }
 }
 

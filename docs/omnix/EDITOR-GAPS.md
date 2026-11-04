@@ -1011,7 +1011,7 @@ Open when designing: which beat tracker (a Rust onset detector, or
 footage-agent's Python with librosa / madmom / aubio); which vision model
 (licence: permissive only, as for 53a); how the AI picks among the ways.
 
-### 60. The bin as a view of its own, in tiles — idea (user, 2026-11-03)
+### 60. The bin as a view of its own, in tiles — built 2026-11-04, waiting for the user's check (user, 2026-11-03)
 
 User: "a separate view, instead of the playback screen: an edit bin. The
 project is made as folders from the start, so it would be logical to have
@@ -1040,6 +1040,14 @@ What it would be:
 - No drag from a tile onto the timeline (user, 2026-11-03): the add
   buttons do it, and most projects come already cut in footage-agent's
   contact sheet.
+
+Built 2026-11-04 (`bin_view.rs`; `c059e1f`, `cbaaea6`, `07c03b5`): the Bin
+toggle in the Mode group or Shift+B; every section shown, an empty one
+too, with its «+»; a drop goes to its kind's first section (Footage,
+Music, Graphics), since X11 drops carry no position; the tile says where
+the edit uses the file; the trash is the system's (`trash` crate). Left
+for later: ratings and the skimmer (gap 2), LUTs as a section, moving a
+file between sections. Drops don't arrive on Wayland (winit).
 
 It grows the narrow bin panel (gap 2) rather than replacing it: the panel
 for quick adding while cutting, the view for sorting the material. Joins

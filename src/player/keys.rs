@@ -173,6 +173,9 @@ impl App {
             Key::Named(Named::Delete | Named::Backspace) if !self.framing => return self.update(Message::DeleteCut),
             Key::Named(Named::Delete | Named::Backspace) => return self.update(Message::KeyDelete),
             Key::Character(c) => match c {
+                // In and out points in the bin's player (Alt clears them).
+                "i" | "I" if self.bin.view && self.bin.source.is_some() && !mods.command() => return self.update(Message::BinPlayer(super::bin_player::SourceMsg::In(!mods.alt()))),
+                "o" | "O" if self.bin.view && self.bin.source.is_some() && !mods.command() => return self.update(Message::BinPlayer(super::bin_player::SourceMsg::Out(!mods.alt()))),
                 "o" | "O" if mods.command() && mods.shift() => return self.update(Message::OpenProject),
                 "n" | "N" if mods.command() => return self.update(Message::NewProject),
                 "o" if mods.command() => return self.update(Message::Open),

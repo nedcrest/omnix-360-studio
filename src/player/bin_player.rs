@@ -64,6 +64,12 @@ pub enum SourceMsg {
     ScrubDone,
     /// A segment picked on the strip (its place in `marks`), or none.
     Pick(Option<usize>),
+    /// I: the picked segment's start to the playhead, else an in point
+    /// there; false (Alt+I) forgets the in point and the pick.
+    In(bool),
+    /// O: the picked segment's end to the playhead, else a new segment from
+    /// the in point (or the start) to it; false (Alt+O) as Alt+I.
+    Out(bool),
 }
 
 impl App {
@@ -149,6 +155,38 @@ impl App {
                     p.scrub_end();
                 }
             }
+            SourceMsg::In(false) | SourceMsg::Out(false) => {
+                if let Some(s) = &mut self.bin.source {
+                    s.mark_in = None;
+                    s.picked = None;
+                }
+            }
+            SourceMsg::In(true) => {
+                let Some(now) = self.source_playback().map(|p| p.position()) else { return Task::none() };
+                let Some(s) = &mut self.bin.source else { return Task::none() };
+                match s.picked.and_then(|i| s.marks.get(i)).cloned() {
+                    Some(m @ Segment { end: Some(end), .. }) if now < end => self.set_segment(Some(m), now, end),
+                    _ => {
+                        s.picked = None;
+                        s.mark_in = Some(now);
+                    }
+                }
+            }
+            SourceMsg::Out(true) => {
+                let Some(now) = self.source_playback().map(|p| p.position()) else { return Task::none() };
+                let Some(s) = &self.bin.source else { return Task::none() };
+                match s.picked.and_then(|i| s.marks.get(i)).cloned() {
+                    // A segment's end moved; a point picked becomes a segment.
+                    Some(m) if now > m.start => {
+                        let start = m.start;
+                        self.set_segment(Some(m), start, now);
+                    }
+                    _ => {
+                        let start = s.mark_in.unwrap_or(0.0);
+                        self.set_segment(None, start, now);
+                    }
+                }
+            }
             SourceMsg::Pick(i) => {
                 let Some(s) = &mut self.bin.source else { return Task::none() };
                 s.picked = i.filter(|&i| i < s.marks.len());
@@ -162,6 +200,52 @@ impl App {
             }
         }
         Task::none()
+    }
+
+    /// Sets a segment from `start` to `end` on the player's clip: the
+    /// picked one moved (`was`), or a new one; written back to the contact
+    /// sheet, then picked. Without a sheet, or for a clip outside its
+    /// archive, it's kept here only, for adding.
+    fn set_segment(&mut self, was: Option<Segment>, start: f64, end: f64) {
+        let Some(s) = &self.bin.source else { return };
+        let path = s.path.clone();
+        let (start, end) = (start.min(end), start.max(end));
+        if end - start < crate::model::edit::MIN_CUT {
+            self.error = Some("The segment is too short: set the out point further from the in point".to_owned());
+            return;
+        }
+        let written = match &self.bin.sheet {
+            Some(sheet) if sheet.key(&path).is_some() => Some(sheet.set(&path, was.as_ref(), start, end)),
+            _ => None,
+        };
+        let marks = match written {
+            Some(Err(e)) => {
+                self.error = Some(format!("Couldn't write the contact sheet: {e:#}"));
+                return;
+            }
+            Some(Ok(index)) => Some((self.sheet_marks(&path), index)),
+            None => None,
+        };
+        let Some(s) = &mut self.bin.source else { return };
+        s.mark_in = None;
+        match marks {
+            Some((marks, index)) => {
+                s.marks = marks;
+                s.picked = Some(index);
+            }
+            // Here only: over the picked one, or a new one at the end.
+            None => {
+                let at = was.map(|w| w.index).filter(|&i| i < s.marks.len());
+                let index = at.unwrap_or(s.marks.len());
+                let (role, note) = at.map(|i| (s.marks[i].role.clone(), s.marks[i].note.clone())).unwrap_or_default();
+                let m = Segment { index, start, end: Some(end), role, note };
+                match at {
+                    Some(i) => s.marks[i] = m,
+                    None => s.marks.push(m),
+                }
+                s.picked = Some(index);
+            }
+        }
     }
 
     fn source_playback(&mut self) -> Option<&mut Playback> {

@@ -56,7 +56,7 @@ impl Media {
 impl Media {
     /// `progress` hears how far reading the clip's telemetry has got (0..1),
     /// which is most of the time a clip takes to load.
-    pub(super) fn load(input: PathBuf, opts: &Options, progress: &dyn Fn(f64)) -> Result<Media> {
+    pub(crate) fn load(input: PathBuf, opts: &Options, progress: &dyn Fn(f64)) -> Result<Media> {
         let stitch = crate::StitchOpts { stabilize: Some(opts.stabilize), imu_axes: opts.imu_axes, world_z_down: opts.world_z_down, ..Default::default() };
         let p = crate::Pipeline::load(&input, &stitch, opts.stabilize, progress)?;
         let proxy = if p.flat.is_some() { None } else { ffmpeg::proxy(&input) };

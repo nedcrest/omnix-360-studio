@@ -10,6 +10,7 @@ mod audio_panel;
 mod bin;
 mod bin_view;
 mod bin_player;
+pub mod viewer;
 mod ask;
 mod export_panel;
 mod handles;

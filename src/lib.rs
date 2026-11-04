@@ -28,6 +28,8 @@ mod loudness;
 mod lut;
 mod overlay;
 mod player;
+/// Omnix's player for another program's window (Dailix).
+pub use player::viewer;
 mod project;
 mod ring;
 mod sheet;

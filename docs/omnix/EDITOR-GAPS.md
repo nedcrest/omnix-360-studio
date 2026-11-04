@@ -2129,6 +2129,36 @@ snapping), Add green `#3A7A50`, Cut amber `#9A6026`, History grey
 The shortcuts window shows each group's swatch. Panels' own buttons keep
 the theme's.
 
+### 67. Bokeh: the background softened behind a person — idea (user, 2026-11-04)
+
+The user asked what the plan holds for the picture («bokeh and so on»):
+only a whole-frame blur (gap 26). A real bokeh softens what's behind the
+subject and keeps the subject sharp, so it needs the subject cut out:
+without a depth camera, a segmentation model (a person mask per frame,
+run once per clip like the colour track, its mask cached), then a blur
+weighted by the mask, keyframed like an effect, CPU and GPU alike with a
+parity test. On a 360 view the mask comes from the framed picture.
+Belongs with face detection and tracking in milestone «Кадрування» (gap
+53); the model's licence is to be checked (no AGPL, as with YOLO).
+
+### 68. Curves and colour by hue — idea (user, 2026-11-04)
+
+Today's Effects work on the whole picture. Missing: tone curves (RGB and
+per channel) and adjusting one hue only (HSL: the grass greener, the sky
+deeper, the skin left alone), as Resolve's and Premiere's colour tools
+do. Kept in the effect keyframes like the other values (new optional
+fields), mirrored in the shader and `Grade::apply` with a GPU-CPU test.
+Milestone «Колір і текст», after the black and white levels (gap 14).
+
+### 69. Scopes: a histogram and a waveform of the picture — idea (user, 2026-11-04)
+
+To see whether the picture is clipped and whether its black is black (the
+Kos film's darkest is 14 of 255, gap 14), as editors show: a histogram
+and a luma / RGB waveform of the frame shown, in the Effects panel or a
+small panel of its own, updated while paused and a few times a second
+while playing (measured from the frame already decoded, so cheap).
+Milestone «Колір і текст», with gap 14, which it helps set by eye.
+
 ## Format rule for all of these
 
 New fields only, each `#[serde(default, skip_serializing_if = …)]`, so every
@@ -2171,7 +2201,7 @@ whenever a better grouping shows. `ROADMAP.md` shows the same as cards (field
    placement → 25d stingers («перебивки») → 25c templates → 25b edge
    transitions → 25e 360 looks. Stingers come early because the user
    already has stinger clips (film burn, white noise).
-8. **Колір і текст**: 14 levels → 15 bars → 26 glow/blur → 6 vignette shapes →
+8. **Колір і текст**: 69 scopes → 14 levels → 68 curves and hue → 15 bars → 26 glow/blur → 6 vignette shapes →
    16 subtitles (needs 29) → text-based editing (needs 29).
 9. **Швидкість і автоматизація** (gap 31): constant speed per cut with
    its sound following (atempo), measured for drift → speed ramps →

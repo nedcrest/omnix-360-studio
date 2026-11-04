@@ -92,6 +92,7 @@ done in part stays here until its last card is done.
 | 70 | The text and overlay lanes as groups of several lanes | below |
 | 71 | Two viewers: the source and the edit; effects tried beside the original, then applied | below |
 | 72 | The contact sheet's next round: music hints, ready music, its flow, data for AI | below |
+| 73 | Multicam: several cameras as one clip, a module of its own; 360 angles the same way | below |
 
 ## Open gaps
 
@@ -964,7 +965,7 @@ praise and curse. Then the parts below get ordered from it.
 - **53b Object tracking** (gap 37, moved here): a box drawn on anything,
   followed frame by frame, keys the view (or an overlay); corrected by
   hand along its path.
-- **53c Angles as a multicam** (gap 49, moved here): one 360 clip, several
+- **53c Angles as a multicam** (gap 49; now under «Мультикамерність», gap 73e): one 360 clip, several
   virtual cameras, cut between on the timeline; an angle per detected
   person later (53a).
 - **53d Framing aids** to be taken from the research: rule-of-thirds and
@@ -1250,6 +1251,42 @@ Kept in a context of its own in footage-agent:
 Milestones: 72a, 72d «ШІ-монтаж» (they feed gap 28's brief); 72b, 72c
 «Матеріал і бін».
 
+### 73. Multicam as a module: several cameras as one clip — idea, large (user, 2026-11-04)
+
+User: "multicam editing (POV video of one ride from several cameras) as a
+module, so the linked videos become one pseudo-file on the edit's line.
+A module of its own, like reframing: it opens inside, in the screen's
+place, or everything folds but the video row, for more room. 360 video
+is a module of its own too (pseudo-multicam there). The two can be
+turned on separately. The multicam pseudo-file can be put in the bin, a
+kind of file to add to the edit. Why a «kind of file»: so as not to
+breed copies of the video files."
+
+What it is in the trade: Final Cut's multicam clip, Premiere's multicam
+source sequence, Resolve's multicam clip.
+
+- **73a The multicam clip** (the «pseudo-file»): a small file in the
+  project's folder (e.g. `01_footage/<name>.multicam.json`) naming its
+  angles: each a real file, read in place, and its offset on a shared
+  clock. Synced by the cameras' recorded time, then by the sound (each
+  camera's audio matched against the others, as PluralEyes does), then
+  by hand. No video is copied or re-encoded.
+- **73b In the bin**: listed as a clip of its own kind (a stack of the
+  angles' pictures), added with the same buttons; Info lists the angles.
+- **73c On the edit**: a cut of a multicam clip names it plus the angle
+  shown, and a switch of angle is a cut point (so trimming, J/L and
+  everything else work as for any cut). Optional fields only.
+- **73d The module**: opens in the picture's place (as the bin view and
+  the mix check do), or folds everything but the video row: the angles in
+  a grid, the edit playing; a click or a number key switches the angle
+  at the playhead, live while playing. Sound: one chosen camera's, or
+  each angle's own.
+- **73e 360 as its own module** (gap 49 / 53c): the same idea with
+  virtual cameras from one sphere; switched on separately from 73d.
+
+Milestone «Мультикамерність» (new, 2026-11-04, after «Кадрування»: 73e
+builds on its angles). Needs the core API for the new cut kind.
+
 ## Format rule for all of these
 
 New fields only, each `#[serde(default, skip_serializing_if = …)]`, so every
@@ -1287,13 +1324,17 @@ whenever a better grouping shows. `ROADMAP.md` shows the same as cards (field
    footage-agent's 30), object tracking (37 → 53b), angles as a multicam
    (49 → 53c), framing aids. After B-roll and groups, as angles change the
    format beside groups; reordered freely.
-7. **Ритм і переходи**: 13 beats → 25a basic transitions with quick
+7. **Мультикамерність** (gap 73, user 2026-11-04): 73a the multicam
+   clip (a file naming its angles, synced by time, then sound) → 73b in
+   the bin → 73c cuts of it → 73d the module → 73e 360 angles the same
+   way (gap 49 / 53c).
+8. **Ритм і переходи**: 13 beats → 25a basic transitions with quick
    placement → 25d stingers («перебивки») → 25c templates → 25b edge
    transitions → 25e 360 looks. Stingers come early because the user
    already has stinger clips (film burn, white noise).
-8. **Колір і текст**: 69 scopes → 14 levels → 68 curves and hue → 71b effects beside the original (after 39) → 15 bars → 26 glow/blur → 6 vignette shapes →
+9. **Колір і текст**: 69 scopes → 14 levels → 68 curves and hue → 71b effects beside the original (after 39) → 15 bars → 26 glow/blur → 6 vignette shapes →
    16 subtitles (needs 29) → text-based editing (needs 29).
-9. **Швидкість і автоматизація** (gap 31): constant speed per cut with
+10. **Швидкість і автоматизація** (gap 31): constant speed per cut with
    its sound following (atempo), measured for drift → speed ramps →
    automation lanes per value (the user's FL Studio idea). Large and
    careful; after B-roll and groups, since it touches the same time
@@ -1301,19 +1342,19 @@ whenever a better grouping shows. `ROADMAP.md` shows the same as cards (field
    main timeline, 31c the speed editor window, 31d right-click keyframes,
    and the automation idea that 37 object tracking (now in «Кадрування»)
    keys into.
-10. **Якість 360** (from `OPENOSV.md`, mostly needs 360 footage: one public
+11. **Якість 360** (from `OPENOSV.md`, mostly needs 360 footage: one public
    sample now, the user's camera ~2027-02): 17 easing presets and 18 bundled
    LUT any time (small, useful now) → 24 file facts → 19 lens protectors →
    20 mask release → 21 tilt diagnostic → 22 sky seam field (patents first)
    → 23 DJI presets → Osmo 360 II.
-11. **Експорт** (gaps 51, 52; user, 2026-11-02): what the export makes
+12. **Експорт** (gaps 51, 52; user, 2026-11-02): what the export makes
    (4K and 8K, HEVC and AV1, bitrates, frame rates, sound, presets, HDR
    and 360 out) and how fast (the frames' path through the GPU). Before
    the AI edit, which needs it; reordered freely.
-12. **ШІ-монтаж** (gap 28, `AUTO-EDIT.md`): the user's main wish, but put
+13. **ШІ-монтаж** (gap 28, `AUTO-EDIT.md`): the user's main wish, but put
    last on purpose (user, 2026-10-23: "I wouldn't do AI functions yet:
    Omnix doesn't have its full working functionality"). The design stays
    ready. The pieces it needs arrive with the milestones above.
-13. **Інші платформи** (gap 40, user's question 2026-11-01): Mac and
+14. **Інші платформи** (gap 40, user's question 2026-11-01): Mac and
    Windows realistic (upstream builds both), Android a new UI over the
    same core. Not planned; no new Linux-only code without a stub.

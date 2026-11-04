@@ -2095,12 +2095,15 @@ fresh GPU decoder starts in ~0.45 s, so the scrub copy in software (0.05
 s) stays. Order: measure the main thread's canvases, cache the timeline's
 still layers, scale on the GPU, then the Settings choice.
 
-**Measured and the first fix built 2026-11-04** (`8a2177d`, waits for
-the user's word): the lanes' canvas took 40 ms a frame (79 fullscreen),
+**Measured and the first fix done 2026-11-04** (`8a2177d`), confirmed
+by the user ("fire, mega smooth"; a short stutter, ~20 fps, only while a
+sound lane's level changes and its waveform is drawn anew): the lanes' canvas took 40 ms a frame (79 fullscreen),
 nearly all the waveforms; the sound lanes are now drawn once and kept
 (`canvas::Cache`, keyed by a hash of what they show). The main thread
 went from 100 % to 10-30 % while playing and dragging. Left: scale on the
-GPU for 4K and 2.7K, the Settings choice.
+GPU for 4K and 2.7K; the waveforms drawn as pictures on worker threads
+(the user's multithreading idea), so a level change doesn't stutter
+either; the Settings choice.
 
 ### 66. The button groups in colours of their own — done 2026-11-04 (`5b85986`), confirmed by the user
 

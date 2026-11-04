@@ -40,6 +40,12 @@ iced's wgpu backend tessellates each filled path on the CPU (lyon) when
 it is drawn. Not yet measured: which canvas costs most, and how much the
 view's rebuild (the `Timeline` struct cloned per message) adds.
 
+The user saw the same from the other side: dragging the playhead is
+smooth in a smaller window and lags in fullscreen (2026-11-04). The
+decode doesn't change with the window; the drawing does: waveforms are
+drawn a bar per two pixels on every sound lane, so a wider timeline is
+more paths to tessellate on every frame.
+
 Receiving frames from ffmpeg costs the player little: a test through the
 player's own `source::spawn`, 150 frames at 30 fps, 1080p NV12 (93 MB/s),
 took 3 % of a core (software decode) and 5 % (CUDA).

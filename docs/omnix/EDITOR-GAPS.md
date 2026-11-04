@@ -603,6 +603,19 @@ then back. Possible today by hand: two black PNGs on the overlay lane with
 motion keys. Proper: an effect value "bars" (0 = none, 1 = 2.39:1), keyframed,
 so it eases in and out per cut. Small with 14's plumbing.
 
+**The user's route (2026-11-04): bars as an item on the overlay lane.**
+Rather than a value inside each cut's effects, a «Bars» item on the
+overlay lane, made by the app as text items are (no file): it spans the
+stretch it covers across cuts (30 s of forest over several cuts is one
+item), moves and trims like any overlay, and its own values sit in the
+Effects panel's group with keyframes: the shape (2.39:1, 2:1, 1.85:1 or
+a number), how far in (0 = gone, 1 = full, so a slide is two keys), the
+colour (black by default) and opacity; a slide in and out at its ends by
+default. Drawn after the picture's grade and before text, burnt into the
+export as overlays are, the same on GPU and CPU (`overlay::Burn`). Wins
+over the per-cut value: one item instead of keys on every cut, and it's
+seen on the timeline where it runs.
+
 ### 16. Subtitles from speech — medium (Kos TODO, 2026-10-23)
 
 Mar'yana can't be heard even cleaned (action-cam mic, distance). Run

@@ -497,6 +497,7 @@ impl App {
         match message {
             Message::Tick => {
                 self.tick();
+                self.tick_source();
                 if self.clip.as_ref().is_some_and(|c| c.playback.playing) {
                     self.reveal_playhead();
                 }
@@ -504,7 +505,10 @@ impl App {
             Message::TimelineZoom(factor, anchor) => self.zoom_timeline(self.timeline_zoom * factor, anchor),
             Message::TimelineZoomTo(v) => self.zoom_timeline(self.timeline_most_zoom().powf(v), None),
             Message::TimelinePan(start) => self.timeline_start = start,
+            // Space while the bin shows a clip plays that clip.
+            Message::Toggle if self.bin.view && self.bin.source.is_some() => return self.on_source(bin_player::SourceMsg::Toggle),
             Message::Toggle => {
+                self.pause_source();
                 self.follow = true;
                 let playing = self.clip.as_ref().is_some_and(|c| c.playback.playing);
                 if !playing && self.position() >= self.edit.duration() - 1.5 / self.fps() {

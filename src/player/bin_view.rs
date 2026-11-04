@@ -98,6 +98,12 @@ pub fn copy_in(file: &Path, dir: &Path) -> Result<PathBuf, String> {
     Ok(target)
 }
 
+/// A time as minutes, seconds and tenths: the bin player's readout.
+fn fine_clock(t: f64) -> String {
+    let tenths = (t.max(0.0) * 10.0).round() as u64;
+    format!("{}:{:02}.{}", tenths / 600, tenths / 10 % 60, tenths % 10)
+}
+
 /// Where a file is used in the edit, as a line: "cuts 2, 5 · Music · Overlay";
 /// `None` when nothing uses it.
 pub fn uses(edit: &crate::project::Project, path: &Path) -> Option<String> {
@@ -130,6 +136,8 @@ impl App {
                 self.bin.view = !self.bin.view;
                 self.bin.menu = None;
                 self.bin.copied = None;
+                // Its player stops with it.
+                self.bin.source = None;
                 // One view in the picture's place at a time.
                 if self.bin.view {
                     self.check.on = false;
@@ -145,7 +153,15 @@ impl App {
                 }
             }
             BinMsg::Grip(on) => self.bin.gripping = on,
-            BinMsg::Show(path, kind) => return self.bin_preview(path, kind, false),
+            BinMsg::Show(path, kind) => {
+                let shown = self.bin_preview(path.clone(), kind, false);
+                // A clip plays at the side, in the bin's own player.
+                if kind != Kind::Clip {
+                    self.bin.source = None;
+                    return shown;
+                }
+                return Task::batch([shown, self.source_open(path)]);
+            }
             BinMsg::About(path, file) => {
                 if let Some((p, f)) = &mut self.bin.about
                     && *p == path
@@ -341,6 +357,15 @@ impl App {
         let playing = p.player.is_some();
         let play: Element<'a, Message> = match p.kind {
             Kind::Picture => space().into(),
+            Kind::Clip => {
+                let playing = self.source_playing();
+                let ready = self.bin.source.as_ref().is_some_and(|s| s.path == p.path && s.clip.is_some());
+                tip(
+                    button(text(if playing { "⏸" } else { "▶" }).size(14)).padding([2, 10]).on_press_maybe(ready.then_some(Message::BinPlayer(super::bin_player::SourceMsg::Toggle))),
+                    text(if playing { "Pause (Space)" } else { "Play (Space)" }),
+                    tooltip::Position::Bottom,
+                )
+            }
             _ => tip(
                 button(text(if playing { "■" } else { "▶" }).size(14)).padding([2, 10]).on_press(if playing { Message::BinStop } else { Message::BinPreview(p.path.clone(), p.kind) }),
                 text(if playing { "Stop" } else if p.kind == Kind::Clip { "Play (in a window of its own)" } else { "Play" }),
@@ -354,6 +379,16 @@ impl App {
         let cap = (self.bin.size.get().height * PICTURES).max(120.0);
         let fit = |h: &image::Handle, most: f32| container(image(h.clone()).width(Length::Fill)).max_height(most).center_x(Length::Fill);
         match p.kind {
+            // The clip in the player once its first frame is in; its frames
+            // till then.
+            Kind::Clip if let Some((picture, aspect, at, length)) = self.source_picture().filter(|_| self.bin.source.as_ref().is_some_and(|s| s.path == p.path)) => {
+                let room = self.side_width(self.bin.size.get().width) - 24.0;
+                let h = (room / aspect).min(cap);
+                let w = h * aspect;
+                col = col.push(container(iced::widget::shader(picture).width(w).height(h)).center_x(Length::Fill));
+                col = col.push(iced::widget::canvas(super::bin_player::Strip { at, length }).width(Length::Fill).height(18));
+                col = col.push(text(format!("{} / {}", fine_clock(at), fine_clock(length))).size(12).style(text::secondary));
+            }
             Kind::Clip if p.frames.is_empty() => col = col.push(text("Reading frames…").size(12).style(text::secondary)),
             Kind::Clip => {
                 let rows = p.frames.len().div_ceil(2).max(1) as f32;

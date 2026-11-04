@@ -160,6 +160,8 @@ pub struct Bin {
     pub size: std::cell::Cell<iced::Size>,
     /// What Info read of the file shown there (`None` while reading).
     pub about: Option<(PathBuf, Option<Result<std::sync::Arc<super::info::File>, String>>)>,
+    /// The clip in the bin view's own player (`bin_player.rs`).
+    pub source: Option<super::bin_player::Source>,
     /// Loaded clips from outside the folder taken out of the bin's list
     /// (the clips stay loaded: an undo may bring back a cut of one).
     pub hidden: std::collections::HashSet<PathBuf>,

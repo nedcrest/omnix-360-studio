@@ -98,6 +98,25 @@ impl App {
         !self.edit.cuts.is_empty() || self.edit.sound_clips().next().is_some()
     }
 
+    /// A clip loaded, into the library: its thumbnails for the timeline
+    /// read (the task), its quick copy for the playhead made. Shared by
+    /// clips added to the edit and those opened in the bin's player, so a
+    /// clip played there adds at once.
+    pub(super) fn take_in(&mut self, media: Media) -> Task<Message> {
+        if media.flat.is_none() {
+            self.opts.hw = Some(media.hw);
+        }
+        let input = media.input.clone();
+        let thumbs = (!self.thumbs.contains_key(&input)).then(|| Task::run(thumbs::stream(media.clone()), |m| m));
+        self.thumbs.entry(input.clone()).or_default();
+        if let Some(flat) = media.flat {
+            super::scrub::make(input, flat, media.hw);
+        }
+        self.library.push(media);
+        self.mark_flat();
+        thumbs.unwrap_or_else(Task::none)
+    }
+
     /// Parses the clip and probes the decoder off the UI thread.
     pub(super) fn open(&mut self, path: PathBuf) -> Task<Message> {
         self.loading = Some(path.clone());
@@ -211,21 +230,12 @@ impl App {
                 self.loaded += 1;
                 match Arc::into_inner(result).expect("loaded clip is not shared") {
                     Ok(media) => {
-                        if media.flat.is_none() {
-                            self.opts.hw = Some(media.hw);
-                        }
                         let (input, duration) = (media.input.clone(), media.duration);
-                        let thumbs = (!self.thumbs.contains_key(&input)).then(|| Task::run(thumbs::stream(media.clone()), |m| m));
-                        self.thumbs.entry(input.clone()).or_default();
-                        if let Some(flat) = media.flat {
-                            super::scrub::make(input.clone(), flat, media.hw);
-                        }
-                        self.library.push(media);
-                        self.mark_flat();
+                        let thumbs = self.take_in(media);
                         if self.loading_adds {
                             self.add_cut(input, duration);
                         }
-                        return Task::batch([self.open_next(), thumbs.unwrap_or_else(Task::none)]);
+                        return Task::batch([self.open_next(), thumbs]);
                     }
                     Err(e) => self.error = Some(e),
                 }

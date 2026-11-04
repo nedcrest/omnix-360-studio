@@ -9,6 +9,7 @@ mod gpu;
 mod audio_panel;
 mod bin;
 mod bin_view;
+mod bin_player;
 mod export_panel;
 mod handles;
 mod info;
@@ -432,6 +433,8 @@ enum Message {
     BinRefresh,
     /// The bin as a view of tiles in the picture's place.
     BinView(bin_view::BinMsg),
+    /// The bin view's own player.
+    BinPlayer(bin_player::SourceMsg),
     /// Add a file from the bin where its kind goes.
     BinAdd(PathBuf, bin::Kind, bin::Place),
     /// Pin the bin open, or unpin it.
@@ -937,7 +940,7 @@ impl App {
         });
         // The crossfade's partner too: paused, its frame came in only with
         // the next event.
-        let busy = self.clip.iter().chain(self.partner.as_ref().map(|(_, c)| c)).any(|c| c.playback.busy());
+        let busy = self.clip.iter().chain(self.partner.as_ref().map(|(_, c)| c)).any(|c| c.playback.busy()) || self.source_busy();
         let close = window::close_requests().map(|_| Message::CloseRequested);
         // Files dropped from a file manager go into the bin (X11 and other
         // systems; winit doesn't pass them on Wayland yet).
@@ -969,6 +972,7 @@ impl App {
             m @ (Message::Resolution { .. } | Message::ExportClips { .. } | Message::ExportGraded { .. } | Message::ExportFormat { .. } | Message::ExportLoudness { .. } | Message::Info { .. } | Message::InfoRead { .. } | Message::InfoClose { .. } | Message::Reveal { .. } | Message::CopyPath { .. } | Message::ExportPanel { .. } | Message::AudioPanel { .. } | Message::SettingsPanel { .. } | Message::Shortcuts { .. } | Message::AutoKey { .. } | Message::SplitDrag { .. } | Message::SplitDone { .. } | Message::SplitReset { .. } | Message::TenBit { .. } | Message::AddLut { .. } | Message::LutPicked { .. } | Message::RemoveLut { .. } | Message::DlogMLut { .. } | Message::UiScale { .. } | Message::ShowAngles { .. } | Message::RulerLarge { .. } | Message::BarLabels | Message::Snapping | Message::Fold { .. } | Message::Modifiers { .. } | Message::ViewSize { .. } | Message::Aspect { .. } | Message::Theme { .. } | Message::Mute { .. } | Message::Volume { .. } | Message::Fullscreen { .. }) => self.on_panels(m),
             m @ (Message::BinPanel { .. } | Message::BinPin { .. } | Message::BinRefresh { .. } | Message::BinPreview { .. } | Message::BinStop { .. } | Message::BinMeta { .. } | Message::BinFrames { .. } | Message::BinAdd { .. }) => self.on_bin(m),
             Message::BinView(msg) => self.on_bin_view(msg),
+            Message::BinPlayer(msg) => self.on_source(msg),
             m @ (Message::MarkEdit { .. } | Message::MarkNote { .. } | Message::MarkSave | Message::MarkDelete | Message::MarkClose) => self.on_marks(m),
             m @ (Message::Tick { .. } | Message::TimelineZoom { .. } | Message::TimelineZoomTo { .. } | Message::TimelinePan { .. } | Message::Toggle { .. } | Message::Scrub { .. } | Message::ScrubDone { .. }) => self.on_transport(m),
             m @ (Message::Select { .. } | Message::AddBlank | Message::SoundEdge { .. } | Message::Trim { .. } | Message::MoveCut { .. } | Message::AddMark { .. } | Message::SelectAtPlayhead | Message::MarkMove { .. } | Message::MarkSelect { .. } | Message::StepsRested { .. } | Message::ToastGone { .. } | Message::StepNoteGone { .. } | Message::TrimToPlayhead { .. } | Message::Crossfade { .. } | Message::ToggleCrossfade { .. } | Message::Split { .. } | Message::DeleteCut { .. } | Message::Undo { .. } | Message::Redo { .. }) => self.on_cuts(m),

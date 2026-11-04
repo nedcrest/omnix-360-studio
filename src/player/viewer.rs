@@ -34,6 +34,14 @@ pub fn load(path: &Path) -> anyhow::Result<Loaded> {
     Ok(Loaded(media))
 }
 
+/// What the clip at `path` is, as lines (its kind first): length,
+/// picture, frame rate, codecs, when recorded, size and bitrate, as
+/// Omnix's Info panel shows them. Blocking (ffprobe).
+pub fn describe(path: &Path) -> anyhow::Result<Vec<(String, String)>> {
+    let file = super::info::read(path, false)?;
+    Ok(std::iter::once(("Kind".to_owned(), file.kind.to_owned())).chain(file.rows.into_iter().map(|(k, v)| (k.to_owned(), v))).collect())
+}
+
 /// A clip playing (or paused) and its newest frame.
 pub struct Viewer {
     playback: Playback,

@@ -1912,6 +1912,10 @@ panels and files. Esc, ?, F1 or a click outside closes it. Hidden until
 asked for, so the «no help text in the UI» rule holds. Its list is kept
 in step with `keys.rs` by hand: a key added there is added here.
 
+
+**Done 2026-11-04** (`32b75a9`), confirmed by the user on a wired keyboard: F1
+opens and closes it; «?» never reached the app, so it was dropped.
+
 ### 57. Cutting footage to music's beat, for the AI edit — idea, large (user, 2026-11-03)
 
 User: "an idea for the AI-editing API: sometimes there's video that can

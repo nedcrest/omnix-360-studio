@@ -50,6 +50,27 @@ Receiving frames from ffmpeg costs the player little: a test through the
 player's own `source::spawn`, 150 frames at 30 fps, 1080p NV12 (93 MB/s),
 took 3 % of a core (software decode) and 5 % (CUDA).
 
+### Which part of the main thread (measured the same day)
+
+A throwaway build timed each canvas's `draw`, the view's build and
+`update`, a line a second; the user played and dragged the playhead in a
+window, then fullscreen:
+
+| | Window | Fullscreen |
+|---|---|---|
+| The lanes' canvas (`Marks::draw`), per frame | **40 ms** | **79 ms** |
+| … of it the sound lanes (waveforms, lines) | 30 ms | 59 ms |
+| … of it the clip sound lane | 10 ms | 19 ms |
+| Frames it manages a second | ~24 | ~13 |
+| Every other canvas (ruler, markers, overlay and text lanes, thumbnails, meter, handles, divider) | ≤ 0.2 ms each | ≤ 0.2 ms each |
+| The view's build, the timeline's model | 0.1 ms | 0.1 ms |
+| `update` | 0.1-5 ms | 0.1-5 ms |
+
+So nearly all of it is the waveforms: drawn a bar per two pixels in
+three layers on every lane, tessellated anew on every frame, twice the
+work at twice the width; the frame rate halves in fullscreen, as the
+user saw. Nothing else is worth touching first.
+
 ## 2. Decoding: software against CUDA, as the player runs ffmpeg
 
 The player's command (`ffmpeg::yuv`): decode, then for a GPU decode
@@ -108,9 +129,7 @@ place of it.
 
 ## What to do, in order
 
-1. **Measure the main thread** (needs the user once more, ~40 s): time
-   each canvas's `draw` and the view's build, printed once a second
-   behind an environment variable, in a throwaway build.
+1. ~~Measure the main thread~~: done, above: the waveforms.
 2. **Cache the timeline's still layers** (`canvas::Cache`): waveforms,
    blocks, thumbnails and headers redrawn only when the edit, the zoom or
    the window change; the playhead, the snap line and readouts in a thin

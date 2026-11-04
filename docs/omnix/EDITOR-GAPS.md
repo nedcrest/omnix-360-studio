@@ -1254,7 +1254,9 @@ Kept in a context of its own in footage-agent:
 - 72c: the sheet's look and working flow, to think through together;
 - 72e: the sheet's in/out segments in Omnix: shown on the bin player's
   strip, used by its add buttons, set with I / O; written back to the
-  sheet (proposed) — goes with 71a;
+  sheet (decided 2026-11-04). Built the same day (`notes.rs`,
+  `bin_player.rs`; footage-agent refuses a stale save), waiting for the
+  user's check;
 - 72d: what an AI editor wants in `notes.json` (a brainstorm there:
   spans, story order, ids for marks, closed decision words, music as
   data, a schema, a compact text view).

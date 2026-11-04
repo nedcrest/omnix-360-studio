@@ -1,0 +1,11 @@
+[package]
+name = "rushix-sheet"
+version = "0.1.0"
+description = "The contact sheet's core: reading and changing notes.json, one way for every program that does"
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+indexmap.workspace = true

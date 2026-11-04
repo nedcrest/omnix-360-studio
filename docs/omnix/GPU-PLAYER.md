@@ -157,5 +157,17 @@ place of it.
    stored frame's size before `hwdownload`, the turn after on the small
    frame; checked against the software decode (within 3 levels of luma,
    turned and not).
+Checked with the user on the test project with two Kos clips (2.7K
+HEVC) added: playing them, the main thread at 12-22 %, ffmpeg 0-57 %.
+Opening it, ffmpeg ran at 570-790 % for ~20 s: making the two clips'
+copies for the playhead (gap 63) in software. Made on CUDA since
+(`a41e81e`): 2.5 s and 3 s of CPU against 17.6 s and 54 s for the 37 s
+clip, the same picture.
+
+What the user saw dragging fast against slowly: fast, the picture is
+the 960 px copy's (softer), a new one as soon as the last showed; slow
+or at rest, the file's own full frame comes in (sharper). By design
+(gap 63).
+
 4. Later: a Settings choice «Decoding: automatic / GPU / CPU» (gap 65),
    the preview's size (gap 64), and zero-copy (gap 52).

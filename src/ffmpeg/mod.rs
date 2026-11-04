@@ -552,10 +552,17 @@ pub fn yuv(input: &Path, track: u32, start: f64, out: Out, hw: Hwaccel, deep: bo
     let mut filters = Vec::new();
     let mut cmd = tool("ffmpeg");
     cmd.args(["-v", "error", "-nostdin"]);
+    // On CUDA the frame is scaled on the GPU before it comes down: a 4K or
+    // 2.7K frame scaled on the CPU after the download cost 4-5x the CPU
+    // (63-73 % of a core playing, against 14-15 %; `GPU-PLAYER.md`), and
+    // a quarter of the bytes come down. The size is the stored frame's,
+    // as the turn comes after.
+    let mut out = out;
     if let Some(name) = hw.name() {
         cmd.args(["-hwaccel", name, "-hwaccel_output_format", hw.output_format().unwrap_or(name)]);
-        if hw == Hwaccel::Cuda && out.size.is_none() {
-            filters.push(format!("scale_cuda=format={format},hwdownload,format={format}"));
+        if hw == Hwaccel::Cuda {
+            let size = out.size.take().map_or_else(String::new, |(w, h)| if out.turns.is_some_and(|t| t % 2 == 1) { format!("{h}:{w}:") } else { format!("{w}:{h}:") });
+            filters.push(format!("scale_cuda={size}format={format},hwdownload,format={format}"));
         } else {
             filters.push(format!("hwdownload,format={}", if ten_bit { "p010le" } else { "nv12" }));
         }
@@ -950,5 +957,43 @@ pub mod testmedia {
     /// two sounds over each other can be told apart in a level.
     pub fn tone_at(path: &Path, secs: f64, hz: u32) {
         ffmpeg(&["-f", "lavfi", "-i", &format!("sine=f={hz}:d={secs}:sample_rate=48000"), path.to_str().unwrap()]);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// One frame of `input` through the player's decode (`nv12`) on `hw`.
+    fn frame(input: &Path, out: Out, hw: Hwaccel) -> Vec<u8> {
+        let o = nv12(input, 0, 1.0, out, hw).unwrap().args(["-frames:v", "1", "-f", "rawvideo", "-"]).stderr(Stdio::null()).output().unwrap();
+        assert!(o.status.success(), "{hw:?}");
+        o.stdout
+    }
+
+    #[test]
+    fn scaled_on_the_gpu_it_is_the_picture_scaled_on_the_cpu() {
+        let dir = testmedia::dir("gpu-scale");
+        let input = dir.join("cam.mp4");
+        testmedia::ffmpeg(&["-f", "lavfi", "-i", "testsrc2=s=1280x720:r=30:d=2", "-c:v", "libx264", "-pix_fmt", "yuv420p", input.to_str().unwrap()]);
+        if !Hwaccel::Cuda.works(&input, 0).unwrap() {
+            eprintln!("no CUDA decoder here: skipped");
+            std::fs::remove_dir_all(&dir).unwrap();
+            return;
+        }
+        // Halved, and halved and turned a quarter (a portrait phone clip):
+        // the size given is upright, the GPU scales the stored frame.
+        for (turns, size) in [(None, (640, 360)), (Some(1), (360, 640))] {
+            let out = Out { size: Some(size), turns, ..Out::default() };
+            let (gpu, cpu) = (frame(&input, out, Hwaccel::Cuda), frame(&input, out, Hwaccel::Software));
+            assert_eq!(gpu.len(), (size.0 * size.1 * 3 / 2) as usize, "{turns:?}");
+            assert_eq!(gpu.len(), cpu.len(), "{turns:?}");
+            // Luma only (the first w×h bytes): within a level or two on
+            // average, scaling filters differing a little.
+            let n = (size.0 * size.1) as usize;
+            let off = gpu[..n].iter().zip(&cpu[..n]).map(|(a, b)| (*a as f64 - *b as f64).abs()).sum::<f64>() / n as f64;
+            assert!(off < 3.0, "{turns:?}: off by {off:.2} on average");
+        }
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 }

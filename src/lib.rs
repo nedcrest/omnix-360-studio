@@ -62,6 +62,44 @@ impl Doc {
         serde_json::to_string_pretty(&self.value).expect("a JSON value always serialises")
     }
 
+    /// Gives every mark without an id one, and the later of two marks
+    /// sharing an id a new one; says how many it gave. An id is `m` and a
+    /// number, past the highest in the file, in the file's order, so the
+    /// same file always gets the same ids; it goes last among the mark's
+    /// keys, so nothing else in the file moves. Ids are kept forever after.
+    ///
+    /// An id given here means something only once it's written: until
+    /// then, another writer adding a mark before this one would get the
+    /// same id at the next read. So a program settles and saves before
+    /// it addresses a mark by id (the store does, step 5).
+    pub fn settle_ids(&mut self) -> usize {
+        let number = |id: &str| id.strip_prefix('m').and_then(|n| n.parse::<u64>().ok());
+        let mut next = self.marks().filter_map(|m| m.get("id").and_then(Value::as_str).and_then(number)).max().unwrap_or(0);
+        let mut seen = std::collections::HashSet::new();
+        let mut given = 0;
+        for mark in self.marks_mut() {
+            let fresh = mark.get("id").and_then(Value::as_str).is_some_and(|id| seen.insert(id.to_owned()));
+            if !fresh {
+                next += 1;
+                let id = format!("m{next}");
+                seen.insert(id.clone());
+                // A duplicate keeps its place among the keys; a new one goes last.
+                mark.insert("id".into(), Value::String(id));
+                given += 1;
+            }
+        }
+        given
+    }
+
+    /// Every mark's object, clip by clip in the file's order.
+    fn marks(&self) -> impl Iterator<Item = &serde_json::Map<String, Value>> {
+        self.value.get("clips").and_then(Value::as_object).into_iter().flat_map(|c| c.values()).filter_map(|c| c.get("marks")?.as_array()).flatten().filter_map(Value::as_object)
+    }
+
+    fn marks_mut(&mut self) -> impl Iterator<Item = &mut serde_json::Map<String, Value>> {
+        self.value.get_mut("clips").and_then(Value::as_object_mut).into_iter().flat_map(|c| c.values_mut()).filter_map(|c| c.get_mut("marks")?.as_array_mut()).flatten().filter_map(Value::as_object_mut)
+    }
+
     /// The typed view of the file as it stands.
     pub fn sheet(&self) -> Result<Sheet, Error> {
         Sheet::deserialize(&self.value).map_err(|e| Error::Shape(e.to_string()))
@@ -213,6 +251,34 @@ mod tests {
         assert!(matches!(Doc::parse("{"), Err(Error::Json(_))));
         let e = Doc::parse(r#"{"clips": {"d/a": {"rating": 5}}}"#).unwrap_err();
         assert!(e.to_string().contains("0, 1 or 2"), "{e}");
+    }
+
+    #[test]
+    fn ids_go_to_marks_without_one_past_the_highest_and_stay() {
+        let mut doc = Doc::parse(
+            r#"{"clips": {"d/a": {"marks": [{"t": 1, "note": ""}, {"t": 2, "note": "", "id": "m7"}]},
+                          "d/b": {"marks": [{"t": 3, "note": "", "id": "m7"}, {"t": 4, "note": ""}]}}}"#,
+        )
+        .unwrap();
+        assert_eq!(doc.settle_ids(), 3);
+        let ids: Vec<_> = doc.sheet().unwrap().clips.values().flat_map(|c| c.marks.iter().map(|m| m.id.clone().unwrap())).collect();
+        // In the file's order, past m7; the second m7 is a duplicate.
+        assert_eq!(ids, ["m8", "m7", "m9", "m10"]);
+        // Settled, nothing more to give, and the text doesn't change.
+        let text = doc.text();
+        assert_eq!(doc.settle_ids(), 0);
+        assert_eq!(doc.text(), text);
+        // The same file gets the same ids.
+        let mut again = Doc::parse(r#"{"clips": {"d/a": {"marks": [{"t": 1, "note": ""}]}}}"#).unwrap();
+        again.settle_ids();
+        assert_eq!(again.sheet().unwrap().clips["d/a"].marks[0].id.as_deref(), Some("m1"));
+    }
+
+    #[test]
+    fn a_new_id_goes_last_and_nothing_else_moves() {
+        let mut doc = Doc::parse("{\n  \"clips\": {\n    \"d/a\": {\n      \"marks\": [\n        {\n          \"t\": 26,\n          \"note\": \"x\"\n        }\n      ]\n    }\n  }\n}").unwrap();
+        doc.settle_ids();
+        assert_eq!(doc.text(), "{\n  \"clips\": {\n    \"d/a\": {\n      \"marks\": [\n        {\n          \"t\": 26,\n          \"note\": \"x\",\n          \"id\": \"m1\"\n        }\n      ]\n    }\n  }\n}");
     }
 
     #[test]

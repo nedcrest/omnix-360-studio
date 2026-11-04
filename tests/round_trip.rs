@@ -40,3 +40,26 @@ fn a_real_sheet_read_and_written_back_is_the_same_file() {
     let text = std::fs::read_to_string(path).unwrap();
     assert!(Doc::parse(&text).unwrap().text() == text, "the round trip changed the file");
 }
+
+/// Ids given to a real sheet (`RUSHIX_SHEET`, a copy): only `id` keys are
+/// added; taken out again, the file is as it was, byte for byte.
+#[test]
+#[ignore]
+fn ids_given_to_a_real_sheet_add_only_ids() {
+    let path = std::env::var("RUSHIX_SHEET").expect("RUSHIX_SHEET names a copy of a notes.json");
+    let text = std::fs::read_to_string(path).unwrap();
+    let mut doc = Doc::parse(&text).unwrap();
+    let given = doc.settle_ids();
+    let sheet = doc.sheet().unwrap();
+    let marks: Vec<_> = sheet.clips.values().flat_map(|c| &c.marks).collect();
+    assert!(marks.iter().all(|m| m.id.is_some()));
+    println!("ids given: {given} of {} marks", marks.len());
+    // The ids taken out again: the file as it was.
+    let mut value: serde_json::Value = serde_json::from_str(&doc.text()).unwrap();
+    for clip in value["clips"].as_object_mut().unwrap().values_mut() {
+        for m in clip.get_mut("marks").and_then(|m| m.as_array_mut()).into_iter().flatten() {
+            m.as_object_mut().unwrap().shift_remove("id");
+        }
+    }
+    assert!(serde_json::to_string_pretty(&value).unwrap() == text, "more than ids changed");
+}

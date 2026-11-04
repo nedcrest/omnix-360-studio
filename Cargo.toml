@@ -24,9 +24,9 @@ serde_json = { version = "1.0.151", features = ["float_roundtrip"] }
 # the pin on purpose, bumping FORMAT if the rig or attitude changes.
 telemetry-parser = { git = "https://github.com/AdrianEddy/telemetry-parser.git", rev = "8bd825db33700c4d4472fae61eada27a65aea7a8", version = "0.4.0" }
 schemars = { version = "1.2.3", features = ["preserve_order"] }
-# The contact sheet's core (Rushix, a sibling repo): the bin reads and
+# The contact sheet's core (Dailix, a sibling repo): the bin reads and
 # changes the sheet's marks through it (`src/notes.rs`).
-rushix-sheet = { path = "../rushix/crates/sheet" }
+dailix-sheet = { path = "../dailix/crates/sheet" }
 # The bin's Move to trash: the system's own trash, so it can be restored.
 trash = { version = "5", default-features = false }
 

@@ -3,15 +3,15 @@
 //! described or deleted here (gaps 71a, 72e; user, 2026-11-04: one list,
 //! both ways).
 //!
-//! Reading and changing go through the sheet's core, Rushix's
-//! `rushix-sheet` (`../rushix`, `docs/SHEET-CORE.md`): the file is
+//! Reading and changing go through the sheet's core, Dailix's
+//! `dailix-sheet` (`../dailix`, `docs/SHEET-CORE.md`): the file is
 //! read afresh for every change, marks are named by their ids, every op
 //! is checked, and the file keeps its form and every field it has. What
 //! stays here is Omnix's side: where a project's sheet is, and which
 //! sheet key a clip file has.
 
 use anyhow::{Context, Result, bail};
-use rushix_sheet::{MarkKind, MarkOp, Op, Store};
+use dailix_sheet::{MarkKind, MarkOp, Op, Store};
 use std::path::{Path, PathBuf};
 
 /// A mark of the sheet on a clip: where it is and what it's for.
@@ -43,7 +43,7 @@ impl std::fmt::Display for Role {
     }
 }
 
-/// The names of the sheet's own roles (`rushix_sheet::ops::ROLES` holds
+/// The names of the sheet's own roles (`dailix_sheet::ops::ROLES` holds
 /// their keys): the function of a shot in the edit, not what's in it; the
 /// English word is the trade's.
 const NAMES: [(&str, &str, &str); 8] = [

@@ -88,6 +88,7 @@ const GROUPS: &[(&str, &[(&str, &str)])] = &[
             ("B", "bin"),
             ("Shift+B", "bin in tiles, in the picture's place"),
             ("I / O", "bin player: in and out of a segment (Alt clears)"),
+            ("Delete", "bin player: delete the picked segment"),
             ("Ctrl+,", "settings"),
             ("Ctrl+E", "export"),
             ("Ctrl+N", "new project"),

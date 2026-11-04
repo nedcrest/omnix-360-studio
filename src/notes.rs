@@ -140,6 +140,19 @@ impl Sheet {
         Ok(was.index)
     }
 
+    /// Removes the mark `was` names from `file`'s list and saves the sheet;
+    /// an error if the sheet moved or removed it meanwhile.
+    pub fn remove(&self, file: &Path, was: &Segment) -> Result<()> {
+        let Some(key) = self.key(file) else { bail!("{} isn't in the contact sheet's archive", file.display()) };
+        let mut notes = self.read()?;
+        let marks = notes["clips"][key.as_str()]["marks"].as_array_mut();
+        let Some(marks) = marks.filter(|m| m.get(was.index).is_some_and(|m| m["t"].as_f64() == Some(was.start) && m["end"].as_f64() == was.end)) else {
+            bail!("the mark was changed in the contact sheet meanwhile: pick it again")
+        };
+        marks.remove(was.index);
+        self.save(&notes)
+    }
+
     /// Writes `notes` over the sheet, its last version kept beside it.
     fn save(&self, notes: &Value) -> Result<()> {
         let mut text = serde_json::to_string_pretty(notes)?;
@@ -271,6 +284,15 @@ mod tests {
         s.describe(&file, m, None, "крик").unwrap();
         assert_eq!(s.segments(&file).unwrap()[0].role, None);
         assert!(s.roles().iter().any(|r| r.key == "cut" && r.name == "перебивка / cutaway"));
+
+        // Removed: the others stay, in order.
+        let before = s.segments(&file).unwrap();
+        s.remove(&file, &before[1]).unwrap();
+        let after = s.segments(&file).unwrap();
+        assert_eq!(after.len(), before.len() - 1);
+        assert_eq!(after[1].start, before[2].start);
+        // The same mark again: it isn't there as it was, so it's refused.
+        assert!(s.remove(&file, &before[1]).is_err());
 
         // A clip the sheet has no entry for gets one.
         let new = dir.join("archive/2026-08-22/y.MP4");

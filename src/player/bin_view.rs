@@ -461,16 +461,32 @@ impl App {
                     let role = iced::widget::pick_list(choices, Some(current), |r: crate::notes::Role| Message::BinPlayer(super::bin_player::SourceMsg::Role((!r.key.is_empty()).then_some(r.key))))
                         .text_size(13)
                         .placeholder("role…");
-                    let draft = source.and_then(|s| s.draft.clone()).unwrap_or_else(|| m.note.clone());
-                    let note = iced::widget::text_input("what happens here", &draft)
-                        .size(13)
-                        .on_input(|t| Message::BinPlayer(super::bin_player::SourceMsg::Note(t)))
-                        .on_submit(Message::BinPlayer(super::bin_player::SourceMsg::NoteSave));
+                    // It wraps, so a long note reads whole; Enter saves it.
+                    let note: Element<'_, Message> = match source {
+                        Some(s) => iced::widget::text_editor(&s.note)
+                            .placeholder("what happens here")
+                            .size(13)
+                            .wrapping(text::Wrapping::WordOrGlyph)
+                            .on_action(|a| Message::BinPlayer(super::bin_player::SourceMsg::Note(a)))
+                            .key_binding(|press| match press.key.as_ref() {
+                                iced::keyboard::Key::Named(iced::keyboard::key::Named::Enter) => Some(iced::widget::text_editor::Binding::Custom(Message::BinPlayer(super::bin_player::SourceMsg::NoteSave))),
+                                _ => iced::widget::text_editor::Binding::from_key_press(press),
+                            })
+                            .into(),
+                        None => space().into(),
+                    };
                     let colour = super::bin_player::role_colour(m.role.as_deref());
+                    let remove = tip(
+                        button(text("✕").size(13)).padding([2, 8]).style(button::danger).on_press(Message::BinPlayer(super::bin_player::SourceMsg::Remove)),
+                        text("Delete this segment (Delete)"),
+                        tooltip::Position::Bottom,
+                    );
                     col = col.push(row![
                         container(space()).width(4).height(28).style(move |_| container::background(colour)),
                         text(span).size(13),
                         role,
+                        space().width(Length::Fill),
+                        remove,
                     ].spacing(8).align_y(Alignment::Center));
                     col = col.push(note);
                 }

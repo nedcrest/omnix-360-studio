@@ -169,6 +169,10 @@ impl App {
             Key::Named(Named::ArrowUp) => self.free_look().pitch += step,
             Key::Named(Named::ArrowDown) => self.free_look().pitch -= step,
             Key::Named(Named::Home) => self.free_look().reset(),
+            // A segment picked in the bin's player: Delete removes it.
+            Key::Named(Named::Delete | Named::Backspace) if self.bin.view && self.bin.source.as_ref().is_some_and(|s| s.picked.is_some()) => {
+                return self.update(Message::BinPlayer(super::bin_player::SourceMsg::Remove));
+            }
             Key::Named(Named::Delete | Named::Backspace) if mods.shift() || !matches!(self.selection, Selection::None | Selection::Cut(_)) => {
                 return self.update(Message::DeleteCut);
             }

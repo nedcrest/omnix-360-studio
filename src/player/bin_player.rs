@@ -17,7 +17,7 @@ use crate::notes::Segment;
 use crate::stitch::M3;
 use crate::view::{Camera, Projection, View};
 use iced::widget::canvas::{self, Frame, Geometry, Path};
-use iced::widget::shader;
+use iced::widget::{shader, text_editor};
 use iced::{Color, Point, Rectangle, Renderer, Size, Task, Theme, mouse};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -33,6 +33,10 @@ pub struct Source {
     pub mark_in: Option<f64>,
     /// The picked segment's note as being typed, till it's saved.
     pub draft: Option<String>,
+    /// The note's field (it wraps, so a long note reads whole), and the
+    /// segment it was filled from (its place, start and end).
+    pub note: text_editor::Content,
+    note_for: Option<(usize, f64, Option<f64>)>,
 }
 
 /// The sheet's role colours (footage-agent's `report.html`), so a segment
@@ -72,10 +76,12 @@ pub enum SourceMsg {
     /// O: the picked segment's end to the playhead, else a new segment from
     /// the in point (or the start) to it; false (Alt+O) as Alt+I.
     Out(bool),
+    /// The picked segment removed (Delete, or its ✕).
+    Remove,
     /// The picked segment's role chosen (none: «—»), saved at once.
     Role(Option<String>),
     /// Its note typed, and saved (Enter, or picking another segment).
-    Note(String),
+    Note(text_editor::Action),
     NoteSave,
 }
 
@@ -87,7 +93,7 @@ impl App {
             return Task::none();
         }
         let marks = self.sheet_marks(&path);
-        let source = |clip| Source { path: path.clone(), clip, marks, picked: None, mark_in: None, draft: None };
+        let source = |clip| Source { path: path.clone(), clip, marks, picked: None, mark_in: None, draft: None, note: text_editor::Content::new(), note_for: None };
         if let Some(media) = self.library.iter().find(|m| m.input == path) {
             let clip = self.source_clip(media.clone());
             self.bin.source = Some(source(Some(clip)));
@@ -115,6 +121,29 @@ impl App {
     }
 
     pub(super) fn on_source(&mut self, msg: SourceMsg) -> Task<Message> {
+        // A note being typed is saved before a segment's ends move.
+        if matches!(msg, SourceMsg::In(true) | SourceMsg::Out(true)) {
+            self.save_draft();
+        }
+        let task = self.source_msg(msg);
+        self.sync_note();
+        task
+    }
+
+    /// Fills the note's field from the picked segment when the pick (or
+    /// the segment) changed.
+    fn sync_note(&mut self) {
+        let Some(s) = &mut self.bin.source else { return };
+        let now = s.picked.and_then(|i| s.marks.get(i)).map(|m| (m.index, m.start, m.end));
+        if now != s.note_for {
+            s.note_for = now;
+            s.draft = None;
+            let text = s.picked.and_then(|i| s.marks.get(i)).map(|m| m.note.clone()).unwrap_or_default();
+            s.note = text_editor::Content::with_text(&text);
+        }
+    }
+
+    fn source_msg(&mut self, msg: SourceMsg) -> Task<Message> {
         match msg {
             SourceMsg::Loaded(result) => {
                 let result = Arc::unwrap_or_clone(result);
@@ -198,12 +227,59 @@ impl App {
                 let note = self.bin.source.as_ref().and_then(|s| s.draft.clone().or_else(|| s.picked.and_then(|i| s.marks.get(i)).map(|m| m.note.clone())));
                 self.describe_picked(role, note);
             }
-            SourceMsg::Note(text) => {
+            SourceMsg::Note(action) => {
                 if let Some(s) = &mut self.bin.source {
-                    s.draft = Some(text);
+                    let edit = action.is_edit();
+                    s.note.perform(action);
+                    if edit {
+                        // One line, as the contact sheet keeps it.
+                        s.draft = Some(s.note.text().replace('\n', " ").trim_end().to_owned());
+                    }
                 }
             }
             SourceMsg::NoteSave => self.save_draft(),
+            SourceMsg::Remove => {
+                let Some(s) = &self.bin.source else { return Task::none() };
+                let Some(m) = s.picked.and_then(|i| s.marks.get(i)).cloned() else { return Task::none() };
+                let path = s.path.clone();
+                let removed = match &self.bin.sheet {
+                    Some(sheet) if sheet.key(&path).is_some() => Some(sheet.remove(&path, &m)),
+                    _ => None,
+                };
+                if let Some(Err(e)) = removed {
+                    self.error = Some(format!("Couldn't write the contact sheet: {e:#}"));
+                    return Task::none();
+                }
+                let fresh = removed.is_some().then(|| self.sheet_marks(&path));
+                let Some(s) = &mut self.bin.source else { return Task::none() };
+                match fresh {
+                    Some(marks) => s.marks = marks,
+                    None => {
+                        s.marks.remove(m.index);
+                        for (i, x) in s.marks.iter_mut().enumerate() {
+                            x.index = i;
+                        }
+                    }
+                }
+                s.picked = None;
+                s.draft = None;
+                // Its cuts on the timeline go too: those of this clip with
+                // its in and out to a frame (one trimmed since is the
+                // user's own, and stays). One undo step.
+                let Some(end) = m.end else { return Task::none() };
+                let frame = self.library.iter().find(|x| x.input == path).map_or(1.0 / 30.0, |x| 1.0 / x.fps);
+                let near = |a: f64, b: f64| (a - b).abs() <= frame;
+                let cuts: Vec<(usize, crate::project::Id)> = self.edit.cuts.iter().enumerate().filter(|(_, c)| c.input == path && near(c.start, m.start) && near(c.end, end)).map(|(i, c)| (i, c.id)).collect();
+                let Some(&(first, _)) = cuts.first() else { return Task::none() };
+                self.edit.commit();
+                self.edit.begin();
+                for (_, id) in &cuts {
+                    self.op(crate::model::ops::Op::Cut(crate::model::ops::cuts::CutOp::Delete { cut: *id }));
+                }
+                self.edit.commit();
+                self.selection = crate::model::selection::Selection::None;
+                self.after_edit(self.edit.offset(first.min(self.edit.cuts.len())));
+            }
             SourceMsg::Pick(i) => {
                 self.save_draft();
                 let Some(s) = &mut self.bin.source else { return Task::none() };

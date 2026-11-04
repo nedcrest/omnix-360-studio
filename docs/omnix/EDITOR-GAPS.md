@@ -91,6 +91,7 @@ done in part stays here until its last card is done.
 | 69 | Scopes: a histogram and a waveform of the picture | below |
 | 70 | The text and overlay lanes as groups of several lanes | below |
 | 71 | Two viewers: the source and the edit; effects tried beside the original, then applied | below |
+| 72 | The contact sheet's next round: music hints, ready music, its flow, data for AI | below |
 
 ## Open gaps
 
@@ -1232,6 +1233,22 @@ curve. Needs gap 39's lanes for «as separate lines». Milestone «Колір і
 текст». Note: the effects split line (`SplitDrag`) already compares
 before and after inside one viewer; 71b adds the side by side and the
 staging.
+
+### 72. The contact sheet's next round — ideas (user, 2026-11-04)
+
+Kept in a context of its own in footage-agent:
+`footage-agent's folder/docs/CONTACT-SHEET-NEXT.md`. In short:
+- 72a: tie a mark, clip or stretch to the song meant for it, as a hint
+  for the AI edit (to a point in the song too: "on the drop");
+- 72b: place a ready song under clips in the sheet, exported by «→
+  Omnix» onto the Music lane, Omnix's ducking doing the rest;
+- 72c: the sheet's look and working flow, to think through together;
+- 72d: what an AI editor wants in `notes.json` (a brainstorm there:
+  spans, story order, ids for marks, closed decision words, music as
+  data, a schema, a compact text view).
+
+Milestones: 72a, 72d «ШІ-монтаж» (they feed gap 28's brief); 72b, 72c
+«Матеріал і бін».
 
 ## Format rule for all of these
 

@@ -136,11 +136,15 @@ impl App {
                 self.bin.view = !self.bin.view;
                 self.bin.menu = None;
                 self.bin.copied = None;
-                // Its player stops with it.
+                // Its player stops with it, and opens again with it on the
+                // clip shown at the side (it showed only frames before).
                 self.bin.source = None;
-                // One view in the picture's place at a time.
                 if self.bin.view {
+                    // One view in the picture's place at a time.
                     self.check.on = false;
+                    let reopen = self.bin.preview.as_ref().filter(|p| p.kind == Kind::Clip).map(|p| p.path.clone());
+                    let meta = self.read_bin_meta();
+                    return Task::batch([meta, reopen.map_or_else(Task::none, |p| self.source_open(p))]);
                 }
             }
             BinMsg::Tile(w) => self.bin.tile = w.clamp(*TILE.start(), *TILE.end()),

@@ -273,8 +273,15 @@ impl App {
     pub(super) fn rescan_bin(&mut self) -> Task<Message> {
         self.bin.read = self.project.as_deref().and_then(root).map(|r| (scan(&r), r));
         self.bin.sheet = self.bin.read.as_ref().and_then(|(_, r)| crate::notes::Sheet::of(r));
-        let Some((sections, _)) = &self.bin.read else { return Task::none() };
-        let todo: Vec<(PathBuf, Kind)> = sections.iter().flat_map(|s| s.files.iter().map(move |f| (f.clone(), s.kind))).filter(|(f, _)| !self.bin.meta.contains_key(f)).collect();
+        self.read_bin_meta()
+    }
+
+    /// Reads the pictures and lengths not read yet: the folder's files and
+    /// the clips loaded from outside it (an archive's), a few per thread.
+    pub(super) fn read_bin_meta(&mut self) -> Task<Message> {
+        let mut todo: Vec<(PathBuf, Kind)> = self.bin.read.iter().flat_map(|(sections, _)| sections.iter().flat_map(|s| s.files.iter().map(move |f| (f.clone(), s.kind)))).collect();
+        todo.extend(self.loaded_outside().into_iter().map(|f| (f, Kind::Clip)));
+        todo.retain(|(f, _)| !self.bin.meta.contains_key(f));
         for (f, _) in &todo {
             self.bin.meta.insert(f.clone(), Meta::default());
         }

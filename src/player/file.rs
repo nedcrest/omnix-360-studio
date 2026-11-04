@@ -114,7 +114,9 @@ impl App {
         }
         self.library.push(media);
         self.mark_flat();
-        thumbs.unwrap_or_else(Task::none)
+        // The bin lists loaded clips too: its picture of this one.
+        let bin = if self.bin.view || self.bin.open { self.read_bin_meta() } else { Task::none() };
+        Task::batch([thumbs.unwrap_or_else(Task::none), bin])
     }
 
     /// Parses the clip and probes the decoder off the UI thread.

@@ -40,29 +40,46 @@ pub fn flat(flat: &Flat) -> Flat {
     Flat { track: 0, stored: size(flat), ..*flat }
 }
 
+/// Copies being made or waiting, so a clip asked for twice is made once.
+static PENDING: LazyLock<Mutex<std::collections::HashSet<PathBuf>>> = LazyLock::new(Default::default);
+/// Held while a copy is made: one at a time. Opening a project of 31 clips
+/// started 31 CUDA encodes at once (and a clip asked for twice wrote its
+/// copy twice over); the night of 2026-11-04 the GPU's firmware stopped
+/// answering under some such load and the machine froze.
+static ONE_AT_A_TIME: Mutex<()> = Mutex::new(());
+
 /// Makes `input`'s copy on a thread if the cache hasn't one (a picture
-/// needs none), and registers it once there; decoded on CUDA when `hw` is
-/// it, else in software.
+/// needs none), one copy at a time, and registers it once there; decoded
+/// on CUDA when `hw` is it, else in software.
 pub fn make(input: PathBuf, flat: Flat, hw: crate::ffmpeg::Hwaccel) {
-    if flat.picture {
+    if flat.picture || !PENDING.lock().is_ok_and(|mut p| p.insert(input.clone())) {
         return;
     }
     std::thread::spawn(move || {
-        let Some(entry) = crate::cache::scrub(&input) else { return };
-        // On CUDA first: a 37 s 2.7K HEVC clip from the Kos archive took
-        // 17.6 s and 54 s of CPU in software, 2.5 s and 3 s on CUDA, the
-        // same picture (`GPU-PLAYER.md`). Software if that fails.
-        let gpu = hw == crate::ffmpeg::Hwaccel::Cuda;
-        if !entry.is_file()
-            && let Err(e) = write(&input, &flat, &entry, gpu).or_else(|e| if gpu { write(&input, &flat, &entry, false) } else { Err(e) })
-        {
-            eprintln!("no quick copy of {} for the playhead: {e:#}", input.display());
-            return;
-        }
-        if let Ok(mut ready) = READY.lock() {
-            ready.insert(input, entry);
+        let _turn = ONE_AT_A_TIME.lock();
+        make_now(input.clone(), flat, hw);
+        if let Ok(mut p) = PENDING.lock() {
+            p.remove(&input);
         }
     });
+}
+
+/// Makes `input`'s copy now, unless the cache has it, and registers it.
+fn make_now(input: PathBuf, flat: Flat, hw: crate::ffmpeg::Hwaccel) {
+    let Some(entry) = crate::cache::scrub(&input) else { return };
+    // On CUDA first: a 37 s 2.7K HEVC clip from the Kos archive took
+    // 17.6 s and 54 s of CPU in software, 2.5 s and 3 s on CUDA, the
+    // same picture (`GPU-PLAYER.md`). Software if that fails.
+    let gpu = hw == crate::ffmpeg::Hwaccel::Cuda;
+    if !entry.is_file()
+        && let Err(e) = write(&input, &flat, &entry, gpu).or_else(|e| if gpu { write(&input, &flat, &entry, false) } else { Err(e) })
+    {
+        eprintln!("no quick copy of {} for the playhead: {e:#}", input.display());
+        return;
+    }
+    if let Ok(mut ready) = READY.lock() {
+        ready.insert(input, entry);
+    }
 }
 
 /// Encodes the copy beside `entry` and renames it there, so a half-written

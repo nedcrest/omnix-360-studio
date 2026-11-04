@@ -1313,7 +1313,9 @@ one copy now, two later) and an Omnix project. Repo
 over from Python and how, the open decisions). Shares data with Omnix
 (`notes.json`, sidecars, the folder tree), later a small common crate.
 Takes in gap 34 (import from devices) and 61 (the sheet standalone).
-Milestone «Матеріал і бін».
+Milestone «Матеріал і бін». Under way from 2026-11-04 with the contact
+sheet's core (`footage-studio/docs/SHEET-CORE.md`, eight steps; Omnix
+moves onto it at step 7 and drops `notes.rs`).
 
 ## Format rule for all of these
 

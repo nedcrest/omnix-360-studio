@@ -151,6 +151,9 @@ pub struct Bin {
     /// copy did.
     pub copying: usize,
     pub copied: Option<String>,
+    /// Loaded clips from outside the folder taken out of the bin's list
+    /// (the clips stay loaded: an undo may bring back a cut of one).
+    pub hidden: std::collections::HashSet<PathBuf>,
 }
 
 /// The project's folder for a project file at `project`.
@@ -323,7 +326,7 @@ impl App {
 
         // The clips already loaded, wherever they live: a project's footage
         // is often in an archive outside its folder.
-        let mut loaded: Vec<PathBuf> = self.library.iter().map(|m| m.input.clone()).collect();
+        let mut loaded: Vec<PathBuf> = self.library.iter().map(|m| m.input.clone()).filter(|p| !self.bin.hidden.contains(p)).collect();
         loaded.sort();
         loaded.dedup();
 

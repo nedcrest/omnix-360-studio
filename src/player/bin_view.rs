@@ -39,6 +39,13 @@ pub enum BinMsg {
     CopyIn(Vec<PathBuf>, Option<&'static str>),
     /// The copies done: where each went, or why not.
     Copied(Vec<Result<PathBuf, String>>),
+    /// Move a copy in the project's folder to the system's trash: asked
+    /// first, then done if the answer is yes.
+    Trash(PathBuf),
+    TrashAnswered(PathBuf, bool),
+    Trashed(PathBuf, Result<(), String>),
+    /// A loaded clip from outside the folder taken off the bin's list.
+    Hide(PathBuf),
 }
 
 /// The folder under `root` a file of `kind` goes in: the section's named
@@ -148,6 +155,43 @@ impl App {
                 }
                 return self.rescan_bin();
             }
+            BinMsg::Trash(path) => {
+                let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                let ask = rfd::AsyncMessageDialog::new()
+                    .set_level(rfd::MessageLevel::Warning)
+                    .set_title("Move to trash")
+                    .set_description(format!("Move {name} from the project's folder to the trash? It can be restored from there."))
+                    .set_buttons(rfd::MessageButtons::OkCancelCustom("Move to trash".into(), "Keep it".into()));
+                return Task::perform(async move { ask.show().await }, move |answer| {
+                    let yes = matches!(answer, rfd::MessageDialogResult::Ok) || matches!(&answer, rfd::MessageDialogResult::Custom(l) if l == "Move to trash");
+                    Message::BinView(BinMsg::TrashAnswered(path.clone(), yes))
+                });
+            }
+            BinMsg::TrashAnswered(path, true) => {
+                // Asked again now: the edit may have changed while the
+                // question was open.
+                if let Some(used) = uses(&self.edit, &path) {
+                    self.error = Some(format!("Still in the edit ({used}): not moved to the trash"));
+                    return Task::none();
+                }
+                return Task::perform(super::blocking(move || (trash::delete(&path).map_err(|e| e.to_string()), path)), |(r, path)| Message::BinView(BinMsg::Trashed(path, r)));
+            }
+            BinMsg::TrashAnswered(_, false) => {}
+            BinMsg::Trashed(path, result) => {
+                match result {
+                    Ok(()) => {
+                        self.bin.meta.remove(&path);
+                        if self.bin.preview.as_ref().is_some_and(|p| p.path == path) {
+                            self.bin.preview = None;
+                        }
+                    }
+                    Err(e) => self.error = Some(format!("Couldn't move it to the trash: {e}")),
+                }
+                return self.rescan_bin();
+            }
+            BinMsg::Hide(path) => {
+                self.bin.hidden.insert(path);
+            }
             BinMsg::Info(path, kind) => {
                 self.bin.menu = None;
                 return self.open_info(super::info::Of::File(matches!(kind, Kind::Sound(_))), path);
@@ -237,7 +281,7 @@ impl App {
     /// footage is often read in place from an archive outside its folder.
     pub(super) fn loaded_outside(&self) -> Vec<PathBuf> {
         let listed = |p: &Path| self.bin.read.as_ref().is_some_and(|(s, _)| s.iter().any(|s| s.files.iter().any(|f| f == p)));
-        let mut loaded: Vec<PathBuf> = self.library.iter().map(|m| m.input.clone()).filter(|p| !listed(p)).collect();
+        let mut loaded: Vec<PathBuf> = self.library.iter().map(|m| m.input.clone()).filter(|p| !listed(p) && !self.bin.hidden.contains(p)).collect();
         loaded.sort();
         loaded.dedup();
         loaded
@@ -311,6 +355,17 @@ impl App {
         items.push(item("Info", Message::BinView(BinMsg::Info(path.clone(), kind))));
         items.push(item("Show in folder", Message::Reveal(path.clone())));
         items.push(item("Copy the path", Message::CopyPath(path.clone())));
+        // Only a copy inside the project's folder goes to the trash; raw
+        // material outside it (an archive, a card) is only taken off the list.
+        // Neither while the edit uses it.
+        items.push(rule::horizontal(1).into());
+        let inside = self.bin.read.as_ref().is_some_and(|(_, root)| path.starts_with(root));
+        let label = if inside { "Move to trash…" } else { "Take out of the bin" };
+        match uses(&self.edit, path) {
+            Some(used) => items.push(button(text(format!("{label} (in the edit: {used})")).size(13)).style(button::text).width(Length::Fill).padding([5, 10]).into()),
+            None if inside => items.push(item(label, Message::BinView(BinMsg::Trash(path.clone())))),
+            None => items.push(item(label, Message::BinView(BinMsg::Hide(path.clone())))),
+        }
         let menu = container(column(items).width(280)).padding(4).style(container::rounded_box);
         let close = mouse_area(container(space()).width(Length::Fill).height(Length::Fill)).on_press(Message::BinView(BinMsg::Menu(None))).on_right_press(Message::BinView(BinMsg::Menu(None)));
         stack![below, close, pin(opaque(menu)).position(at)].into()

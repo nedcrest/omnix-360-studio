@@ -167,6 +167,10 @@ pub struct Bin {
     /// the roles a segment can have (its own list, or the default one).
     pub sheet: Option<crate::notes::Sheet>,
     pub roles: Vec<crate::notes::Role>,
+    /// The tile the pointer rests on, since when, and whether its frames
+    /// show; the frames read for hovering, by clip.
+    pub hover: Option<(PathBuf, std::time::Instant, bool)>,
+    pub hover_frames: HashMap<PathBuf, Vec<image::Handle>>,
     /// The clip in the bin view's own player (`bin_player.rs`).
     pub source: Option<super::bin_player::Source>,
     /// Loaded clips from outside the folder taken out of the bin's list
@@ -231,6 +235,13 @@ fn label(path: &Path) -> String {
 pub(super) fn clock(seconds: f64) -> String {
     let s = seconds.round() as u64;
     format!("{}:{:02}", s / 60, s % 60)
+}
+
+/// A clip's frames spread over its length, `width` wide, read at once (a
+/// frame of 2.7K HEVC takes about a second).
+pub(super) fn frames(path: &Path, duration: f64, width: u32) -> Vec<image::Handle> {
+    use rayon::prelude::*;
+    (1..=PREVIEW_FRAMES).into_par_iter().filter_map(|i| frame(path, duration * (i as f64 - 0.5) / PREVIEW_FRAMES as f64, width)).collect()
 }
 
 /// One frame of `path` at `t` seconds, `width` wide, as a JPEG.
@@ -321,6 +332,11 @@ impl App {
         self.bin.preview = Some(Preview { path: path.clone(), kind, frames: Vec::new(), player });
         let about = self.read_about(path.clone(), kind);
         if kind != Kind::Clip {
+            return about;
+        }
+        // The bin view shows a clip in its player (its frames on hovering a
+        // tile); the panel shows them in its strip.
+        if !start {
             return about;
         }
         let duration = self.bin.meta.get(&path).and_then(|m| m.duration).unwrap_or(10.0);

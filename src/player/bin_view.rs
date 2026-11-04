@@ -15,6 +15,10 @@ use std::path::{Path, PathBuf};
 /// A tile's width: the slider's range and where it starts.
 pub const TILE: std::ops::RangeInclusive<f32> = 140.0..=420.0;
 pub const TILE_DEFAULT: f32 = 220.0;
+/// How long the pointer rests on a clip's tile before its frames show.
+const HOVER: std::time::Duration = std::time::Duration::from_secs(1);
+/// A hovered clip's frames: each this wide, two by two.
+const HOVER_W: f32 = 220.0;
 /// The right side's default width, and the least it and the tiles keep.
 pub const SIDE_DEFAULT: f32 = 460.0;
 const MIN_SIDE: f32 = 260.0;
@@ -45,6 +49,14 @@ pub enum BinMsg {
     About(PathBuf, Result<std::sync::Arc<super::info::File>, String>),
     /// A tile clicked: the file shown at the right, not played.
     Show(PathBuf, Kind),
+    /// The pointer onto a clip's tile, and off it.
+    HoverIn(PathBuf),
+    HoverOut(PathBuf),
+    /// A screen frame while the pointer rests on a tile: past `HOVER`, its
+    /// frames show.
+    HoverTick,
+    /// A hovered clip's frames read.
+    HoverFrames(PathBuf, Vec<image::Handle>),
     /// A file dropped on the window from a file manager.
     Dropped(PathBuf),
     /// A section's «+»: pick files to copy into its folder.
@@ -150,6 +162,11 @@ impl App {
             BinMsg::Tile(w) => self.bin.tile = w.clamp(*TILE.start(), *TILE.end()),
             BinMsg::Pointer(p) => {
                 self.bin.pointer = p;
+                // A move closes the frames and starts the wait again.
+                if let Some((_, since, shown)) = &mut self.bin.hover {
+                    *since = std::time::Instant::now();
+                    *shown = false;
+                }
                 if self.bin.gripping {
                     let width = self.bin.size.get().width;
                     self.bin.side = width - p.x - GRIP / 2.0;
@@ -157,6 +174,32 @@ impl App {
                 }
             }
             BinMsg::Grip(on) => self.bin.gripping = on,
+            BinMsg::HoverIn(path) => self.bin.hover = Some((path, std::time::Instant::now(), false)),
+            BinMsg::HoverOut(path) => {
+                if self.bin.hover.as_ref().is_some_and(|(p, _, _)| *p == path) {
+                    self.bin.hover = None;
+                }
+            }
+            BinMsg::HoverTick => {
+                let Some((path, since, shown)) = &mut self.bin.hover else { return Task::none() };
+                if *shown || since.elapsed() < HOVER || self.bin.menu.is_some() {
+                    return Task::none();
+                }
+                *shown = true;
+                let path = path.clone();
+                if self.bin.hover_frames.contains_key(&path) {
+                    return Task::none();
+                }
+                self.bin.hover_frames.insert(path.clone(), Vec::new());
+                let duration = self.bin.meta.get(&path).and_then(|m| m.duration).unwrap_or(10.0);
+                return Task::perform(super::blocking({
+                    let path = path.clone();
+                    move || super::bin::frames(&path, duration, 320)
+                }), move |f| Message::BinView(BinMsg::HoverFrames(path.clone(), f)));
+            }
+            BinMsg::HoverFrames(path, frames) => {
+                self.bin.hover_frames.insert(path, frames);
+            }
             BinMsg::Show(path, kind) => {
                 let shown = self.bin_preview(path.clone(), kind, false);
                 // A clip plays at the side, in the bin's own player.
@@ -428,13 +471,11 @@ impl App {
                     col = col.push(note);
                 }
             }
-            Kind::Clip if p.frames.is_empty() => col = col.push(text("Reading frames…").size(12).style(text::secondary)),
-            Kind::Clip => {
-                let rows = p.frames.len().div_ceil(2).max(1) as f32;
-                for pair in p.frames.chunks(2) {
-                    col = col.push(row(pair.iter().map(|h| fit(h, cap / rows).width(Length::FillPortion(1)).into())).spacing(4));
-                }
-            }
+            // Till the player's first frame: the tile's picture.
+            Kind::Clip => match self.bin.meta.get(&p.path).and_then(|m| m.thumb.clone()) {
+                Some(h) => col = col.push(fit(&h, cap)),
+                None => col = col.push(text("…").size(20)),
+            },
             Kind::Picture => {
                 if let Some(h) = self.bin.meta.get(&p.path).and_then(|m| m.thumb.clone()) {
                     col = col.push(fit(&h, cap));
@@ -509,11 +550,35 @@ impl App {
             .padding(4)
             .style(if selected { button::secondary } else { button::text })
             .on_press(Message::BinView(BinMsg::Show(path.to_owned(), kind)));
-        mouse_area(tile).on_right_press(Message::BinView(BinMsg::Menu(Some((path.to_owned(), kind))))).into()
+        let area = mouse_area(tile).on_right_press(Message::BinView(BinMsg::Menu(Some((path.to_owned(), kind)))));
+        // A clip's frames show when the pointer rests on its tile.
+        match kind {
+            Kind::Clip => area.on_enter(Message::BinView(BinMsg::HoverIn(path.to_owned()))).on_exit(Message::BinView(BinMsg::HoverOut(path.to_owned()))).into(),
+            _ => area.into(),
+        }
+    }
+
+    /// A hovered clip's frames beside the pointer, kept inside the view.
+    fn hover_layer<'a>(&'a self, below: Element<'a, Message>) -> Element<'a, Message> {
+        let Some((path, _, true)) = &self.bin.hover else { return below };
+        let Some(frames) = self.bin.hover_frames.get(path) else { return below };
+        let body: Element<'a, Message> = if frames.is_empty() {
+            text("…").size(20).into()
+        } else {
+            column(frames.chunks(2).map(|pair| row(pair.iter().map(|h| image(h.clone()).width(HOVER_W).into())).spacing(4).into())).spacing(4).into()
+        };
+        let card = container(body).padding(6).style(container::rounded_box);
+        let (w, h) = (HOVER_W * 2.0 + 16.0, HOVER_W * 9.0 / 16.0 * 2.0 + 16.0);
+        let room = self.bin.size.get();
+        let p = self.bin.pointer;
+        let x = (p.x + 16.0).min(room.width - w).max(0.0);
+        let y = if p.y + 16.0 + h > room.height { (p.y - 16.0 - h).max(0.0) } else { p.y + 16.0 };
+        stack![below, pin(card).position(Point::new(x, y))].into()
     }
 
     /// A tile's menu at the pointer, if open: a click outside closes it.
     fn bin_menu_layer<'a>(&'a self, below: Element<'a, Message>) -> Element<'a, Message> {
+        let below = self.hover_layer(below);
         let Some((path, kind, at)) = &self.bin.menu else { return below };
         let (kind, at) = (*kind, *at);
         let item = |label: &str, msg: Message| -> Element<'a, Message> { button(text(label.to_owned()).size(13)).style(button::text).width(Length::Fill).padding([5, 10]).on_press(Message::BinView(BinMsg::Pick(Box::new(msg)))).into() };

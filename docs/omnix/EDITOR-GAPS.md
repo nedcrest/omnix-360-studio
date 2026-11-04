@@ -1045,7 +1045,10 @@ What it would be:
 
 Built 2026-11-04 (`bin_view.rs`; `c059e1f`, `cbaaea6`, `07c03b5`, `c5808fd`): the
 file picked shows at the right with its Info, the edge between dragged
-(user's ask the same day); a tile's click only shows, ▶ plays. The Bin
+(user's ask the same day); a tile's click only shows. A clip plays
+there in the bin's own player (`bin_player.rs`, `e3dd968`): a second
+`Playback`, a strip to scrub, Space; the first part of 71a (in and out
+points still to come). The pictures stop at half the view's height. The Bin
 toggle in the Mode group or Shift+B; every section shown, an empty one
 too, with its «+»; a drop goes to its kind's first section (Footage,
 Music, Graphics), since X11 drops carry no position; the tile says where

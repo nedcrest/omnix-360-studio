@@ -115,6 +115,43 @@ impl Doc {
     }
 }
 
+impl schemars::JsonSchema for Rating {
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        "Rating".into()
+    }
+    fn json_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        schemars::json_schema!({"type": "integer", "minimum": 0, "maximum": 2, "description": "2 take (✓), 1 think (?), 0 junk (✕)"})
+    }
+}
+
+/// A mark as the file holds it, for the schema: `end` only for a segment,
+/// `kind: "flag"` only for a flag.
+#[derive(schemars::JsonSchema)]
+#[allow(dead_code)]
+struct MarkShape {
+    /// Given by the core, kept forever: `m` and a number.
+    id: Option<String>,
+    /// Seconds into the clip.
+    t: f64,
+    /// A segment's end; absent for a point or a flag.
+    end: Option<f64>,
+    /// "flag" for a note to self, never material.
+    kind: Option<String>,
+    /// One of the eight (talk, establish, broll, detail, cut, action,
+    /// reveal, reaction) or the sheet's own (`roles`).
+    role: Option<String>,
+    note: String,
+}
+
+impl schemars::JsonSchema for Mark {
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        "Mark".into()
+    }
+    fn json_schema(g: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        MarkShape::json_schema(g)
+    }
+}
+
 /// A clip's rating: the sheet's ✓, ? and ✕.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Rating {
@@ -185,7 +222,7 @@ impl<'de> Deserialize<'de> for Mark {
 }
 
 /// A clip's marking.
-#[derive(Debug, Clone, PartialEq, Default, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Deserialize, schemars::JsonSchema)]
 pub struct Clip {
     /// None while unrated.
     #[serde(default)]
@@ -201,14 +238,14 @@ pub struct Clip {
 }
 
 /// A day's story and ideas.
-#[derive(Debug, Clone, PartialEq, Default, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Deserialize, schemars::JsonSchema)]
 pub struct Day {
     #[serde(default)]
     pub note: String,
 }
 
 /// A role the user added to the sheet's eight.
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, schemars::JsonSchema)]
 pub struct Role {
     pub key: String,
     #[serde(default)]
@@ -222,7 +259,7 @@ pub struct Role {
 
 /// The typed view of a sheet: days and clips in the file's order, a clip
 /// keyed `<day>/<file>`.
-#[derive(Debug, Clone, PartialEq, Default, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Deserialize, schemars::JsonSchema)]
 pub struct Sheet {
     #[serde(default)]
     pub days: IndexMap<String, Day>,

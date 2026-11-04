@@ -9,6 +9,8 @@ license.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 indexmap.workspace = true
+# The file's and the ops' JSON Schema, for an AI to check against.
+schemars.workspace = true
 
 [dev-dependencies]
 proptest = { version = "1.12.0", default-features = false, features = ["std"] }

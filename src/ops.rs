@@ -30,7 +30,7 @@ pub const ROLES: [&str; 8] = ["talk", "establish", "broll", "detail", "cut", "ac
 const EXTRA_COLORS: [&str; 6] = ["#8fae7a", "#3f8fb0", "#a3799a", "#7d8a6a", "#e08b4a", "#5fb3c9"];
 
 /// A change to a sheet.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(tag = "area", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Op {
     Mark(MarkOp),
@@ -40,7 +40,7 @@ pub enum Op {
 }
 
 /// Marks on a clip: segments (material), points, flags (notes to self).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(tag = "op", rename_all = "snake_case", deny_unknown_fields)]
 pub enum MarkOp {
     /// A new mark on `clip`: a segment with an `end`, a point without, a
@@ -67,7 +67,7 @@ pub enum MarkOp {
 }
 
 /// A clip's own marking.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(tag = "op", rename_all = "snake_case", deny_unknown_fields)]
 pub enum ClipOp {
     /// ✓ 2, ? 1, ✕ 0, or none: unrated.
@@ -78,14 +78,14 @@ pub enum ClipOp {
 }
 
 /// A day's story.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(tag = "op", rename_all = "snake_case", deny_unknown_fields)]
 pub enum DayOp {
     Note { day: String, note: String },
 }
 
 /// The user's own roles, beside the eight.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(tag = "op", rename_all = "snake_case", deny_unknown_fields)]
 pub enum RoleOp {
     /// A role named `title` (and its trade word `en`), keyed as the web

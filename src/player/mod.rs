@@ -938,6 +938,16 @@ impl App {
         // the next event.
         let busy = self.clip.iter().chain(self.partner.as_ref().map(|(_, c)| c)).any(|c| c.playback.busy());
         let close = window::close_requests().map(|_| Message::CloseRequested);
+        // Files dropped from a file manager go into the bin (X11 and other
+        // systems; winit doesn't pass them on Wayland yet).
+        let close = if self.bin.view || self.bin.open {
+            Subscription::batch([close, iced::event::listen_with(|e, _, _| match e {
+                iced::Event::Window(window::Event::FileDropped(path)) => Some(Message::BinView(bin_view::BinMsg::Dropped(path))),
+                _ => None,
+            })])
+        } else {
+            close
+        };
         // The Record panel's meter and countdown, every screen frame.
         let keys = if self.side == Some(Side::Record) { Subscription::batch([keys, window::frames().map(|_| Message::Record(record_ui::RecordMsg::Tick))]) } else { keys };
         if busy {

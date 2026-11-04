@@ -43,7 +43,7 @@ pub enum Kind {
 
 impl Kind {
     /// The same kind of file, whichever track a sound is for.
-    fn alike(self, other: Kind) -> bool {
+    pub(super) fn alike(self, other: Kind) -> bool {
         std::mem::discriminant(&self) == std::mem::discriminant(&other)
     }
 }
@@ -73,7 +73,7 @@ const ADD_JOIN: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0
 /// A heading and the folders under the project's folder it gathers.
 /// Cleaned voice (`voice/`) isn't listed: it belongs to its clip, and comes
 /// in with the project footage-agent writes, not by hand.
-const SECTIONS: [(&str, Kind, &[&str]); 6] = [
+pub(super) const SECTIONS: [(&str, Kind, &[&str]); 6] = [
     ("Footage", Kind::Clip, &["01_footage"]),
     ("External video", Kind::Clip, &["06_external"]),
     ("Music", Kind::Sound(SoundTrack::Music), &[SoundTrack::Music.folder()]),
@@ -82,9 +82,9 @@ const SECTIONS: [(&str, Kind, &[&str]); 6] = [
     ("Graphics", Kind::Picture, &["08_graphics"]),
 ];
 
-const CLIP_EXT: &[&str] = &["mp4", "mov", "mkv", "webm", "osv", "insv"];
-const SOUND_EXT: &[&str] = &["mp3", "flac", "wav", "m4a", "aac", "ogg", "opus", "wma"];
-const PICTURE_EXT: &[&str] = &["png", "jpg", "jpeg", "webp", "bmp", "tif", "tiff"];
+pub(super) const CLIP_EXT: &[&str] = &["mp4", "mov", "mkv", "webm", "osv", "insv"];
+pub(super) const SOUND_EXT: &[&str] = &["mp3", "flac", "wav", "m4a", "aac", "ogg", "opus", "wma"];
+pub(super) const PICTURE_EXT: &[&str] = &["png", "jpg", "jpeg", "webp", "bmp", "tif", "tiff"];
 
 /// One heading's files, by name.
 #[derive(Debug, Clone, PartialEq)]
@@ -147,6 +147,10 @@ pub struct Bin {
     /// The pointer over the view, and a tile's menu open at it.
     pub pointer: iced::Point,
     pub menu: Option<(PathBuf, Kind, iced::Point)>,
+    /// Files being copied into the project's folder, and what the last
+    /// copy did.
+    pub copying: usize,
+    pub copied: Option<String>,
 }
 
 /// The project's folder for a project file at `project`.

@@ -31,6 +31,50 @@ pub enum BinMsg {
     Info(PathBuf, Kind),
     /// A menu item chosen: the menu closes, then the item's message.
     Pick(Box<Message>),
+    /// A file dropped on the window from a file manager.
+    Dropped(PathBuf),
+    /// A section's «+»: pick files to copy into its folder.
+    AddTo(&'static str),
+    /// Files to copy into a section's folder (picked), or by their kind.
+    CopyIn(Vec<PathBuf>, Option<&'static str>),
+    /// The copies done: where each went, or why not.
+    Copied(Vec<Result<PathBuf, String>>),
+}
+
+/// The folder under `root` a file of `kind` goes in: the section's named
+/// `title`, else the first section of its kind (Footage, Music, Graphics).
+pub fn folder_for(root: &Path, kind: Kind, title: Option<&str>) -> Option<PathBuf> {
+    super::bin::SECTIONS.iter().find(|(t, k, _)| k.alike(kind) && title.is_none_or(|title| *t == title)).map(|(_, _, dirs)| root.join(dirs[0]))
+}
+
+/// Copies `file` into `dir` and says where it went. Copied under a hidden
+/// name first and renamed when whole, so the bin never lists half a file.
+/// A file of the same name and size there is taken as this one already
+/// copied; another of the same name gets a number. The original is only
+/// read (an archive's files are never changed).
+pub fn copy_in(file: &Path, dir: &Path) -> Result<PathBuf, String> {
+    let name = file.file_name().ok_or("no file name")?.to_string_lossy().into_owned();
+    std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    let size = std::fs::metadata(file).map_err(|e| format!("{name}: {e}"))?.len();
+    let (stem, ext) = match name.rsplit_once('.') {
+        Some((s, e)) if !s.is_empty() => (s.to_owned(), format!(".{e}")),
+        _ => (name.clone(), String::new()),
+    };
+    let mut target = dir.join(&name);
+    let mut n = 2;
+    while let Ok(there) = std::fs::metadata(&target) {
+        if there.len() == size {
+            return Ok(target);
+        }
+        target = dir.join(format!("{stem} ({n}){ext}"));
+        n += 1;
+    }
+    let part = dir.join(format!(".{}.part", target.file_name().unwrap_or_default().to_string_lossy()));
+    std::fs::copy(file, &part).and_then(|_| std::fs::rename(&part, &target)).map_err(|e| {
+        let _ = std::fs::remove_file(&part);
+        format!("{name}: {e}")
+    })?;
+    Ok(target)
 }
 
 /// Where a file is used in the edit, as a line: "cuts 2, 5 · Music · Overlay";
@@ -64,6 +108,7 @@ impl App {
             BinMsg::Toggle => {
                 self.bin.view = !self.bin.view;
                 self.bin.menu = None;
+                self.bin.copied = None;
                 // One view in the picture's place at a time.
                 if self.bin.view {
                     self.check.on = false;
@@ -76,12 +121,73 @@ impl App {
                 self.bin.menu = None;
                 return self.update(*m);
             }
+            BinMsg::Dropped(path) => return self.copy_files(vec![path], None),
+            BinMsg::AddTo(title) => {
+                let Some(&(_, kind, _)) = super::bin::SECTIONS.iter().find(|(t, _, _)| *t == title) else { return Task::none() };
+                let exts = match kind {
+                    Kind::Clip => super::bin::CLIP_EXT,
+                    Kind::Sound(_) => super::bin::SOUND_EXT,
+                    Kind::Picture => super::bin::PICTURE_EXT,
+                };
+                // Upper case too: the file dialog's filter is exact on Linux.
+                let exts: Vec<String> = exts.iter().flat_map(|e| [e.to_string(), e.to_uppercase()]).collect();
+                return Task::perform(
+                    async move { rfd::AsyncFileDialog::new().set_title(format!("Add to {title}")).add_filter(title, &exts).pick_files().await.map(|fs| fs.iter().map(|f| f.path().to_owned()).collect::<Vec<_>>()) },
+                    move |files| Message::BinView(BinMsg::CopyIn(files.unwrap_or_default(), Some(title))),
+                );
+            }
+            BinMsg::CopyIn(files, title) => return self.copy_files(files, title),
+            BinMsg::Copied(done) => {
+                self.bin.copying = self.bin.copying.saturating_sub(done.len());
+                let (ok, failed): (Vec<_>, Vec<_>) = done.into_iter().partition(Result::is_ok);
+                if let Some(Err(e)) = failed.into_iter().next() {
+                    self.error = Some(format!("Couldn't copy into the project: {e}"));
+                }
+                if !ok.is_empty() {
+                    self.bin.copied = Some(if ok.len() == 1 { "1 file added".to_owned() } else { format!("{} files added", ok.len()) });
+                }
+                return self.rescan_bin();
+            }
             BinMsg::Info(path, kind) => {
                 self.bin.menu = None;
                 return self.open_info(super::info::Of::File(matches!(kind, Kind::Sound(_))), path);
             }
         }
         Task::none()
+    }
+
+    /// Copies `files` into the project's folder: into the section named
+    /// `title`, else each into its kind's first section. A file already
+    /// inside the project's folder stays where it is.
+    fn copy_files(&mut self, files: Vec<PathBuf>, title: Option<&'static str>) -> Task<Message> {
+        if files.is_empty() {
+            return Task::none();
+        }
+        let Some(root) = self.bin.read.as_ref().map(|(_, r)| r.clone()) else {
+            self.error = Some("Save the project first: files are copied into its folder".to_owned());
+            return Task::none();
+        };
+        let mut jobs = Vec::new();
+        for file in files {
+            let name = file.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+            let Some(kind) = super::bin::kind_of(&file).filter(|_| file.is_file()) else {
+                self.error = Some(format!("{name}: not a clip, sound or picture"));
+                continue;
+            };
+            if file.starts_with(&root) {
+                continue;
+            }
+            match folder_for(&root, kind, title) {
+                Some(dir) => jobs.push((file, dir)),
+                None => self.error = Some(format!("{name} doesn't belong in {}", title.unwrap_or("the bin"))),
+            }
+        }
+        if jobs.is_empty() {
+            return self.rescan_bin();
+        }
+        self.bin.copying += jobs.len();
+        self.bin.copied = None;
+        Task::perform(super::blocking(move || jobs.iter().map(|(f, d)| copy_in(f, d)).collect::<Vec<_>>()), |done| Message::BinView(BinMsg::Copied(done)))
     }
 
     /// The bin in tiles, in the picture's place.
@@ -98,6 +204,11 @@ impl App {
         if let Some((_, root)) = &self.bin.read {
             head = head.push(text(root.display().to_string()).size(12).style(text::secondary));
         }
+        if self.bin.copying > 0 {
+            head = head.push(text(format!("Copying {} into the project…", if self.bin.copying == 1 { "a file".to_owned() } else { format!("{} files", self.bin.copying) })).size(13));
+        } else if let Some(note) = &self.bin.copied {
+            head = head.push(text(note.clone()).size(13).style(text::success));
+        }
         let head = head.push(space().width(Length::Fill)).push(size).push(refresh).push(close);
         let mut body = column![head].spacing(10);
 
@@ -106,15 +217,17 @@ impl App {
         }
         match &self.bin.read {
             None => body = body.push(text("Save the project to see its folder here.").size(13).style(text::secondary)),
+            // Every section, an empty one too: its «+» is where to add.
             Some((sections, _)) => {
-                for section in sections {
-                    body = body.push(rule::horizontal(1)).push(self.section_tiles(section.title, section.kind, &section.files));
+                for &(title, kind, _) in &super::bin::SECTIONS {
+                    let files = sections.iter().find(|s| s.title == title).map_or(&[][..], |s| &s.files[..]);
+                    body = body.push(rule::horizontal(1)).push(self.section_tiles(title, kind, files, true));
                 }
             }
         }
         let loaded = self.loaded_outside();
         if !loaded.is_empty() {
-            body = body.push(rule::horizontal(1)).push(self.section_tiles("Loaded clips", Kind::Clip, &loaded));
+            body = body.push(rule::horizontal(1)).push(self.section_tiles("Loaded clips", Kind::Clip, &loaded, false));
         }
         let view = mouse_area(container(scrollable(body.padding(14)).width(Length::Fill).height(Length::Fill)).width(Length::Fill).height(Length::Fill)).on_move(move |p| to(BinMsg::Pointer(p)));
         self.bin_menu_layer(view.into())
@@ -131,8 +244,15 @@ impl App {
     }
 
     /// A heading and its files as tiles, wrapping to the view's width.
-    fn section_tiles<'a>(&'a self, title: &'static str, kind: Kind, files: &[PathBuf]) -> Element<'a, Message> {
-        let head = text(format!("{title}  ·  {}", files.len())).size(15);
+    fn section_tiles<'a>(&'a self, title: &'static str, kind: Kind, files: &[PathBuf], add: bool) -> Element<'a, Message> {
+        let mut head = row![text(format!("{title}  ·  {}", files.len())).size(15)].spacing(8).align_y(Alignment::Center);
+        if add {
+            head = head.push(tip(
+                button(text("+").size(14)).padding([0, 8]).on_press(Message::BinView(BinMsg::AddTo(title))),
+                text(format!("Copy files into {title} (or drop them on the bin)")),
+                tooltip::Position::Right,
+            ));
+        }
         let tiles = row(files.iter().map(|f| self.tile(f, kind))).spacing(10).wrap().vertical_spacing(10);
         column![head, tiles].spacing(8).into()
     }
@@ -199,8 +319,8 @@ impl App {
 
 #[cfg(test)]
 mod tests {
-    use super::uses;
-    use crate::project::{Cut, Project};
+    use super::{Kind, copy_in, folder_for, uses};
+    use crate::project::{Cut, Project, SoundTrack};
     use std::path::{Path, PathBuf};
 
     #[test]
@@ -212,5 +332,39 @@ mod tests {
         assert_eq!(uses(&p, Path::new("b.mp4")).as_deref(), Some("cut 2"));
         assert_eq!(uses(&p, Path::new("song.mp3")).as_deref(), Some("Music"));
         assert_eq!(uses(&p, Path::new("other.mp4")), None);
+    }
+
+    #[test]
+    fn a_file_goes_in_its_sections_folder() {
+        let root = Path::new("/p");
+        assert_eq!(folder_for(root, Kind::Clip, None), Some(PathBuf::from("/p/01_footage")));
+        assert_eq!(folder_for(root, Kind::Clip, Some("External video")), Some(PathBuf::from("/p/06_external")));
+        assert_eq!(folder_for(root, Kind::Sound(SoundTrack::Music), Some("Sound effects")), Some(PathBuf::from("/p/07_sfx")));
+        assert_eq!(folder_for(root, Kind::Picture, None), Some(PathBuf::from("/p/08_graphics")));
+        // A sound picked for the Graphics section doesn't belong there.
+        assert_eq!(folder_for(root, Kind::Sound(SoundTrack::Music), Some("Graphics")), None);
+    }
+
+    #[test]
+    fn copying_in_keeps_the_original_and_numbers_a_clash() {
+        let dir = std::env::temp_dir().join(format!("omnix-copy-in-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let (src, other, into) = (dir.join("src/song.mp3"), dir.join("other/song.mp3"), dir.join("p/02_audio/music"));
+        for (f, body) in [(&src, &b"abc"[..]), (&other, &b"abcdef"[..])] {
+            std::fs::create_dir_all(f.parent().unwrap()).unwrap();
+            std::fs::write(f, body).unwrap();
+        }
+        assert_eq!(copy_in(&src, &into), Ok(into.join("song.mp3")));
+        // The same file again: taken as already there, not copied twice.
+        assert_eq!(copy_in(&src, &into), Ok(into.join("song.mp3")));
+        // Another of the same name: a number, the first left alone.
+        assert_eq!(copy_in(&other, &into), Ok(into.join("song (2).mp3")));
+        assert_eq!(std::fs::read(into.join("song.mp3")).unwrap(), b"abc");
+        assert_eq!(std::fs::read(&src).unwrap(), b"abc");
+        // No half copy left behind.
+        let mut names: Vec<_> = std::fs::read_dir(&into).unwrap().map(|e| e.unwrap().file_name().into_string().unwrap()).collect();
+        names.sort();
+        assert_eq!(names, ["song (2).mp3", "song.mp3"]);
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 }

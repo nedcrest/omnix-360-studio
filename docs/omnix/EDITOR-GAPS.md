@@ -1224,6 +1224,11 @@ Premiere, Resolve). A file chosen in the bin plays in a viewer of its own
 beside the edit's, with its own in and out points; the add buttons put
 the marked span on the timeline. This is the «Перегляд з біна у вікні
 Omnix» card made concrete (today a clip previews in ffplay's own window).
+In and out points (user, 2026-11-04): several segments per file, the
+same as the contact sheet's marks (`{t, end, role, note}`), which Omnix
+reads in and shows on the bin player's strip; a segment picked there is
+what the add buttons add; I / O set a new one. Both ways with the sheet
+is gap 72e (`footage-agent's folder/docs/CONTACT-SHEET-NEXT.md`, section E).
 The skimmer keeps a smaller job: on the timeline, a look at a frame
 without moving the playhead; in the bin the source viewer replaces it.
 Milestone «Матеріал і бін».
@@ -1247,6 +1252,9 @@ Kept in a context of its own in footage-agent:
 - 72b: place a ready song under clips in the sheet, exported by «→
   Omnix» onto the Music lane, Omnix's ducking doing the rest;
 - 72c: the sheet's look and working flow, to think through together;
+- 72e: the sheet's in/out segments in Omnix: shown on the bin player's
+  strip, used by its add buttons, set with I / O; written back to the
+  sheet (proposed) — goes with 71a;
 - 72d: what an AI editor wants in `notes.json` (a brainstorm there:
   spans, story order, ids for marks, closed decision words, music as
   data, a schema, a compact text view).

@@ -11,8 +11,10 @@
 
 pub mod edit;
 pub mod ops;
+pub mod store;
 
 pub use edit::Edit;
+pub use store::{Store, StoreError};
 
 pub use ops::{ClipOp, DayOp, MarkOp, Op, OpError, Outcome, RoleOp};
 

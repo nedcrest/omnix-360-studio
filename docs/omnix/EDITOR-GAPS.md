@@ -90,6 +90,7 @@ done in part stays here until its last card is done.
 | 68 | Curves and colour by hue | below |
 | 69 | Scopes: a histogram and a waveform of the picture | below |
 | 70 | The text and overlay lanes as groups of several lanes | below |
+| 71 | Two viewers: the source and the edit; effects tried beside the original, then applied | below |
 
 ## Open gaps
 
@@ -1192,6 +1193,36 @@ top. Subtitles (gap 16) get a lane of their own by default. No format
 change: lanes gain an optional `name`. Milestone «Колір і текст» (text
 and titles), and the overlay side with «B-roll і групи».
 
+### 71. Two viewers: the source and the edit; effects tried beside the original, then applied — idea (user, 2026-11-04)
+
+User, on the skimmer card (gaps 2, 9): "I don't know if it'll be needed,
+whether it's worth anything. Wouldn't it be better here to add a double
+viewer: from the timeline and from a specific chosen file. And, as in
+Kdenlive, apply effects on a separate screen at the side, to compare with
+the original. A toggle: off, editing writes straight into the timeline;
+with the second screen open, effects are added only when you press
+Apply, and their values move as separate line-rectangles into the
+«effects» group, with curves of the values."
+
+**71a. Two viewers** (source monitor and program monitor, as in Kdenlive,
+Premiere, Resolve). A file chosen in the bin plays in a viewer of its own
+beside the edit's, with its own in and out points; the add buttons put
+the marked span on the timeline. This is the «Перегляд з біна у вікні
+Omnix» card made concrete (today a clip previews in ffplay's own window).
+The skimmer keeps a smaller job: on the timeline, a look at a frame
+without moving the playhead; in the bin the source viewer replaces it.
+Milestone «Матеріал і бін».
+
+**71b. Effects tried beside the original.** A toggle in the Effects
+panel: off (the default), changes write into the edit at once, as today.
+On, the second viewer shows the cut before and the first after, and
+nothing reaches the edit until Apply; then each effect's values land on
+the effects group (gap 39's automation lanes) as a block with its value
+curve. Needs gap 39's lanes for «as separate lines». Milestone «Колір і
+текст». Note: the effects split line (`SplitDrag`) already compares
+before and after inside one viewer; 71b adds the side by side and the
+staging.
+
 ## Format rule for all of these
 
 New fields only, each `#[serde(default, skip_serializing_if = …)]`, so every
@@ -1212,11 +1243,10 @@ whenever a better grouping shows. `ROADMAP.md` shows the same as cards (field
    and its TODO puts sound right after the cuts.
 2. **Зручний таймлайн** (timeline ease, runs beside 1 in small packs): 10
    two modes → 9 pack 1 (with 7) → 5 markers → 9 click routes → 9 snapping
-   → 9 skimmer (needs 10 for S) → 9 action bar → 9 typed time and UI scale
+   → 9 skimmer on the timeline (needs 10 for S; in the bin 71a replaces it) → 9 action bar → 9 typed time and UI scale
    → 27 overview strip, centred playhead option.
 3. **Матеріал і бін** (material in): 34 import from devices in the studio; 1 + 2 bin buttons (done) → bin
-   preview in Omnix's viewer (designed with 10: the viewer gets three
-   states) → bin grid, ratings from `notes.json`, LUTs, E/W → «new project
+   preview in Omnix's viewer as a second viewer (71a; designed with 10) → bin grid, ratings from `notes.json`, LUTs, E/W → «new project
    with folders» in Omnix.
 4. **Розуміння матеріалу** (footage-agent, can run beside the Omnix work):
    29 speech transcription → 30 who is in the frame (names from Immich).
@@ -1234,7 +1264,7 @@ whenever a better grouping shows. `ROADMAP.md` shows the same as cards (field
    placement → 25d stingers («перебивки») → 25c templates → 25b edge
    transitions → 25e 360 looks. Stingers come early because the user
    already has stinger clips (film burn, white noise).
-8. **Колір і текст**: 69 scopes → 14 levels → 68 curves and hue → 15 bars → 26 glow/blur → 6 vignette shapes →
+8. **Колір і текст**: 69 scopes → 14 levels → 68 curves and hue → 71b effects beside the original (after 39) → 15 bars → 26 glow/blur → 6 vignette shapes →
    16 subtitles (needs 29) → text-based editing (needs 29).
 9. **Швидкість і автоматизація** (gap 31): constant speed per cut with
    its sound following (atempo), measured for drift → speed ramps →

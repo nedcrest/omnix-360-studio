@@ -9,7 +9,10 @@
 //! for now) keep adding fields; none may be lost here. What a program
 //! reads is the typed view over it ([`Sheet`]).
 
+pub mod edit;
 pub mod ops;
+
+pub use edit::Edit;
 
 pub use ops::{ClipOp, DayOp, MarkOp, Op, OpError, Outcome, RoleOp};
 

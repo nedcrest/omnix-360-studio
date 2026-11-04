@@ -10,10 +10,12 @@
 //! reads is the typed view over it ([`Sheet`]).
 
 pub mod edit;
+pub mod layout;
 pub mod ops;
 pub mod store;
 
 pub use edit::Edit;
+pub use layout::Layout;
 pub use store::{Store, StoreError};
 
 pub use ops::{ClipOp, DayOp, MarkOp, Op, OpError, Outcome, RoleOp};

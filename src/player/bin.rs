@@ -163,8 +163,10 @@ pub struct Bin {
     /// Clips being added as one segment of them (the bin player's picked
     /// one), till they're in.
     pub spans: HashMap<PathBuf, (f64, f64)>,
-    /// The project folder's contact sheet, if it has one (`notes.rs`).
+    /// The project folder's contact sheet, if it has one (`notes.rs`), and
+    /// the roles a segment can have (its own list, or the default one).
     pub sheet: Option<crate::notes::Sheet>,
+    pub roles: Vec<crate::notes::Role>,
     /// The clip in the bin view's own player (`bin_player.rs`).
     pub source: Option<super::bin_player::Source>,
     /// Loaded clips from outside the folder taken out of the bin's list
@@ -273,6 +275,7 @@ impl App {
     pub(super) fn rescan_bin(&mut self) -> Task<Message> {
         self.bin.read = self.project.as_deref().and_then(root).map(|r| (scan(&r), r));
         self.bin.sheet = self.bin.read.as_ref().and_then(|(_, r)| crate::notes::Sheet::of(r));
+        self.bin.roles = self.bin.sheet.as_ref().map_or_else(crate::notes::Sheet::default_roles, crate::notes::Sheet::roles);
         self.read_bin_meta()
     }
 

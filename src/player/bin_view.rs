@@ -407,8 +407,25 @@ impl App {
                         Some(e) => format!("{} – {}", fine_clock(m.start), fine_clock(e)),
                         None => fine_clock(m.start),
                     };
-                    let head = [m.role.clone(), Some(span)].into_iter().flatten().collect::<Vec<_>>().join(" · ");
-                    col = col.push(column![text(head).size(13).color(super::bin_player::role_colour(m.role.as_deref())), text(m.note.clone()).size(13)].spacing(2));
+                    // Its role and note, as the contact sheet sets them.
+                    let none = crate::notes::Role { key: String::new(), name: "—".to_owned() };
+                    let choices: Vec<crate::notes::Role> = std::iter::once(none.clone()).chain(self.bin.roles.iter().cloned()).collect();
+                    let current = m.role.as_ref().and_then(|r| choices.iter().find(|c| &c.key == r).cloned()).unwrap_or(none);
+                    let role = iced::widget::pick_list(choices, Some(current), |r: crate::notes::Role| Message::BinPlayer(super::bin_player::SourceMsg::Role((!r.key.is_empty()).then_some(r.key))))
+                        .text_size(13)
+                        .placeholder("role…");
+                    let draft = source.and_then(|s| s.draft.clone()).unwrap_or_else(|| m.note.clone());
+                    let note = iced::widget::text_input("what happens here", &draft)
+                        .size(13)
+                        .on_input(|t| Message::BinPlayer(super::bin_player::SourceMsg::Note(t)))
+                        .on_submit(Message::BinPlayer(super::bin_player::SourceMsg::NoteSave));
+                    let colour = super::bin_player::role_colour(m.role.as_deref());
+                    col = col.push(row![
+                        container(space()).width(4).height(28).style(move |_| container::background(colour)),
+                        text(span).size(13),
+                        role,
+                    ].spacing(8).align_y(Alignment::Center));
+                    col = col.push(note);
                 }
             }
             Kind::Clip if p.frames.is_empty() => col = col.push(text("Reading frames…").size(12).style(text::secondary)),

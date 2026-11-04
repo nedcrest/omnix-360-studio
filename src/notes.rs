@@ -28,6 +28,33 @@ pub struct Segment {
     pub note: String,
 }
 
+/// A role a segment can have: its key in the sheet and its name there
+/// ("перебивка / cutaway"), as the sheet's own list shows it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Role {
+    pub key: String,
+    pub name: String,
+}
+
+impl std::fmt::Display for Role {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.name)
+    }
+}
+
+/// The sheet's own roles (footage-agent's `report.html`): the function of
+/// a shot in the edit, not what's in it. The English word is the trade's.
+const ROLES: [(&str, &str, &str); 8] = [
+    ("talk", "розмова", "sync"),
+    ("establish", "загальний", "establishing"),
+    ("broll", "фон", "B-roll"),
+    ("detail", "деталь", "insert"),
+    ("cut", "перебивка", "cutaway"),
+    ("action", "дія", "action"),
+    ("reveal", "ревіл", "reveal"),
+    ("reaction", "реакція", "reaction"),
+];
+
 /// A project folder's sheet: where its file is and how its clips are keyed.
 #[derive(Debug, Clone)]
 pub struct Sheet {
@@ -69,6 +96,59 @@ impl Sheet {
         Ok(marks_of(&self.read()?, &key))
     }
 
+    /// The sheet's own roles, for a project without a sheet.
+    pub fn default_roles() -> Vec<Role> {
+        ROLES.iter().map(|(k, t, en)| Role { key: (*k).to_owned(), name: format!("{t} / {en}") }).collect()
+    }
+
+    /// The roles to pick from: the sheet's own, then the user's added in it
+    /// (`roles`: key, title, en).
+    pub fn roles(&self) -> Vec<Role> {
+        let mut roles = Self::default_roles();
+        if let Ok(notes) = self.read()
+            && let Some(own) = notes["roles"].as_array()
+        {
+            for r in own {
+                let Some(key) = r["key"].as_str() else { continue };
+                let title = r["title"].as_str().unwrap_or(key);
+                let name = match r["en"].as_str().filter(|e| !e.is_empty()) {
+                    Some(en) => format!("{title} / {en}"),
+                    None => title.to_owned(),
+                };
+                if !roles.iter().any(|x| x.key == key) {
+                    roles.push(Role { key: key.to_owned(), name });
+                }
+            }
+        }
+        roles
+    }
+
+    /// Gives the mark `was` names a role (none removes it) and a note, and
+    /// saves the sheet. Says where the mark is; an error if the sheet moved
+    /// or removed it meanwhile.
+    pub fn describe(&self, file: &Path, was: &Segment, role: Option<&str>, note: &str) -> Result<usize> {
+        let Some(key) = self.key(file) else { bail!("{} isn't in the contact sheet's archive", file.display()) };
+        let mut notes = self.read()?;
+        let m = notes["clips"][key.as_str()]["marks"].get_mut(was.index).filter(|m| m["t"].as_f64() == Some(was.start) && m["end"].as_f64() == was.end);
+        let Some(m) = m.and_then(Value::as_object_mut) else { bail!("the mark was changed in the contact sheet meanwhile: pick it again") };
+        match role {
+            Some(r) => m.insert("role".into(), json!(r)),
+            None => m.remove("role"),
+        };
+        m.insert("note".into(), json!(note));
+        self.save(&notes)?;
+        Ok(was.index)
+    }
+
+    /// Writes `notes` over the sheet, its last version kept beside it.
+    fn save(&self, notes: &Value) -> Result<()> {
+        let mut text = serde_json::to_string_pretty(notes)?;
+        text.push('\n');
+        // The sheet's server keeps the last version beside it; so do we.
+        std::fs::copy(&self.file, self.file.with_extension("json.bak")).with_context(|| format!("backing up {}", self.file.display()))?;
+        crate::fsutil::replace_file(&self.file, text.as_bytes())
+    }
+
     /// Sets a segment on `file` from `start` to `end` and saves the sheet:
     /// the mark `was` names moved, if it's still there as it was, else a new
     /// mark. Says where the mark now is in the clip's list.
@@ -76,11 +156,7 @@ impl Sheet {
         let Some(key) = self.key(file) else { bail!("{} isn't in the contact sheet's archive", file.display()) };
         let mut notes = self.read()?;
         let index = set_mark(&mut notes, &key, was, start, end)?;
-        let mut text = serde_json::to_string_pretty(&notes)?;
-        text.push('\n');
-        // The sheet's server keeps the last version beside it; so do we.
-        std::fs::copy(&self.file, self.file.with_extension("json.bak")).with_context(|| format!("backing up {}", self.file.display()))?;
-        crate::fsutil::replace_file(&self.file, text.as_bytes())?;
+        self.save(&notes)?;
         Ok(index)
     }
 }
@@ -186,6 +262,15 @@ mod tests {
         assert_eq!(s.set(&file, Some(&marks[0]), 9.0, 8.0).unwrap(), 2);
         let after = s.segments(&file).unwrap();
         assert_eq!((after[2].start, after[2].end), (8.0, Some(9.0)));
+
+        // A role and a note given; a role taken away.
+        let m = &s.segments(&file).unwrap()[0];
+        s.describe(&file, m, Some("cut"), "крик").unwrap();
+        let m = &s.segments(&file).unwrap()[0];
+        assert_eq!((m.role.as_deref(), m.note.as_str()), (Some("cut"), "крик"));
+        s.describe(&file, m, None, "крик").unwrap();
+        assert_eq!(s.segments(&file).unwrap()[0].role, None);
+        assert!(s.roles().iter().any(|r| r.key == "cut" && r.name == "перебивка / cutaway"));
 
         // A clip the sheet has no entry for gets one.
         let new = dir.join("archive/2026-08-22/y.MP4");

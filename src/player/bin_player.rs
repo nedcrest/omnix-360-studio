@@ -31,6 +31,8 @@ pub struct Source {
     pub marks: Vec<Segment>,
     pub picked: Option<usize>,
     pub mark_in: Option<f64>,
+    /// The picked segment's note as being typed, till it's saved.
+    pub draft: Option<String>,
 }
 
 /// The sheet's role colours (footage-agent's `report.html`), so a segment
@@ -70,6 +72,11 @@ pub enum SourceMsg {
     /// O: the picked segment's end to the playhead, else a new segment from
     /// the in point (or the start) to it; false (Alt+O) as Alt+I.
     Out(bool),
+    /// The picked segment's role chosen (none: «—»), saved at once.
+    Role(Option<String>),
+    /// Its note typed, and saved (Enter, or picking another segment).
+    Note(String),
+    NoteSave,
 }
 
 impl App {
@@ -80,7 +87,7 @@ impl App {
             return Task::none();
         }
         let marks = self.sheet_marks(&path);
-        let source = |clip| Source { path: path.clone(), clip, marks, picked: None, mark_in: None };
+        let source = |clip| Source { path: path.clone(), clip, marks, picked: None, mark_in: None, draft: None };
         if let Some(media) = self.library.iter().find(|m| m.input == path) {
             let clip = self.source_clip(media.clone());
             self.bin.source = Some(source(Some(clip)));
@@ -187,8 +194,20 @@ impl App {
                     }
                 }
             }
+            SourceMsg::Role(role) => {
+                let note = self.bin.source.as_ref().and_then(|s| s.draft.clone().or_else(|| s.picked.and_then(|i| s.marks.get(i)).map(|m| m.note.clone())));
+                self.describe_picked(role, note);
+            }
+            SourceMsg::Note(text) => {
+                if let Some(s) = &mut self.bin.source {
+                    s.draft = Some(text);
+                }
+            }
+            SourceMsg::NoteSave => self.save_draft(),
             SourceMsg::Pick(i) => {
+                self.save_draft();
                 let Some(s) = &mut self.bin.source else { return Task::none() };
+                s.draft = None;
                 s.picked = i.filter(|&i| i < s.marks.len());
                 // To its start, as the strip shows it picked.
                 if let Some(start) = s.picked.map(|i| s.marks[i].start)
@@ -244,6 +263,43 @@ impl App {
                     None => s.marks.push(m),
                 }
                 s.picked = Some(index);
+            }
+        }
+    }
+
+    /// Saves the note being typed for the picked segment, if any.
+    fn save_draft(&mut self) {
+        let Some(s) = &self.bin.source else { return };
+        let Some(draft) = s.draft.clone() else { return };
+        let role = s.picked.and_then(|i| s.marks.get(i)).and_then(|m| m.role.clone());
+        self.describe_picked(role, Some(draft));
+    }
+
+    /// Gives the picked segment `role` and `note` (its own kept if none):
+    /// in the contact sheet, or here only without one.
+    fn describe_picked(&mut self, role: Option<String>, note: Option<String>) {
+        let Some(s) = &self.bin.source else { return };
+        let Some(m) = s.picked.and_then(|i| s.marks.get(i)).cloned() else { return };
+        let note = note.unwrap_or_else(|| m.note.clone());
+        let path = s.path.clone();
+        let written = match &self.bin.sheet {
+            Some(sheet) if sheet.key(&path).is_some() => Some(sheet.describe(&path, &m, role.as_deref(), &note)),
+            _ => None,
+        };
+        if let Some(Err(e)) = written {
+            self.error = Some(format!("Couldn't write the contact sheet: {e:#}"));
+            return;
+        }
+        let fresh = written.is_some().then(|| self.sheet_marks(&path));
+        let Some(s) = &mut self.bin.source else { return };
+        s.draft = None;
+        match fresh {
+            Some(marks) => s.marks = marks,
+            None => {
+                if let Some(x) = s.marks.get_mut(m.index) {
+                    x.role = role;
+                    x.note = note;
+                }
             }
         }
     }

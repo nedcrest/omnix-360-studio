@@ -104,6 +104,40 @@ pub(crate) enum Target {
     Clips { dir: PathBuf, name: String, handles: f64, graded: bool },
 }
 
+/// Per cut: its clip's pipeline, its start (on a frame, `handles` early)
+/// and how many frames.
+fn frame_plan(project: &project::Project, pipelines: &[Pipeline], of_cut: &[usize], handles: f64) -> Result<Vec<(usize, f64, usize)>> {
+    project
+        .cuts
+        .iter()
+        .zip(of_cut)
+        .map(|(cut, &i)| {
+            let p = &pipelines[i];
+            let from = (cut.start - handles).max(0.0);
+            let end = (cut.end + handles).min(ffmpeg::duration(&cut.input)?);
+            if end <= from {
+                bail!("the cut from {} s starts after {} ends", cut.start, cut.input.display());
+            }
+            // Count frames over the span asked for, not from the frame the
+            // start snaps to: snapping 14 s forward to 14.014 left `-d 5` at
+            // 149 frames.
+            Ok((i, p.snap(from), ((end - from) * p.fps).round().max(1.0) as usize))
+        })
+        .collect()
+}
+
+/// Each file the export writes and the cuts it holds: one for the whole
+/// edit, or one per cut in a folder made for them.
+fn files(target: &Target, format: ffmpeg::Format, cuts: usize) -> Result<Vec<(PathBuf, std::ops::Range<usize>)>> {
+    Ok(match target {
+        Target::One(path) => vec![(path.clone(), 0..cuts)],
+        Target::Clips { dir, name, .. } => {
+            std::fs::create_dir_all(dir).with_context(|| format!("creating {}", dir.display()))?;
+            (0..cuts).map(|k| (dir.join(format!("{name} - {:03}.{}", k + 1, format.extension())), k..k + 1)).collect()
+        }
+    })
+}
+
 /// Renders `project` as `out` says, with sound, and returns the files
 /// written. Each clip is set up once however many cuts use it.
 /// `progress(done, total)` hears of every frame; an error from it (a
@@ -136,19 +170,7 @@ pub(crate) fn export(project: &project::Project, opts: &StitchOpts, out: &Export
         Target::One(_) => 0.0,
         Target::Clips { handles, .. } => handles.max(0.0),
     };
-    // Per cut: its clip's pipeline, start (on a frame) and frame count.
-    let mut plan = Vec::with_capacity(project.cuts.len());
-    for (cut, &i) in project.cuts.iter().zip(&of_cut) {
-        let p = &pipelines[i];
-        let from = (cut.start - handles).max(0.0);
-        let end = (cut.end + handles).min(ffmpeg::duration(&cut.input)?);
-        if end <= from {
-            bail!("the cut from {} s starts after {} ends", cut.start, cut.input.display());
-        }
-        // Count frames over the span asked for, not from the frame the start
-        // snaps to: snapping 14 s forward to 14.014 left `-d 5` at 149 frames.
-        plan.push((i, p.snap(from), ((end - from) * p.fps).round().max(1.0) as usize));
-    }
+    let plan = frame_plan(project, &pipelines, &of_cut, handles)?;
     let fps = pipelines[0].fps;
     if pipelines.iter().any(|p| (p.fps - fps).abs() > 0.01) {
         eprintln!("the clips' frame rates differ; exporting at {fps:.3} fps");
@@ -158,14 +180,7 @@ pub(crate) fn export(project: &project::Project, opts: &StitchOpts, out: &Export
     // never more than either cut has to give.
     let frames: Vec<usize> = plan.iter().map(|p| p.2).collect();
     let overlap = if matches!(out.target, Target::One(_)) { overlaps(&frames, &project.cuts.iter().map(|c| c.crossfade).collect::<Vec<_>>(), fps) } else { vec![0; plan.len()] };
-    // Each file and the cuts it holds.
-    let files: Vec<(PathBuf, std::ops::Range<usize>)> = match &out.target {
-        Target::One(path) => vec![(path.clone(), 0..plan.len())],
-        Target::Clips { dir, name, .. } => {
-            std::fs::create_dir_all(dir).with_context(|| format!("creating {}", dir.display()))?;
-            (0..plan.len()).map(|k| (dir.join(format!("{name} - {:03}.{}", k + 1, out.format.extension())), k..k + 1)).collect()
-        }
-    };
+    let files = files(&out.target, out.format, plan.len())?;
     let total = plan.iter().map(|p| p.2).sum();
     let mut done = 0;
     let mut written = Vec::with_capacity(files.len());

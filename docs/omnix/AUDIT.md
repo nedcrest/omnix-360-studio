@@ -24,8 +24,8 @@ In Omnix:
 
 ## Tangled
 
-- [ ] `Marks::update` 241 lines; `export()` 159; `cli::run` 157 (preview
-      and export logic inline); Dailix `update` 243.
+- [ ] `Marks::update` 241 lines (with the timeline's `Hit`); Dailix's
+      `update` 243.
 - [ ] The export reaches into `player` for the GPU (`render`, `gpu`): to `src/gpu/`.
 
 ## Looked at and kept

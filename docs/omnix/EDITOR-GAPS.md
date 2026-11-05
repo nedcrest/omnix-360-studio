@@ -1319,7 +1319,7 @@ Milestone «Матеріал і бін». Its first piece, the contact
 sheet's core, was built 2026-11-04 (`dailix/docs/SHEET-CORE.md`), and
 Omnix's bin runs on it (`98f2795`).
 
-### 75. A cut's flags from the contact sheet as markers on the edit — built 2026-11-05 with from-sheet, waiting for the user's check (user, 2026-11-05)
+### 75. A cut's flags from the contact sheet as markers on the edit — done 2026-11-05 with from-sheet, confirmed by the user (user, 2026-11-05)
 
 In Dailix a flag (F) is a note to self, never material: «a meme here»,
 «find a laughing sound». When a segment goes into an Omnix edit, the

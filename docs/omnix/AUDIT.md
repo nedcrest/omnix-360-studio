@@ -9,9 +9,6 @@ cost is duplication and drift.
 
 ## Bugs found on the way (first)
 
-- [ ] Bin panel lists folder clips twice under «Loaded clips»: use
-      `loaded_outside()` (`bin.rs` `bin_panel`).
-- [ ] Bin add tooltips say "music lane" for SFX and voice-over (`bin.rs`).
 - [ ] Timeline: press and hover test what's under the pointer in different
       orders (level tag vs fade knob): the cursor lies (`timeline.rs`
       `Marks::update` / `mouse_interaction`; `OverlayLane` too).

@@ -5,7 +5,8 @@
 //! Each file shows a picture (a frame of a clip, the picture itself) and
 //! its length. A click previews it: a clip's frames in the bin's preview
 //! strip, a sound heard. "+" adds it where its kind goes: a clip as a cut,
-//! a sound on the music lane at the playhead, a picture over the picture.
+//! a sound on its section's lane (music, SFX, voice-over), a picture over
+//! the picture.
 //!
 //! The project's folder is the one holding the project file, or the one
 //! above it when the file sits in a `04_project` folder: the layout
@@ -485,11 +486,9 @@ impl App {
             body = body.push(self.preview_box(p));
         }
 
-        // The clips already loaded, wherever they live: a project's footage
-        // is often in an archive outside its folder.
-        let mut loaded: Vec<PathBuf> = self.library.iter().map(|m| m.input.clone()).filter(|p| !self.bin.hidden.contains(p)).collect();
-        loaded.sort();
-        loaded.dedup();
+        // The clips already loaded from outside the folder (an archive's):
+        // the folder's own are listed under their sections.
+        let loaded = self.loaded_outside();
 
         match &self.bin.read {
             None => body = body.push(text("Save the project to see its folder here.").size(13).style(text::secondary)),
@@ -566,26 +565,26 @@ impl App {
 /// A file's add buttons: at the end, at the playhead, at the join (a
 /// picture only at the playhead).
 pub(super) fn add_buttons<'a>(path: &Path, kind: Kind) -> Element<'a, Message> {
-    let add = |icon: &'static [u8], place: Place, hint: &'static str| -> Element<'a, Message> {
+    let add = |icon: &'static [u8], place: Place, hint: String| -> Element<'a, Message> {
         let icon = iced::widget::svg(iced::widget::svg::Handle::from_memory(icon)).width(16).height(16);
         tip(button(icon).padding(4).on_press(Message::BinAdd(path.to_owned(), kind, place)), text(hint), tooltip::Position::Left)
     };
     match kind {
         Kind::Clip => row![
-            add(ADD_END, Place::End, "Add at the end of the edit"),
-            add(ADD_HERE, Place::Playhead, "Add at the playhead: the cut there is split around it"),
-            add(ADD_JOIN, Place::Join, "Add at the join of cuts nearest the playhead"),
+            add(ADD_END, Place::End, "Add at the end of the edit".into()),
+            add(ADD_HERE, Place::Playhead, "Add at the playhead: the cut there is split around it".into()),
+            add(ADD_JOIN, Place::Join, "Add at the join of cuts nearest the playhead".into()),
         ]
         .spacing(2)
         .into(),
-        Kind::Sound(_) => row![
-            add(ADD_END, Place::End, "Add on the music lane after the last song"),
-            add(ADD_HERE, Place::Playhead, "Add on the music lane at the playhead"),
-            add(ADD_JOIN, Place::Join, "Add on the music lane at the join of cuts nearest the playhead"),
+        Kind::Sound(which) => row![
+            add(ADD_END, Place::End, format!("Add on the {} lane after its last sound", which.name())),
+            add(ADD_HERE, Place::Playhead, format!("Add on the {} lane at the playhead", which.name())),
+            add(ADD_JOIN, Place::Join, format!("Add on the {} lane at the join of cuts nearest the playhead", which.name())),
         ]
         .spacing(2)
         .into(),
-        Kind::Picture => add(ADD_HERE, Place::Playhead, "Add over the picture at the playhead"),
+        Kind::Picture => add(ADD_HERE, Place::Playhead, "Add over the picture at the playhead".into()),
     }
 }
 

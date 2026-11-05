@@ -370,11 +370,7 @@ impl App {
         let frames = Task::perform(
             blocking({
                 let path = path.clone();
-                // All at once: a frame of 2.7K HEVC takes about a second.
-                move || {
-                    use rayon::prelude::*;
-                    (1..=PREVIEW_FRAMES).into_par_iter().filter_map(|i| frame(&path, duration * (i as f64 - 0.5) / PREVIEW_FRAMES as f64, 640)).collect::<Vec<_>>()
-                }
+                move || frames(&path, duration, 640)
             }),
             move |frames| Message::BinFrames(path.clone(), frames),
         );

@@ -325,7 +325,7 @@ marks, and beats (gap 57).
 The TODO: "a cut doesn't land on the beat", found by ear. Find the music's
 beats (onset or beat tracking: ffmpeg has no beat tracker, so a small Rust
 onset detector or footage-agent's Python with librosa or aubio), list the
-cuts more than N ms off a beat (`rosmo360 check` gains a `beat` rule), and
+cuts more than N ms off a beat (`omnix check` gains a `beat` rule), and
 draw the beats as marks on the music lane that cuts snap to (needs 5 and
 the snapping pack of 9).
 
@@ -637,7 +637,7 @@ shape, not only its ends.
 
 User: "object tracking" (recalled with the speed ideas; no detail yet).
 
-What exists: `rosmo360 track` and the colour-track picker follow one
+What exists: `omnix track` and the colour-track picker follow one
 **colour** in a 360 clip and key the view to it (`src/track.rs`). It
 works on a jacket or a tent; it loses a subject in a crowd of similar
 colours, and does nothing for a flat video.
@@ -948,7 +948,7 @@ hang here too)". So gap 10 is the base, not the end; milestone
 **What there is (code facts).** The Framing switch (gap 10) with free
 look, view keyframes and their eases, stabilisation modes, projections
 (perspective to little planet, typed angles), Follow: the selfie stick
-(from the attitude) or a colour track (`rosmo360 track`, `src/track.rs`);
+(from the attitude) or a colour track (`omnix track`, `src/track.rs`);
 ordinary videos framed by pan and zoom (`view::Crop`). Every view change
 is an op (`KeyOp::View`/`Follow`, OPS-API), so whatever comes next can
 key the view the same way.
@@ -1336,7 +1336,7 @@ cut (user, 2026-11-05: «move a video's flags with it»): moved with the
 cut, kept on its frame through a trim (hidden past the cut's ends, back
 when trimmed out again), carried by both halves of a split. Must stay
 so; `markers_are_set_noted_moved_and_removed_by_time` checks it.
-Built with `rosmo360 from-sheet` (`src/from_sheet.rs`, `f0b37ed`): a Dailix
+Built with `omnix from-sheet` (`src/from_sheet.rs`, `f0b37ed`): a Dailix
 project's marking made into an edit by footage-agent's «→ Omnix» rules,
 a clip's flags inside a cut its markers; Dailix's «→ Omnix» by each day
 calls it. The bin also lists a section's subfolders (Dailix's days,
@@ -1347,16 +1347,16 @@ id (a marker could carry it). Milestone «Матеріал і бін».
 
 ### 76. The program's name: rosmo360 → omnix — later (user, 2026-11-05)
 
-The binary is still upstream's `rosmo360`. To do later, as one change,
+The binary is still upstream's `omnix`. To do later, as one change,
 because the name is in 34 files across three repos:
 - the Cargo package and binary (`Cargo.toml`), and with it the library's
   crate name Dailix uses (`rosmo360::viewer`, `rosmo360::from_sheet`);
 - the settings and cache folders (`settings.rs`, `cache.rs`:
-  `~/.config/rosmo360`, the clip cache): moved or read from the old
+  `~/.config/omnix`, the clip cache): moved or read from the old
   place once, so nothing set or cached is lost;
 - `packaging/` (desktop entry, icon names, Flatpak, macOS, Windows);
 - the CLI's examples and docs; `tests/cli.rs`;
-- footage-agent's `export/omnix.py` (`app()` looks for `rosmo360`) and
+- footage-agent's `export/omnix.py` (`app()` looks for `omnix`) and
   Dailix's `omnix()` (OMNIX_BIN, PATH, the sibling build);
 - the desktop entries installed on this machine.
 Upstream (rOsmo360) is unchanged since our fork point; merging from it
@@ -1415,6 +1415,12 @@ this with you, with Claude: that belongs there."
 - README's credits and licence notes the same.
 Done together with the rename (gap 76): name, icon, footer and start
 picture are one change of face. Milestone «Інші платформи» (packaging).
+Done 2026-11-05: the user's pick A2 (a sphere over a timeline, a playhead
+through it), `packaging/omnix.svg` and the PNG/ICO made from it; the
+footer; README's credits. Left for publishing: the screenshots
+(`docs/screenshot.png`, `docs/guide/`) are upstream's, all rights
+reserved, to be taken again in Omnix; the app id and release repository
+are placeholders (`local.omnix.Omnix`, `REPO=` in `install.sh`).
 
 ## Format rule for all of these
 

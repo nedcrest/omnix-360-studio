@@ -1,12 +1,12 @@
-# rOsmo360 user guide
+# Omnix user guide
 
-rOsmo360 plays and edits 360° video from the **DJI Osmo 360**. It reads the camera's `.OSV` files directly, stitches the two lenses, keeps the horizon level, and lets you look around, cut clips together, move the camera's view with keyframes, add crossfades, music, colour effects, titles and logos, and export a finished video. Footage filmed in D-Log M is recognised and turned into normal colours with DJI's LUT. Ordinary videos (from a phone, a drone or an action camera) and photos go in the same edit.
+Omnix plays and edits 360° video from the **DJI Osmo 360**. It reads the camera's `.OSV` files directly, stitches the two lenses, keeps the horizon level, and lets you look around, cut clips together, move the camera's view with keyframes, add crossfades, music, colour effects, titles and logos, and export a finished video. Footage filmed in D-Log M is recognised and turned into normal colours with DJI's LUT. Ordinary videos (from a phone, a drone or an action camera) and photos go in the same edit.
 
-Part 1 walks through the app itself; everything there is done with the mouse and keyboard. Part 2 covers the command line, for batches, scripts and a few extra tools. For building rOsmo360 from source, see the [README](../README.md).
+Part 1 walks through the app itself; everything there is done with the mouse and keyboard. Part 2 covers the command line, for batches, scripts and a few extra tools. For building Omnix from source, see the [README](../README.md).
 
 **Contents**
 
-Part 1: Using rOsmo360
+Part 1: Using Omnix
 
 1. [Getting started](#1-getting-started)
 2. [The window](#2-the-window)
@@ -34,47 +34,47 @@ Part 2: Advanced
 
 ---
 
-# Part 1: Using rOsmo360
+# Part 1: Using Omnix
 
 ## 1. Getting started
 
 ### Installing
 
-For the install script and the AppImage, install `ffmpeg` from your distribution first (`sudo apt install ffmpeg`, `sudo dnf install ffmpeg` or `sudo pacman -S ffmpeg`). Then take one of the ready-made builds from the [releases page](https://github.com/ravelund/rOsmo360/releases/latest). They run on x86_64 Linux: Ubuntu 22.04, Debian 12, Fedora 36 and newer.
+For the install script and the AppImage, install `ffmpeg` from your distribution first (`sudo apt install ffmpeg`, `sudo dnf install ffmpeg` or `sudo pacman -S ffmpeg`). Then take one of the ready-made builds from the [releases page](https://github.com/ravelund/Omnix/releases/latest). They run on x86_64 Linux: Ubuntu 22.04, Debian 12, Fedora 36 and newer.
 
-- **Install script**: puts rOsmo360 in your application menu. Paste this into a terminal:
+- **Install script**: puts Omnix in your application menu. Paste this into a terminal:
 
   ```sh
-  curl -fsSL https://github.com/ravelund/rOsmo360/releases/latest/download/install.sh | sh
+  curl -fsSL https://github.com/ravelund/Omnix/releases/latest/download/install.sh | sh
   ```
 
   Run it again to update. Adding `--uninstall` removes it; your settings stay.
-- **AppImage**: download `rOsmo360-x86_64.AppImage`, make it executable (in your file manager's properties, or `chmod +x rOsmo360-x86_64.AppImage`) and double-click it.
-- **Flatpak**: download `rOsmo360-x86_64.flatpak` and open it with your software centre (Discover, GNOME Software), or install it in a terminal with `flatpak install --user rOsmo360-x86_64.flatpak`. It brings everything it needs, ffmpeg included, so you can skip installing ffmpeg. Its exports are a little slower on NVIDIA cards.
+- **AppImage**: download `Omnix-x86_64.AppImage`, make it executable (in your file manager's properties, or `chmod +x Omnix-x86_64.AppImage`) and double-click it.
+- **Flatpak**: download `Omnix-x86_64.flatpak` and open it with your software centre (Discover, GNOME Software), or install it in a terminal with `flatpak install --user Omnix-x86_64.flatpak`. It brings everything it needs, ffmpeg included, so you can skip installing ffmpeg. Its exports are a little slower on NVIDIA cards.
 
-**Windows (beta)**: download `rOsmo360-x86_64-windows.zip` from the same page, unzip it anywhere and double-click `rosmo360.exe` (ffmpeg comes with it). Windows may warn that the app isn't signed: choose **More info → Run anyway**. It's a beta, not yet tested on a real Windows PC with a graphics card; please report what doesn't work in the [issues](https://github.com/ravelund/rOsmo360/issues).
+**Windows (beta)**: download `Omnix-x86_64-windows.zip` from the same page, unzip it anywhere and double-click `omnix.exe` (ffmpeg comes with it). Windows may warn that the app isn't signed: choose **More info → Run anyway**. It's a beta, not yet tested on a real Windows PC with a graphics card; please report what doesn't work in the [issues](https://github.com/ravelund/Omnix/issues).
 
-On an Apple Silicon Mac, rOsmo360 can be built from source for now; see the [README](../README.md#building).
+On an Apple Silicon Mac, Omnix can be built from source for now; see the [README](../README.md#building).
 
 ### What you need
 
-- Clips from the Osmo 360 (`.OSV`), in any of its video modes, 100 fps included. Copy the `.LRF` file that the camera records next to each clip as well. It's a small preview version, and rOsmo360 uses it for smooth playback, scrubbing and thumbnails.
+- Clips from the Osmo 360 (`.OSV`), in any of its video modes, 100 fps included. Copy the `.LRF` file that the camera records next to each clip as well. It's a small preview version, and Omnix uses it for smooth playback, scrubbing and thumbnails.
 - If you like, ordinary videos and photos to mix in: MP4, MOV, MKV and the like, and JPG, PNG, WebP, BMP or TIFF (see [Ordinary videos and photos](#ordinary-videos-and-photos)).
 - A GPU with up-to-date drivers (Vulkan on Linux, Metal on a Mac). It decodes the video, draws the view and renders exports.
 
 ### Opening clips
 
-Start **rOsmo360** from your application menu.
+Start **Omnix** from your application menu.
 
 ![The start screen: the Vibing with Ravelund logo, and the buttons Open clips…, Open project… and Add music…](guide/start.jpg)
 
-**Open clips…** picks one or more clips (Osmo clips, ordinary videos or photos); **Open project…** opens a saved edit; **Add music…** starts a project from a song (see [Music and sound](#9-music-and-sound)). A bar shows how far loading has got. The first time, a clip takes a while to open, longest from a network drive or a spinning disk, because rOsmo360 reads the camera's motion data from all through the file. It remembers what it read, so the same clip opens almost at once after that, in any project.
+**Open clips…** picks one or more clips (Osmo clips, ordinary videos or photos); **Open project…** opens a saved edit; **Add music…** starts a project from a song (see [Music and sound](#9-music-and-sound)). A bar shows how far loading has got. The first time, a clip takes a while to open, longest from a network drive or a spinning disk, because Omnix reads the camera's motion data from all through the file. It remembers what it read, so the same clip opens almost at once after that, in any project.
 
 The first clip starts playing as soon as it has loaded; the others load behind it.
 
 ## 2. The window
 
-![The rOsmo360 editor: a rock tower under the title "Kyrkja, July 2026" with a small logo in the corner, and underneath the transport row, the view angles (Yaw 20, Pitch 4, Roll 0, FOV 70, Correction 0) and the timeline: a Text and an Overlay lane, four cuts with crossfades between them, their keyframe rows, the seek bar and a soundtrack lane with its waveform](guide/editor.jpg)
+![The Omnix editor: a rock tower under the title "Kyrkja, July 2026" with a small logo in the corner, and underneath the transport row, the view angles (Yaw 20, Pitch 4, Roll 0, FOV 70, Correction 0) and the timeline: a Text and an Overlay lane, four cuts with crossfades between them, their keyframe rows, the seek bar and a soundtrack lane with its waveform](guide/editor.jpg)
 
 From top to bottom:
 
@@ -155,7 +155,7 @@ Perspective and little planet are one family. A keyframed move can morph smoothl
 
 ## 5. Stabilisation
 
-The camera records its own motion about a thousand times a second, and rOsmo360 uses that to steady the picture.
+The camera records its own motion about a thousand times a second, and Omnix uses that to steady the picture.
 
 - **Horizon** (the default) keeps the horizon level and follows where the camera points, smoothed. It looks like a steady camera operator.
 - **Level** keeps the horizon level like Horizon, but holds the direction the camera pointed when the clip started, instead of following it. A mountain stays put while the camera turns, and the picture stays level even if the camera started tilted. Use it for a view that should stay on one thing while you turn around.
@@ -178,7 +178,7 @@ An *edit* is a row of *cuts*, each a stretch of one clip, played one after anoth
 - **Delete**: select it and press **Shift+Delete**, or 🗑.
 - **Undo / redo**: Ctrl+Z and Ctrl+Shift+Z (or Ctrl+Y).
 
-Playback runs through the cuts in order, straight on from one into the next, even when the next one comes from a different clip: rOsmo360 gets the next cut ready a few seconds ahead, so the change is smooth. To dissolve from one cut into the next instead of cutting, see [Crossfades](#8-crossfades).
+Playback runs through the cuts in order, straight on from one into the next, even when the next one comes from a different clip: Omnix gets the next cut ready a few seconds ahead, so the change is smooth. To dissolve from one cut into the next instead of cutting, see [Crossfades](#8-crossfades).
 
 Each cut shows thumbnails of its footage, the view straight ahead. They fill in a moment after a clip loads; a long clip takes a few seconds the first time.
 
@@ -277,7 +277,7 @@ Two common patterns:
 
 ### Follow: a third-person shot
 
-A keyframe can **follow the selfie stick** instead of looking in a fixed direction. The stick points at whoever holds it, so the view keeps you in the picture as you walk, turn and move the stick, like a drone following from above and behind. rOsmo360 knows where the stick points from the camera's own motion data, so it keeps working even when the stick points straight down.
+A keyframe can **follow the selfie stick** instead of looking in a fixed direction. The stick points at whoever holds it, so the view keeps you in the picture as you walk, turn and move the stick, like a drone following from above and behind. Omnix knows where the stick points from the camera's own motion data, so it keeps working even when the stick points straight down.
 
 1. Frame the shot you want around yourself: for example tilt the view up a little from the stick so the trail ahead shows too, and widen it (FOV 100 or so).
 2. Press **K**, then choose **Stick** in the **Follow** picker. The view stays as it is: the keyframe now keeps it as an offset from the stick. Its mark in the View row gets a ring.
@@ -287,7 +287,7 @@ To follow **someone or something else**, such as a friend in a red jacket, track
 
 1. Pause where the subject is in view, at the keyframe that should start following it.
 2. Click the **eyedropper** icon next to the Follow picker, or choose **Colour track** in the picker, and drag a box over the subject. A box over a good patch of the colour works better than a thin edge. Esc cancels.
-3. rOsmo360 takes the box's colour and tracks it from there to the end of the cut (the top bar shows **Tracking** with its progress), saves the track next to the project, and makes the keyframe follow it with the subject in the middle. The top bar then says in how many moments it found the colour.
+3. Omnix takes the box's colour and tracks it from there to the end of the cut (the top bar shows **Tracking** with its progress), saves the track next to the project, and makes the keyframe follow it with the subject in the middle. The top bar then says in how many moments it found the colour.
 
 Pick something with a strong colour that nothing big nearby shares: sky, grass, rock and snow won't track. Small things that swing, like legs, follow less steadily than a jacket.
 
@@ -400,20 +400,20 @@ A LUT (a `.cube` file) turns the picture's colours into others. Its main use her
 
 #### Downloading and adding DJI's LUT
 
-You do this once on each computer. rOsmo360 doesn't come with the LUT, as it's DJI's file to hand out, but it's a free download.
+You do this once on each computer. Omnix doesn't come with the LUT, as it's DJI's file to hand out, but it's a free download.
 
 1. **Download it.** Open DJI's download page, [Osmo 360 D-Log M to Rec.709 LUT](https://www.dji.com/downloads/softwares/osmo-360-dlog-m-to-rec709-lut) (in the DJI Download Center, search for "Osmo 360 D-Log M" if the link has moved), and click the **.cube** button. The page has a **Mac** and a **Windows** tab; it doesn't matter which you pick, as both give the same file, and on Linux either will do. You get `DJI Osmo 360 D-Log M to Rec.709 V1.cube`, about 1 MB, usually in your Downloads folder. Make sure it's the **Osmo 360** one (it's for the Osmo 360 II too): DJI has D-Log M LUTs for its drones and other cameras as well.
-2. **Add it.** In rOsmo360, open **Settings** (the cog at the far left of the top bar, or **Ctrl+,**), find **LUTs** and click **Add LUT…**. Pick the `.cube` file you downloaded and click **Open**.
+2. **Add it.** In Omnix, open **Settings** (the cog at the far left of the top bar, or **Ctrl+,**), find **LUTs** and click **Add LUT…**. Pick the `.cube` file you downloaded and click **Open**.
 
    ![The LUTs part of the Settings panel before any LUT is added: "None yet.", the Add LUT… button, and For D-Log M clips set to None](guide/lut-add.png)
 
-3. **Check it.** The LUT is now listed under LUTs, and **For D-Log M clips** shows it: since its name says D-Log M, rOsmo360 chose it for those clips by itself. Any D-Log M clips in your edit change from grey and flat to normal colours at once.
+3. **Check it.** The LUT is now listed under LUTs, and **For D-Log M clips** shows it: since its name says D-Log M, Omnix chose it for those clips by itself. Any D-Log M clips in your edit change from grey and flat to normal colours at once.
 
    ![The LUTs part of the Settings panel after adding it: DJI Osmo 360 D-Log M to Rec.709 V1 listed with a ✕ to remove it, and chosen under For D-Log M clips](guide/lut-added.png)
 
-rOsmo360 copies the file into its own settings folder, so you can delete the download afterwards, and your projects keep working wherever the download went. The LUT is known by its file name (without `.cube`); a project made on another computer finds it by that name, so add the same file there without renaming it. To take a LUT out of the library, click the **✕** beside it.
+Omnix copies the file into its own settings folder, so you can delete the download afterwards, and your projects keep working wherever the download went. The LUT is known by its file name (without `.cube`); a project made on another computer finds it by that name, so add the same file there without renaming it. To take a LUT out of the library, click the **✕** beside it.
 
-From then on, every clip filmed in D-Log M gets the LUT as soon as you add it to the edit. rOsmo360 knows from the clip itself whether it was filmed in D-Log M; the camera's file says so even though it's otherwise tagged like any video.
+From then on, every clip filmed in D-Log M gets the LUT as soon as you add it to the edit. Omnix knows from the clip itself whether it was filmed in D-Log M; the camera's file says so even though it's otherwise tagged like any video.
 
 #### Using it
 
@@ -444,7 +444,7 @@ On the timeline each item is a block: teal for text, orange for pictures. Click 
 With a title selected, the panel at the left of the view holds:
 
 - **The words**: type them in the box; Enter starts a new line.
-- **The font**, and **Bold** where the font has it. The first six come with rOsmo360 and are marked **built in**: they look the same on any computer. **Inter** (clean, the default), **Montserrat** (geometric), **Bebas Neue** (tall capitals for titles), **Playfair Display** (an elegant serif), **Caveat** (handwriting) and **Permanent Marker** (a marker pen). The rest of the list is your computer's own fonts; a project using one that another computer lacks shows Inter there, and says which font is missing.
+- **The font**, and **Bold** where the font has it. The first six come with Omnix and are marked **built in**: they look the same on any computer. **Inter** (clean, the default), **Montserrat** (geometric), **Bebas Neue** (tall capitals for titles), **Playfair Display** (an elegant serif), **Caveat** (handwriting) and **Permanent Marker** (a marker pen). The rest of the list is your computer's own fonts; a project using one that another computer lacks shows Inter there, and says which font is missing.
 - **Size**, the letters' height as a share of the picture's.
 - **Lines**: left, centred or right, for text over several lines.
 - **Colour**, from the swatches.
@@ -487,7 +487,7 @@ A project saves the edit: the cuts, their keyframes, stabilisation, crossfades, 
 
 Changing the **Aspect** counts as a change to save too.
 
-The window title shows the project's name, with a dot (•) when there are unsaved changes. If you close the window, open another project or start a new one with unsaved changes, rOsmo360 asks whether to **Save**, **Don't save** or **Cancel**.
+The window title shows the project's name, with a dot (•) when there are unsaved changes. If you close the window, open another project or start a new one with unsaved changes, Omnix asks whether to **Save**, **Don't save** or **Cancel**.
 
 Clips in the project's folder, or in folders inside it, are remembered by relative path, so you can move the whole folder, or copy it to another computer, and the project still finds its clips. If a clip is missing when you open a project, its cuts are left out and you're told which.
 
@@ -527,7 +527,7 @@ Click the **cog** at the far left of the top bar, or press **Ctrl+,**, for the *
 
 ![The Settings panel: Look, with the theme picker on Kanagawa Dragon; Decoding, with the 10-bit switch; LUTs, with DJI Osmo 360 D-Log M to Rec.709 V1 in the library, the Add LUT… button and the LUT for D-Log M clips; Keyframes, with the Auto keyframe switch; View angles, with the Show the view as numbers switch; each with a short note](guide/settings-panel.png)
 
-- **Look**: the colour theme. rOsmo360 starts in **Kanagawa Dragon**, a dark theme that keeps the picture in front; the list has light and dark themes such as Nord, Dracula, Gruvbox, Catppuccin and Tokyo Night, and the change shows at once.
+- **Look**: the colour theme. Omnix starts in **Kanagawa Dragon**, a dark theme that keeps the picture in front; the list has light and dark themes such as Nord, Dracula, Gruvbox, Catppuccin and Tokyo Night, and the change shows at once.
 - **Decoding → 10-bit**: decodes the Osmo's `.OSV` and other 10-bit video (a phone's HDR) with all its 10 bits instead of 8. Skies and smooth gradients stay smoother, most of all after strong grading, in the player's full-resolution frames and in exports. It moves twice the data, so a full-resolution export takes about a third longer on a PC; playing from the `.LRF` proxy isn't affected. Off by default; it applies from the next seek or clip.
 - **LUTs**: the LUT library. **Add LUT…** adds a `.cube` file, the **✕** beside one takes it out, and **For D-Log M clips** chooses the one clips filmed in D-Log M get when they're added. See [LUTs and D-Log M](#luts-and-d-log-m).
 - **Keyframes → Auto keyframe**: looking around while paused sets the view's keyframe at the playhead, or updates the one there, as **K** does, so every framing you settle on is kept. Each look-around (from pressing the mouse to letting go) is one undo step. While playing, looking around stays free, as without it. Off by default.
@@ -578,17 +578,17 @@ Keys only work while you're not typing: in the Text panel's box or a view angle,
 ## 18. Tips and troubleshooting
 
 - **Playback stutters.** Use the **Proxy (LRF)** source; it needs far less than the full `.OSV`, and through a crossfade the player decodes two cuts at once. Ordinary videos play at up to 1920 px whatever the source says. If a clip has no `.LRF`, copy it from the camera's card; DJI records one next to every clip. Footage on an SSD plays and scrubs more smoothly than on a spinning disk or a network drive.
-- **Clips open slowly the first time.** That's rOsmo360 reading the camera's motion data; the second time the clip opens almost at once. To have a whole card ready before you start, see [the clip cache](#20-the-clip-cache).
+- **Clips open slowly the first time.** That's Omnix reading the camera's motion data; the second time the clip opens almost at once. To have a whole card ready before you start, see [the clip cache](#20-the-clip-cache).
 - **The paused picture keeps changing sharpness.** Turn off **Full res** in the top bar while keyframing.
-- **Something close to the camera looks doubled or cut at the edges.** That's the seam where the two lenses meet. rOsmo360 lines up close subjects and cuts cleanly where it can't, but a hand or face very close to the seam can still show it, most of all next to the selfie stick, where the two lenses overlap least. Turn the view so close subjects sit away from the sides of the camera.
+- **Something close to the camera looks doubled or cut at the edges.** That's the seam where the two lenses meet. Omnix lines up close subjects and cuts cleanly where it can't, but a hand or face very close to the seam can still show it, most of all next to the selfie stick, where the two lenses overlap least. Turn the view so close subjects sit away from the sides of the camera.
 - **"World lock" starts tilted.** It holds the clip's first orientation. Use **Level** instead: it holds the direction but keeps the horizon level.
 - **No sound.** Check the speaker icon isn't showing muted (mute is remembered between runs); the Audio panel has the volume. On Linux, sound goes through ALSA, which PipeWire and PulseAudio both provide.
 - **Export says it's stitching on the CPU.** No usable GPU was found, so it falls back to the slower CPU stitcher. Update your GPU drivers. The result looks the same.
 - **The meter goes red.** The mix goes over 0 dBFS there and the export's sound would clip. Lower **Clip sound** or **Music**, or add a volume point to dip the loud stretch.
-- **A title shows in another font than you chose.** The project uses a font this computer doesn't have; rOsmo360 says which, and uses Inter. Pick one of the built-in fonts to have it look the same everywhere.
+- **A title shows in another font than you chose.** The project uses a font this computer doesn't have; Omnix says which, and uses Inter. Pick one of the built-in fonts to have it look the same everywhere.
 - **An Osmo clip looks flat and grey.** It was filmed in D-Log M. Download DJI's D-Log M to Rec.709 LUT and add it in Settings; see [Downloading and adding DJI's LUT](#downloading-and-adding-djis-lut).
 - **A cut shows as filmed and the player says a LUT is missing.** The project names a LUT this computer's library doesn't have, such as one added on another machine. Add the same `.cube` file in Settings; keep its file name, as that's the LUT's name.
-- **A phone video looks washed out.** rOsmo360 converts HDR (HLG and HDR10) by itself; if a video still looks flat, it may lack the HDR tags its colours need. Exposure, contrast and saturation in the Effects panel can lift it.
+- **A phone video looks washed out.** Omnix converts HDR (HLG and HDR10) by itself; if a video still looks flat, it may lack the HDR tags its colours need. Exposure, contrast and saturation in the Effects panel can lift it.
 - **Full-resolution playback stutters with 10-bit on.** Turn **10-bit** off in Settings, or play from the proxy; exports aren't affected either way.
 - **Your settings** (stabilisation, playback source, rolling shutter, full res when paused, volume and mute, the export's options, aspect, theme, 10-bit, Auto keyframe, the LUT for D-Log M clips, the view angles row and how tall the timeline is) are remembered between runs, and your LUTs stay in the library.
 
@@ -598,39 +598,39 @@ Keys only work while you're not typing: in the Text panel's box or a view angle,
 
 ## 19. The command line
 
-Everything the player does can also be done from a terminal, which is handy for batches and scripts, and a few tools exist only there. `rosmo360 --help` and `rosmo360 <command> --help` list every option. If you use the AppImage, write `./rOsmo360-x86_64.AppImage` where these say `rosmo360`; with the Flatpak, `flatpak run io.github.ravelund.rOsmo360`. The Flatpak has a `/tmp` of its own, so give it output paths elsewhere.
+Everything the player does can also be done from a terminal, which is handy for batches and scripts, and a few tools exist only there. `omnix --help` and `omnix <command> --help` list every option. If you use the AppImage, write `./Omnix-x86_64.AppImage` where these say `omnix`; with the Flatpak, `flatpak run io.github.ravelund.Omnix`. The Flatpak has a `/tmp` of its own, so give it output paths elsewhere.
 
 **Open** the player with something loaded:
 
 ```sh
-rosmo360 play                  # the start screen
-rosmo360 play clip.OSV         # one clip
-rosmo360 play a.OSV b.OSV      # several clips, one after another on the timeline
-rosmo360 play edit.json        # a saved project
+omnix play                  # the start screen
+omnix play clip.OSV         # one clip
+omnix play a.OSV b.OSV      # several clips, one after another on the timeline
+omnix play edit.json        # a saved project
 ```
 
 **Export** a project, or a clip with a fixed or keyframed view:
 
 ```sh
-rosmo360 export edit.json -o edit.mp4                         # a project saved from the player
-rosmo360 export clip.OSV -s 30 -d 8 --view 40,-10 -a 9:16 -o reel.mp4
-rosmo360 export clip.OSV --reframe moves.json -r 2160p -o reel.mp4
-rosmo360 export edit.json --draft -o draft.mp4                # quick and soft, from the proxies
-rosmo360 export edit.json --clips --handles 1 -o clips/        # a file per cut, with 1 s extra either side
-rosmo360 export edit.json --clips --graded -o clips/           # the same, with the cuts' LUTs and colour effects
-rosmo360 export edit.json --format resolve -o edit.mov         # 10-bit DNxHR HQX, for DaVinci Resolve on Linux
+omnix export edit.json -o edit.mp4                         # a project saved from the player
+omnix export clip.OSV -s 30 -d 8 --view 40,-10 -a 9:16 -o reel.mp4
+omnix export clip.OSV --reframe moves.json -r 2160p -o reel.mp4
+omnix export edit.json --draft -o draft.mp4                # quick and soft, from the proxies
+omnix export edit.json --clips --handles 1 -o clips/        # a file per cut, with 1 s extra either side
+omnix export edit.json --clips --graded -o clips/           # the same, with the cuts' LUTs and colour effects
+omnix export edit.json --format resolve -o edit.mov         # 10-bit DNxHR HQX, for DaVinci Resolve on Linux
 ```
 
-Exports decode at 8 bits unless you set `ROSMO360_10BIT=1` (the command line's version of the 10-bit setting): `ROSMO360_10BIT=1 rosmo360 export edit.json --format resolve -o edit.mov`.
+Exports decode at 8 bits unless you set `OMNIX_10BIT=1` (the command line's version of the 10-bit setting): `OMNIX_10BIT=1 omnix export edit.json --format resolve -o edit.mov`.
 
 `--handles` adds footage before and after each clip, where the camera recorded it, so another editor has room for its own transitions; the music's WAVs get the same handles from the song.
 
 **Preview** an edit or a clip as one image. For a project you get a row per cut, headed by where it starts in the edit, its number, its clip and its in and out points (`2:16.4 #23 0036 18.0-25.0`; the clip by the last digits of its file name). Each tile is framed as the export will frame it, with the titles and overlays drawn, and labelled with its edit time and clip time. With music, its waveform runs under each row, lined up with the tiles, so you see where the cuts fall on the song. Small tiles keep a long edit in one image:
 
 ```sh
-rosmo360 preview edit.json --every 2 -o check.png
-rosmo360 preview edit.json --tile 200 --columns 6 -o check.png  # a long edit, six moments a cut
-rosmo360 preview clip.OSV -o sheet.png                        # 24 moments of a clip, the whole sphere
+omnix preview edit.json --every 2 -o check.png
+omnix preview edit.json --tile 200 --columns 6 -o check.png  # a long edit, six moments a cut
+omnix preview clip.OSV -o sheet.png                        # 24 moments of a clip, the whole sphere
 ```
 
 ![A contact sheet of a four-cut project: a row per cut headed like "0:11.0 #2 0034 40.0-52.0", with views of a rock tower under the title, a boulder slope, a lake valley turning into an upward little planet, and a boulder field, each tile labelled with its edit and clip time, a small logo in each corner, and the music's waveform in orange under each row](guide/contact-sheet.jpg)
@@ -638,7 +638,7 @@ rosmo360 preview clip.OSV -o sheet.png                        # 24 moments of a 
 **Check an edit** for likely mistakes:
 
 ```sh
-rosmo360 check edit.json
+omnix check edit.json
 ```
 
 It lists, a line each with the edit time and cut: cuts out of the order they were filmed in, a cut showing footage the cut before already shows, crossfades between two cuts of one clip only seconds apart (one scene, so it looks like a stutter), pans faster than 30° a second (`--fast-pan` changes it), saying whether your keyframes or the camera's own turning make them (with Horizon, **Level** holds the view while the camera turns), cuts under a second, and music that ends before the edit does or runs far past it. Not all of them are mistakes; it's a list to look through.
@@ -646,36 +646,36 @@ It lists, a line each with the edit time and cut: cuts out of the order they wer
 **Track a subject by colour**, the command-line version of the eyedropper (see [Follow](#follow-a-third-person-shot)):
 
 ```sh
-rosmo360 track clip.OSV --colour "#c8302a" -s 40 -d 20 > friend.csv
+omnix track clip.OSV --colour "#c8302a" -s 40 -d 20 > friend.csv
 ```
 
 Then give a keyframe `"follow": "friend.csv"` in the project file. Read the colour off a preview or a saved photo. If something else nearby has the same colour, add `--near YAW,PITCH` with where the subject is at the start, as shown on a `--stabilize level` preview.
 
-**Find good moments**: `rosmo360 scan clip.OSV > scan.csv` gives, per second, where the camera points, how fast it turns or shakes, and how loud it is. Give it a folder (or several clips) and an output folder, `rosmo360 scan ~/Videos/Hike -o scans/`, for a CSV per clip, four at a time. Add `--image` for three columns from the picture: how much of the sky is open (`sky`), how high the skyline is around you (`skyline`, in degrees: near 0 on a summit, higher in a valley) and in how many directions you can see out to the horizon (`open`). Sort by `open` to find the panoramas. It needs the `.LRF` proxy and takes a little longer: about 20 s for a 13-minute clip. `rosmo360 info clip.OSV` prints the clip's length, frame rate and recording time, whether it's an Osmo clip, an ordinary video or a picture, and for an Osmo clip its colour profile (`"colour": "D-Log M"` or `"normal"`). `scan`, `track` and the other commands that need the camera's motion data work only on Osmo clips.
+**Find good moments**: `omnix scan clip.OSV > scan.csv` gives, per second, where the camera points, how fast it turns or shakes, and how loud it is. Give it a folder (or several clips) and an output folder, `omnix scan ~/Videos/Hike -o scans/`, for a CSV per clip, four at a time. Add `--image` for three columns from the picture: how much of the sky is open (`sky`), how high the skyline is around you (`skyline`, in degrees: near 0 on a summit, higher in a valley) and in how many directions you can see out to the horizon (`open`). Sort by `open` to find the panoramas. It needs the `.LRF` proxy and takes a little longer: about 20 s for a 13-minute clip. `omnix info clip.OSV` prints the clip's length, frame rate and recording time, whether it's an Osmo clip, an ordinary video or a picture, and for an Osmo clip its colour profile (`"colour": "D-Log M"` or `"normal"`). `scan`, `track` and the other commands that need the camera's motion data work only on Osmo clips.
 
 **Stitch** whole clips or frames to equirectangular video or images, for other 360° tools:
 
 ```sh
-rosmo360 render clip.OSV -s 48 -d 12 -w 3840 --stabilize horizon -o out.mp4
-rosmo360 stitch clip.OSV -t 10 -w 4096 --stabilize horizon -o frame.png
+omnix render clip.OSV -s 48 -d 12 -w 3840 --stabilize horizon -o out.mp4
+omnix stitch clip.OSV -t 10 -w 4096 --stabilize horizon -o frame.png
 ```
 
 Projects are small JSON files you can also write or change by hand; the [README](../README.md#usage) describes the project and reframe formats, including cut notes (`"note": "summit arrival"`), per-cut stabilisation, following keyframes, crossfades, effects, LUTs, volume points, music, titles, overlays and fades.
 
 ## 20. The clip cache
 
-What rOsmo360 reads from a clip the first time, the calibration, the motion data and the timeline's thumbnails, and each song's waveform, is kept in a cache, so the next time the clip opens in a fraction of a second, in any project and from the command line too. (One 7-minute clip on a network share: 46 s the first time, 0.4 s after.) It recognises a clip by its contents, so moving or renaming footage doesn't matter, and a changed file is read afresh.
+What Omnix reads from a clip the first time, the calibration, the motion data and the timeline's thumbnails, and each song's waveform, is kept in a cache, so the next time the clip opens in a fraction of a second, in any project and from the command line too. (One 7-minute clip on a network share: 46 s the first time, 0.4 s after.) It recognises a clip by its contents, so moving or renaming footage doesn't matter, and a changed file is read afresh.
 
 ```sh
-rosmo360 cache                                  # where it is, how many clips, how big
-rosmo360 cache add ~/Videos/Hike                # cache every clip in a folder ahead of time
-rosmo360 cache add ~/Videos/Hike --force        # read them all afresh, even those cached
-rosmo360 cache move /mnt/media/rosmo360-cache   # keep it elsewhere from now on
-rosmo360 cache move --default                   # back to the usual place
-rosmo360 cache clear                            # empty it
-rosmo360 cache clear --older-than 90            # only what no clip has used for 90 days
+omnix cache                                  # where it is, how many clips, how big
+omnix cache add ~/Videos/Hike                # cache every clip in a folder ahead of time
+omnix cache add ~/Videos/Hike --force        # read them all afresh, even those cached
+omnix cache move /mnt/media/omnix-cache   # keep it elsewhere from now on
+omnix cache move --default                   # back to the usual place
+omnix cache clear                            # empty it
+omnix cache clear --older-than 90            # only what no clip has used for 90 days
 ```
 
-- **Where**: `~/.cache/rosmo360` on Linux (in the Flatpak, `~/.var/app/io.github.ravelund.rOsmo360/cache/rosmo360`; `%LOCALAPPDATA%\rosmo360` on Windows), about 1.5 MB per minute of footage. `cache move` moves what's cached to the new folder, say on a disk meant for media, and remembers it. Setting `ROSMO360_CACHE=/some/folder` overrides that for one run or a script.
+- **Where**: `~/.cache/omnix` on Linux (in the Flatpak, `~/.var/app/io.github.ravelund.Omnix/cache/omnix`; `%LOCALAPPDATA%\omnix` on Windows), about 1.5 MB per minute of footage. `cache move` moves what's cached to the new folder, say on a disk meant for media, and remembers it. Setting `OMNIX_CACHE=/some/folder` overrides that for one run or a script.
 - **Ahead of time**: run `cache add` after copying a card, and even the first open is quick. It skips clips already cached, so it's cheap to run again.
 - **Safe to clear**: anything removed is simply read again the next time it's needed. `--no-cache` on any command reads clips afresh and caches nothing.

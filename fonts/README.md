@@ -1,6 +1,6 @@
 # Built-in fonts
 
-rOsmo360's text overlays come with these fonts, built into the program. Each
+Omnix's text overlays come with these fonts, built into the program. Each
 keeps its own licence, in its folder here and beside the program in every
 release.
 

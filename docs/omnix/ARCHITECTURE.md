@@ -7,13 +7,13 @@ the code changes; the history is in git (the first refactor, gap 35,
 
 ## The shape today
 
-~33 000 lines of Rust in one crate, `rosmo360`: a library and a
+~33 000 lines of Rust in one crate, `omnix`: a library and a
 six-line binary. Dailix (`../dailix`) links the library; the library
 links Dailix's sheet core.
 
 | Layer | Where | What it is |
 |---|---|---|
-| The core | `src/model/` | The project being edited (`Edit`: a `Project` with undo) and every change to it as a checked operation (`ops/`: cuts, clips, items, keys, sound), what's selected (one `Selection`). No iced, no ffmpeg. The player, `rosmo360 apply`/`describe`/`ops-schema` and the tests all go through it. |
+| The core | `src/model/` | The project being edited (`Edit`: a `Project` with undo) and every change to it as a checked operation (`ops/`: cuts, clips, items, keys, sound), what's selected (one `Selection`). No iced, no ffmpeg. The player, `omnix apply`/`describe`/`ops-schema` and the tests all go through it. |
 | The file format | `project.rs`, `overlay.rs`, `text.rs`, `grade.rs`, `view.rs` | Public JSON, backward compatible. |
 | 360 and colour (upstream) | `stitch.rs`, `stab.rs`, `align.rs`, `exposure.rs`, `ring.rs`, `imu.rs`, `lut.rs`, `hdr.rs`, ... | The CPU reference; the shaders mirror it (AGENTS.md's pairs). |
 | Media | `ffmpeg/`, `cache.rs`, `fsutil.rs` | ffmpeg as a separate program; the clip cache; safe writes and the app's folders. |

@@ -170,11 +170,11 @@ see only the plain ops.
 - **Player.** A handler turns its `Message` into an `Op` and calls
   `editor.apply`; it keeps only UI state (selection, playhead, panels).
   Moved area by area, each a commit.
-- **CLI.** `rosmo360 apply project.json ops.json [--dry-run] [-o out]`:
-  one batch, prints each outcome and the diff. `rosmo360 describe
+- **CLI.** `omnix apply project.json ops.json [--dry-run] [-o out]`:
+  one batch, prints each outcome and the diff. `omnix describe
   project.json`: what an op needs (ids, names, times), in short text.
   The existing `duck` and `normalize` become thin wrappers over it.
-  `rosmo360 blank DIR` makes the black picture of a blank cut (gap 32)
+  `omnix blank DIR` makes the black picture of a blank cut (gap 32)
   and prints its path for a cut `add` op.
 - **AI (later, milestone 10).** One tool per op from its JSON Schema
   (`schemars`, doc comments as the descriptions), read-only query tools
@@ -187,7 +187,7 @@ see only the plain ops.
   ids unique, points sorted, no overlaps on a lane, crossfades within
   limits (Kdenlive's `checkConsistency`).
 - **Script tests**: `tests/ops/*.json` (ops in, expected summary or
-  project out), run through the same code as `rosmo360 apply`.
+  project out), run through the same code as `omnix apply`.
 - **Integration with sound**: ffmpeg generates a tone, noise and a
   «voice» (an on/off tone) in the test. Apply ops, then assert on
   `mixcheck`'s numbers and the export's length and loudness. No footage.
@@ -210,13 +210,13 @@ still lacks is listed in the last row and in «Later» below.
 | 1a | Ids on cuts, sound clips, items (`Project::settle_ids`, saved in the file) | **Done** `d48af1b` |
 | 1b | `src/model/` with `edit.rs`, `selection.rs`; a test that the core imports no player, ffmpeg or iced | **Done** `23aff2d` |
 | 1c | Transactions: `Edit::begin`/`commit`/`changing` replace `begin_drag` and the `dragging` flag; no empty steps | **Done** `30b0959` |
-| 2a | `Op`, `SoundRef`, `Outcome`, `OpError`, `Edit::apply`/`batch`, `check`; sound ops; `rosmo360 apply`/`describe`; first unit and CLI tests | **Done** `2e22ce9` |
+| 2a | `Op`, `SoundRef`, `Outcome`, `OpError`, `Edit::apply`/`batch`, `check`; sound ops; `omnix apply`/`describe`; first unit and CLI tests | **Done** `2e22ce9` |
 | 2b | The player's sound menu, level tags, fades and duck on ops | **Done** `5955b28`, waiting for the user's check |
 | 2c | Normalize as measure + apply, by id (`CORE-API` step 6; Even1; the CLI's `--track`); points as ops (add, K, move, delete, continue; named by time); the duck's speech found again if the edit changed meanwhile | **Done** `0bcb553`, `2d259da`, `5b5dc65`, and the duck's check |
 | 3 | Cuts (`CutOp`: add, trim, move, split, crossfade, stabilisation, LUT, delete) and sound clips (`ClipOp`: add with the SFX 2 rule, move, trim, split, other SFX lane, delete); the edit's cut rules moved from `Edit` to `Project`; `Outcome::made`; the player's handlers and `Edit::delete` on them; an export test driven by an ops script | **Done** `bb87844`, `755603c`, `c7d38cd`, `9dfba52`, and the test |
 | 4 | Overlays and text (`ItemOp`: add pictures, add text, move, trim, set text whole, delete); the player's handlers and Del on them | **Done**, the two commits after `79f53bd` |
 | 5 | Keyframes: `model::curve` (`Key`, `key_at`; CORE-API step 8), `KeyOp` for effect, motion and view keys (view keys get where the stick and tracks point as data, `Aims`); the effects panel, K, Auto keyframe, diamond and mark drags, colour-track keys on them; `Edit::checkpoint` gone from the code | **Done** `36c216f`, `cc2eb5a`, and the two after |
-| 6 | `proptest` on random op sequences (found a trim panic and inexact floats in JSON, both fixed); `rosmo360 ops-schema` (`schemars`, doc comments as descriptions); `apply` without `-o` is the preview; `describe` the query | **Done** `cd89a11`, `74e2cca`, `e0b5b5c` |
+| 6 | `proptest` on random op sequences (found a trim panic and inexact floats in JSON, both fixed); `omnix ops-schema` (`schemars`, doc comments as descriptions); `apply` without `-o` is the preview; `describe` the query | **Done** `cd89a11`, `74e2cca`, `e0b5b5c` |
 | — | Left as direct writes inside a begin/commit, no op yet: the edit's fades, the clip-sound and track levels (Audio panel), the aspect (kept by the app), a project's load clean-up. Small; ops when the AI needs them | |
 
 What differs from the sketch above, as built: the `Editor` is the

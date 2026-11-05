@@ -119,7 +119,7 @@ voice; ordinary volume points. Defaults taken:
   depth);
 - an action, not a live switch: the points are the user's to edit after.
 In the Audio panel («Lower under speech» and the depth), the Music lane's
-menu, and `rosmo360 duck project.json [--depth] [-o]`. On the test
+menu, and `omnix duck project.json [--depth] [-o]`. On the test
 project: speech 5.7–11.7 s and 12.9–25.9 s, the music 12 dB down there.
 
 **Not yet:** two sound effects at once (a second SFX lane).
@@ -313,7 +313,7 @@ How to build it so the player and the export sound the same:
   clip). Mute and «Show volume line» with points work too (2026-10-29).
   Card done. Left: the user's ear on the leveler (samples A–D).
 - **Step 1 built** (`18671af`): `Cut.gain/mute/loudness`, `loudness.rs`,
-  `rosmo360 normalize`, the export limiter (0.87 = −1.2 dBFS, `level=0`,
+  `omnix normalize`, the export limiter (0.87 = −1.2 dBFS, `level=0`,
   `latency=1`), the player's limiter. Measured on Kos 22.08 cuts 1–6:
   −32.5 → −16.1 LUFS, true peak −1.0 dBTP, sync 0.0 ms.
 - **The user asked the same as step 2 (2026-10-28):** "can it normalize by
@@ -382,7 +382,7 @@ How it works:
   cuts; mid-cut it splits the cut. It is a picture: 5 s, trimmed at will,
   named «Blank» on the timeline from the file's stem. One file serves
   every blank.
-- `rosmo360 blank DIR` makes the same file and prints its path, so a
+- `omnix blank DIR` makes the same file and prints its path, so a
   script or an agent adds one with a cut `add` op.
 - **The magnetic edit stays** (user, 2026-10-23: "handy"): gaps happen
   only as blank cuts.
@@ -849,7 +849,7 @@ viewer's place:
 **Built in three steps** (started 2026-11-01): (1) the rules, pure and
 tested, from measured numbers to findings; (2) the measuring: each lane
 rendered alone through the export's own mix graph (so «as heard» is the
-export's), its clips measured, plus `rosmo360 mixcheck`; (3) the view.
+export's), its clips measured, plus `omnix mixcheck`; (3) the view.
 Built 2026-11-01 (`40ed95b` rules, `c145a2d` measuring and CLI, `f159edb`
 view), confirmed by the user 2026-11-02. Defaults: the target is the Export panel's
 loudness, else −14; a speech stretch's voice is the louder of the Voice

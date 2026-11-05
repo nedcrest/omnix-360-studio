@@ -103,15 +103,15 @@ nothing has to run in the background. Each tool is listed with where it
 exists today:
 
 - **Exists now:**
-  - `rosmo360 check proj.json`
-  - `rosmo360 preview proj.json`
-  - `rosmo360 info`
-  - `rosmo360 scan`
+  - `omnix check proj.json`
+  - `omnix preview proj.json`
+  - `omnix info`
+  - `omnix scan`
   - `export/omnix.py` (Python)
 - **To add in Omnix:**
-  - `rosmo360 schema` (the project's JSON Schema, so an agent can validate
+  - `omnix schema` (the project's JSON Schema, so an agent can validate
     before saving);
-  - `rosmo360 describe proj.json` (a short text summary per cut: edit time,
+  - `omnix describe proj.json` (a short text summary per cut: edit time,
     clip, in/out, note, sound, effects; cheaper for an AI than the image);
   - the player reloading the project when its file changes, so the user
     watches the AI's version appear.

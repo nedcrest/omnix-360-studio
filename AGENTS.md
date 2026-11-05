@@ -1,15 +1,15 @@
-# rOsmo360: instructions for coding agents
+# Omnix: instructions for coding agents
 
-Read this before changing anything. It's for AI coding agents (and the people driving them) helping build rOsmo360. `CLAUDE.md` is the maintainer's own working notes, full of paths and footage you don't have; use this file instead. Human contributors: see `CONTRIBUTING.md` too.
+Read this before changing anything. It's for AI coding agents (and the people driving them) helping build Omnix (grown from rOsmo360, whose `CLAUDE.md` is its maintainer's own working notes, full of paths and footage you don't have: use this file and `docs/omnix/` instead). The rules for changing code: the `code-rules` skill. Human contributors: see `CONTRIBUTING.md` too.
 
 ## What it is
 
-A Rust replacement for DJI Studio's playback and editing of DJI Osmo 360 `.OSV` footage: dual-fisheye stitching with DJI's own calibration, gyro stabilisation, rolling-shutter correction, a free-look player and timeline editor (iced), and export. One binary, `rosmo360`: `rosmo360 play` is the GUI; the other subcommands (`export`, `stitch`, `preview`, `scan`, `check`, `info`, ...) are the CLI. Linux is the main platform, macOS (Apple Silicon) builds from source, Windows is in beta.
+A Rust replacement for DJI Studio's playback and editing of DJI Osmo 360 `.OSV` footage: dual-fisheye stitching with DJI's own calibration, gyro stabilisation, rolling-shutter correction, a free-look player and timeline editor (iced), and export. One binary, `omnix`: `omnix play` is the GUI; the other subcommands (`export`, `stitch`, `preview`, `scan`, `check`, `info`, ...) are the CLI. Linux is the main platform, macOS (Apple Silicon) builds from source, Windows is in beta.
 
 ## Build and check
 
 ```sh
-cargo build --release          # target/release/rosmo360
+cargo build --release          # target/release/omnix
 cargo test --release           # GPU tests need a real GPU adapter
 cargo clippy --release         # no new warnings
 ```
@@ -38,8 +38,8 @@ How to check:
 - Export the same clip or project both ways and compare:
 
   ```sh
-  rosmo360 export clip.OSV -s 10 -d 3 -o gpu.mp4
-  rosmo360 export clip.OSV -s 10 -d 3 --cpu -o cpu.mp4
+  omnix export clip.OSV -s 10 -d 3 -o gpu.mp4
+  omnix export clip.OSV -s 10 -d 3 --cpu -o cpu.mp4
   ffmpeg -i gpu.mp4 -i cpu.mp4 -lavfi psnr -f null -
   ```
 
@@ -50,11 +50,11 @@ The same rule holds wider: the **player and the export** must frame, grade and t
 ## Things that are easy to break
 
 - **Portability.** Code must build and work on Linux, macOS and Windows. No Linux-only paths, commands or APIs without a `cfg` fallback; config and cache folders from the platform; ffmpeg found by `ffmpeg::tool`, never assumed at `/usr/bin`.
-- **ffmpeg is a separate program.** We talk to it over pipes, never link its libraries: that keeps rOsmo360 MIT/Apache. Never require a nonfree ffmpeg build.
+- **ffmpeg is a separate program.** We talk to it over pipes, never link its libraries: that keeps Omnix MIT/Apache. Never require a nonfree ffmpeg build.
 - **wgpu comes from iced.** Use `iced::wgpu`; never add `wgpu` as a direct dependency, or the versions split.
 - **The clip cache** (`src/cache.rs`): if your change alters what a cache entry holds or how it's made (layout, a telemetry-parser update touching the rig or attitude, thumbnails), bump `cache::FORMAT`. Otherwise leave it, so users keep their cache.
 - **Project files are a public format** (`src/project.rs`, `view.rs`, `overlay.rs`, `grade.rs`; documented in the README). Older projects must open and look exactly as before: new fields need a default and are written only when they differ from it. Same for `settings.json`.
-- **10-bit and HDR.** Frames may be 8-bit NV12 or 10-bit P010, video or full range, BT.709, BT.601 or BT.2020 HLG/PQ. Test what you change at both depths (Settings → 10-bit, or `ROSMO360_10BIT=1`).
+- **10-bit and HDR.** Frames may be 8-bit NV12 or 10-bit P010, video or full range, BT.709, BT.601 or BT.2020 HLG/PQ. Test what you change at both depths (Settings → 10-bit, or `OMNIX_10BIT=1`).
 - **Frame rates.** Clips at 30, 60 and 100 fps can share one edit, whose rate is its first Osmo clip's. Frames are timed n / fps; every decode is converted to the clip's or edit's rate (`ffmpeg::Out::rate`). Check a mixed-rate edit's frame count when touching decode or export.
 - **The UI stays clean.** No help-text lines in bars or panels: explanations go in hover hints, Settings notes or the user guide. The app never mentions DJI Studio by name.
 - **iced quirks.** Keyboard shortcuts only see keys no widget used. Within one canvas layer images draw over shapes, which is why the timeline is two stacked canvases.
@@ -78,8 +78,8 @@ There's no test footage in the repo, and there won't be: footage is personal. Us
 
 Useful checks:
 
-- Stitch geometry: `rosmo360 stitch clip.OSV -t 10 --only 0 -o a.png` and `--only 1`; content must line up across the overlap at longitude ±90°.
-- Seam: `rosmo360 seam clip.OSV -s 10 -d 3`; compare mismatch and eased jitter before and after.
+- Stitch geometry: `omnix stitch clip.OSV -t 10 --only 0 -o a.png` and `--only 1`; content must line up across the overlap at longitude ±90°.
+- Seam: `omnix seam clip.OSV -s 10 -d 3`; compare mismatch and eased jitter before and after.
 - Stabilisation: `--stabilize lock` through a fast pan; a distant object (or the sun) must stay put. `horizon` keeps the horizon level at large tilts.
 - Exports run several GB of memory at 1080p from the full-res OSV.
 
@@ -93,9 +93,9 @@ Useful checks:
 
 ## Layout
 
-One crate, `rosmo360`: a library (`lib.rs`) and a thin binary (`main.rs`). Dailix (`../dailix`) uses the library, and the library uses Dailix's sheet core (`dailix_sheet`).
+One crate, `omnix`: a library (`lib.rs`) and a thin binary (`main.rs`). Dailix (`../dailix`) uses the library, and the library uses Dailix's sheet core (`dailix_sheet`).
 
-- **The core** (`src/model/`): the project being edited and every change to it as an operation (`model/ops/`: cuts, clips, items, keys, sound), checked, one undo step each (`model/edit.rs`), what's selected (`selection.rs`). No iced, no ffmpeg. The player, the CLI (`rosmo360 apply`, `describe`, `ops-schema`) and tests all change a project only through it (`docs/omnix/OPS-API.md`, `CORE-API.md`).
+- **The core** (`src/model/`): the project being edited and every change to it as an operation (`model/ops/`: cuts, clips, items, keys, sound), checked, one undo step each (`model/edit.rs`), what's selected (`selection.rs`). No iced, no ffmpeg. The player, the CLI (`omnix apply`, `describe`, `ops-schema`) and tests all change a project only through it (`docs/omnix/OPS-API.md`, `CORE-API.md`).
 - **The file format**: `project.rs` (cuts, sound tracks, `drop_missing`), `overlay.rs`, `text.rs`, `grade.rs`, `view.rs` (views, keyframes, `Camera`).
 - **360**: `stitch.rs` (the CPU stitcher, ground truth), `ring.rs`, `exposure.rs`, `align.rs`, `stab.rs`, `imu.rs`, `dji.rs`, `sky.rs`, `track.rs`; colour `grade.rs`, `lut.rs`, `hdr.rs`.
 - **Media**: `ffmpeg/` (every ffmpeg/ffprobe call: decoding, the encoder, `jpeg_frame`, `mono`; `ffmpeg/mix.rs` the export's sound graph), `cache.rs` (the clip cache), `waveform.rs` (a sound's waveform), `fsutil.rs` (safe file replacement, settings and cache folders).

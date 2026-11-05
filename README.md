@@ -1,18 +1,18 @@
-# rOsmo360
+# Omnix
 
-A 360° video player and editor for **DJI Osmo 360** footage, written in Rust. It plays the camera's `.OSV` files directly: it stitches the two fisheye lenses, stabilises with the camera's gyro data and lets you look around freely, without going through DJI Studio. Then you can cut clips together on a timeline, with ordinary videos and photos beside them, keyframe the camera's view, add crossfades, music, colour effects, titles and logos, and export a framed video.
+A home-video editor with first-class **DJI Osmo 360** footage, written in Rust. It grew from [rOsmo360](https://github.com/ravelund/rOsmo360) by Vibing with Ravelund (see [Credits](#credits)). It plays the camera's `.OSV` files directly: it stitches the two fisheye lenses, stabilises with the camera's gyro data and lets you look around freely, without going through DJI Studio. Then you can cut clips together on a timeline, with ordinary videos and photos beside them, keyframe the camera's view, add crossfades, music, colour effects, titles and logos, and export a framed video.
 
-![rOsmo360 editing a mountain hike: a rock tower under the title "Kyrkja, July 2026" with a small logo in the corner, and below it the view angles and the timeline: a text lane and an overlay lane, cuts from four clips with crossfades, thumbnails and keyframe rows, and a soundtrack lane with its waveform and volume line](docs/screenshot.png)
+![Omnix (then rOsmo360) editing a mountain hike: a rock tower under the title "Kyrkja, July 2026" with a small logo in the corner, and below it the view angles and the timeline: a text lane and an overlay lane, cuts from four clips with crossfades, thumbnails and keyframe rows, and a soundtrack lane with its waveform and volume line](docs/screenshot.png)
 
 **New here? Read the [user guide](docs/user-guide.md)**: the whole app, step by step, with screenshots.
 
 Licensed under [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE), at your option.
 
-Ready-made Linux builds, with an install script, an AppImage and a Flatpak, are on the [releases page](https://github.com/ravelund/rOsmo360/releases/latest), and a **Windows** zip as a **beta**; see [Installing](#installing). On an Apple Silicon Mac it builds from source; see [Building](#building).
+Omnix has no published releases yet: build it from source; see [Building](#building). The packaging scripts (`packaging/`) make the same archives, AppImage, Flatpak and Windows zip as upstream's, under Omnix's name.
 
 ## Why
 
-I vibed this tool primarily for Linux, since I couldn't find anything close to DJI Studio there. The goal of rOsmo360 is to bring most of DJI Studio's playback and editing to Linux users. It isn't Linux-exclusive, though: it runs on Apple Silicon Macs too (built from source for now), and Windows support is coming soon.
+To edit home video on Linux end to end: footage from a phone, an action camera, a drone and a 360 camera, with sound treated as carefully as the picture. rOsmo360 brought DJI Studio's 360 playback and editing to Linux; Omnix builds a home-video editor around it (sound lanes, a bin, a contact sheet in its sibling Dailix, an operations core a script or an AI can drive).
 
 ## Features
 
@@ -45,7 +45,7 @@ I vibed this tool primarily for Linux, since I couldn't find anything close to D
 - **Ordinary videos and photos** as cuts beside the Osmo clips: MP4, MOV and the like from a phone, a drone or an action camera (any frame rate, portrait too, and a phone's HDR, brought to normal colours by itself), and JPG, PNG, WebP and other pictures. They work like any cut, framed by pan and zoom keyframes, so a slow push-in over a photo comes free.
 - **Keyframes** for the view: where it looks (yaw, pitch, roll), the zoom, and the projection with its correction, so a shot can pan, zoom or morph into a little planet. Each keyframe eases into the next smoothly, at a steady speed, or holds and then cuts. With Auto keyframe on, framing the view while paused keys it by itself. Every kind of keyframe mark drags along the timeline to retime it.
 - **Follow the stick**: a keyframe can follow the selfie stick, and so whoever holds it, for a third-person shot that frames you automatically. It works from the camera's motion data, even straight below the camera.
-- **Follow a subject by colour**: `rosmo360 track` finds a coloured subject (a friend's jacket, a tent) through a clip, and keyframes can follow it the same way.
+- **Follow a subject by colour**: `omnix track` finds a coloured subject (a friend's jacket, a tent) through a clip, and keyframes can follow it the same way.
 - **Stabilisation per cut**: one cut world-locked, the next following the horizon.
 - **Crossfades** between cuts, picture and sound: overlap two cuts and the first dissolves into the second. Select a cut in the overlap to frame it on its own.
 - **Music**: songs on a lane of their own under the edit, to move, trim, split and crossfade; it fades out by itself where the video ends. A project can start from a song.
@@ -75,25 +75,7 @@ Developed and tested on Linux (KDE Plasma, NVIDIA RTX 3090) and on an Apple Sili
 
 ## Installing
 
-Ready-made builds for x86_64 Linux are on the [releases page](https://github.com/ravelund/rOsmo360/releases/latest). They run on Ubuntu 22.04, Debian 12, Fedora 36 and newer distributions. The install script and the AppImage use `ffmpeg` from the system, with its GPU decoders, so install it from your distribution first; the Flatpak brings its own.
-
-- **Install script**: puts `rosmo360` in `~/.local/bin` and adds rOsmo360 to the application menu.
-
-  ```sh
-  curl -fsSL https://github.com/ravelund/rOsmo360/releases/latest/download/install.sh | sh
-  ```
-
-  Or download `rosmo360-x86_64-linux.tar.gz`, unpack it and run `./install.sh` in it. `--prefix /usr/local` (as root) installs for all users, and `--uninstall` removes it again.
-- **AppImage**: download `rOsmo360-x86_64.AppImage`, make it executable (`chmod +x`) and run it. Without arguments, or given clips or a project, it opens the player. Commands work as with `rosmo360`: `./rOsmo360-x86_64.AppImage export clip.OSV -o out.mp4`.
-- **Flatpak**: download `rOsmo360-x86_64.flatpak` and install it; the Freedesktop runtime comes from Flathub.
-
-  ```sh
-  flatpak install --user rOsmo360-x86_64.flatpak
-  ```
-
-  It brings its own ffmpeg (GPL, with VA-API, Vulkan and NVDEC decoding; built without `scale_cuda`, so exports decode with Vulkan, ~16 rather than ~21 fps at 1080p on an RTX 3090) and needs nothing else from the system. Commands work through `flatpak run io.github.ravelund.rOsmo360 export clip.OSV -o out.mp4`. It sees your files, but has a `/tmp` of its own, and keeps its settings and cache in `~/.var/app/io.github.ravelund.rOsmo360`. The sources of the ffmpeg and x264 inside are in `rOsmo360-flatpak-ffmpeg-sources.tar` on the same release.
-
-**Windows (beta)**: download `rOsmo360-x86_64-windows.zip`, unzip it anywhere and double-click `rosmo360.exe`; dropping a clip or project on it opens that. It brings its own ffmpeg (in the `ffmpeg` folder beside it; GPL, with Direct3D 11, NVDEC and Vulkan decoding), and from a terminal it takes the same commands as on Linux (`rosmo360 export clip.OSV -o out.mp4`). The exe isn't signed, so Windows SmartScreen may warn the first time: **More info → Run anyway**. It's a beta: it has run in a virtual machine without a GPU (slowly, with exports on the CPU) and under Wine, but not yet on a real Windows PC with a graphics card, so GPU decoding there is untested. Reports are welcome in the [issues](https://github.com/ravelund/rOsmo360/issues). The sources of its ffmpeg are in `rOsmo360-windows-ffmpeg-sources.tar` on the same release.
+No releases yet: see [Building](#building). Once Omnix is published, `packaging/` makes an install script, an AppImage, a Flatpak and a Windows zip, as upstream's releases have them.
 
 ## Building
 
@@ -101,11 +83,11 @@ Ready-made builds for x86_64 Linux are on the [releases page](https://github.com
 cargo build --release
 ```
 
-The program is `target/release/rosmo360`. `packaging/build-release.sh` builds the release files into `dist/`, inside an Ubuntu 22.04 container (docker), so they run on older distributions too.
+The program is `target/release/omnix`. `packaging/build-release.sh` builds the release files into `dist/`, inside an Ubuntu 22.04 container (docker), so they run on older distributions too.
 
-On an **Apple Silicon Mac** (with [Rust](https://rustup.rs) and `xcode-select --install`), `sh packaging/macos/build.sh` builds it, fetches a static arm64 ffmpeg (GPL, with VideoToolbox) and makes `target/release/rOsmo360.app` to open from the Finder. There's no signed download for the Mac yet.
+On an **Apple Silicon Mac** (with [Rust](https://rustup.rs) and `xcode-select --install`), `sh packaging/macos/build.sh` builds it, fetches a static arm64 ffmpeg (GPL, with VideoToolbox) and makes `target/release/Omnix.app` to open from the Finder. There's no signed download for the Mac yet.
 
-For **Windows**, `sh packaging/windows/build.sh` cross-builds on Linux (docker, MinGW): `rosmo360.exe` with its icon, beside an ffmpeg built from pinned sources (GPL, with Direct3D 11, NVDEC and Vulkan decoding), zipped as `target/windows/rOsmo360-x86_64-windows.zip`, with those sources in `rOsmo360-windows-ffmpeg-sources.tar`.
+For **Windows**, `sh packaging/windows/build.sh` cross-builds on Linux (docker, MinGW): `omnix.exe` with its icon, beside an ffmpeg built from pinned sources (GPL, with Direct3D 11, NVDEC and Vulkan decoding), zipped as `target/windows/Omnix-x86_64-windows.zip`, with those sources in `Omnix-windows-ffmpeg-sources.tar`.
 
 Want to help? See [CONTRIBUTING.md](CONTRIBUTING.md), and [AGENTS.md](AGENTS.md) if you work with an AI coding agent.
 
@@ -114,10 +96,10 @@ Want to help? See [CONTRIBUTING.md](CONTRIBUTING.md), and [AGENTS.md](AGENTS.md)
 The **[user guide](docs/user-guide.md)** walks through the whole app with screenshots: watching, projections, stabilisation, the timeline, keyframes, crossfades, music, effects, titles and overlays, projects and exporting.
 
 ```sh
-rosmo360 play                 # opens the player; use Open clips… or Ctrl+O
-rosmo360 play clip.OSV        # opens a clip straight away
-rosmo360 play a.OSV b.OSV     # several clips, one after another on the timeline
-rosmo360 play edit.json       # a saved project
+omnix play                 # opens the player; use Open clips… or Ctrl+O
+omnix play clip.OSV        # opens a clip straight away
+omnix play a.OSV b.OSV     # several clips, one after another on the timeline
+omnix play edit.json       # a saved project
 ```
 
 In the player:
@@ -164,21 +146,21 @@ In the player:
 | Save / open / new project | Ctrl+S (Ctrl+Shift+S: save as) / Ctrl+Shift+O / Ctrl+N |
 | Export the edit | The export button, an arrow out of a tray, or Ctrl+E: the Export panel, with the resolution (720p–2160p), the format (MP4, or 10-bit DNxHR HQX and PCM in `.mov`, which DaVinci Resolve's free Linux version can read) and **A file per cut** ("project - 001" and on, the music as WAVs, for another editor; **Graded** gives them their LUTs and effects); the aspect lock sets the shape, 16:9 when free |
 
-A project saves the cuts with their keyframes, crossfades, effects and volume points, the music, the levels, the titles and overlays, the fades and the aspect lock, in the same file `rosmo360 export` renders (see below). Clips in the project's folder are stored by relative path, so the folder can be moved as a whole.
+A project saves the cuts with their keyframes, crossfades, effects and volume points, the music, the levels, the titles and overlays, the fades and the aspect lock, in the same file `omnix export` renders (see below). Clips in the project's folder are stored by relative path, so the folder can be moved as a whole.
 
 Command-line tools:
 
 ```sh
-rosmo360 stitch clip.OSV -t 10 -w 4096 --stabilize horizon -o frame.png   # one frame to an equirect PNG
-rosmo360 render clip.OSV -s 48 -d 12 -w 3840 --stabilize horizon -o out.mp4   # a span to an equirect MP4
+omnix stitch clip.OSV -t 10 -w 4096 --stabilize horizon -o frame.png   # one frame to an equirect PNG
+omnix render clip.OSV -s 48 -d 12 -w 3840 --stabilize horizon -o out.mp4   # a span to an equirect MP4
 ```
 
 Framed video:
 
 ```sh
-rosmo360 export clip.OSV -s 30 -d 8 --view 40,-10 -a 9:16 -o reel.mp4   # a fixed view: yaw 40°, pitch −10°, vertical
-rosmo360 export clip.OSV --reframe moves.json -o reel.mp4                         # keyframed camera moves
-rosmo360 export clip.OSV --reframe moves.json --draft -o draft.mp4                # quick, soft draft from the proxy
+omnix export clip.OSV -s 30 -d 8 --view 40,-10 -a 9:16 -o reel.mp4   # a fixed view: yaw 40°, pitch −10°, vertical
+omnix export clip.OSV --reframe moves.json -o reel.mp4                         # keyframed camera moves
+omnix export clip.OSV --reframe moves.json --draft -o draft.mp4                # quick, soft draft from the proxy
 ```
 
 Export stitches on the GPU with the player's shader (any vendor, through wgpu): about 21 frames a second at 1080p on an RTX 3090, four times the CPU stitcher. `--cpu` uses the CPU stitcher instead, as happens anyway without a usable GPU.
@@ -217,7 +199,7 @@ A cut may also have:
 - `crossfade`: seconds it overlaps the cut before, dissolving in from it (the edit is that much shorter);
 - `volume`: its own sound's level over time, `[{"t": 12, "volume": -10}, …]` in clip time and dB, straight lines between points;
 - `effects`: colour keyframes in clip time, each holding the whole look (fields left out are 0, opacity and lut 1): `exposure` (stops, −3…3), `contrast`, `highlights`, `shadows`, `temperature`, `tint`, `saturation`, `vibrance` (−1…1), `vignette` (0…1), `opacity` (0…1, the rest black), `lut` (how much of the cut's LUT, 0…1), and `ease`;
-- `lut`: a LUT applied before the effects: the name of one in the player's LUT library (`"DJI Osmo 360 D-Log M to Rec.709 V1"`, kept in rOsmo360's settings folder under `luts/`), or a `.cube` file, relative to the project. A missing one leaves the cut as filmed, with a warning.
+- `lut`: a LUT applied before the effects: the name of one in the player's LUT library (`"DJI Osmo 360 D-Log M to Rec.709 V1"`, kept in Omnix's settings folder under `luts/`), or a `.cube` file, relative to the project. A missing one leaves the cut as filmed, with a warning.
 
 On an ordinary video or a picture there's no sphere: a keyframe pans and zooms within the picture. `fov` 90 shows its whole height (and is where a cut without keyframes stays), 45 is a 2× zoom, and 90° of `yaw` or `pitch` moves the view one picture height.
 
@@ -266,10 +248,10 @@ Titles go in `text` and pictures in `overlays`, each a list of lanes (the first 
 An item shows from `at` in the edit for `out − in` seconds. Its `motion` keyframes, in its own time from `in`, give its centre (`x`, `y`, 0…1 across and down the frame), `size` (1: a picture fits the frame, text is as big as its own `size`, a share of the frame's height) and `rotation` (degrees clockwise), eased like camera keyframes; left-out fields are their defaults (the centre, 1, 0). `effects` are as for cuts. Text takes `content`, `font` (the built-in Inter, Montserrat, Bebas Neue, Playfair Display, Caveat and Permanent Marker, or a system font; a missing one falls back to Inter), `size`, `colour`, `bold`, `align` (`left`, `centre`, `right`), `shadow` and `outline`. Clips export leaves titles and overlays out.
 
 ```sh
-rosmo360 export edit.json -o edit.mp4
-rosmo360 export edit.json --clips --handles 1 -o clips/      # a file per cut: "edit - 001.mp4", … with 1 s extra either side, the music as WAVs
-rosmo360 export edit.json --clips --graded -o clips/         # the same, with the cuts' LUTs and colour effects
-rosmo360 export edit.json --format resolve -o edit.mov       # 10-bit DNxHR HQX + PCM, for DaVinci Resolve on Linux
+omnix export edit.json -o edit.mp4
+omnix export edit.json --clips --handles 1 -o clips/      # a file per cut: "edit - 001.mp4", … with 1 s extra either side, the music as WAVs
+omnix export edit.json --clips --graded -o clips/         # the same, with the cuts' LUTs and colour effects
+omnix export edit.json --format resolve -o edit.mov       # 10-bit DNxHR HQX + PCM, for DaVinci Resolve on Linux
 ```
 
 `--format resolve` exists because DaVinci Resolve's free version on Linux reads neither H.264/H.265 nor AAC. DNxHR is an editing format, so the files are large: about 28 MB a second at 1080p. Exports decode at 8 bits unless `ROSMO360_10BIT=1` is set, the command line's version of the player's 10-bit setting; MP4s are dithered down to 8 bits either way.
@@ -281,7 +263,7 @@ Instead of `yaw` and `pitch`, a keyframe can say `"follow": "stick"`: it then lo
 To follow something else, track it by colour first, then give the track's file as `follow` (relative to the project or reframe file):
 
 ```sh
-rosmo360 track clip.OSV --colour "#e8641e" -s 12 -d 15 > friend.csv   # --near YAW,PITCH where it starts, if it isn't the biggest patch of that colour
+omnix track clip.OSV --colour "#e8641e" -s 12 -d 15 > friend.csv   # --near YAW,PITCH where it starts, if it isn't the biggest patch of that colour
 ```
 
 ```json
@@ -293,22 +275,22 @@ The CSV has, every 0.1 s, the subject's direction in the camera, its yaw and pit
 Skimming a clip:
 
 ```sh
-rosmo360 info clip.OSV                      # length, frame rate, recording time, kind (osv, video, picture) and colour (normal, D-Log M), as JSON
-rosmo360 preview clip.OSV -o sheet.png      # 24 moments on one contact sheet, marked with time and yaw
-rosmo360 preview clip.OSV --reframe moves.json -o check.png   # the framing at each keyframe
-rosmo360 preview edit.json -o check.png      # a project: a row per cut, framed as the export (--every N for more)
-rosmo360 preview edit.json --tile 200 --columns 6 -o check.png   # a long edit on one readable sheet
-rosmo360 scan clip.OSV > scan.csv           # per second: heading, tilt, turning, shake, loudness
-rosmo360 scan clip.OSV --image > scan.csv   # and open sky, skyline height, views out to the horizon
-rosmo360 scan ~/Videos/Hike -o scans/        # a CSV per clip in a folder, four at a time
-rosmo360 check edit.json                    # likely mistakes in an edit, a line each
+omnix info clip.OSV                      # length, frame rate, recording time, kind (osv, video, picture) and colour (normal, D-Log M), as JSON
+omnix preview clip.OSV -o sheet.png      # 24 moments on one contact sheet, marked with time and yaw
+omnix preview clip.OSV --reframe moves.json -o check.png   # the framing at each keyframe
+omnix preview edit.json -o check.png      # a project: a row per cut, framed as the export (--every N for more)
+omnix preview edit.json --tile 200 --columns 6 -o check.png   # a long edit on one readable sheet
+omnix scan clip.OSV > scan.csv           # per second: heading, tilt, turning, shake, loudness
+omnix scan clip.OSV --image > scan.csv   # and open sky, skyline height, views out to the horizon
+omnix scan ~/Videos/Hike -o scans/        # a CSV per clip in a folder, four at a time
+omnix check edit.json                    # likely mistakes in an edit, a line each
 ```
 
 A project's sheet heads each row with the cut's edit time, number, clip and in–out points (`2:16.4 #23 0036 18.0-25.0`), labels each tile with its edit and clip time, draws the titles and overlays, and runs the music's waveform under each row. `check` lists cuts out of the order they were filmed in, a cut repeating footage the cut before shows, crossfades between cuts of one clip seconds apart, pans over 30°/s (`--fast-pan`; it says whether the keyframes or the camera's own turning make them), cuts under a second, and music ending before the edit or running far past it.
 
-Clips' telemetry and thumbnails, and songs' waveforms, are cached in `~/.cache/rosmo360`, so a clip opens in a fraction of a second after the first time (0047 from a network share: 46 s, then 0.4 s). `rosmo360 cache add FOLDER` caches a folder's clips ahead of time, `rosmo360 cache move FOLDER` keeps the cache elsewhere (or set `ROSMO360_CACHE` for one run), `rosmo360 cache` shows where it is and its size, `rosmo360 cache clear [--older-than DAYS]` empties it, and `--no-cache` on any command bypasses it.
+Clips' telemetry and thumbnails, and songs' waveforms, are cached in `~/.cache/omnix`, so a clip opens in a fraction of a second after the first time (0047 from a network share: 46 s, then 0.4 s). `omnix cache add FOLDER` caches a folder's clips ahead of time, `omnix cache move FOLDER` keeps the cache elsewhere (or set `ROSMO360_CACHE` for one run), `omnix cache` shows where it is and its size, `omnix cache clear [--older-than DAYS]` empties it, and `--no-cache` on any command bypasses it.
 
-`rosmo360 --help` lists everything, including `rig` (calibration as JSON), `imu` (motion data as CSV) and `seam` (seam quality report).
+`omnix --help` lists everything, including `rig` (calibration as JSON), `imu` (motion data as CSV) and `seam` (seam quality report).
 
 ## Roadmap
 
@@ -321,24 +303,22 @@ Clips' telemetry and thumbnails, and songs' waveforms, are cached in `~/.cache/r
 
 ## License
 
-rOsmo360 is licensed under either of
+Omnix is licensed under either of
 
 - the [MIT License](LICENSE-MIT), or
 - the [Apache License, Version 2.0](LICENSE-APACHE),
 
-at your option. Unless you state otherwise, any contribution you submit for inclusion in rOsmo360 is dual-licensed as above, without any additional terms or conditions.
+at your option. Unless you state otherwise, any contribution you submit for inclusion in Omnix is dual-licensed as above, without any additional terms or conditions.
 
 The built-in fonts in [`fonts/`](fonts/) keep their own licences (the SIL Open Font License 1.1, and Apache 2.0 for Permanent Marker), included beside each font and with every release; see [`fonts/README.md`](fonts/README.md).
 
-The Vibing with Ravelund logo ([`vibewithravelund-lowres-corrected.jpg`](vibewithravelund-lowres-corrected.jpg)) and the screenshots ([`docs/screenshot.png`](docs/screenshot.png) and those in [`docs/guide/`](docs/guide/)) are not covered by these licences; all rights reserved.
-
-## Support
-
-rOsmo360 is free, and it always will be. If you find it useful and feel like buying me a coffee, you can do that through [PayPal](https://www.paypal.com/donate/?hosted_button_id=78BF2LSB8FGR8). Thank you! ☕
+The screenshots ([`docs/screenshot.png`](docs/screenshot.png) and those in [`docs/guide/`](docs/guide/)) are rOsmo360's and not covered by these licences; all rights reserved by their author. They are to be replaced by Omnix's own before it is published.
 
 ## Credits
 
-Made by **Vibing with Ravelund**, 2026. rOsmo360 was built through AI-assisted ("vibe") coding with Claude.
+Omnix is made by **Dmytro Halushko** with Claude, 2026.
+
+It grew from **[rOsmo360](https://github.com/ravelund/rOsmo360)** by **Vibing with Ravelund** (MIT OR Apache-2.0), whose stitching, stabilisation, player and timeline it builds on, itself built with Claude.
 
 It stands on the shoulders of:
 
@@ -347,4 +327,4 @@ It stands on the shoulders of:
 - the fonts Inter, Montserrat, Bebas Neue, Playfair Display, Caveat and Permanent Marker, by their designers, as published on [Google Fonts](https://fonts.google.com);
 - [FFmpeg](https://ffmpeg.org), used as an external program for decoding.
 
-rOsmo360 is an independent project. It is not affiliated with or endorsed by DJI. DJI, Osmo and DJI Studio are trademarks of SZ DJI Technology Co., Ltd.
+Omnix is an independent project. It is not affiliated with or endorsed by DJI. DJI, Osmo and DJI Studio are trademarks of SZ DJI Technology Co., Ltd.

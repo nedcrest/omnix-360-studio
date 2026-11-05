@@ -22,7 +22,7 @@ export PKG_CONFIG_PATH=$PWD/.localdeps/root/usr/lib/x86_64-linux-gnu/pkgconfig
   `sine`), tiny (320×180, ≤ 3 s), in a temp folder per test. Never real
   footage.
 - **End to end works without footage:** two generated 3 s clips and a
-  song, `rosmo360 --no-cache export edit.json --cpu --size 320x180`:
+  song, `omnix --no-cache export edit.json --cpu --size 320x180`:
   ~3.9 s, 105 frames (2 + 2 s at 30 fps less a 0.5 s crossfade),
   picture and sound both 3.500 s. `check` on it: ~3 s, 0 findings.
   Ordinary videos go through `Pipeline::load_flat`, no OSV needed.
@@ -50,7 +50,7 @@ smaller player modules.
 
 1. **Paths on load and save** — a bug, found by this analysis and
    reproduced (2026-11-01): a project opened by a relative path
-   (`rosmo360 normalize edit.json -o sub/n.json`, or `play edit.json`
+   (`omnix normalize edit.json -o sub/n.json`, or `play edit.json`
    then Save As elsewhere) keeps its clips relative to the working folder
    (`Project::load` joins them to `path.parent()`, which is `""`), so the
    copy saved elsewhere names `a.mp4` and can't find it: `check

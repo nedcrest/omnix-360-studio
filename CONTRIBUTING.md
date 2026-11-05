@@ -1,13 +1,13 @@
-# Contributing to rOsmo360
+# Contributing to Omnix
 
-Thanks for helping. rOsmo360 is a free, open replacement for DJI Studio's playback and editing of Osmo 360 footage, and help is welcome: bug reports, testing on hardware we don't have (Windows PCs with a GPU, other Macs, other Linux setups), fixes and features.
+Thanks for helping. Omnix is a free, open replacement for DJI Studio's playback and editing of Osmo 360 footage, and help is welcome: bug reports, testing on hardware we don't have (Windows PCs with a GPU, other Macs, other Linux setups), fixes and features.
 
 ## Reporting a problem
 
-Open an [issue](https://github.com/ravelund/rOsmo360/issues) with:
+Open an [issue](https://github.com/ravelund/Omnix/issues) with:
 
 - what you did, what you expected and what happened;
-- your system (OS, GPU), the rOsmo360 version (`rosmo360 --version`) and how you installed it;
+- your system (OS, GPU), the Omnix version (`omnix --version`) and how you installed it;
 - for stitching, stabilisation or colour problems, a short clip that shows it helps more than anything: a few seconds of `.OSV` with its `.LRF`, shared however you like. We only use it to find the bug, and never publish it.
 
 ## Code
@@ -23,4 +23,4 @@ Using an AI coding agent is fine: `AGENTS.md` is written for it. You're still re
 
 ## Licence
 
-rOsmo360 is dual-licensed under [MIT](LICENSE-MIT) or [Apache 2.0](LICENSE-APACHE). Unless you say otherwise, anything you contribute is licensed the same way.
+Omnix is dual-licensed under [MIT](LICENSE-MIT) or [Apache 2.0](LICENSE-APACHE). Unless you say otherwise, anything you contribute is licensed the same way.

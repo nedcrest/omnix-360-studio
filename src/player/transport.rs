@@ -59,7 +59,7 @@ impl App {
     /// it. Elsewhere there's none.
     pub(super) fn follow_crossfade(&mut self) {
         // Played, the outgoing cut leads again, as `tick` expects.
-        if self.clip.as_ref().is_some_and(|c| c.playback.playing) && self.partner.as_ref().is_some_and(|(j, _)| j + 1 == self.current) {
+        if self.playing() && self.partner.as_ref().is_some_and(|(j, _)| j + 1 == self.current) {
             self.swap_partner();
             if let Some(c) = &mut self.clip {
                 c.playback.scrub_end();
@@ -502,7 +502,7 @@ impl App {
             Message::Tick => {
                 self.tick();
                 self.tick_source();
-                if self.clip.as_ref().is_some_and(|c| c.playback.playing) {
+                if self.playing() {
                     self.reveal_playhead();
                 }
             }
@@ -524,7 +524,7 @@ impl App {
             Message::Toggle => {
                 self.pause_source();
                 self.follow = true;
-                let playing = self.clip.as_ref().is_some_and(|c| c.playback.playing);
+                let playing = self.playing();
                 if !playing && self.position() >= self.edit.duration() - 1.5 / self.fps() {
                     // From the end of the edit, play again from the start.
                     let start = self.edit.cuts.first().map_or(0.0, |c| c.start);

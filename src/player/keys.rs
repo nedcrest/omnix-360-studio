@@ -308,7 +308,7 @@ impl App {
         // The edit's end shows its last frame.
         let t = t.clamp(0.0, (self.edit.duration() - 1.0 / self.fps()).max(0.0));
         if let Some((i, t)) = self.edit.locate(t) {
-            let playing = self.clip.as_ref().is_some_and(|c| c.playback.playing);
+            let playing = self.playing();
             self.goto(i, t, playing);
         }
         self.step_note(note)

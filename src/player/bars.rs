@@ -257,8 +257,8 @@ impl App {
                     let to = (all.partition_point(|(t, _)| *t <= c.end) + 1).min(all.len());
                     all[from..to].to_vec()
                 });
-                let wave = self.waveforms.get(&cut_wave_file(c)).cloned();
-                let even_wave = if c.even { self.even_waves.get(&cut_wave_file(c)).cloned() } else { None };
+                let wave = self.waveforms.get(&c.sound_file()).cloned();
+                let even_wave = if c.even { self.even_waves.get(&c.sound_file()).cloned() } else { None };
                 let level = level_tag(c.gain, c.mute, filter_tags(c.low_cut, c.clean, c.even));
                 // A picture lasts as long as it's trimmed to.
                 let most = self.library.iter().find(|m| m.input == c.input).map_or(f64::INFINITY, |m| if m.flat.is_some_and(|f| f.picture) { f64::INFINITY } else { m.duration });

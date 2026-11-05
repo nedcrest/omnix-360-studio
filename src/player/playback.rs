@@ -223,7 +223,8 @@ impl Playback {
         ((t * self.media.fps).round() / self.media.fps).clamp(0.0, last)
     }
 
-    fn clock(&self) -> f64 {
+    /// The playback clock: where playback is now, between frames too.
+    pub fn now(&self) -> f64 {
         match (self.playing, &self.audio) {
             (false, _) => self.anchor_pts,
             _ if self.sound_waits => self.anchor_pts,
@@ -429,11 +430,6 @@ impl Playback {
         self.playing && !self.sound_waits
     }
 
-    /// The playback clock: where playback is now, between frames too.
-    pub fn now(&self) -> f64 {
-        self.clock()
-    }
-
     /// From where the last step or seek asked, not from the frame shown:
     /// pressed faster than frames decode, each step used to start again
     /// from the old frame, asking for the same one, and the playhead stood
@@ -567,12 +563,12 @@ impl Playback {
         let mut show = self.recalled.take().map(|f| (f, None));
         // A slow machine at full resolution can fall behind the sound; then
         // the sound restarts from the picture rather than drifting from it.
-        if self.audio.is_some() && self.clock() - self.shown_pts > 0.5 {
+        if self.audio.is_some() && self.now() - self.shown_pts > 0.5 {
             self.anchor_pts = self.shown_pts;
             self.hold_sound();
         }
         if self.stream.is_some() {
-            let due = if self.playing && !self.sound_waits { self.clock() + 0.5 / self.media.fps } else { f64::INFINITY };
+            let due = if self.playing && !self.sound_waits { self.now() + 0.5 / self.media.fps } else { f64::INFINITY };
             let mut latest = None;
             let mut ended = false;
             loop {
@@ -629,7 +625,7 @@ impl Playback {
                         self.preview(t);
                     }
                 }
-            } else if self.playing && self.audio.is_none() && self.shown_pts < self.clock() - 0.25 {
+            } else if self.playing && self.audio.is_none() && self.shown_pts < self.now() - 0.25 {
                 // Decoding is slower than real time: let the clock wait for
                 // it. Sound can't wait, so with sound the picture skips.
                 self.anchor_pts = self.shown_pts;

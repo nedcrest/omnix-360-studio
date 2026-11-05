@@ -84,7 +84,7 @@ impl App {
     /// paused (playing, a drag would fight the motion keyframes).
     pub(super) fn overlay_handles(&self) -> handles::Handles {
         let t = self.position();
-        let playing = self.clip.as_ref().is_some_and(|c| c.playback.playing);
+        let playing = self.playing();
         let items = [crate::overlay::Track::Overlay, crate::overlay::Track::Text]
             .into_iter()
             .filter(|_| !playing)

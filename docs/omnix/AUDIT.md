@@ -35,8 +35,7 @@ In Omnix:
 - [ ] File type lists disagree (Open dialog vs `CLIP_EXT`).
 - [ ] Whole-film `Mix` assembly ×3; `Sound` spelt out by hand.
 - [ ] Find-by-id ×7; `Lane::place` = `Music::place`; mute-aware level ×3.
-- [ ] Loading `Options` literal ×3; "is the edit playing" ×9; pass-through
-      wrappers (`cut_wave_file`, `Media::filter`, `now`).
+- [ ] Loading `Options` literal ×3.
 - [ ] Timeline per-lane code (edges, fades, blocks, folded strips,
       crossfade X, lane boxes) copied across lanes; view structs copy the
       model field by field; five selection fields rebuilt from one.

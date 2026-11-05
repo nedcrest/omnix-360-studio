@@ -334,7 +334,7 @@ impl App {
                 self.follow = true;
                 self.selection = Selection::cut_at(&self.edit, i);
                 if let Some(t) = self.edit.cuts.get(i).and_then(|c| c.keyframes.get(k)).map(|k| k.t) {
-                    let playing = self.clip.as_ref().is_some_and(|c| c.playback.playing);
+                    let playing = self.playing();
                     self.goto(i, t, playing);
                 }
             }

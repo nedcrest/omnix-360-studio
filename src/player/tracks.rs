@@ -23,11 +23,6 @@ pub(super) fn filter_tags(low_cut: bool, clean: bool, even: bool) -> [(bool, &'s
     [(low_cut, "low cut"), (clean, "clean"), (even, "even")]
 }
 
-/// The file to draw cut `cut`'s waveform from (`Cut::sound_file`).
-pub(super) fn cut_wave_file(cut: &Cut) -> PathBuf {
-    cut.sound_file()
-}
-
 /// Runs `f` on its own thread so blocking work (parsing, ffprobe) stays off
 /// the executor.
 /// Reads a sound file's length on a thread (ffprobe can take seconds on a
@@ -73,7 +68,7 @@ impl App {
         // The plain waveform of each, and the evened one of those evened;
         // a sound clip's plain one comes when it's added (`load_waveform`).
         let wants = self.edit.cuts.iter().flat_map(|c| {
-            let file = cut_wave_file(c);
+            let file = c.sound_file();
             std::iter::once((file.clone(), false)).chain(c.even.then_some((file, true)))
         });
         let wants = wants.chain(self.edit.sound_clips().filter(|c| c.even).map(|c| (c.input.clone(), true)));

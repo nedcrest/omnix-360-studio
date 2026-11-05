@@ -229,9 +229,6 @@ impl App {
         if self.record.take.is_some() { self.stop_take() } else { Task::none() }
     }
 
-    fn playing(&self) -> bool {
-        self.clip.as_ref().is_some_and(|c| c.playback.playing)
-    }
 
     fn start_take(&mut self) {
         self.record.error = None;

@@ -316,6 +316,7 @@ impl App {
                 // A cut's audio file that's gone: its clip's own sound plays,
                 // and the file stays named, so it comes back once found.
                 let mut deaf: Vec<String> = cuts.iter().filter_map(|c| c.audio.as_ref()).filter(|a| !a.exists()).map(|a| a.display().to_string()).collect();
+                deaf.sort();
                 deaf.dedup();
                 if !deaf.is_empty() {
                     let said = self.error.take().map_or(String::new(), |e| e + ". ");

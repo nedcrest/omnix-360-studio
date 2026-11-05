@@ -9,8 +9,6 @@ cost is duplication and drift.
 
 ## Bugs found on the way (first)
 
-- [ ] Save frame (PNG): no grade, no LUT, so a D-Log M cut saves flat
-      (`player/export.rs` `Request`, `jobs.rs`). CPU/GPU rule.
 - [ ] Bin panel lists folder clips twice under «Loaded clips»: use
       `loaded_outside()` (`bin.rs` `bin_panel`).
 - [ ] Bin add tooltips say "music lane" for SFX and voice-over (`bin.rs`).

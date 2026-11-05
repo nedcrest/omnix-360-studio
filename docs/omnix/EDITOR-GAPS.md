@@ -1326,7 +1326,12 @@ flags inside it would come along as markers with their notes, at the
 same place in the cut; so the timeline says where the meme or the sound
 goes. The markers exist (gap 5, built 2026-11-03: `Cut::marks`, M,
 the Markers row); this is gap 5's one leftover, «footage-agent's flags
-exported into them», now from Dailix's sheet. Flags outside every
+exported into them», now from Dailix's sheet.
+A flag lands in its cut's `marks`, in clip time, so it travels with the
+cut (user, 2026-11-05: «move a video's flags with it»): moved with the
+cut, kept on its frame through a trim (hidden past the cut's ends, back
+when trimmed out again), carried by both halves of a split. Must stay
+so; `markers_are_set_noted_moved_and_removed_by_time` checks it. Flags outside every
 segment stay in the sheet. Made when a cut is made from a segment (the
 bin's add buttons, or Dailix's hand-over), kept in step by the mark's
 id (a marker could carry it). Milestone «Матеріал і бін».

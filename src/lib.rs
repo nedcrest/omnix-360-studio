@@ -159,10 +159,9 @@ impl schemars::JsonSchema for Rating {
     }
 }
 
-/// A mark as the file holds it, for the schema: `end` only for a segment,
-/// `kind: "flag"` only for a flag.
-#[derive(schemars::JsonSchema)]
-#[allow(dead_code)]
+/// A mark as the file holds it: `end` only for a segment, `kind: "flag"`
+/// only for a flag. Read as this, then typed (`Mark`); the schema shows it.
+#[derive(Deserialize, schemars::JsonSchema)]
 struct MarkShape {
     /// Given by the core, kept forever: `m` and a number.
     id: Option<String>,
@@ -175,6 +174,7 @@ struct MarkShape {
     /// One of the eight (talk, establish, broll, detail, cut, action,
     /// reveal, reaction) or the sheet's own (`roles`).
     role: Option<String>,
+    #[serde(default)]
     note: String,
 }
 
@@ -235,18 +235,7 @@ pub struct Mark {
 
 impl<'de> Deserialize<'de> for Mark {
     fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Mark, D::Error> {
-        // As written: `kind` only for a flag, `end` only for a segment.
-        #[derive(Deserialize)]
-        struct Raw {
-            id: Option<String>,
-            t: f64,
-            end: Option<f64>,
-            kind: Option<String>,
-            role: Option<String>,
-            #[serde(default)]
-            note: String,
-        }
-        let r = Raw::deserialize(d)?;
+        let r = MarkShape::deserialize(d)?;
         let kind = match (r.kind.as_deref(), r.end) {
             (Some("flag"), _) => MarkKind::Flag,
             (_, Some(_)) => MarkKind::Segment,

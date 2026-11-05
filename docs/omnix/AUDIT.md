@@ -12,9 +12,6 @@ cost is duplication and drift.
 - [ ] Timeline: press and hover test what's under the pointer in different
       orders (level tag vs fade knob): the cursor lies (`timeline.rs`
       `Marks::update` / `mouse_interaction`; `OverlayLane` too).
-- [ ] Edit fades, clip-sound level, track level: no `Op`, set directly
-      (`effects.rs`, `tracks.rs`).
-- [ ] `rosmo360 duck` saves directly; `SoundOp::Duck` exists (`duck.rs`).
 - [ ] Opening a project drops missing files in a UI handler: a tested
       `Project::drop_missing` (`file.rs`).
 - [ ] Dailix: I/O/M/N/PageUp-Down marking logic in `pane_key` (100 lines,

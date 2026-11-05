@@ -168,14 +168,13 @@ impl Doc {
     pub fn check(&self) -> Vec<String> {
         let mut problems = Vec::new();
         let Ok(sheet) = self.sheet() else { return vec!["the file isn't a contact sheet".into()] };
-        let date = |d: &str| d.len() == 10 && d.chars().enumerate().all(|(i, c)| if i == 4 || i == 7 { c == '-' } else { c.is_ascii_digit() });
-        for day in sheet.days.keys().filter(|d| !date(d)) {
+        for day in sheet.days.keys().filter(|d| !crate::is_day(d)) {
             problems.push(format!("day {day}: not a date"));
         }
         let mut ids = std::collections::HashSet::new();
         for (key, clip) in &sheet.clips {
             match key.split_once('/') {
-                Some((day, file)) if date(day) && !file.is_empty() => {}
+                Some((day, file)) if crate::is_day(day) && !file.is_empty() => {}
                 _ => problems.push(format!("clip {key}: not <day>/<file>")),
             }
             for m in &clip.marks {

@@ -79,6 +79,10 @@ impl Layout {
     pub fn footage(&self) -> PathBuf {
         self.root.join("01_footage")
     }
+    /// Where edits go (Omnix's projects).
+    pub fn edits(&self) -> PathBuf {
+        self.root.join("04_project")
+    }
 
     /// Whether `root` is a Dailix project (it has `dailix/project.json`).
     pub fn is_project(&self) -> bool {

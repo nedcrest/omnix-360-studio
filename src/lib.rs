@@ -27,6 +27,11 @@ use serde::Deserialize;
 use serde_json::Value;
 use std::fmt;
 
+/// Whether `name` is a day as the sheet keys days: `YYYY-MM-DD`.
+pub fn is_day(name: &str) -> bool {
+    name.len() == 10 && name.chars().enumerate().all(|(i, c)| if i == 4 || i == 7 { c == '-' } else { c.is_ascii_digit() })
+}
+
 /// Seconds as `m:ss`, with `places` decimals (`m:ss.s` for one), rounded
 /// to them first: 59.96 s with one place is «1:00.0», never «0:60.0».
 /// One clock for both programs' readouts and the sheet's text view.

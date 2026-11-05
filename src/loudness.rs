@@ -123,7 +123,7 @@ pub fn bring_to(path: &Path, target: f64, format: crate::ffmpeg::Format) -> Resu
     Ok(Some((before, gain)))
 }
 
-/// `rosmo360 normalize`: measures each cut (all, or those numbered in
+/// `omnix normalize`: measures each cut (all, or those numbered in
 /// `only`, from 1), or every clip on `track`, as it will sound (evened out
 /// first if `even`), and applies what it measured as one step of ops
 /// (`SoundOp::Normalized`, as the player's dialog does), printing a line
@@ -175,7 +175,7 @@ mod tests {
 
     #[test]
     fn measures_a_level_and_a_change_in_it() {
-        let dir = std::env::temp_dir().join(format!("rosmo360-loud-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("omnix-loud-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let make = |name: &str, filter: &str| {
             let path = dir.join(name);

@@ -152,7 +152,7 @@ impl Options {
 }
 
 /// Caches `input` the way opening it in the player would: its telemetry and
-/// timeline thumbnails (`rosmo360 cache add`).
+/// timeline thumbnails (`omnix cache add`).
 pub fn cache_clip(input: &Path) -> Result<()> {
     thumbs::make(&Media::load(input.to_owned(), &Options::software(), &|_| {})?, |_, _| true)
 }

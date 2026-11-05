@@ -1,5 +1,5 @@
 //! Omnix (built on rOsmo360): a home-video and DJI Osmo 360 editor. The
-//! library holds everything; the `rosmo360` binary is its command line
+//! library holds everything; the `omnix` binary is its command line
 //! (`cli::main`), and `play` opens the player.
 //!
 //! Map and plan: `docs/omnix/ARCHITECTURE.md`.
@@ -15,7 +15,7 @@ mod dji;
 mod duck;
 mod mixdown;
 mod notes;
-/// A Dailix project's marking made into an edit (`rosmo360 from-sheet`).
+/// A Dailix project's marking made into an edit (`omnix from-sheet`).
 pub mod from_sheet;
 mod model;
 mod lufs;

@@ -287,7 +287,7 @@ pub enum Follow {
     /// +y, so the camera's attitude says where it points, with no picture
     /// analysis, even straight below the camera.
     Stick,
-    /// A subject tracked by colour (`rosmo360 track`): the CSV it wrote.
+    /// A subject tracked by colour (`omnix track`): the CSV it wrote.
     Track(PathBuf),
 }
 
@@ -296,7 +296,7 @@ impl schemars::JsonSchema for Follow {
         "Follow".into()
     }
     fn json_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
-        schemars::json_schema!({ "type": "string", "description": "\"stick\": the selfie stick (whoever holds it); else the path of a colour track's CSV (rosmo360 track)" })
+        schemars::json_schema!({ "type": "string", "description": "\"stick\": the selfie stick (whoever holds it); else the path of a colour track's CSV (omnix track)" })
     }
 }
 

@@ -1366,7 +1366,7 @@ mod tests {
 
     #[test]
     fn loads_cuts_relative_to_the_file() {
-        let dir = std::env::temp_dir().join(format!("rosmo360-project-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("omnix-project-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("edit.json");
         std::fs::write(
@@ -1400,7 +1400,7 @@ mod tests {
     /// the strength moved into its effects; it isn't written back.
     #[test]
     fn a_cut_s_own_audio_file_loads_and_saves_like_its_clip() {
-        let dir = std::env::temp_dir().join(format!("rosmo360-audio-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("omnix-audio-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("edit.json");
         std::fs::write(
@@ -1425,7 +1425,7 @@ mod tests {
 
     #[test]
     fn old_lut_strength_becomes_an_effect() {
-        let dir = std::env::temp_dir().join(format!("rosmo360-lut-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("omnix-lut-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("edit.json");
         std::fs::write(
@@ -1445,7 +1445,7 @@ mod tests {
 
     #[test]
     fn music_sits_on_the_edit_relative_to_the_file() {
-        let dir = std::env::temp_dir().join(format!("rosmo360-music-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("omnix-music-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("edit.json");
         // Music alone is a project: the song is the frame to fill.
@@ -1488,7 +1488,7 @@ mod tests {
 
     #[test]
     fn sound_effects_are_a_track_of_their_own() {
-        let dir = std::env::temp_dir().join(format!("rosmo360-sfx-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("omnix-sfx-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("edit.json");
         // Sound effects alone are a start, as music is; their files load

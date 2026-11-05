@@ -1,4 +1,4 @@
-//! `rosmo360 apply` and `describe`: operations from a file, and what a
+//! `omnix apply` and `describe`: operations from a file, and what a
 //! project holds by id to write them against (`OPS-API.md`). The tests
 //! and an agent change a project the way the player does.
 

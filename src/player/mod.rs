@@ -1053,10 +1053,9 @@ impl App {
     }
 }
 
-/// The name people see: Omnix, this fork of rOsmo360 (whose name was Osmo
-/// 360 with an r for its Rust core). The binary, the config and cache
-/// folders keep rOsmo360's names: scripts, footage-agent and the clip cache
-/// find them there, and merges from upstream stay simple.
+/// The name people see: Omnix, grown from rOsmo360 (Osmo 360 with an r
+/// for its Rust core); the binary and its folders are `omnix` too since
+/// the rename (gap 76).
 pub const NAME: &str = "Omnix";
 
 /// A short name for a clip on the timeline: DJI's clip number (the digits

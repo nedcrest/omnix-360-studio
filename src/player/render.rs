@@ -399,7 +399,7 @@ mod tests {
                 }
             }
         }
-        let path = std::env::temp_dir().join(format!("rosmo360-test-{}.cube", std::process::id()));
+        let path = std::env::temp_dir().join(format!("omnix-test-{}.cube", std::process::id()));
         std::fs::write(&path, cube).unwrap();
         let id = crate::lut::shared(&path).unwrap();
         let _ = std::fs::remove_file(&path);

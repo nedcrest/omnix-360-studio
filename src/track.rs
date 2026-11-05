@@ -1,5 +1,5 @@
 //! Colour tracking, for keyframes that follow a subject the way they follow
-//! the selfie stick: a friend's jacket, a tent, a dog's harness. `rosmo360
+//! the selfie stick: a friend's jacket, a tent, a dog's harness. `omnix
 //! track` stitches the clip small and unstabilised, so the picture's
 //! directions are the rig's, and finds the colour in each sampled frame.
 //!
@@ -156,7 +156,7 @@ fn densest(hits: &[([f64; 3], f64)]) -> Option<[f64; 3]> {
     (best.0 > 0.0).then(|| normalise(best.1))
 }
 
-/// A track as `rosmo360 track` wrote it.
+/// A track as `omnix track` wrote it.
 pub struct Track {
     /// (clip time in seconds, rig direction), lost samples left out.
     samples: Vec<(f64, [f64; 3])>,

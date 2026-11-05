@@ -38,7 +38,7 @@ impl<'a> Dissolve<'a> {
         let mut hasher = std::collections::hash_map::RandomState::new().build_hasher();
         hasher.write_u128(std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_nanos()));
         let key = hasher.finish();
-        let file = |k| std::env::temp_dir().join(format!("rosmo360-dissolve-{}-{key:016x}-{k}.rgb", std::process::id()));
+        let file = |k| std::env::temp_dir().join(format!("omnix-dissolve-{}-{key:016x}-{k}.rgb", std::process::id()));
         Dissolve { out, n: 0, frames: 0, head: 0, tail: 0, held: None, holding: None, files: [file(0), file(1)] }
     }
 
@@ -128,7 +128,7 @@ mod tests {
     /// the held frames' files are gone once it's done.
     fn run(a: Frame, b: Frame) -> (Vec<Frame>, bool) {
         let mut out = Collect(Vec::new());
-        let pid = format!("rosmo360-dissolve-{}-", std::process::id());
+        let pid = format!("omnix-dissolve-{}-", std::process::id());
         let files = {
             let mut d = Dissolve::new(&mut out);
             let files = d.files.clone();

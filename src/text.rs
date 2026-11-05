@@ -14,7 +14,7 @@ use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::sync::{Mutex, OnceLock};
 
-/// The fonts that come with rOsmo360, by family; the first is the default.
+/// The fonts that come with Omnix, by family; the first is the default.
 pub const BUILT_IN: [&str; 6] = ["Inter", "Montserrat", "Bebas Neue", "Playfair Display", "Caveat", "Permanent Marker"];
 const DEFAULT_FONT: &str = "Inter";
 

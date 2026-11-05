@@ -15,7 +15,7 @@ use std::thread;
 
 /// Whether 10-bit tracks (the OSV's, a phone's HDR video) are decoded at
 /// 10 bits (P010) rather than cut to 8 (NV12). One switch for the run: the
-/// player's setting, or `ROSMO360_10BIT=1` for the command line, to compare
+/// player's setting, or `OMNIX_10BIT=1` for the command line, to compare
 /// the two while the 10-bit pipeline is new.
 static DEEP: AtomicBool = AtomicBool::new(false);
 
@@ -24,7 +24,7 @@ pub fn set_deep(on: bool) {
 }
 
 pub fn deep() -> bool {
-    DEEP.load(Ordering::Relaxed) || std::env::var_os("ROSMO360_10BIT").is_some_and(|v| v == "1")
+    DEEP.load(Ordering::Relaxed) || std::env::var_os("OMNIX_10BIT").is_some_and(|v| v == "1")
 }
 
 /// One NV12 picture: Y plane then interleaved UV at half resolution; or,

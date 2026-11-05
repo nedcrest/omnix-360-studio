@@ -1,4 +1,4 @@
-//! The command line: the `rosmo360` subcommands and how each runs; `play` opens the player.
+//! The command line: the `omnix` subcommands and how each runs; `play` opens the player.
 
 use crate::{cache, check, ffmpeg, imu, loudness, player, project, stab, track, view};
 use crate::{ExportOpts, Resolution, Target, StitchOpts, Pipeline, export, track_to};
@@ -13,7 +13,7 @@ use std::time::Instant;
 use crate::view::{Projection, Reframe, View};
 
 #[derive(Parser)]
-#[command(name = player::NAME, version, about = "Omnix (built on rOsmo360): edit home video and DJI Osmo 360 .OSV files")]
+#[command(name = player::NAME, version, about = "Omnix: edit home video and DJI Osmo 360 .OSV files (built on rOsmo360)")]
 pub(crate) struct Cli {
     #[command(subcommand)]
     pub(crate) cmd: Cmd,
@@ -408,7 +408,7 @@ pub(crate) enum CacheAction {
         force: bool,
     },
     /// Move the cache to another folder (a disk with room, say), and keep it
-    /// there from now on; ROSMO360_CACHE, if set, still wins for a run.
+    /// there from now on; OMNIX_CACHE, if set, still wins for a run.
     Move {
         #[arg(required_unless_present = "default")]
         folder: Option<PathBuf>,

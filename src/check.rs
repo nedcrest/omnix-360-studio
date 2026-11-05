@@ -1,4 +1,4 @@
-//! `rosmo360 check`: what in a project is likely a mistake, found from what
+//! `omnix check`: what in a project is likely a mistake, found from what
 //! the clips already tell us, so an edit needn't be read off a contact
 //! sheet for it. One line each: edit time, cut, what and why.
 

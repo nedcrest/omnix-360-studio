@@ -1,4 +1,4 @@
-//! Contact sheets of a project (`rosmo360 preview`): a row per cut, with the music's waveform.
+//! Contact sheets of a project (`omnix preview`): a row per cut, with the music's waveform.
 
 use crate::{overlay, project, sheet, stitch, view};
 use crate::{pipeline::{Shot, StitchOpts, Carry}, cut_pipelines};
@@ -13,7 +13,7 @@ fn tile_height(tile: usize, aspect: Option<view::Aspect>) -> usize {
     ((tile * h as usize / w as usize) / 2).max(8) * 2
 }
 
-/// A contact sheet of one clip (`rosmo360 preview <clip>`): a tile every
+/// A contact sheet of one clip (`omnix preview <clip>`): a tile every
 /// `every` seconds, or at each of `reframe`'s keyframes, or 24 spread over
 /// its `span` (start, duration); each the whole sphere with its grid, or
 /// framed by `reframe`; labelled with its time. The sheet and the times.

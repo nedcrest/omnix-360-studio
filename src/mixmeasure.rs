@@ -3,7 +3,7 @@
 //! sound_stream`), so a clip is measured as the export will make it (its
 //! level, line, fades, filters, the lane's level), and the whole film
 //! once more as exported. Read as it streams: a film's worth would be
-//! hundreds of MB. `rosmo360 mixcheck` prints it with the findings.
+//! hundreds of MB. `omnix mixcheck` prints it with the findings.
 
 use crate::ffmpeg::{self, Mix, Sound};
 use crate::lufs::Loudness;
@@ -139,7 +139,7 @@ fn overlap(a0: f64, a1: f64, b0: f64, b1: f64) -> f64 {
     (a1.min(b1) - a0.max(b0)).max(0.0)
 }
 
-/// `rosmo360 mixcheck`: measures the project, prints each clip's loudness
+/// `omnix mixcheck`: measures the project, prints each clip's loudness
 /// and the findings against `target` LUFS.
 pub fn run_cli(path: &std::path::Path, target: f64) -> Result<()> {
     let project = Project::load(path)?;

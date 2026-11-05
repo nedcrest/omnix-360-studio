@@ -88,7 +88,7 @@ pub fn find_speech(project: &Project) -> anyhow::Result<Vec<(f64, f64)>> {
     Ok(merge(spans))
 }
 
-/// `rosmo360 duck`: the music lowered `depth` dB under the project's
+/// `omnix duck`: the music lowered `depth` dB under the project's
 /// speech, as the Audio panel's «Lower under speech» does; prints where,
 /// writes the project to `output` if given.
 pub fn run(path: &std::path::Path, depth: f64, output: Option<&std::path::Path>) -> anyhow::Result<()> {

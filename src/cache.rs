@@ -14,7 +14,7 @@
 //! update used to re-read every clip). Entries are written
 //! to a temporary file and renamed into place, so runs side by side never
 //! read half an entry; a hit refreshes the file's time, which
-//! `rosmo360 cache clear --older-than` goes by.
+//! `omnix cache clear --older-than` goes by.
 
 use crate::imu;
 use anyhow::{Context, Result};
@@ -31,6 +31,8 @@ use telemetry_parser::rig::CameraRig;
 ///
 /// 2 (0.7.0): telemetry entries hold the colour mode (D-Log M).
 const FORMAT: u32 = 2;
+// The cache's own mark, from before the rename: changed, every entry
+// would be made again for nothing.
 const MAGIC: &[u8; 8] = b"rOsmo360";
 /// What entries are named, after the fingerprint.
 const KINDS: [&str; 5] = ["telemetry", "thumbs", "wave", "wave-even", "scrub"];
@@ -42,14 +44,14 @@ pub fn disable() {
     OFF.store(true, Ordering::Relaxed);
 }
 
-/// The cache folder: `$ROSMO360_CACHE`, else the one `cache move` chose,
+/// The cache folder: `$OMNIX_CACHE`, else the one `cache move` chose,
 /// else the system's (`fsutil::cache_dir`).
 pub fn dir() -> Option<PathBuf> {
     std::env::var_os(ENV).filter(|v| !v.is_empty()).map(PathBuf::from).or_else(chosen).or_else(crate::fsutil::cache_dir)
 }
 
 /// Names a cache folder for one run or a script, over `cache move`'s.
-const ENV: &str = "ROSMO360_CACHE";
+const ENV: &str = "OMNIX_CACHE";
 
 /// The folder `cache move` chose, kept in a file of its own beside the
 /// settings, so a player saving its settings can't undo it.
@@ -298,7 +300,7 @@ fn string_from(r: &mut &[u8]) -> Option<String> {
     String::from_utf8(s.to_vec()).ok()
 }
 
-/// `rosmo360 cache`: where the cache is and what it holds.
+/// `omnix cache`: where the cache is and what it holds.
 pub fn report() -> Result<()> {
     let dir = dir().context("no cache folder (HOME is not set)")?;
     let (clips, bytes) = entries(&dir).fold((0, 0), |(n, b), (p, m)| (n + usize::from(p.extension().is_some_and(|e| e == "telemetry")), b + m.len()));
@@ -331,7 +333,7 @@ pub fn forget(input: &Path) -> Result<()> {
     Ok(())
 }
 
-/// `rosmo360 cache move`: moves the entries to `to` (the system's folder if
+/// `omnix cache move`: moves the entries to `to` (the system's folder if
 /// `None`) and keeps the cache there from now on.
 pub fn move_to(to: Option<PathBuf>) -> Result<()> {
     let from = dir().context("no cache folder (HOME is not set)")?;
@@ -366,7 +368,7 @@ pub fn move_to(to: Option<PathBuf>) -> Result<()> {
     Ok(())
 }
 
-/// `rosmo360 cache clear`: every entry, or those unused for `older_than`
+/// `omnix cache clear`: every entry, or those unused for `older_than`
 /// days.
 pub fn clear(older_than: Option<f64>) -> Result<()> {
     let dir = dir().context("no cache folder (HOME is not set)")?;

@@ -467,7 +467,7 @@ impl App {
             row![
                 tip(
                     pick_list(families, Some(FontChoice(words.font.clone())), |f| Message::Effect(EffectMsg::Text(TextChange::Font(f.0)))).width(Length::Fill),
-                    text("Built-in fonts come with rOsmo360, so the text looks the same on any machine; the others are this system's, and where a project's font is missing the text falls back to Inter."),
+                    text("Built-in fonts come with Omnix, so the text looks the same on any machine; the others are this system's, and where a project's font is missing the text falls back to Inter."),
                     tooltip::Position::Bottom,
                 ),
                 iced::widget::checkbox(words.bold).label("Bold").on_toggle(move |b| Message::Effect(EffectMsg::Text(TextChange::Bold(b)))),

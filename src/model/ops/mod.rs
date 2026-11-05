@@ -1,5 +1,5 @@
 //! Operations: every change to a project as data (`OPS-API.md`), applied
-//! the same way by the player, `rosmo360 apply`, an AI agent and the
+//! the same way by the player, `omnix apply`, an AI agent and the
 //! tests. One enum per area, each in its own file with its own `apply`;
 //! a new area is a new file and a line in `Op`.
 //!

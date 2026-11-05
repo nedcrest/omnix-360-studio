@@ -1,4 +1,4 @@
-//! A Dailix project's marking made into an Omnix edit (`rosmo360
+//! A Dailix project's marking made into an Omnix edit (`omnix
 //! from-sheet`, and Dailix's «→ Omnix»): what footage-agent's «→ Omnix»
 //! made from its web contact sheet (`export/omnix.py`, `cut.py
 //! --from-marks --whole-unmarked`), now from Dailix's `dailix/sheet.json`,

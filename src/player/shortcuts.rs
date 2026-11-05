@@ -5,7 +5,7 @@
 //! timeline's presses.
 
 use super::{App, Message};
-use iced::widget::{button, column, container, mouse_area, opaque, row, rule, scrollable, space, text};
+use iced::widget::{button, column, container, row, rule, scrollable, space, text};
 use iced::{Alignment, Element, Font, Length};
 
 /// What each group's keys do, as «keys», «what».
@@ -141,8 +141,7 @@ impl App {
         .padding(18)
         .max_height(760)
         .style(container::rounded_box);
-        // A click outside closes it; inside, nothing below takes it.
-        let shade = mouse_area(container(iced::widget::center(opaque(card))).width(Length::Fill).height(Length::Fill).style(|_| container::Style::default().background(iced::Color::from_rgba(0.0, 0.0, 0.0, 0.55)))).on_press(Message::Shortcuts);
-        iced::widget::stack![below, opaque(shade)].into()
+        // A click outside closes it.
+        iced::widget::stack![below, super::ask::modal(card, Some(Message::Shortcuts))].into()
     }
 }

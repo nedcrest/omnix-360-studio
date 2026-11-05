@@ -296,9 +296,7 @@ impl App {
             .into(),
         };
         let card = container(column![text("Normalize sound").size(18), rule::horizontal(1), body].spacing(12).width(380)).padding(18).style(container::rounded_box);
-        // Dimmed behind, and nothing below takes a click while it's open.
-        let shade = container(iced::widget::center(opaque(card))).width(Length::Fill).height(Length::Fill).style(|_| container::Style::default().background(iced::Color::from_rgba(0.0, 0.0, 0.0, 0.55)));
-        stack![below, opaque(shade)].into()
+        stack![below, super::ask::modal(card, None)].into()
     }
 
     /// How the dialog names a cut's sound or a sound clip.

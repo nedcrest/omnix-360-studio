@@ -6,7 +6,7 @@ use super::{App, Message};
 use crate::model::ops::Op;
 use crate::model::ops::cuts::CutOp;
 use crate::project::Id;
-use iced::widget::{button, column, container, opaque, row, rule, space, text, text_input};
+use iced::widget::{button, column, container, row, rule, space, text, text_input};
 use iced::{Element, Length, Task};
 
 /// The note field, focused when the window opens.
@@ -72,7 +72,6 @@ impl App {
         )
         .padding(18)
         .style(container::rounded_box);
-        let shade = container(iced::widget::center(opaque(card))).width(Length::Fill).height(Length::Fill).style(|_| container::Style::default().background(iced::Color::from_rgba(0.0, 0.0, 0.0, 0.55)));
-        iced::widget::stack![below, opaque(shade)].into()
+        iced::widget::stack![below, super::ask::modal(card, None)].into()
     }
 }

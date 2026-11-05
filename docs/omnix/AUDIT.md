@@ -28,7 +28,7 @@ cost is duplication and drift.
 Across the two repos:
 
 In Omnix:
-- [ ] Modal shade ×4; job thread scaffolding ×2; `note()` ×2.
+- [ ] Job thread scaffolding ×2; `note()` ×2.
 - [ ] A cut's media built ×3 (`transport.rs`); cut level formula ×2.
 - [ ] `request_still` thread ×2; mono PCM decode ×2 (`music.rs`, ffmpeg).
 - [ ] Info read and drawn twice (bin side pane, Info panel).

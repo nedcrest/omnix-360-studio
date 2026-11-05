@@ -58,8 +58,17 @@ impl App {
         }
         buttons = buttons.push(answer("Cancel", &ask.cancel, false));
         let card = container(column![text(ask.title.clone()).size(18), text(ask.text.clone()).size(14), buttons].spacing(14).width(460)).padding(18).style(container::rounded_box);
-        // Modal: a click outside does nothing, nothing below takes it.
-        let shade = container(center(opaque(card))).width(Length::Fill).height(Length::Fill).style(|_| container::Style::default().background(iced::Color::from_rgba(0.0, 0.0, 0.0, 0.55)));
-        opaque(mouse_area(shade))
+        modal(card, None)
     }
+}
+
+/// A card over the window, the rest dimmed: nothing below takes a click;
+/// one outside the card sends `outside`, if there is one. Every dialog's.
+pub(super) fn modal<'a>(card: impl Into<Element<'a, Message>>, outside: Option<Message>) -> Element<'a, Message> {
+    let shade = container(center(opaque(card))).width(Length::Fill).height(Length::Fill).style(|_| container::Style::default().background(iced::Color::from_rgba(0.0, 0.0, 0.0, 0.55)));
+    let area = mouse_area(shade);
+    opaque(match outside {
+        Some(m) => area.on_press(m),
+        None => area,
+    })
 }

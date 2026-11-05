@@ -28,7 +28,7 @@ cost is duplication and drift.
 Across the two repos:
 
 In Omnix:
-- [ ] Job thread scaffolding ×2; `note()` ×2.
+- [ ] `note()` ×2 (with the panels' help text, below).
 - [ ] Info read and drawn twice (bin side pane, Info panel).
 - [ ] Whole-film `Mix` assembly ×3; `Sound` spelt out by hand.
 - [ ] Find-by-id ×7; `Lane::place` = `Music::place`; mute-aware level ×3.

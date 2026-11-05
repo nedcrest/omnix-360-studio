@@ -23,7 +23,6 @@ impl App {
     /// command line uses, at the chosen resolution, in the aspect lock's
     /// shape (16:9 when free), stabilised as the player is.
     pub(super) fn start_export(&mut self, path: PathBuf) -> Task<Message> {
-        use iced::futures::{SinkExt, StreamExt};
         let project = self.to_project();
         let [w, h] = project.aspect.unwrap_or(crate::view::Aspect(16, 9)).size(self.resolution.short_side());
         let target = if self.export_clips {
@@ -42,28 +41,18 @@ impl App {
         let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));
         self.exporting = Some((cancel.clone(), 0.0));
         self.save_status = None;
-        let work = iced::stream::channel(8, async move |mut output: iced::futures::channel::mpsc::Sender<Message>| {
-            let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
-            std::thread::spawn(move || {
-                let mut progress = |done: usize, total: usize| {
-                    if cancel.load(std::sync::atomic::Ordering::Relaxed) {
-                        anyhow::bail!("cancelled");
-                    }
-                    if done.is_multiple_of(5) || done == total {
-                        let _ = tx.unbounded_send(Message::ExportProgress(done as f32 / total.max(1) as f32));
-                    }
-                    Ok(())
-                };
-                let result = crate::export(&project, &opts, &out, &mut progress);
-                let _ = tx.unbounded_send(Message::ExportDone(result.map_err(|e| format!("{e:#}"))));
-            });
-            while let Some(m) = rx.next().await {
-                if output.send(m).await.is_err() {
-                    break;
+        background(move |say| {
+            let mut progress = |done: usize, total: usize| {
+                if cancel.load(std::sync::atomic::Ordering::Relaxed) {
+                    anyhow::bail!("cancelled");
                 }
-            }
-        });
-        Task::run(work, |m| m)
+                if done.is_multiple_of(5) || done == total {
+                    say(Message::ExportProgress(done as f32 / total.max(1) as f32));
+                }
+                Ok(())
+            };
+            Message::ExportDone(crate::export(&project, &opts, &out, &mut progress).map_err(|e| format!("{e:#}")))
+        })
     }
 
     /// What exports are named after: the project, else the first clip.
@@ -79,7 +68,6 @@ impl App {
     /// starting from `dir` (where the picked box was, in the rig), into a
     /// CSV beside the project (or the clip, before it is saved).
     pub(super) fn start_track(&mut self, colour: crate::track::Colour, hex: String, dir: [f64; 3]) -> Task<Message> {
-        use iced::futures::{SinkExt, StreamExt};
         let Some((cut, t)) = self.playing_cut() else { return Task::none() };
         let (input, end, i) = (cut.input.clone(), cut.end, cut.id);
         let folder = self.project.as_deref().unwrap_or(&input).parent().unwrap_or(Path::new("")).to_owned();
@@ -87,36 +75,27 @@ impl App {
         let path = folder.join(format!("{stem}-colour-{t:.1}s.csv"));
         let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));
         self.tracking = Some((cancel.clone(), 0.0));
-        let work = iced::stream::channel(8, async move |mut output: iced::futures::channel::mpsc::Sender<Message>| {
-            let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
-            std::thread::spawn(move || {
-                let mut progress = |done: usize, total: usize| {
-                    if cancel.load(std::sync::atomic::Ordering::Relaxed) {
-                        anyhow::bail!("cancelled");
-                    }
-                    let _ = tx.unbounded_send(Message::TrackProgress(done as f32 / total.max(1) as f32));
-                    Ok(())
-                };
-                let result = (|| {
-                    use std::io::Write;
-                    let mut file = std::io::BufWriter::new(std::fs::File::create(&path).with_context(|| format!("writing {}", path.display()))?);
-                    let near = Some(crate::track::Near::Rig(dir));
-                    let (found, rows) = crate::track_to(&input, &colour, near, Some(t), Some(end - t), 0.1, &mut file, &mut progress)?;
-                    file.flush()?;
-                    Ok::<_, anyhow::Error>(TrackDone { path: path.clone(), cut: i, t, found, rows, colour: hex })
-                })();
-                if result.is_err() {
-                    let _ = std::fs::remove_file(&path);
+        background(move |say| {
+            let mut progress = |done: usize, total: usize| {
+                if cancel.load(std::sync::atomic::Ordering::Relaxed) {
+                    anyhow::bail!("cancelled");
                 }
-                let _ = tx.unbounded_send(Message::Tracked(result.map_err(|e| format!("{e:#}"))));
-            });
-            while let Some(m) = rx.next().await {
-                if output.send(m).await.is_err() {
-                    break;
-                }
+                say(Message::TrackProgress(done as f32 / total.max(1) as f32));
+                Ok(())
+            };
+            let result = (|| {
+                use std::io::Write;
+                let mut file = std::io::BufWriter::new(std::fs::File::create(&path).with_context(|| format!("writing {}", path.display()))?);
+                let near = Some(crate::track::Near::Rig(dir));
+                let (found, rows) = crate::track_to(&input, &colour, near, Some(t), Some(end - t), 0.1, &mut file, &mut progress)?;
+                file.flush()?;
+                Ok::<_, anyhow::Error>(TrackDone { path: path.clone(), cut: i, t, found, rows, colour: hex })
+            })();
+            if result.is_err() {
+                let _ = std::fs::remove_file(&path);
             }
-        });
-        Task::run(work, |m| m)
+            Message::Tracked(result.map_err(|e| format!("{e:#}")))
+        })
     }
 
     /// Makes the keyframe where a finished track starts follow it, with the
@@ -439,4 +418,27 @@ impl App {
         }
         Task::none()
     }
+}
+
+/// Runs `work` on a thread of its own, what it says (`say`: progress) and
+/// the message it ends with relayed to the window as they come: every long
+/// job's (the export, colour tracking).
+fn background(work: impl FnOnce(&dyn Fn(Message)) -> Message + Send + 'static) -> Task<Message> {
+    use iced::futures::{SinkExt, StreamExt};
+    let relay = iced::stream::channel(8, async move |mut output: iced::futures::channel::mpsc::Sender<Message>| {
+        let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
+        std::thread::spawn(move || {
+            let say = |m: Message| {
+                let _ = tx.unbounded_send(m);
+            };
+            let last = work(&say);
+            say(last);
+        });
+        while let Some(m) = rx.next().await {
+            if output.send(m).await.is_err() {
+                break;
+            }
+        }
+    });
+    Task::run(relay, |m| m)
 }

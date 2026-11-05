@@ -15,6 +15,8 @@ mod dji;
 mod duck;
 mod mixdown;
 mod notes;
+/// A Dailix project's marking made into an edit (`rosmo360 from-sheet`).
+pub mod from_sheet;
 mod model;
 mod lufs;
 mod mixcheck;

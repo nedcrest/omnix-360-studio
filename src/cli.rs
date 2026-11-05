@@ -115,6 +115,16 @@ pub(crate) enum Cmd {
     /// if there) and prints its path, for a cut `add` op: a gap in the
     /// edit for a title, an overlay or a sound.
     Blank { dir: PathBuf },
+    /// Makes an edit from a Dailix project's marking (its folder): clips
+    /// rated ✓ or ?, their segments as cuts (a clip with none whole), the
+    /// voice chosen, flags inside a cut as its markers; written into the
+    /// project's 04_project under a new name, printed.
+    FromSheet {
+        project: PathBuf,
+        /// One day only (YYYY-MM-DD).
+        #[arg(long)]
+        day: Option<String>,
+    },
     /// Stitch one frame to an equirectangular PNG.
     Stitch {
         input: PathBuf,
@@ -608,6 +618,7 @@ pub(crate) fn run() -> Result<()> {
         Cmd::Describe { project } => crate::apply::describe(&project)?,
         Cmd::OpsSchema => println!("{}", crate::apply::schema()),
         Cmd::Blank { dir } => println!("{}", crate::blank::ensure(&dir)?.display()),
+        Cmd::FromSheet { project, day } => println!("{}", crate::from_sheet::write(&project, day.as_deref())?.display()),
         Cmd::Mixcheck { project, target } => crate::mixmeasure::run_cli(&project, target)?,
         Cmd::Play { input, osv_size, hwaccel, stabilize, imu_axes, world_z_down } => {
             player::run(input, player::Launch { osv_size, hw: hwaccel, stabilize, imu_axes, world_z_down })?;

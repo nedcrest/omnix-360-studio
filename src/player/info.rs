@@ -193,25 +193,29 @@ fn file_uri(path: &Path) -> String {
     uri
 }
 
+/// A label and its value, as Info lists a file's facts.
+pub(super) fn line<'a>(label: &'a str, value: String, width: f32) -> iced::widget::Row<'a, Message> {
+    row![text(label).size(13).style(text::secondary).width(width), text(value).size(13).width(Length::Fill)].spacing(6)
+}
+
+/// What Info read of a file, as rows: being read, what went wrong, or its
+/// kind and facts. The Info panel's and the bin's side pane's.
+pub(super) fn file_rows<'a>(file: Option<&'a Result<Arc<File>, String>>, width: f32) -> Element<'a, Message> {
+    match file {
+        None => text("Reading…").size(13).style(text::secondary).into(),
+        Some(Err(e)) => text(e.clone()).size(13).style(text::danger).into(),
+        Some(Ok(file)) => column(std::iter::once(line("Kind", file.kind.to_owned(), width)).chain(file.rows.iter().map(|(l, v)| line(l, v.clone(), width))).map(Element::from)).spacing(4).into(),
+    }
+}
+
 impl App {
     /// The Info panel, while one is open.
     pub(super) fn info_panel(&self) -> Option<Element<'_, Message>> {
         let info = self.info.as_ref()?;
         let close = tip(button(text("✕").size(14)).padding([0, 6]).style(button::text).on_press(Message::InfoClose), text("Close"), tooltip::Position::Bottom);
         let name = info.path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
-        let line = |label: &'static str, value: String| row![text(label).size(13).style(text::secondary).width(84), text(value).size(13).width(Length::Fill)].spacing(6);
-        let mut body = column![row![text("Info").size(18).width(Length::Fill), close].align_y(Alignment::Center), text(name).size(15)].spacing(10).padding(12);
-        match &info.file {
-            None => body = body.push(text("Reading…").size(13).style(text::secondary)),
-            Some(Err(e)) => body = body.push(text(e.clone()).size(13).style(text::danger)),
-            Some(Ok(file)) => {
-                let mut rows = column![line("Kind", file.kind.to_owned())].spacing(4);
-                for (label, value) in &file.rows {
-                    rows = rows.push(line(label, value.clone()));
-                }
-                body = body.push(rows);
-            }
-        }
+        let line = |label: &'static str, value: String| line(label, value, 84.0);
+        let mut body = column![row![text("Info").size(18).width(Length::Fill), close].align_y(Alignment::Center), text(name).size(15), file_rows(info.file.as_ref(), 84.0)].spacing(10).padding(12);
         let place = self.info_place(info);
         if !place.is_empty() {
             let mut rows = column![text("In the edit").size(15)].spacing(4);

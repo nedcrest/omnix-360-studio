@@ -521,18 +521,9 @@ impl App {
             Kind::Sound(_) => col = col.push(container(text("♪").size(64)).width(Length::Fill).center_x(Length::Fill)),
         }
         col = col.push(rule::horizontal(1));
-        let line = |label: &'static str, value: String| row![text(label).size(13).style(text::secondary).width(96), text(value).size(13).width(Length::Fill)].spacing(6);
-        col = col.push(line("In the edit", uses(&self.edit, &p.path).unwrap_or_else(|| "not used".to_owned())));
-        match self.bin.about.as_ref().filter(|(path, _)| *path == p.path).map(|(_, f)| f) {
-            None | Some(None) => col = col.push(text("Reading…").size(13).style(text::secondary)),
-            Some(Some(Err(e))) => col = col.push(text(e.clone()).size(13).style(text::danger)),
-            Some(Some(Ok(file))) => {
-                col = col.push(line("Kind", file.kind.to_owned()));
-                for (label, value) in &file.rows {
-                    col = col.push(line(label, value.clone()));
-                }
-            }
-        }
+        col = col.push(super::info::line("In the edit", uses(&self.edit, &p.path).unwrap_or_else(|| "not used".to_owned()), 96.0));
+        let about = self.bin.about.as_ref().filter(|(path, _)| *path == p.path).and_then(|(_, f)| f.as_ref());
+        col = col.push(super::info::file_rows(about, 96.0));
         container(scrollable(col.padding(12))).height(Length::Fill).style(container::rounded_box).into()
     }
 

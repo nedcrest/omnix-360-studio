@@ -15,7 +15,6 @@ cost is duplication and drift.
 Across the two repos:
 
 In Omnix:
-- [ ] Info read and drawn twice (bin side pane, Info panel).
 - [ ] `Sound` spelt out field by field in `cli.rs` (`render`).
 - [ ] Timeline: press and hover each walk what's under the pointer (now in
       the same order, `Marks` and `OverlayLane`): one `Hit` per canvas,

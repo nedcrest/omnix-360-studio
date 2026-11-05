@@ -560,6 +560,13 @@ impl Timeline {
         flags
     }
 
+    /// The marker under `x` (its cut and clip time), for pressing, the
+    /// right button and the pointer alike; one scrolled under the header
+    /// column isn't there.
+    fn flag_at(&self, b: Rectangle, x: f32) -> Option<(usize, f64)> {
+        self.flags(b).into_iter().filter(|f| f.2 >= HEAD).find(|f| (f.2 - x).abs() <= MARK_REACH).map(|(cut, t, ..)| (cut, t))
+    }
+
     /// The selected cut's edge under `x`: only it has handles, so a press
     /// elsewhere on a cut moves or selects it.
     fn selected_edge(&self, x: f32, b: Rectangle) -> Option<(usize, bool)> {
@@ -2656,9 +2663,7 @@ impl canvas::Program<Message> for Flags {
         match event {
             Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
                 let p = cursor.position_in(bounds)?;
-                // Flags scrolled under the header column aren't there.
-                let flag = t.flags(bounds).into_iter().filter(|f| f.2 >= HEAD).find(|f| (f.2 - p.x).abs() <= MARK_REACH);
-                let Some((cut, mt, ..)) = flag else {
+                let Some((cut, mt)) = t.flag_at(bounds, p.x) else {
                     return Flags::on_name(p).then(|| canvas::Action::publish(Message::Fold(FoldLane::Marks, !t.folds.marks)).and_capture());
                 };
                 // Twice on it: its window, to name or delete it.
@@ -2685,7 +2690,7 @@ impl canvas::Program<Message> for Flags {
             }
             Mouse(mouse::Event::ButtonPressed(mouse::Button::Right)) => {
                 let p = cursor.position_in(bounds)?;
-                let (cut, mt, ..) = t.flags(bounds).into_iter().find(|f| (f.2 - p.x).abs() <= MARK_REACH)?;
+                let (cut, mt) = t.flag_at(bounds, p.x)?;
                 Some(canvas::Action::publish(Message::MarkEdit(cut, mt)).and_capture())
             }
             _ => None,
@@ -2696,7 +2701,7 @@ impl canvas::Program<Message> for Flags {
         let Some(p) = cursor.position_in(bounds) else { return mouse::Interaction::default() };
         if state.mark.is_some() {
             mouse::Interaction::Grabbing
-        } else if self.0.flags(bounds).iter().any(|f| (f.2 - p.x).abs() <= MARK_REACH) {
+        } else if self.0.flag_at(bounds, p.x).is_some() {
             mouse::Interaction::Grab
         } else if Flags::on_name(p) {
             mouse::Interaction::Pointer

@@ -12,10 +12,6 @@ cost is duplication and drift.
 - [ ] Timeline: press and hover test what's under the pointer in different
       orders (level tag vs fade knob): the cursor lies (`timeline.rs`
       `Marks::update` / `mouse_interaction`; `OverlayLane` too).
-- [ ] `Selection::item` looks only in the first overlay lane; `items::find`
-      looks in all (`model/selection.rs`).
-- [ ] Right-click on a flag under the header works, left-click doesn't
-      (`timeline.rs` flags, `HEAD` filter).
 - [ ] `player/mod.rs` clock shows 59.996 s as "0:60.00".
 - [ ] Opening a project: `deaf.dedup()` without a sort (`file.rs`).
 - [ ] Settings panel says "rOsmo360's settings folder" (the name is Omnix).

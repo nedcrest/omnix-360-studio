@@ -97,6 +97,7 @@ done in part stays here until its last card is done.
 | 75 | A cut's flags from the contact sheet as markers on the edit | below |
 | 76 | The program's name: rosmo360 → omnix | below |
 | 77 | Dailix: voice clean-up and loudness for camera and phone sound | below |
+| 78 | A vertical video in a wide edit: its sides filled from itself, not black | below |
 
 ## Open gaps
 
@@ -1383,6 +1384,17 @@ which one the edit uses. Dailix needs the same, as its parity step 4
 - the same `voice/` layout and recipe names, so Kos's variants made by
   the web sheet stay valid.
 Milestone «Звук для Косу».
+
+### 78. A vertical video in a wide edit: its sides filled from itself, not black — idea (user, 2026-11-05)
+
+Phone clips are often vertical; in a 16:9 edit they stand between two
+wide black bars. The usual answer: the same clip, scaled to fill the
+frame, blurred and darkened, behind the sharp one (pillarbox fill),
+or a softer kind: the edge colours stretched outwards. It belongs with
+the overlays (the clip over a background of itself): a cut's option,
+on by default for a clip whose shape isn't the edit's, the same in the
+player (GPU) and in the export (ffmpeg `split`, `scale`, `boxblur`,
+`overlay`), tested to match. Milestone «Кадрування».
 
 ## Format rule for all of these
 

@@ -394,37 +394,11 @@ pub(crate) enum CacheAction {
     },
 }
 
-/// Each path given that is a file, and every .OSV in the folders given (and
-/// the folders inside), in name order.
-pub(crate) fn osv_under(paths: &[PathBuf]) -> Result<Vec<PathBuf>> {
-    fn walk(path: &Path, out: &mut Vec<PathBuf>) -> Result<()> {
-        if path.is_dir() {
-            let mut inside: Vec<_> = std::fs::read_dir(path).with_context(|| format!("reading {}", path.display()))?.flatten().map(|e| e.path()).collect();
-            inside.sort();
-            for p in inside {
-                if p.is_dir() || p.extension().is_some_and(|e| e.eq_ignore_ascii_case("osv")) {
-                    walk(&p, out)?;
-                }
-            }
-        } else if path.exists() {
-            out.push(path.to_owned());
-        } else {
-            bail!("{} does not exist", path.display());
-        }
-        Ok(())
-    }
-    let mut clips = Vec::new();
-    for p in paths {
-        walk(p, &mut clips)?;
-    }
-    Ok(clips)
-}
-
 /// `cache add`: caches each clip under `paths` that isn't yet (all of them
 /// with `force`), saying how it went one line a clip. A clip that fails is
 /// reported and skipped.
 pub(crate) fn cache_clips(paths: &[PathBuf], force: bool) -> Result<()> {
-    let clips = osv_under(paths)?;
+    let clips = crate::fsutil::osv_under(paths)?;
     let dir = cache::dir().context("no cache folder (HOME is not set)")?;
     eprintln!("caching {} clips in {}", clips.len(), dir.display());
     let (mut added, mut failed) = (0, 0);

@@ -3,7 +3,7 @@
 
 use crate::{align, cache, ffmpeg, sky, stab, track};
 use crate::pipeline::{Pipeline, Shot, StitchOpts, Carry};
-use crate::cli::osv_under;
+use crate::fsutil::osv_under;
 use anyhow::{Context, Result, bail};
 use std::path::{Path, PathBuf};
 

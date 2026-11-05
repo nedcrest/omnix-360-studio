@@ -1,8 +1,8 @@
-//! Files: a replacement that lands whole or not at all, and where a
-//! program keeps its settings and cache on each platform.
+//! Files: a replacement that lands whole or not at all, the clips under
+//! folders given, and where a program keeps its settings and cache.
 
 use crate::stitch;
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use std::path::{Path, PathBuf};
 
 /// The name of Omnix's own folders (the binary's; gap 76 renames both).
@@ -107,4 +107,30 @@ mod tests {
         std::fs::remove_dir_all(&dir).unwrap();
         assert!(left.is_empty(), "{left:?}");
     }
+}
+
+/// Each path given that is a file, and every .OSV in the folders given (and
+/// the folders inside), in name order.
+pub(crate) fn osv_under(paths: &[PathBuf]) -> Result<Vec<PathBuf>> {
+    fn walk(path: &Path, out: &mut Vec<PathBuf>) -> Result<()> {
+        if path.is_dir() {
+            let mut inside: Vec<_> = std::fs::read_dir(path).with_context(|| format!("reading {}", path.display()))?.flatten().map(|e| e.path()).collect();
+            inside.sort();
+            for p in inside {
+                if p.is_dir() || p.extension().is_some_and(|e| e.eq_ignore_ascii_case("osv")) {
+                    walk(&p, out)?;
+                }
+            }
+        } else if path.exists() {
+            out.push(path.to_owned());
+        } else {
+            bail!("{} does not exist", path.display());
+        }
+        Ok(())
+    }
+    let mut clips = Vec::new();
+    for p in paths {
+        walk(p, &mut clips)?;
+    }
+    Ok(clips)
 }

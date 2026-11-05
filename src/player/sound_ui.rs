@@ -429,8 +429,7 @@ mod tests {
     use super::*;
 
     fn app() -> App {
-        let opts = super::super::Options { osv_size: None, hw: Some(crate::ffmpeg::Hwaccel::Software), hw_forced: true, stabilize: crate::stab::Mode::Horizon, imu_axes: crate::stab::ImuAxes::X180, world_z_down: false };
-        let mut app = App::new(opts, super::super::settings::Settings::default());
+        let mut app = App::new(super::super::Options::software(), super::super::settings::Settings::default());
         // Files that aren't there: the dialog's measuring finds no sound,
         // and the results are fed in below by hand.
         app.edit.cuts = vec![crate::project::Cut::new("nowhere/a.mp4".into(), 0.0, 2.0), crate::project::Cut::new("nowhere/b.mp4".into(), 0.0, 2.0)];

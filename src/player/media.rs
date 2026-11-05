@@ -135,9 +135,24 @@ pub struct Options {
     pub world_z_down: bool,
 }
 
+impl Default for Options {
+    /// As a viewer opens a clip: the decoder probed, the horizon kept, the
+    /// IMU as AGENTS.md's facts have it.
+    fn default() -> Self {
+        Options { osv_size: None, hw: None, hw_forced: false, stabilize: Mode::Horizon, imu_axes: ImuAxes::X180, world_z_down: false }
+    }
+}
+
+impl Options {
+    /// Decoded in software, nothing probed: for work without a player (the
+    /// cache, tests), the same on every machine.
+    pub fn software() -> Self {
+        Options { hw: Some(Hwaccel::Software), hw_forced: true, ..Options::default() }
+    }
+}
+
 /// Caches `input` the way opening it in the player would: its telemetry and
 /// timeline thumbnails (`rosmo360 cache add`).
 pub fn cache_clip(input: &Path) -> Result<()> {
-    let opts = Options { osv_size: None, hw: Some(Hwaccel::Software), hw_forced: true, stabilize: Mode::Horizon, imu_axes: ImuAxes::X180, world_z_down: false };
-    thumbs::make(&Media::load(input.to_owned(), &opts, &|_| {})?, |_, _| true)
+    thumbs::make(&Media::load(input.to_owned(), &Options::software(), &|_| {})?, |_, _| true)
 }

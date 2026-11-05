@@ -11,7 +11,6 @@
 use super::gpu::{self, Rig, Shown};
 use super::media::{Media, Options};
 use super::playback::Playback;
-use crate::stab::{ImuAxes, Mode};
 use crate::stitch::M3;
 use crate::view::{Camera, Projection, View};
 use iced::widget::shader;
@@ -26,8 +25,7 @@ pub struct Loaded(Media);
 /// copy for scrubbing started). Blocking: ffprobe, and an Osmo 360 clip's
 /// telemetry.
 pub fn load(path: &Path) -> anyhow::Result<Loaded> {
-    let opts = Options { osv_size: None, hw: None, hw_forced: false, stabilize: Mode::Horizon, imu_axes: ImuAxes::X180, world_z_down: false };
-    let media = Media::load(path.to_owned(), &opts, &|_| {})?;
+    let media = Media::load(path.to_owned(), &Options::default(), &|_| {})?;
     if let Some(flat) = media.flat {
         super::scrub::make(media.input.clone(), flat, media.hw);
     }

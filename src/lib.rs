@@ -26,6 +26,19 @@ use serde::Deserialize;
 use serde_json::Value;
 use std::fmt;
 
+/// Seconds as `m:ss`, with `places` decimals (`m:ss.s` for one), rounded
+/// to them first: 59.96 s with one place is «1:00.0», never «0:60.0».
+/// One clock for both programs' readouts and the sheet's text view.
+pub fn clock(t: f64, places: u32) -> String {
+    let scale = 10u64.pow(places);
+    let units = (t.max(0.0) * scale as f64).round() as u64;
+    let (s, frac) = (units / scale, units % scale);
+    match places {
+        0 => format!("{}:{:02}", s / 60, s % 60),
+        p => format!("{}:{:02}.{frac:0w$}", s / 60, s % 60, w = p as usize),
+    }
+}
+
 /// The marking file as read: changed in place, written back in the form
 /// the sheet has always written it.
 #[derive(Debug, Clone, PartialEq)]
@@ -283,6 +296,11 @@ pub struct Sheet {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_clock_rounds_before_it_carries() {
+        assert_eq!([clock(65.4, 0), clock(59.96, 1), clock(136.4, 1), clock(59.996, 2), clock(-1.0, 1)], ["1:05", "1:00.0", "2:16.4", "1:00.00", "0:00.0"]);
+    }
 
     #[test]
     fn marks_are_told_apart_by_their_fields() {

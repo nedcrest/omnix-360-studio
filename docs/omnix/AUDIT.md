@@ -26,7 +26,6 @@ cost is duplication and drift.
 ## Duplicates
 
 Across the two repos:
-- [ ] `config_dir` ×3.
 
 In Omnix:
 - [ ] Bin player re-implements `viewer::Viewer` (`Picture`, tick, aspect).
@@ -55,8 +54,8 @@ In Dailix:
 - [ ] `App` mirrors ~33 settings by hand (in at `new`, out at `settings()`).
 - [ ] `Marks::update` 241 lines; `export()` 159; `cli::run` 157 (preview
       and export logic inline); Dailix `update` 243.
-- [ ] Library modules reach into `player` and `cli` (`config_dir`,
-      `Waveform`, `render`, `osv_under`).
+- [ ] Library modules reach into `player` and `cli` (`Waveform`,
+      `render`, `osv_under`).
 - [ ] Tests in the wrong module (`sound_ui.rs` tests cuts and markers).
 
 ## Help text in panels (house rule)

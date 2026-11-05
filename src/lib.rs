@@ -52,4 +52,5 @@ mod preview;
 pub(crate) use analyse::track_to;
 pub(crate) use export::{ExportOpts, Resolution, Target, cut_pipelines, export};
 pub(crate) use fsutil::replace_file;
+pub use fsutil::{AppDir, app_dir};
 pub(crate) use pipeline::{Pipeline, StitchOpts, load_input};

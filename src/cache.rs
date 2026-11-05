@@ -43,9 +43,9 @@ pub fn disable() {
 }
 
 /// The cache folder: `$ROSMO360_CACHE`, else the one `cache move` chose,
-/// else the system's (`default_dir`).
+/// else the system's (`fsutil::cache_dir`).
 pub fn dir() -> Option<PathBuf> {
-    std::env::var_os(ENV).filter(|v| !v.is_empty()).map(PathBuf::from).or_else(chosen).or_else(default_dir)
+    std::env::var_os(ENV).filter(|v| !v.is_empty()).map(PathBuf::from).or_else(chosen).or_else(crate::fsutil::cache_dir)
 }
 
 /// Names a cache folder for one run or a script, over `cache move`'s.
@@ -59,21 +59,7 @@ fn chosen() -> Option<PathBuf> {
 }
 
 fn choice_file() -> Option<PathBuf> {
-    Some(crate::player::config_dir()?.join("cache-dir"))
-}
-
-/// `$XDG_CACHE_HOME` or `~/.cache` on Linux, `~/Library/Caches` on macOS,
-/// `%LOCALAPPDATA%` on Windows.
-fn default_dir() -> Option<PathBuf> {
-    let env = |k: &str| std::env::var_os(k).filter(|v| !v.is_empty()).map(PathBuf::from);
-    let base = if cfg!(windows) {
-        env("LOCALAPPDATA")?
-    } else if cfg!(target_os = "macos") {
-        env("HOME")?.join("Library/Caches")
-    } else {
-        env("XDG_CACHE_HOME").or_else(|| env("HOME").map(|h| h.join(".cache")))?
-    };
-    Some(base.join("rosmo360"))
+    Some(crate::fsutil::config_dir()?.join("cache-dir"))
 }
 
 /// What the stitcher and stabiliser need from a clip's telemetry.
@@ -351,7 +337,7 @@ pub fn move_to(to: Option<PathBuf>) -> Result<()> {
     let from = dir().context("no cache folder (HOME is not set)")?;
     let to = match to {
         Some(to) => std::path::absolute(to)?,
-        None => default_dir().context("no default cache folder (HOME is not set)")?,
+        None => crate::fsutil::cache_dir().context("no default cache folder (HOME is not set)")?,
     };
     fs::create_dir_all(&to).with_context(|| format!("creating {}", to.display()))?;
     let mut n = 0;
@@ -367,7 +353,7 @@ pub fn move_to(to: Option<PathBuf>) -> Result<()> {
         }
     }
     let choice = choice_file().context("no configuration folder (HOME is not set)")?;
-    if Some(&to) == default_dir().as_ref() {
+    if Some(&to) == crate::fsutil::cache_dir().as_ref() {
         let _ = fs::remove_file(&choice);
     } else {
         fs::create_dir_all(choice.parent().unwrap())?;

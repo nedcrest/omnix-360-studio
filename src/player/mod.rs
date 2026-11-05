@@ -77,7 +77,6 @@ use file::*;
 use tracks::*;
 use cuts::*;
 
-pub use settings::config_dir;
 
 pub fn run(inputs: Vec<PathBuf>, launch: Launch) -> Result<()> {
     // Finding the system's fonts takes a moment: done ahead, the font list

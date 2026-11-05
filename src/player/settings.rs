@@ -122,22 +122,8 @@ impl Default for Settings {
     }
 }
 
-/// rOsmo360's configuration folder: in `$XDG_CONFIG_HOME` or `~/.config` on
-/// Linux, `~/Library/Application Support` on macOS, `%APPDATA%` on Windows.
-pub fn config_dir() -> Option<PathBuf> {
-    let env = |k: &str| std::env::var_os(k).filter(|v| !v.is_empty()).map(PathBuf::from);
-    let base = if cfg!(windows) {
-        env("APPDATA")?
-    } else if cfg!(target_os = "macos") {
-        env("HOME")?.join("Library/Application Support")
-    } else {
-        env("XDG_CONFIG_HOME").or_else(|| env("HOME").map(|h| h.join(".config")))?
-    };
-    Some(base.join("rosmo360"))
-}
-
 fn path() -> Option<PathBuf> {
-    Some(config_dir()?.join("settings.json"))
+    Some(crate::fsutil::config_dir()?.join("settings.json"))
 }
 
 impl Settings {

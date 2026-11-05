@@ -1,8 +1,47 @@
-//! Writing files safely: a replacement lands whole or not at all.
+//! Files: a replacement that lands whole or not at all, and where a
+//! program keeps its settings and cache on each platform.
 
 use crate::stitch;
 use anyhow::{Context, Result};
-use std::path::Path;
+use std::path::{Path, PathBuf};
+
+/// The name of Omnix's own folders (the binary's; gap 76 renames both).
+const APP: &str = "rosmo360";
+
+/// Which of a program's folders.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AppDir {
+    /// Settings: `$XDG_CONFIG_HOME` or `~/.config` on Linux, `~/Library/
+    /// Application Support` on macOS, `%APPDATA%` on Windows.
+    Config,
+    /// What can be made again: `$XDG_CACHE_HOME` or `~/.cache`,
+    /// `~/Library/Caches`, `%LOCALAPPDATA%`.
+    Cache,
+}
+
+/// The folder `app` keeps its settings or cache in, by the platform's
+/// custom; none when the system says no home.
+pub fn app_dir(kind: AppDir, app: &str) -> Option<PathBuf> {
+    let env = |k: &str| std::env::var_os(k).filter(|v| !v.is_empty()).map(PathBuf::from);
+    let base = match kind {
+        _ if cfg!(windows) => env(if kind == AppDir::Config { "APPDATA" } else { "LOCALAPPDATA" })?,
+        AppDir::Config if cfg!(target_os = "macos") => env("HOME")?.join("Library/Application Support"),
+        AppDir::Cache if cfg!(target_os = "macos") => env("HOME")?.join("Library/Caches"),
+        AppDir::Config => env("XDG_CONFIG_HOME").or_else(|| env("HOME").map(|h| h.join(".config")))?,
+        AppDir::Cache => env("XDG_CACHE_HOME").or_else(|| env("HOME").map(|h| h.join(".cache")))?,
+    };
+    Some(base.join(app))
+}
+
+/// Omnix's settings folder (settings, LUTs, the cache's place).
+pub(crate) fn config_dir() -> Option<PathBuf> {
+    app_dir(AppDir::Config, APP)
+}
+
+/// Omnix's cache folder when none is chosen.
+pub(crate) fn cache_dir() -> Option<PathBuf> {
+    app_dir(AppDir::Cache, APP)
+}
 
 /// Replaces `path` with `bytes` whole or not at all: written to a new file
 /// beside it, synced, then renamed over it. Written in place, a crash or a

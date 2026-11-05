@@ -30,7 +30,7 @@ pub fn get(id: usize) -> Arc<Lut> {
 /// Where the user's LUTs are kept, copied in so projects survive a moved
 /// download: `<config>/luts/`, each named by its file (`<name>.cube`).
 pub fn library() -> Option<PathBuf> {
-    Some(crate::player::config_dir()?.join("luts"))
+    Some(crate::fsutil::config_dir()?.join("luts"))
 }
 
 /// The library's LUTs by name, sorted.

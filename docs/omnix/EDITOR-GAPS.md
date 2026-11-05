@@ -1322,9 +1322,11 @@ Omnix's bin runs on it (`98f2795`).
 
 In Dailix a flag (F) is a note to self, never material: «a meme here»,
 «find a laughing sound». When a segment goes into an Omnix edit, the
-flags inside it would come along as markers with their notes (gap 5,
-markers with notes, exists), at the same place in the cut; so the
-timeline says where the meme or the sound goes. Flags outside every
+flags inside it would come along as markers with their notes, at the
+same place in the cut; so the timeline says where the meme or the sound
+goes. The markers exist (gap 5, built 2026-11-03: `Cut::marks`, M,
+the Markers row); this is gap 5's one leftover, «footage-agent's flags
+exported into them», now from Dailix's sheet. Flags outside every
 segment stay in the sheet. Made when a cut is made from a segment (the
 bin's add buttons, or Dailix's hand-over), kept in step by the mark's
 id (a marker could carry it). Milestone «Матеріал і бін».

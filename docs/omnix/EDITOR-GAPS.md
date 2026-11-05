@@ -1318,7 +1318,7 @@ Milestone «Матеріал і бін». Its first piece, the contact
 sheet's core, was built 2026-11-04 (`dailix/docs/SHEET-CORE.md`), and
 Omnix's bin runs on it (`98f2795`).
 
-### 75. A cut's flags from the contact sheet as markers on the edit — idea (user, 2026-11-05)
+### 75. A cut's flags from the contact sheet as markers on the edit — built 2026-11-05 with from-sheet, waiting for the user's check (user, 2026-11-05)
 
 In Dailix a flag (F) is a note to self, never material: «a meme here»,
 «find a laughing sound». When a segment goes into an Omnix edit, the
@@ -1331,7 +1331,12 @@ A flag lands in its cut's `marks`, in clip time, so it travels with the
 cut (user, 2026-11-05: «move a video's flags with it»): moved with the
 cut, kept on its frame through a trim (hidden past the cut's ends, back
 when trimmed out again), carried by both halves of a split. Must stay
-so; `markers_are_set_noted_moved_and_removed_by_time` checks it. Flags outside every
+so; `markers_are_set_noted_moved_and_removed_by_time` checks it.
+Built with `rosmo360 from-sheet` (`src/from_sheet.rs`, `f0b37ed`): a Dailix
+project's marking made into an edit by footage-agent's «→ Omnix» rules,
+a clip's flags inside a cut its markers; Dailix's «→ Omnix» by each day
+calls it. The bin also lists a section's subfolders (Dailix's days,
+`f522ab7`). Flags outside every
 segment stay in the sheet. Made when a cut is made from a segment (the
 bin's add buttons, or Dailix's hand-over), kept in step by the mark's
 id (a marker could carry it). Milestone «Матеріал і бін».

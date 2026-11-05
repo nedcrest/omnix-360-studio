@@ -12,9 +12,6 @@ cost is duplication and drift.
 - [ ] Timeline: press and hover test what's under the pointer in different
       orders (level tag vs fade knob): the cursor lies (`timeline.rs`
       `Marks::update` / `mouse_interaction`; `OverlayLane` too).
-- [ ] Dailix: I/O/M/N/PageUp-Down marking logic in `pane_key` (100 lines,
-      untested): a pure `marking.rs` returning ops.
-- [ ] Dailix: «→ Omnix» lookup and launch in `update`: an `omnix.rs`.
 - [ ] Contact-sheet segment writes ("sheet, else here only") ×3 in
       `bin_player.rs`; `Remove` uses commit/begin by hand, not `self.ops`.
 

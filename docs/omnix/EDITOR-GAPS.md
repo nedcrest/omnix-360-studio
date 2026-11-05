@@ -1345,7 +1345,7 @@ segment stay in the sheet. Made when a cut is made from a segment (the
 bin's add buttons, or Dailix's hand-over), kept in step by the mark's
 id (a marker could carry it). Milestone «Матеріал і бін».
 
-### 76. The program's name: rosmo360 → omnix — later (user, 2026-11-05)
+### 76. The program's name: rosmo360 → omnix — done 2026-11-05, waiting for the user's check (user, 2026-11-05)
 
 The binary is still upstream's `omnix`. To do later, as one change,
 because the name is in 34 files across three repos:
@@ -1362,6 +1362,14 @@ because the name is in 34 files across three repos:
 Upstream (rOsmo360) is unchanged since our fork point; merging from it
 later gets harder with the rename, so it waits until we know we won't.
 Milestone «Інші платформи» (packaging).
+Done 2026-11-05, a commit a step: the crate, library and binary (`omnix`;
+Dailix's dependency and its module `editor.rs`); the settings and cache
+folders (`~/.config/omnix`, `~/.cache/omnix`, the old ones renamed over on
+first use, tested); `OMNIX_CACHE`, `OMNIX_10BIT`; packaging (with a
+placeholder app id `local.omnix.Omnix` and no release repository until
+published); the docs; footage-agent's lookup. Kept: the cache's file mark
+`rOsmo360` (changing it would remake every entry) and the 0.7 project
+fixture.
 
 ### 77. Dailix: voice clean-up and loudness for camera and phone sound — idea (user, 2026-11-05)
 
@@ -1397,7 +1405,7 @@ on by default for a clip whose shape isn't the edit's, the same in the
 player (GPU) and in the export (ffmpeg `split`, `scale`, `boxblur`,
 `overlay`), tested to match. Milestone «Кадрування».
 
-### 79. Omnix's own face: the footer's credit and the start picture — idea (user, 2026-11-05)
+### 79. Omnix's own face: the footer's credit and the start picture — done 2026-11-05, waiting for the user's check (user, 2026-11-05)
 
 The footer (`player/icons.rs`) still reads «Omnix · built on rOsmo360 …
 · Made by Vibing with Ravelund · 2026», and the picture shown while it

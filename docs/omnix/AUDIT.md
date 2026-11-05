@@ -30,7 +30,7 @@ Across the two repos:
 In Omnix:
 - [ ] Job thread scaffolding ×2; `note()` ×2.
 - [ ] A cut's media built ×3 (`transport.rs`); cut level formula ×2.
-- [ ] `request_still` thread ×2; mono PCM decode ×2 (`music.rs`, ffmpeg).
+- [ ] `request_still` thread ×2.
 - [ ] Info read and drawn twice (bin side pane, Info panel).
 - [ ] Whole-film `Mix` assembly ×3; `Sound` spelt out by hand.
 - [ ] Find-by-id ×7; `Lane::place` = `Music::place`; mute-aware level ×3.

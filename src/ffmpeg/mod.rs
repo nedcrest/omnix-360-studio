@@ -206,18 +206,23 @@ pub fn jpeg_frame(path: &Path, t: f64, width: u32) -> Option<Vec<u8>> {
     (out.status.success() && !out.stdout.is_empty()).then_some(out.stdout)
 }
 
+/// The first audio stream as mono samples at `rate`, through `filter` if
+/// given: for waveforms and levels.
+pub fn mono(input: &Path, rate: u32, filter: Option<&str>) -> Result<Vec<f32>> {
+    let mut cmd = tool("ffmpeg");
+    cmd.args(["-v", "error", "-nostdin", "-i"]).arg(input).args(["-map", "0:a:0"]);
+    if let Some(f) = filter {
+        cmd.args(["-af", f]);
+    }
+    let out = cmd.args(["-ac", "1", "-ar", &rate.to_string(), "-f", "f32le", "-"]).stdin(Stdio::null()).stderr(Stdio::null()).output().context("running ffmpeg")?;
+    Ok(out.stdout.chunks_exact(4).map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]])).collect())
+}
+
 /// RMS and peak level in dBFS of the first audio stream, per `window`
 /// seconds from the start.
 pub fn audio_levels(input: &Path, window: f64) -> Result<Vec<(f64, f64)>> {
     const RATE: f64 = 16000.0;
-    let out = tool("ffmpeg")
-        .args(["-v", "error", "-nostdin", "-i"])
-        .arg(input)
-        .args(["-map", "0:a:0", "-ac", "1", "-ar", &RATE.to_string(), "-f", "f32le", "-"])
-        .stderr(Stdio::inherit())
-        .output()
-        .context("running ffmpeg")?;
-    let samples: Vec<f32> = out.stdout.chunks_exact(4).map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]])).collect();
+    let samples = mono(input, RATE as u32, None)?;
     let db = |v: f64| 20.0 * v.max(1e-6).log10();
     Ok(samples
         .chunks(((window * RATE).round() as usize).max(1))

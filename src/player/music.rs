@@ -13,10 +13,8 @@
 
 use super::audio::Audio;
 use crate::project::{self, MusicClip};
-use anyhow::{Context, Result};
-use std::io::Read;
+use anyhow::Result;
 use std::path::{Path, PathBuf};
-use std::process::Stdio;
 
 /// Seconds per waveform peak.
 pub const WAVE_STEP: f64 = 0.05;
@@ -44,22 +42,8 @@ impl Waveform {
             return Ok(Waveform { peaks, duration });
         }
         const RATE: usize = 8000;
-        let mut cmd = crate::ffmpeg::tool("ffmpeg");
-        cmd.args(["-v", "error", "-nostdin", "-i"]).arg(path).args(["-map", "0:a:0"]);
-        if even {
-            cmd.args(["-af", crate::loudness::LEVELER]);
-        }
-        let mut child = cmd
-            .args(["-ac", "1", "-ar", &RATE.to_string(), "-f", "f32le", "-"])
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .spawn()
-            .context("running ffmpeg")?;
-        let mut bytes = Vec::new();
-        child.stdout.take().unwrap().read_to_end(&mut bytes)?;
-        child.wait()?;
+        let samples: Vec<f32> = crate::ffmpeg::mono(path, RATE as u32, even.then_some(crate::loudness::LEVELER))?.into_iter().map(f32::abs).collect();
         let per = (WAVE_STEP * RATE as f64) as usize;
-        let samples: Vec<f32> = bytes.chunks_exact(4).map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]]).abs()).collect();
         if samples.is_empty() {
             anyhow::bail!("{} has no sound", path.display());
         }

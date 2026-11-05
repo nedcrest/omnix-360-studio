@@ -507,45 +507,32 @@ impl Playback {
     /// full resolution, or else at the OSV size being played (none when
     /// playing the proxy, whose preview is already that quality).
     fn request_still(&mut self, t: f64) {
-        if let Some(flat) = self.media.flat {
+        // What to decode, and at what size (none: full); nothing when
+        // playing already shows it as sharp.
+        let size = match (self.media.flat, self.full_on_pause, self.media.osv_size) {
             // Playing already shows up to `FLAT_PLAY`; only full size adds.
-            if !self.full_on_pause || fit(flat.size(), FLAT_PLAY) == flat.size() {
-                self.still = None;
-                return;
-            }
-            if self.still_busy.load(Ordering::Relaxed) {
-                self.still_next = Some(t);
-                return;
-            }
-            let (tx, rx) = channel();
-            let (path, hw, busy) = (self.media.input.clone(), self.media.hw, self.still_busy.clone());
-            busy.store(true, Ordering::Relaxed);
-            std::thread::spawn(move || {
-                let frame = source::still_flat(&path, flat, t, hw);
-                busy.store(false, Ordering::Relaxed);
-                let _ = tx.send(frame);
-            });
-            self.still = Some((t, None, rx));
+            (Some(flat), full, _) if !full || fit(flat.size(), FLAT_PLAY) == flat.size() => None,
+            (Some(_), ..) => Some(None),
+            (None, true, _) => Some(None),
+            (None, false, Some(s)) => Some(Some(s)),
+            (None, false, None) => None,
+        };
+        let Some(size) = size else {
+            self.still = None;
             return;
-        }
-        let size = match (self.full_on_pause, self.media.osv_size) {
-            (true, _) => None,
-            (false, Some(s)) => Some(s),
-            (false, None) => {
-                self.still = None;
-                return;
-            }
         };
         if self.still_busy.load(Ordering::Relaxed) {
             self.still_next = Some(t);
             return;
         }
         let (tx, rx) = channel();
-        let (path, tracks, hw) = (self.media.input.clone(), self.media.rig.tracks.clone(), self.media.hw);
-        let busy = self.still_busy.clone();
+        let (path, flat, tracks, hw, busy) = (self.media.input.clone(), self.media.flat, self.media.rig.tracks.clone(), self.media.hw, self.still_busy.clone());
         busy.store(true, Ordering::Relaxed);
         std::thread::spawn(move || {
-            let frame = source::still(&path, &tracks, t, size, hw);
+            let frame = match flat {
+                Some(flat) => source::still_flat(&path, flat, t, hw),
+                None => source::still(&path, &tracks, t, size, hw),
+            };
             busy.store(false, Ordering::Relaxed);
             let _ = tx.send(frame);
         });

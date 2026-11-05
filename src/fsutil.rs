@@ -5,8 +5,10 @@ use crate::stitch;
 use anyhow::{Context, Result, bail};
 use std::path::{Path, PathBuf};
 
-/// The name of Omnix's own folders (the binary's; gap 76 renames both).
-const APP: &str = "rosmo360";
+/// The name of Omnix's own folders, and the one they had before the
+/// rename (gap 76): moved over once, so nothing set or cached is lost.
+const APP: &str = "omnix";
+const OLD_APP: &str = "rosmo360";
 
 /// Which of a program's folders.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -35,12 +37,28 @@ pub fn app_dir(kind: AppDir, app: &str) -> Option<PathBuf> {
 
 /// Omnix's settings folder (settings, LUTs, the cache's place).
 pub(crate) fn config_dir() -> Option<PathBuf> {
-    app_dir(AppDir::Config, APP)
+    own_dir(AppDir::Config)
 }
 
 /// Omnix's cache folder when none is chosen.
 pub(crate) fn cache_dir() -> Option<PathBuf> {
-    app_dir(AppDir::Cache, APP)
+    own_dir(AppDir::Cache)
+}
+
+/// Omnix's folder of `kind`, the old name's moved to it the first time
+/// (once a run); if the move fails, the old one is used as it is.
+fn own_dir(kind: AppDir) -> Option<PathBuf> {
+    let (new, old) = (app_dir(kind, APP)?, app_dir(kind, OLD_APP)?);
+    Some(moved_over(&old, new))
+}
+
+/// `new`, with `old` renamed to it when only `old` is there; `old` if that
+/// fails.
+fn moved_over(old: &Path, new: PathBuf) -> PathBuf {
+    if !new.exists() && old.is_dir() && std::fs::rename(old, &new).is_err() {
+        return old.to_owned();
+    }
+    new
 }
 
 /// Replaces `path` with `bytes` whole or not at all: written to a new file
@@ -79,6 +97,22 @@ pub(crate) fn save_png(path: &Path, f: &stitch::Frame) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_old_folder_is_moved_to_the_new_name_once() {
+        let base = std::env::temp_dir().join(format!("omnix-rename-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let (old, new) = (base.join("rosmo360"), base.join("omnix"));
+        std::fs::create_dir_all(&old).unwrap();
+        std::fs::write(old.join("settings.json"), b"{}").unwrap();
+        assert_eq!(moved_over(&old, new.clone()), new);
+        assert!(new.join("settings.json").is_file() && !old.exists());
+        // Both there (an old copy came back): the new one wins, untouched.
+        std::fs::create_dir_all(&old).unwrap();
+        assert_eq!(moved_over(&old, new.clone()), new);
+        assert!(old.exists());
+        std::fs::remove_dir_all(&base).unwrap();
+    }
 
     #[test]
     fn a_replacement_lands_whole_keeps_permissions_and_follows_a_link() {

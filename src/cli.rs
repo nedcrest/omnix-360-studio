@@ -412,7 +412,7 @@ pub(crate) enum CacheAction {
     Move {
         #[arg(required_unless_present = "default")]
         folder: Option<PathBuf>,
-        /// Back to the system's cache folder (~/.cache/rosmo360 on Linux).
+        /// Back to the system's cache folder (~/.cache/omnix on Linux).
         #[arg(long, conflicts_with = "folder")]
         default: bool,
     },

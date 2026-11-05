@@ -18,7 +18,7 @@ Across the two repos:
 
 In Omnix:
 - [ ] Info read and drawn twice (bin side pane, Info panel).
-- [ ] Whole-film `Mix` assembly ×3; `Sound` spelt out by hand.
+- [ ] `Sound` spelt out field by field in `cli.rs` (`render`).
 - [ ] Find-by-id ×7; `Lane::place` = `Music::place`; mute-aware level ×3.
 - [ ] Timeline: press and hover each walk what's under the pointer (now in
       the same order, `Marks` and `OverlayLane`): one `Hit` per canvas,

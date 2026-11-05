@@ -52,6 +52,6 @@ links Dailix's sheet core.
 4. **Library modules reaching into `player` and `cli`:** the waveform
    (`player::music::Waveform`, used by `duck`, `preview`), `render` (used
    by `export`), `osv_under` (used by `analyse`): to the media layer.
-5. **Smaller duplicates:** the whole-film `Mix` built three times, find a
+5. **Smaller duplicates:** find a
    cut/clip/item by id seven times, `Lane::place` and `Music::place`, the
    mute-aware level three times, Info read and drawn twice.

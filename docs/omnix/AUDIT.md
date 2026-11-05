@@ -24,10 +24,17 @@ In Omnix:
 
 ## Tangled
 
-- [ ] `App` mirrors ~33 settings by hand (in at `new`, out at `settings()`).
 - [ ] `Marks::update` 241 lines; `export()` 159; `cli::run` 157 (preview
       and export logic inline); Dailix `update` 243.
 - [ ] The export reaches into `player` for the GPU (`render`, `gpu`): to `src/gpu/`.
+
+## Looked at and kept
+
+- `App::settings()` gathers ~33 fields from where they live (the bin,
+  recording, the lanes' folds; the aspect and theme in other types) into
+  what's saved: a projection, not a copy. One `settings` field would put
+  `self.settings.…` in every file for no gain.
+- The mute-aware level: a line each on `Cut`, `MusicClip`, `OwnSound`.
 
 ## Decided by the user (2026-11-05): done
 

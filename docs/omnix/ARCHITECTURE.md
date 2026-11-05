@@ -44,8 +44,6 @@ links Dailix's sheet core.
    `Selection`. The plan: `Rows` boxes per lane, one `Hit` per canvas used
    by press and hover, shared drawing helpers, blocks that reference the
    cut or clip they show. Visible: wants the user's eyes after each step.
-2. **`App` mirrors ~33 settings by hand** (copied in at `new`, out at
-   `settings()`, a third copy for diffing): one `settings` field instead.
 3. **Long functions:** `Marks::update` 241 lines (after 1), `export()`
    159 (a pure plan, then the render loop), `cli::run` 157 (the preview
    and export arms into their modules).

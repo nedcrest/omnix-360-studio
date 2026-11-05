@@ -27,6 +27,12 @@ use serde::Deserialize;
 use serde_json::Value;
 use std::fmt;
 
+/// Whether clip time `t` falls in one of `marks`' segments: a flag or a
+/// point outside every segment goes into no edit.
+pub fn in_segment(marks: &[Mark], t: f64) -> bool {
+    marks.iter().any(|s| s.kind == MarkKind::Segment && s.end.is_some_and(|e| t >= s.t && t <= e))
+}
+
 /// Whether `name` is a day as the sheet keys days: `YYYY-MM-DD`.
 pub fn is_day(name: &str) -> bool {
     name.len() == 10 && name.chars().enumerate().all(|(i, c)| if i == 4 || i == 7 { c == '-' } else { c.is_ascii_digit() })
@@ -104,8 +110,7 @@ impl Doc {
     /// same id at the next read. So a program settles and saves before
     /// it addresses a mark by id (the store does, step 5).
     pub fn settle_ids(&mut self) -> usize {
-        let number = |id: &str| id.strip_prefix('m').and_then(|n| n.parse::<u64>().ok());
-        let mut next = self.marks().filter_map(|m| m.get("id").and_then(Value::as_str).and_then(number)).max().unwrap_or(0);
+        let mut next = self.highest_id();
         let mut seen = std::collections::HashSet::new();
         let mut given = 0;
         for mark in self.marks_mut() {

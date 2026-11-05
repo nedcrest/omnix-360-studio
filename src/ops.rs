@@ -315,7 +315,7 @@ impl Doc {
     }
 
     /// The highest number among the marks' ids (`m<n>`).
-    fn highest_id(&self) -> u64 {
+    pub(crate) fn highest_id(&self) -> u64 {
         self.marks().filter_map(|m| m.get("id")?.as_str()?.strip_prefix('m')?.parse().ok()).max().unwrap_or(0)
     }
 

@@ -248,13 +248,13 @@ impl App {
             }
             Message::SoundLevel(db) => {
                 self.edit.begin();
-                self.edit.sound.volume = db;
+                self.op(Op::Sound(SoundOp::TrackLevel { track: None, db }));
                 let v = self.clip_volume();
                 self.with_playback(|p| p.set_volume(v));
             }
             Message::TrackLevel(which, db) => {
                 self.edit.begin();
-                self.edit.track_mut(which).volume = db;
+                self.op(Op::Sound(SoundOp::TrackLevel { track: Some(which), db }));
             }
             Message::LevelDone => self.edit.commit(),
             _ => {}

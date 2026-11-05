@@ -11,7 +11,8 @@ use super::{App, Message, Selection, icon_button, tip};
 use crate::grade::{EffectKey, Grade, grade_at};
 use crate::overlay::{Place, place_at};
 use crate::model::ops::keys::{EXACT, Graded, KeyOp, Line};
-use crate::model::ops::{Op, items::ItemOp};
+use crate::model::ops::sound::SoundOp;
+use crate::model::ops::{End, Op, items::ItemOp};
 use crate::text::{Colour, Outline, Text, TextAlign};
 use crate::view::Ease;
 use iced::widget::{button, column, container, pick_list, row, rule, scrollable, slider, text, toggler, tooltip};
@@ -397,13 +398,13 @@ impl App {
                     self.save_status = None;
                 }
             }
-            EffectMsg::FadeIn(v) => {
+            EffectMsg::FadeIn(seconds) => {
                 self.edit.begin();
-                self.edit.fades.fade_in = v;
+                self.op(Op::Sound(SoundOp::EditFade { end: End::In, seconds }));
             }
-            EffectMsg::FadeOut(v) => {
+            EffectMsg::FadeOut(seconds) => {
                 self.edit.begin();
-                self.edit.fades.fade_out = v;
+                self.op(Op::Sound(SoundOp::EditFade { end: End::Out, seconds }));
             }
             EffectMsg::Jump(cut, t) => {
                 self.follow = true;

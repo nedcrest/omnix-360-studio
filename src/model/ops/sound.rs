@@ -3,7 +3,7 @@
 //! player's sound menu and level tag (`OPS-API.md` phase 2).
 
 use super::{End, OpError, Outcome, SoundRef, said};
-use crate::project::{OFF_DB, Own, OwnSound, Project};
+use crate::project::{OFF_DB, Own, OwnSound, Project, SoundTrack};
 use serde::{Deserialize, Serialize};
 
 /// How far «Lower for voice-over» takes a sound under its normal level:
@@ -62,7 +62,18 @@ pub enum SoundOp {
     /// The music lowered `depth` dB over these stretches of speech (edit
     /// time, as `duck::find_speech` measures them), replacing a duck before.
     Duck { depth: f64, speech: Vec<(f64, f64)> },
+    /// A track's level, dB (the Audio panel's), or the clips' own sound's
+    /// without a `track`: from `OFF_DB` (silent) to `TRACK_MOST`.
+    TrackLevel { track: Option<SoundTrack>, db: f64 },
+    /// The whole edit's fade from or to black, its sound with it: seconds,
+    /// 0 to `EDIT_FADE_MOST`.
+    EditFade { end: End, seconds: f64 },
 }
+
+/// The loudest a track's level goes, dB.
+pub const TRACK_MOST: f64 = 6.0;
+/// The longest fade of the whole edit, seconds.
+pub const EDIT_FADE_MOST: f64 = 5.0;
 
 pub(super) fn apply(p: &mut Project, op: &SoundOp) -> Result<Outcome, OpError> {
     match op {
@@ -176,6 +187,25 @@ pub(super) fn apply(p: &mut Project, op: &SoundOp) -> Result<Outcome, OpError> {
             crate::duck::duck_music(&mut p.music, speech, *depth);
             said(format!("music {depth:.0} dB down under {} stretches of speech", speech.len()))
         }
+        &SoundOp::TrackLevel { track, db } => {
+            if !(OFF_DB..=TRACK_MOST).contains(&db) {
+                return Err(OpError::OutOfRange { what: "track level", value: db, least: OFF_DB, most: TRACK_MOST });
+            }
+            let level = match track {
+                Some(w) => &mut p.track_mut(w).volume,
+                None => &mut p.sound.volume,
+            };
+            let was = std::mem::replace(level, db);
+            said(format!("{}: level {was:+.1} → {db:+.1} dB", track.map_or("clip sound", SoundTrack::name)))
+        }
+        &SoundOp::EditFade { end, seconds } => {
+            if !(0.0..=EDIT_FADE_MOST).contains(&seconds) {
+                return Err(OpError::OutOfRange { what: "edit fade", value: seconds, least: 0.0, most: EDIT_FADE_MOST });
+            }
+            let fade = if end == End::In { &mut p.fades.fade_in } else { &mut p.fades.fade_out };
+            *fade = seconds;
+            said(format!("the edit fades {} over {seconds:.1} s", if end == End::In { "in" } else { "out" }))
+        }
     }
 }
 
@@ -212,7 +242,7 @@ mod tests {
     use super::super::{Op, check};
     use super::*;
     use crate::model::edit::Edit;
-    use crate::project::{Cut, SoundTrack};
+    use crate::project::Cut;
 
     /// Two cuts and a song, ids given.
     fn edit() -> Edit {
@@ -231,6 +261,18 @@ mod tests {
 
     fn op(o: SoundOp) -> Op {
         Op::Sound(o)
+    }
+
+    #[test]
+    fn track_levels_and_the_edits_fades_are_ops() {
+        let mut e = edit();
+        e.apply(&op(SoundOp::TrackLevel { track: Some(SoundTrack::Sfx), db: -6.0 })).unwrap();
+        e.apply(&op(SoundOp::TrackLevel { track: None, db: 3.0 })).unwrap();
+        e.apply(&op(SoundOp::EditFade { end: End::Out, seconds: 2.5 })).unwrap();
+        assert_eq!((e.track(SoundTrack::Sfx).volume, e.sound.volume, e.fades.fade_in, e.fades.fade_out), (-6.0, 3.0, 0.0, 2.5));
+        assert!(e.apply(&op(SoundOp::TrackLevel { track: None, db: 7.0 })).is_err());
+        assert!(e.apply(&op(SoundOp::EditFade { end: End::In, seconds: -1.0 })).is_err());
+        assert!(e.undo() && e.fades.fade_out == 0.0, "one undo step each");
     }
 
     #[test]

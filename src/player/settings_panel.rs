@@ -34,7 +34,7 @@ impl App {
         column![
             list,
             button(text("Add LUT…").size(14)).on_press(Message::AddLut),
-            note("Copied into rOsmo360's settings folder, so projects keep working when the download moves."),
+            note("Copied into Omnix's settings folder, so projects keep working when the download moves."),
             text("For D-Log M clips").size(14),
             pick_list(choices, Some(LutChoice::of(self.dlog_m_lut.as_ref())), Message::DlogMLut).text_size(13).width(Length::Fill),
             note("Clips filmed in D-Log M get it when they're added; the Effects panel changes it per cut. DJI's is \"Osmo 360 D-Log M to Rec.709 LUT\" in the DJI Download Center."),

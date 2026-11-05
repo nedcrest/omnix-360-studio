@@ -1,13 +1,12 @@
 //! The command line: the `rosmo360` subcommands and how each runs; `play` opens the player.
 
-use crate::{cache, check, ffmpeg, imu, loudness, player, project, sheet, stab, track, view};
+use crate::{cache, check, ffmpeg, imu, loudness, player, project, stab, track, view};
 use crate::{ExportOpts, Resolution, Target, StitchOpts, Pipeline, export, track_to};
 use crate::analyse::{info, needs_360, scan, scan_many, seam_report};
 use crate::fsutil::save_png;
 use crate::pipeline::{Carry, Shot, encode, load_input, span};
 use crate::preview::preview_project;
 use anyhow::{Context, Result, bail};
-use rayon::prelude::*;
 use clap::{Args, Parser, Subcommand};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
@@ -519,6 +518,15 @@ pub(crate) fn parse_size(s: &str) -> Result<[u32; 2], String> {
     Ok([w, h])
 }
 
+/// A project sets its own cuts and views: the options for one clip are
+/// refused with it rather than ignored.
+fn clip_options_unused(framing: &Framing, start: Option<f64>, duration: Option<f64>) -> Result<()> {
+    if framing.reframe.is_some() || framing.view.is_some() || start.is_some() || duration.is_some() {
+        bail!("a project sets its own cuts and views; leave out --reframe, --view, -s and -d");
+    }
+    Ok(())
+}
+
 /// Progress on the terminal: frames done, out of how many, and the rate.
 pub(crate) fn print_progress() -> impl FnMut(usize, usize) -> Result<()> {
     let began = Instant::now();
@@ -660,9 +668,7 @@ pub(crate) fn run() -> Result<()> {
         Cmd::Export { input, framing, start, duration, resolution, aspect, size, output, format, clips, handles, graded, loudness, draft, cpu, opts } => {
             let name = input.file_stem().map_or_else(|| "export".to_owned(), |s| s.to_string_lossy().into_owned());
             let project = if is_project(&input) {
-                if framing.reframe.is_some() || framing.view.is_some() || start.is_some() || duration.is_some() {
-                    bail!("a project sets its own cuts and views; leave out --reframe, --view, -s and -d");
-                }
+                clip_options_unused(&framing, start, duration)?;
                 project::Project::load(&input)?
             } else {
                 // One clip is a project of one cut.
@@ -686,52 +692,16 @@ pub(crate) fn run() -> Result<()> {
             eprintln!("{} file(s), {:.2} s of edit", written.len(), project.duration());
         }
         Cmd::Preview { input, framing, start, duration, every, tile, columns, output, full, opts } if is_project(&input) => {
-            if framing.reframe.is_some() || framing.view.is_some() || start.is_some() || duration.is_some() {
-                bail!("a project sets its own cuts and views; leave out --reframe, --view, -s and -d");
-            }
+            clip_options_unused(&framing, start, duration)?;
             let project = project::Project::load(&input)?;
             let (sheet, tiles) = preview_project(&project, &opts, every, tile, columns.max(1), !full)?;
             save_png(&output, &sheet)?;
             eprintln!("wrote {}: {tiles} tiles of {} cuts", output.display(), project.cuts.len());
         }
         Cmd::Preview { input, framing, start, duration, every, tile, columns, output, full, opts } => {
-            let reframe = framing.reframe()?;
-            let mut p = Pipeline::new(&input, &opts, stab::Mode::Horizon)?;
-            if !full {
-                p.use_proxy();
-            }
-            let times = match (every, &reframe) {
-                (Some(every), _) => {
-                    let (a, b) = p.span(start, duration, reframe.as_ref())?;
-                    (0..).map(|n| a + n as f64 * every.max(1.0 / p.fps)).take_while(|&t| t < b).collect()
-                }
-                (None, Some(r)) if start.is_none() && duration.is_none() && r.keyframes.len() > 1 => r.keyframes.iter().map(|k| k.t).collect(),
-                _ => {
-                    let (a, b) = p.span(start, duration, None)?;
-                    (0..24).map(|n| a + (n as f64 + 0.5) * (b - a) / 24.0).collect::<Vec<_>>()
-                }
-            };
-            let shot = |t: f64| match &reframe {
-                None => Shot::Equirect(tile),
-                Some(r) => {
-                    let view::Aspect(w, h) = r.aspect.unwrap_or(view::Aspect(16, 9));
-                    Shot::View { camera: Box::new(r.camera_at(t, &|f, t| p.aim(f, t))), size: (tile, ((tile * h as usize / w as usize) / 2).max(8) * 2) }
-                }
-            };
-            let tiles = times
-                .par_iter()
-                .map(|&t| {
-                    let t = p.snap(t);
-                    let mut f = p.render(&p.stills(t)?, t, &mut Carry::default(), &shot(t));
-                    if reframe.is_none() {
-                        sheet::equirect_grid(&mut f);
-                    }
-                    sheet::label(&mut f, 4, 4, &format!("{t:.1}s"));
-                    Ok(f)
-                })
-                .collect::<Result<Vec<_>>>()?;
-            save_png(&output, &sheet::compose(&tiles, columns))?;
-            eprintln!("wrote {}: {} tiles at {}", output.display(), tiles.len(), times.iter().map(|t| format!("{:.1}", p.snap(*t))).collect::<Vec<_>>().join(" "));
+            let (sheet, times) = crate::preview::preview_clip(&input, framing.reframe()?.as_ref(), &opts, (start, duration), every, tile, columns, !full)?;
+            save_png(&output, &sheet)?;
+            eprintln!("wrote {}: {} tiles at {}", output.display(), times.len(), times.iter().map(|t| format!("{t:.1}")).collect::<Vec<_>>().join(" "));
         }
         Cmd::Scan { inputs, output, jobs, every, image } => match (&inputs[..], output) {
             ([input], None) if !input.is_dir() => needs_360(input, "motion data").and_then(|_| scan(input, every, image, &mut std::io::stdout().lock()))?,

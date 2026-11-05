@@ -6,6 +6,53 @@ use anyhow::Result;
 use rayon::prelude::*;
 use std::path::Path;
 
+/// A tile `tile` wide in `aspect`'s shape (16:9 without one): its height,
+/// even and at least 8.
+fn tile_height(tile: usize, aspect: Option<view::Aspect>) -> usize {
+    let view::Aspect(w, h) = aspect.unwrap_or(view::Aspect(16, 9));
+    ((tile * h as usize / w as usize) / 2).max(8) * 2
+}
+
+/// A contact sheet of one clip (`rosmo360 preview <clip>`): a tile every
+/// `every` seconds, or at each of `reframe`'s keyframes, or 24 spread over
+/// its `span` (start, duration); each the whole sphere with its grid, or
+/// framed by `reframe`; labelled with its time. The sheet and the times.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn preview_clip(input: &Path, reframe: Option<&view::Reframe>, opts: &StitchOpts, (start, duration): (Option<f64>, Option<f64>), every: Option<f64>, tile: usize, columns: usize, proxy: bool) -> Result<(stitch::Frame, Vec<f64>)> {
+    let mut p = crate::Pipeline::new(input, opts, crate::stab::Mode::Horizon)?;
+    if proxy {
+        p.use_proxy();
+    }
+    let times: Vec<f64> = match (every, reframe) {
+        (Some(every), _) => {
+            let (a, b) = p.span(start, duration, reframe)?;
+            (0..).map(|n| a + n as f64 * every.max(1.0 / p.fps)).take_while(|&t| t < b).collect()
+        }
+        (None, Some(r)) if start.is_none() && duration.is_none() && r.keyframes.len() > 1 => r.keyframes.iter().map(|k| k.t).collect(),
+        _ => {
+            let (a, b) = p.span(start, duration, None)?;
+            (0..24).map(|n| a + (n as f64 + 0.5) * (b - a) / 24.0).collect()
+        }
+    };
+    let times: Vec<f64> = times.into_iter().map(|t| p.snap(t)).collect();
+    let shot = |t: f64| match reframe {
+        None => Shot::Equirect(tile),
+        Some(r) => Shot::View { camera: Box::new(r.camera_at(t, &|f, t| p.aim(f, t))), size: (tile, tile_height(tile, r.aspect)) },
+    };
+    let tiles = times
+        .par_iter()
+        .map(|&t| {
+            let mut f = p.render(&p.stills(t)?, t, &mut Carry::default(), &shot(t));
+            if reframe.is_none() {
+                sheet::equirect_grid(&mut f);
+            }
+            sheet::label(&mut f, 4, 4, &format!("{t:.1}s"));
+            Ok(f)
+        })
+        .collect::<Result<Vec<_>>>()?;
+    Ok((sheet::compose(&tiles, columns), times))
+}
+
 /// A contact sheet of a project: per cut, `columns` moments spread across
 /// it (or one every `every` seconds), framed as `export` frames them. Each
 /// cut starts a row, headed by its edit time, number, clip and span
@@ -18,8 +65,7 @@ pub(crate) fn preview_project(project: &project::Project, opts: &StitchOpts, eve
     let mut project = project.clone();
     let (pipelines, of_cut) = cut_pipelines(&mut project, opts, proxy)?;
     let project = &project;
-    let view::Aspect(w, h) = project.aspect.unwrap_or(view::Aspect(16, 9));
-    let size = (tile, ((tile * h as usize / w as usize) / 2).max(8) * 2);
+    let size = (tile, tile_height(tile, project.aspect));
     let offsets = project::offsets(&project.cuts);
     let music = sheet_music(project);
     let width = sheet::width(tile, columns);

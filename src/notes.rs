@@ -1,10 +1,11 @@
-//! The contact sheet's marks: footage-agent's `report/notes.json`, read so
+//! The contact sheet's marks (a Dailix project's `dailix/sheet.json`, or
+//! footage-agent's `report/notes.json`), read so
 //! the bin's player shows a clip's segments, and changed when one is set,
 //! described or deleted here (gaps 71a, 72e; user, 2026-11-04: one list,
 //! both ways).
 //!
 //! Reading and changing go through the sheet's core, Dailix's
-//! `dailix-sheet` (`../dailix`, `docs/SHEET-CORE.md`): the file is
+//! `dailix-sheet` (`../dailix`, its `docs/SHEET-CORE.md`): the file is
 //! read afresh for every change, marks are named by their ids, every op
 //! is checked, and the file keeps its form and every field it has. What
 //! stays here is Omnix's side: where a project's sheet is, and which

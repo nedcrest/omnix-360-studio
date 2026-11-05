@@ -50,8 +50,6 @@ In Omnix:
 
 ## Stale docs
 
-- [ ] AGENTS.md Layout (main.rs, ffmpeg.rs, missing modules).
-- [ ] ARCHITECTURE.md shape table and steps; CORE-API.md names.
 - [ ] timeline.rs header (seek bar, two lanes), misplaced doc comments
       (timeline, icons, framing, bars, effects, keys, jobs, cuts, tracks,
       mod, thumbs, overlay, pipeline, loudness).

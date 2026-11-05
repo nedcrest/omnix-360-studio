@@ -93,11 +93,14 @@ Useful checks:
 
 ## Layout
 
-- `src/main.rs`: CLI, `Pipeline` (rig, lenses, stabiliser, fps per clip), CPU `encode` and `export`.
-- `src/stitch.rs`: the CPU stitcher (ground truth). `ring.rs`: seam coordinates. `exposure.rs`, `align.rs`: per-frame seam corrections.
-- `src/stab.rs`: stabilisation modes. `imu.rs`: reads the attitude. `view.rs`: views, keyframes, `Camera`.
-- `src/project.rs`: projects (cuts, sound, music). `overlay.rs`, `text.rs`: overlay and text tracks. `grade.rs`, `lut.rs`, `hdr.rs`: colour. `dissolve.rs`: crossfades in export.
-- `src/ffmpeg.rs`: every ffmpeg/ffprobe call, decode options, hardware decoder probing. `cache.rs`: the clip cache. `dji.rs`: DJI's metadata.
-- `src/track.rs`, `sky.rs`, `check.rs`, `sheet.rs`: colour tracking, `scan --image`, `check`, `preview` sheets.
-- `src/player/`: the iced app (`mod.rs`), GPU drawing (`gpu.rs`, `shader.wgsl`, `grade.wgsl`, `overlay.wgsl`), GPU export (`render.rs`), decoding (`source.rs`, `playback.rs`), sound (`audio.rs`, `music.rs`), the timeline (`timeline.rs`, `edit.rs`, `thumbs.rs`) and the panels.
-- `packaging/`: release builds for Linux (tarball, AppImage, Flatpak), Windows and macOS. `docs/`: the user guide.
+One crate, `rosmo360`: a library (`lib.rs`) and a thin binary (`main.rs`). Dailix (`../dailix`) uses the library, and the library uses Dailix's sheet core (`dailix_sheet`).
+
+- **The core** (`src/model/`): the project being edited and every change to it as an operation (`model/ops/`: cuts, clips, items, keys, sound), checked, one undo step each (`model/edit.rs`), what's selected (`selection.rs`). No iced, no ffmpeg. The player, the CLI (`rosmo360 apply`, `describe`, `ops-schema`) and tests all change a project only through it (`docs/omnix/OPS-API.md`, `CORE-API.md`).
+- **The file format**: `project.rs` (cuts, sound tracks, `drop_missing`), `overlay.rs`, `text.rs`, `grade.rs`, `view.rs` (views, keyframes, `Camera`).
+- **360**: `stitch.rs` (the CPU stitcher, ground truth), `ring.rs`, `exposure.rs`, `align.rs`, `stab.rs`, `imu.rs`, `dji.rs`, `sky.rs`, `track.rs`; colour `grade.rs`, `lut.rs`, `hdr.rs`.
+- **Media**: `ffmpeg/` (every ffmpeg/ffprobe call: decoding, the encoder, `jpeg_frame`, `mono`; `ffmpeg/mix.rs` the export's sound graph), `cache.rs` (the clip cache), `fsutil.rs` (safe file replacement, settings and cache folders).
+- **Export and the CLI**: `cli.rs` (the subcommands), `pipeline.rs` (`Pipeline`, CPU `encode`, `grade_frame`), `export.rs`, `dissolve.rs`, `preview.rs` and `sheet.rs` (contact sheets), `check.rs`, `analyse.rs`, `apply.rs`, `blank.rs`, `capture.rs`.
+- **Sound rules**: `mixdown.rs` (how loud a sound is at a moment), `loudness.rs` (measuring, filters, normalize), `lufs.rs` (our BS.1770 meter), `duck.rs`, `mixcheck.rs` and `mixmeasure.rs` (the mix check).
+- **Dailix**: `notes.rs` (a project's contact sheet through `dailix_sheet`), `from_sheet.rs` (an edit from its marking).
+- **The player** (`src/player/`): the iced app. `mod.rs` holds `App` and dispatches each area's messages to an `on_*` handler in its own file (`transport`, `cuts`, `tracks`, `effects`, `framing`, `bin`, `sound_ui`, ...). GPU drawing `gpu.rs` and the shaders, GPU export `render.rs`; decoding `media.rs`, `source.rs`, `playback.rs`, `scrub.rs`; sound `audio.rs`, `music.rs`; the timeline `timeline.rs`; `viewer.rs` is the player as a library for Dailix.
+- `packaging/`: release builds. `docs/`: the user guide; `docs/omnix/`: the fork's plans and context.

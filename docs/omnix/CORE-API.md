@@ -164,12 +164,12 @@ One commit each, behaviour unchanged unless the step says so. Tests
 | # | Step | Size | Risk |
 |---|---|---|---|
 | 1 | **Done 2026-11-01** (`03e1d5b`; fixes `528a622` timeline crossfades, `55d2755` contact sheet): `src/mixdown.rs` (`equal_power`, `own_level`, `cut_gain`, `envelope`, `clip_gain`), every level site calls it | S | low |
-| 2 | **Done 2026-11-01** (`787aa8a`): `project::Line`, `line_mut`; `own_line_mut` from `own_sound` | S | low |
+| 2 | **Done 2026-11-01** (`787aa8a`): one line per sound (since folded into `Own`/`OwnSound`, `own_sound`) | S | low |
 | 3 | **Done 2026-11-01** (`2c49a99`): `OwnSound::set_fade`, one `Message::Fade`, one `Drag::Fade` | S | low |
 | 4 | **Done 2026-11-01** (`61b6a5a`), checked by the user (2026-11-01); then the track's line removed altogether at their ask (gap 33i, `c34ae65`): points are only ever on an own line, `PointAdd/Select/Move(Own, …)`, `Drag::Point`, one `selected_point`, one Del, one K | M | medium: drags, Ctrl+click, K |
-| 5 | **Done 2026-11-02** (`7fc2c31`), waiting for the user's check: `player/selection.rs` (beside `edit.rs`, to move with it in step 7): `Selection`, `still_valid`, `Edit::delete`; four `App` fields became one. No `after_move`: a moved cut is selected outright | M | medium: ten files; removes a known source of bugs |
+| 5 | **Done 2026-11-02** (`7fc2c31`), now `model/selection.rs`: `Selection`, `still_valid`, `Edit::delete`; four `App` fields became one. No `after_move`: a moved cut is selected outright | M | medium: ten files; removes a known source of bugs |
 | 6 | **Done 2026-11-02** (as OPS-API step 2c): normalize measured then applied by `SoundOp::Normalized`; lower and restore are ops; the CLI gains `--track` | S | low |
-| 7 | Moves: `edit.rs` → `model/` (**done**, `23aff2d`), `config_dir` → `fsutil`, `Waveform` → media, `gpu`/`render`/shaders → `src/gpu/`, `Cut::sound_file` → media | M | low logic risk |
+| 7 | Moves: `edit.rs` → `model/` (**done**, `23aff2d`), `config_dir` → `fsutil` (**done** 2026-11-05, `fsutil::app_dir`), `Waveform` → media, `gpu`/`render`/shaders → `src/gpu/`, `Cut::sound_file` → media | M | low logic risk |
 | 8 | **Done 2026-11-02** (`36c216f`, as OPS-API step 5): `model::curve` (`Key`, `key_at`, `find`) for effect and motion keys; volume points stay `project::volume_key_at` (no ease, dB lines) until the automation lanes | M | low |
 | 9 | **Done 2026-11-02**: `OPS-API.md`, all its steps | M | medium |
 | 10 | Timeline `LaneView` | L | high: drawing and the mouse everywhere; last, after 4 and 5 |

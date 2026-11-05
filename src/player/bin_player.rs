@@ -39,24 +39,6 @@ pub struct Source {
     note_for: Option<(usize, f64, Option<f64>)>,
 }
 
-/// The sheet's role colours (footage-agent's `report.html`), so a segment
-/// reads the same in both.
-const ROLES: [(&str, Color); 8] = [
-    ("talk", Color::from_rgb8(0xc0, 0x56, 0x3a)),
-    ("establish", Color::from_rgb8(0x4f, 0x8a, 0x6a)),
-    ("broll", Color::from_rgb8(0x6b, 0x7f, 0x9e)),
-    ("detail", Color::from_rgb8(0xc9, 0x8a, 0x5e)),
-    ("cut", Color::from_rgb8(0xb0, 0x7a, 0xa8)),
-    ("action", Color::from_rgb8(0xd2, 0x9a, 0x5e)),
-    ("reveal", Color::from_rgb8(0x7a, 0x6b, 0xab)),
-    ("reaction", Color::from_rgb8(0xd1, 0x8f, 0xa5)),
-];
-
-/// A segment's colour by its role; grey without one (or one of the user's own).
-pub fn role_colour(role: Option<&str>) -> Color {
-    role.and_then(|r| ROLES.iter().find(|(k, _)| *k == r)).map_or(Color::from_rgb8(0x9a, 0x9a, 0x9a), |(_, c)| *c)
-}
-
 /// The player's messages.
 #[derive(Debug, Clone)]
 pub enum SourceMsg {

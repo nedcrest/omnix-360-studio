@@ -12,10 +12,6 @@ cost is duplication and drift.
 - [ ] Timeline: press and hover test what's under the pointer in different
       orders (level tag vs fade knob): the cursor lies (`timeline.rs`
       `Marks::update` / `mouse_interaction`; `OverlayLane` too).
-- [ ] Dailix: user roles get a colour written and never read (grey).
-
-## The core API: edits that bypass it
-
 - [ ] Edit fades, clip-sound level, track level: no `Op`, set directly
       (`effects.rs`, `tracks.rs`).
 - [ ] `rosmo360 duck` saves directly; `SoundOp::Duck` exists (`duck.rs`).
@@ -30,8 +26,6 @@ cost is duplication and drift.
 ## Duplicates
 
 Across the two repos:
-- [ ] Built-in roles ×4 (`dailix_sheet` ops, Dailix `pane.rs`, Omnix
-      `bin_player.rs`, `notes.rs`): one table in `dailix_sheet`.
 - [ ] Sidecar reading ×2 (Dailix `footage.rs`, Omnix `from_sheet.rs`).
 - [ ] Poster frame ×2, Dailix's with a bare `ffmpeg` (not portable).
 - [ ] `is_day` ×3; `config_dir` ×3;

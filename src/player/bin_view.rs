@@ -9,7 +9,7 @@
 use super::bin::{Kind, Place};
 use super::{App, Message, tip};
 use iced::widget::{button, column, container, image, mouse_area, opaque, pin, row, rule, scrollable, slider, space, stack, text, tooltip};
-use iced::{Alignment, Element, Length, Point, Task};
+use iced::{Alignment, Color, Element, Length, Point, Task};
 use std::path::{Path, PathBuf};
 
 /// A tile's width: the slider's range and where it starts.
@@ -142,6 +142,13 @@ pub fn uses(edit: &crate::project::Project, path: &Path) -> Option<String> {
 }
 
 impl App {
+    /// A segment's colour by its role, as the sheet shows it (the user's
+    /// own roles' too); grey for none.
+    fn role_colour(&self, role: Option<&str>) -> Color {
+        let [r, g, b] = role.and_then(|k| self.bin.roles.iter().find(|x| x.key == k)).map_or(dailix_sheet::NO_ROLE_RGB, |x| x.rgb);
+        Color::from_rgb8(r, g, b)
+    }
+
     pub(super) fn on_bin_view(&mut self, msg: BinMsg) -> Task<Message> {
         match msg {
             BinMsg::Toggle => {
@@ -453,7 +460,7 @@ impl App {
                 let strip = super::bin_player::Strip {
                     at,
                     length,
-                    marks: marks.iter().map(|m| (m.start, m.end, super::bin_player::role_colour(m.role.as_deref()))).collect(),
+                    marks: marks.iter().map(|m| (m.start, m.end, self.role_colour(m.role.as_deref()))).collect(),
                     picked: source.and_then(|s| s.picked),
                     mark_in: source.and_then(|s| s.mark_in),
                 };
@@ -466,7 +473,7 @@ impl App {
                         None => dailix_sheet::clock(m.start, 1),
                     };
                     // Its role and note, as the contact sheet sets them.
-                    let none = crate::notes::Role { key: String::new(), name: "—".to_owned() };
+                    let none = crate::notes::Role { key: String::new(), name: "—".to_owned(), rgb: dailix_sheet::NO_ROLE_RGB };
                     let choices: Vec<crate::notes::Role> = std::iter::once(none.clone()).chain(self.bin.roles.iter().cloned()).collect();
                     let current = m.role.as_ref().and_then(|r| choices.iter().find(|c| &c.key == r).cloned()).unwrap_or(none);
                     let role = iced::widget::pick_list(choices, Some(current), |r: crate::notes::Role| Message::BinPlayer(super::bin_player::SourceMsg::Role((!r.key.is_empty()).then_some(r.key))))
@@ -486,7 +493,7 @@ impl App {
                             .into(),
                         None => space().into(),
                     };
-                    let colour = super::bin_player::role_colour(m.role.as_deref());
+                    let colour = self.role_colour(m.role.as_deref());
                     let remove = tip(
                         button(text("✕").size(13)).padding([2, 8]).style(button::danger).on_press(Message::BinPlayer(super::bin_player::SourceMsg::Remove)),
                         text("Delete this segment (Delete)"),

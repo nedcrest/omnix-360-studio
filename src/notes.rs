@@ -29,12 +29,19 @@ pub struct Segment {
     pub note: String,
 }
 
-/// A role a segment can have: its key in the sheet and its name there
-/// ("перебивка / cutaway"), as the sheet's own list shows it.
+/// A role a segment can have: its key in the sheet, its name there
+/// ("перебивка / cutaway") and its colour, as the sheet shows them.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Role {
     pub key: String,
     pub name: String,
+    pub rgb: [u8; 3],
+}
+
+impl From<dailix_sheet::Role> for Role {
+    fn from(r: dailix_sheet::Role) -> Self {
+        Role { name: r.name(), rgb: r.rgb(), key: r.key }
+    }
 }
 
 impl std::fmt::Display for Role {
@@ -42,20 +49,6 @@ impl std::fmt::Display for Role {
         f.write_str(&self.name)
     }
 }
-
-/// The names of the sheet's own roles (`dailix_sheet::ops::ROLES` holds
-/// their keys): the function of a shot in the edit, not what's in it; the
-/// English word is the trade's.
-const NAMES: [(&str, &str, &str); 8] = [
-    ("talk", "розмова", "sync"),
-    ("establish", "загальний", "establishing"),
-    ("broll", "фон", "B-roll"),
-    ("detail", "деталь", "insert"),
-    ("cut", "перебивка", "cutaway"),
-    ("action", "дія", "action"),
-    ("reveal", "ревіл", "reveal"),
-    ("reaction", "реакція", "reaction"),
-];
 
 /// A project folder's sheet: its file and how its clips are keyed.
 #[derive(Debug, Clone)]
@@ -117,22 +110,15 @@ impl Sheet {
 
     /// The sheet's own roles, for a project without a sheet.
     pub fn default_roles() -> Vec<Role> {
-        NAMES.iter().map(|(k, t, en)| Role { key: (*k).to_owned(), name: format!("{t} / {en}") }).collect()
+        dailix_sheet::Sheet::default().all_roles().into_iter().map(Role::from).collect()
     }
 
     /// The roles to pick from: the sheet's own, then the user's added in it.
     pub fn roles(&self) -> Vec<Role> {
-        let mut roles = Self::default_roles();
-        if let Ok(sheet) = self.store.read().map_err(anyhow::Error::from).and_then(|d| Ok(d.sheet()?)) {
-            for r in sheet.roles {
-                let title = if r.title.is_empty() { r.key.clone() } else { r.title };
-                let name = if r.en.is_empty() { title } else { format!("{title} / {}", r.en) };
-                if !roles.iter().any(|x| x.key == r.key) {
-                    roles.push(Role { key: r.key, name });
-                }
-            }
+        match self.store.read().map_err(anyhow::Error::from).and_then(|d| Ok(d.sheet()?)) {
+            Ok(sheet) => sheet.all_roles().into_iter().map(Role::from).collect(),
+            Err(_) => Self::default_roles(),
         }
-        roles
     }
 
     /// Applies `ops` to the sheet as it is now; the id the first made, if

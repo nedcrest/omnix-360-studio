@@ -293,9 +293,79 @@ pub struct Sheet {
     pub roles: Vec<Role>,
 }
 
+/// The sheet's own roles: the function of a shot in the edit, not what's
+/// in it. Key, name, the trade's English word, and the colour the web sheet
+/// gave it (footage-agent's `report.html`), so a segment reads the same in
+/// every program.
+const BUILT_IN_ROLES: [(&str, &str, &str, &str); 8] = [
+    ("talk", "розмова", "sync", "#c0563a"),
+    ("establish", "загальний", "establishing", "#4f8a6a"),
+    ("broll", "фон", "B-roll", "#6b7f9e"),
+    ("detail", "деталь", "insert", "#c98a5e"),
+    ("cut", "перебивка", "cutaway", "#b07aa8"),
+    ("action", "дія", "action", "#d29a5e"),
+    ("reveal", "ревіл", "reveal", "#7a6bab"),
+    ("reaction", "реакція", "reaction", "#d18fa5"),
+];
+
+/// A mark with no role, or one whose colour is unknown.
+pub const NO_ROLE_RGB: [u8; 3] = [0x9a, 0x9a, 0x9a];
+
+/// Whether `key` is one of the sheet's own roles.
+pub fn is_built_in_role(key: &str) -> bool {
+    BUILT_IN_ROLES.iter().any(|r| r.0 == key)
+}
+
+impl Role {
+    /// How it reads in a list: "розмова / sync", or as much as it has.
+    pub fn name(&self) -> String {
+        let title = if self.title.is_empty() { &self.key } else { &self.title };
+        if self.en.is_empty() { title.clone() } else { format!("{title} / {}", self.en) }
+    }
+
+    /// Its colour (`#rrggbb`), grey when it has none it can read.
+    pub fn rgb(&self) -> [u8; 3] {
+        let hex = self.color.as_deref().and_then(|c| c.strip_prefix('#')).filter(|h| h.len() == 6);
+        hex.and_then(|h| {
+            let byte = |i: usize| u8::from_str_radix(&h[i..i + 2], 16).ok();
+            Some([byte(0)?, byte(2)?, byte(4)?])
+        })
+        .unwrap_or(NO_ROLE_RGB)
+    }
+}
+
+impl Sheet {
+    /// Every role a mark can have: the sheet's own, then the user's added
+    /// in it (one with a built-in's key is the built-in).
+    pub fn all_roles(&self) -> Vec<Role> {
+        let built_in = BUILT_IN_ROLES.iter().map(|&(key, title, en, color)| Role { key: key.into(), title: title.into(), en: en.into(), color: Some(color.into()) });
+        built_in.chain(self.roles.iter().filter(|r| !is_built_in_role(&r.key)).cloned()).collect()
+    }
+
+    /// A role by its key, the user's included.
+    pub fn role(&self, key: &str) -> Option<Role> {
+        self.all_roles().into_iter().find(|r| r.key == key)
+    }
+
+    /// A mark's colour by its role: its own, grey for none or one unknown.
+    pub fn role_rgb(&self, key: Option<&str>) -> [u8; 3] {
+        key.and_then(|k| self.role(k)).map_or(NO_ROLE_RGB, |r| r.rgb())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn roles_built_in_and_the_users_with_their_colours() {
+        let sheet = Doc::parse(r##"{"roles": [{"key": "meme", "title": "мем", "color": "#8fae7a"}, {"key": "odd", "color": "nope"}]}"##).unwrap().sheet().unwrap();
+        let keys: Vec<String> = sheet.all_roles().into_iter().map(|r| r.key).collect();
+        assert_eq!((keys.len(), keys[0].as_str(), keys[8].as_str()), (10, "talk", "meme"));
+        assert_eq!(sheet.role("talk").unwrap().name(), "розмова / sync");
+        assert_eq!(sheet.role("meme").unwrap().name(), "мем");
+        assert_eq!([sheet.role_rgb(Some("talk")), sheet.role_rgb(Some("meme")), sheet.role_rgb(Some("odd")), sheet.role_rgb(None)], [[0xc0, 0x56, 0x3a], [0x8f, 0xae, 0x7a], NO_ROLE_RGB, NO_ROLE_RGB]);
+    }
 
     #[test]
     fn a_clock_rounds_before_it_carries() {

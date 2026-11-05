@@ -23,9 +23,6 @@ use std::fmt;
 /// become a cut.
 pub const MIN_SEGMENT: f64 = 0.2;
 
-/// The sheet's own roles; the user's added ones are in its `roles`.
-pub const ROLES: [&str; 8] = ["talk", "establish", "broll", "detail", "cut", "action", "reveal", "reaction"];
-
 /// The colours the web sheet gives the user's roles, in turn.
 const EXTRA_COLORS: [&str; 6] = ["#8fae7a", "#3f8fb0", "#a3799a", "#7d8a6a", "#e08b4a", "#5fb3c9"];
 
@@ -197,7 +194,7 @@ impl Doc {
                     problems.push(format!("{at}: the id is used twice"));
                 }
                 if let Some(role) = &m.role
-                    && !ROLES.contains(&role.as_str())
+                    && !crate::is_built_in_role(role)
                     && !sheet.roles.iter().any(|r| &r.key == role)
                 {
                     problems.push(format!("{at}: no role {role}"));
@@ -306,7 +303,7 @@ impl Doc {
                 }
                 let key = role_key(title);
                 let known = self.sheet().map(|s| s.roles.iter().any(|r| r.key == key)).unwrap_or(false);
-                if known || ROLES.contains(&key.as_str()) {
+                if known || crate::is_built_in_role(&key) {
                     return Err(OpError::Invalid(format!("the role {key} is there already")));
                 }
                 let roles = self.value.as_object_mut().ok_or_else(|| OpError::Invalid("the file isn't an object".into()))?.entry("roles").or_insert_with(|| json!([]));

@@ -2081,11 +2081,15 @@ impl canvas::Program<Message> for Marks {
                 if self.listen_button_at(p).is_some() {
                     return mouse::Interaction::Pointer;
                 }
-                if self.level_tag_hit(p, bounds).is_some() && self.sound_at(p, bounds).is_none() {
-                    return mouse::Interaction::ResizingVertically;
-                }
                 if p.y >= self.rows.height - SCROLL {
                     return if self.zoomed() { mouse::Interaction::Grab } else { mouse::Interaction::default() };
+                }
+                // In the order a press tries them (`update`): on the clip
+                // sound lane a cut's fade knob and sound edge come before
+                // its level tag, so the pointer says what a press will do.
+                let clip_sound_edge = self.rows.on_clip_sound(p.y) && (self.cut_fade_at(p, bounds).is_some() || self.sound_edge_at(p.x, bounds).is_some());
+                if !clip_sound_edge && self.level_tag_hit(p, bounds).is_some() && self.sound_at(p, bounds).is_none() {
+                    return mouse::Interaction::ResizingVertically;
                 }
                 if let Some(lane) = self.rows.sound_at_y(p.y) {
                     if self.fade_at(lane, p, bounds).is_some() {

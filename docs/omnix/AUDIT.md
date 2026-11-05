@@ -9,9 +9,6 @@ cost is duplication and drift.
 
 ## Bugs found on the way (first)
 
-- [ ] Timeline: press and hover test what's under the pointer in different
-      orders (level tag vs fade knob): the cursor lies (`timeline.rs`
-      `Marks::update` / `mouse_interaction`; `OverlayLane` too).
 - [ ] Contact-sheet segment writes ("sheet, else here only") ×3 in
       `bin_player.rs`; `Remove` uses commit/begin by hand, not `self.ops`.
 
@@ -23,6 +20,9 @@ In Omnix:
 - [ ] Info read and drawn twice (bin side pane, Info panel).
 - [ ] Whole-film `Mix` assembly ×3; `Sound` spelt out by hand.
 - [ ] Find-by-id ×7; `Lane::place` = `Music::place`; mute-aware level ×3.
+- [ ] Timeline: press and hover each walk what's under the pointer (now in
+      the same order, `Marks` and `OverlayLane`): one `Hit` per canvas,
+      used by both (CORE-API step 10).
 - [ ] Timeline per-lane code (edges, fades, blocks, folded strips,
       crossfade X, lane boxes) copied across lanes; view structs copy the
       model field by field; five selection fields rebuilt from one.

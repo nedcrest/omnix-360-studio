@@ -108,11 +108,12 @@ pub fn write(root: &Path, day: Option<&str>) -> Result<PathBuf> {
     save(root, day, &build(root, day)?)
 }
 
-/// An empty edit of `day` in the project's `04_project` (user, 2026-11-05:
-/// a day to build from the bin, its idea made afresh): the bin shows that
-/// day's clips (`omnix-<day>` names it). Where it went.
-pub fn write_empty(root: &Path, day: &str) -> Result<PathBuf> {
-    save(root, Some(day), &Project { aspect: Some(Aspect(16, 9)), ..Default::default() })
+/// An empty edit in the project's `04_project`, to build from the bin
+/// (user, 2026-11-05: an idea made afresh). Of one day, the bin shows that
+/// day's clips (`omnix-<day>` names it); of none, every day's
+/// (`omnix-all-days`: the whole project's footage). Where it went.
+pub fn write_empty(root: &Path, day: Option<&str>) -> Result<PathBuf> {
+    save(root, day, &Project { aspect: Some(Aspect(16, 9)), ..Default::default() })
 }
 
 fn save(root: &Path, day: Option<&str>, project: &Project) -> Result<PathBuf> {
@@ -191,8 +192,11 @@ mod tests {
         assert_eq!(day_of(&b).as_deref(), Some("2030-05-01"));
         assert_eq!(day_of(Path::new("/x/my-edit.json")), None);
         // An empty day: the player reads it, the command line's tools don't.
-        let empty = write_empty(&root, "2030-05-02").unwrap();
+        let empty = write_empty(&root, Some("2030-05-02")).unwrap();
         assert!(Project::read(&empty).unwrap().cuts.is_empty() && Project::load(&empty).is_err());
+        // Of every day: named for none, so the bin filters none out.
+        let all = write_empty(&root, None).unwrap();
+        assert_eq!((all.file_name().unwrap(), day_of(&all)), ("omnix-all-days.json".as_ref(), None));
         let back = Project::load(&a).unwrap();
         assert_eq!(back.cuts.len(), 3);
         // Beside 04_project, not under it: kept whole, as Omnix saves them.

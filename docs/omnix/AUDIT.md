@@ -35,17 +35,21 @@ In Omnix:
 - [ ] Library modules reach into `player` (`Waveform`, `render`).
 - [ ] Tests in the wrong module (`sound_ui.rs` tests cuts and markers).
 
-## For the user to decide
+## Decided by the user (2026-11-05), to do
 
-- Dailix `Edit` (undo): built, tested, used by nothing; its snapshots
-  would overwrite another writer's change. Drop it, or build undo as
-  inverse ops through `Store` with a key.
-- Two LUFS meters (ffmpeg `ebur128` and our own, agreeing within 0.3 LU):
-  one would do, but stored gains would shift slightly on a re-run.
-- Upstream maths copies (equirect direction ×5, vector helpers ×3): merge
-  them unless upstream merges are still wanted (the rename says no).
-- `check` parses stitch flags it ignores; IMU flags threaded through the
-  player though AGENTS.md fixes their values: trim the CLI?
+- [ ] Dailix `Edit` (undo): dropped; undo later as inverse ops through
+      `Store`, with a key.
+- [ ] One LUFS meter: ours (`lufs.rs`); `loudness::measure` feeds it
+      instead of parsing ffmpeg's `ebur128`.
+- [ ] Upstream maths copies merged (equirect direction ×5, vector
+      helpers ×3): no more merging from upstream after the rename.
+- [ ] `check` takes only the flags it uses.
 
-## Stale docs
+## Order (user, 2026-11-05)
+
+This refactor first, all of it; then the rename to omnix (gap 76) with
+Omnix's own face (gap 79: the footer «Dmytro Halushko with Claude» and
+upstream credited apart; our own start picture and icon, upstream's logo
+gone). The rename is cheaper now than later.
+
 

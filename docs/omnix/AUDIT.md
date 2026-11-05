@@ -12,9 +12,6 @@ cost is duplication and drift.
 - [ ] Timeline: press and hover test what's under the pointer in different
       orders (level tag vs fade knob): the cursor lies (`timeline.rs`
       `Marks::update` / `mouse_interaction`; `OverlayLane` too).
-- [ ] Opening a project: `deaf.dedup()` without a sort (`file.rs`).
-- [ ] Settings panel says "rOsmo360's settings folder" (the name is Omnix).
-- [ ] `mixmeasure`: an unreadable voice file silently means "no speech".
 - [ ] Dailix: user roles get a colour written and never read (grey).
 
 ## The core API: edits that bypass it

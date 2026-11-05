@@ -67,7 +67,9 @@ fn run(audio: &[Sound<'_>], mix: &Mix<'_>, windows: &mut [&mut Window]) -> Resul
 pub fn measure(project: &Project, progress: &mut dyn FnMut(usize, usize)) -> Result<Measured> {
     let video = crate::project::edit_length(&project.cuts);
     let length = if project.cuts.is_empty() { project.sound_clips().map(|c| c.ends()).fold(0.0, f64::max) } else { video };
-    let speech = crate::duck::find_speech(project).unwrap_or_default();
+    // A voice it can't read is said, not taken for silence: the rule on
+    // music under speech would pass without looking.
+    let speech = crate::duck::find_speech(project).context("finding the speech")?;
     let cuts = cut_sounds(project);
     let tracks: Vec<SoundTrack> = SoundTrack::ALL.into_iter().filter(|&w| !project.track(w).clips.is_empty()).collect();
     let renders = usize::from(!cuts.is_empty()) + tracks.len() + 1;

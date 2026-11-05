@@ -28,8 +28,6 @@ cost is duplication and drift.
 Across the two repos:
 
 In Omnix:
-- [ ] Bin player re-implements `viewer::Viewer` (`Picture`, tick, aspect).
-- [ ] `Flat::size()` spelled out twice.
 - [ ] Modal shade ×4; job thread scaffolding ×2; `note()` ×2.
 - [ ] A cut's media built ×3 (`transport.rs`); cut level formula ×2.
 - [ ] `request_still` thread ×2; mono PCM decode ×2 (`music.rs`, ffmpeg).

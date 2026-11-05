@@ -16,7 +16,7 @@ use crate::stitch::M3;
 use crate::view::{Camera, Projection, View};
 use iced::widget::shader;
 use iced::{Rectangle, mouse};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
 
 /// A clip read, ready to play: made by `load`, off the UI thread.
@@ -62,9 +62,6 @@ impl Viewer {
         Viewer { playback, shown: None }
     }
 
-    pub fn path(&self) -> &PathBuf {
-        &self.playback.media.input
-    }
     pub fn duration(&self) -> f64 {
         self.playback.media.duration
     }
@@ -86,9 +83,6 @@ impl Viewer {
         } else {
             p.play();
         }
-    }
-    pub fn pause(&mut self) {
-        self.playback.pause();
     }
     /// To `t`, playing on if it was.
     pub fn jump(&mut self, t: f64) {
@@ -119,23 +113,31 @@ impl Viewer {
         }
     }
 
-    /// The picture's shape, width over height: an ordinary video's own
-    /// (turned if the camera was), a 360 clip's view 16:9.
+    /// The picture's shape, width over height.
     pub fn aspect(&self) -> f32 {
-        match self.playback.media.flat {
-            Some(f) => {
-                let (w, h) = if f.turns % 2 == 1 { (f.stored.1, f.stored.0) } else { f.stored };
-                w as f32 / h.max(1) as f32
-            }
-            None => 16.0 / 9.0,
-        }
+        aspect(&self.playback)
     }
 
     /// The frame to draw (a `shader` widget), once one is decoded.
     pub fn picture(&self) -> Option<Picture> {
-        let view = if self.playback.media.flat.is_some() { View::home(Projection::Perspective) } else { View::default() };
-        Some(Picture { rig: self.playback.media.rig.clone(), shown: self.shown.clone()?, camera: view.camera(), rig_from_view: self.playback.rig_from_view(true) })
+        picture(&self.playback, self.shown.clone()?, true)
     }
+}
+
+/// A clip's shape, width over height: an ordinary video's own (turned if
+/// the camera was), a 360 clip's view 16:9. Here and in the bin's player.
+pub(super) fn aspect(playback: &Playback) -> f32 {
+    playback.media.flat.map_or(16.0 / 9.0, |f| {
+        let (w, h) = f.size();
+        w as f32 / h.max(1) as f32
+    })
+}
+
+/// A clip's frame as a viewer shows it: an ordinary video whole, a 360
+/// clip looking ahead.
+pub(super) fn picture(playback: &Playback, shown: Arc<Shown>, rolling_shutter: bool) -> Option<Picture> {
+    let view = if playback.media.flat.is_some() { View::home(Projection::Perspective) } else { View::default() };
+    Some(Picture { rig: playback.media.rig.clone(), shown, camera: view.camera(), rig_from_view: playback.rig_from_view(rolling_shutter) })
 }
 
 /// A frame drawn by Omnix's GPU pipeline; it takes no input.

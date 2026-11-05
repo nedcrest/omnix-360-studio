@@ -9,15 +9,14 @@
 //! pipeline, which holds one picture (and a crossfade's second), draws this
 //! one alone.
 
-use super::gpu::{self, Rig, Shown};
+use super::gpu::Shown;
+use super::viewer::Picture;
 use super::{App, Clip, Message, blocking};
 use super::media::Media;
 use super::playback::Playback;
 use crate::notes::Segment;
-use crate::stitch::M3;
-use crate::view::{Camera, Projection, View};
 use iced::widget::canvas::{self, Frame, Geometry, Path};
-use iced::widget::{shader, text_editor};
+use iced::widget::text_editor;
 use iced::{Color, Point, Rectangle, Renderer, Size, Task, Theme, mouse};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -400,40 +399,12 @@ impl App {
     pub(super) fn source_picture(&self) -> Option<(Picture, f32, f64, f64)> {
         let c = self.bin.source.as_ref()?.clip.as_ref()?;
         let p = &c.playback;
-        let flat = p.media.flat;
-        // An ordinary video fills its own shape; a 360 clip looks ahead.
-        let (view, aspect) = match flat {
-            Some(f) => {
-                let (w, h) = if f.turns % 2 == 1 { (f.stored.1, f.stored.0) } else { f.stored };
-                (View::home(Projection::Perspective), w as f32 / h.max(1) as f32)
-            }
-            None => (View::default(), 16.0 / 9.0),
-        };
-        let picture = Picture { rig: p.media.rig.clone(), shown: c.shown.clone()?, camera: view.camera(), rig_from_view: p.rig_from_view(self.rolling_shutter) };
-        Some((picture, aspect, p.position(), p.media.duration))
+        let picture = super::viewer::picture(p, c.shown.clone()?, self.rolling_shutter)?;
+        Some((picture, super::viewer::aspect(p), p.position(), p.media.duration))
     }
 
     pub(super) fn source_playing(&self) -> bool {
         self.bin.source.as_ref().and_then(|s| s.clip.as_ref()).is_some_and(|c| c.playback.playing)
-    }
-}
-
-/// The bin player's frame, drawn by the player's GPU pipeline; it takes no
-/// input (a look around belongs to the edit's view).
-#[derive(Clone)]
-pub struct Picture {
-    rig: Arc<Rig>,
-    shown: Arc<Shown>,
-    camera: Camera,
-    rig_from_view: Vec<M3>,
-}
-
-impl shader::Program<Message> for Picture {
-    type State = ();
-    type Primitive = gpu::Primitive;
-
-    fn draw(&self, _: &(), _: mouse::Cursor, _: Rectangle) -> gpu::Primitive {
-        gpu::Primitive { rig: self.rig.clone(), shown: self.shown.clone(), camera: self.camera, rig_from_view: self.rig_from_view.clone(), incoming: None, overlays: Vec::new() }
     }
 }
 

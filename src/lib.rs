@@ -10,6 +10,7 @@
 //! reads is the typed view over it ([`Sheet`]).
 
 pub mod edit;
+pub mod footage;
 pub mod layout;
 pub mod ops;
 pub mod project;

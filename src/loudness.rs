@@ -1,6 +1,7 @@
 //! How loud a stretch of sound is, as the ear hears it: integrated loudness
-//! in LUFS (EBU R 128, ffmpeg's `ebur128`), and the gain that brings a cut's
-//! sound to the edit's target.
+//! in LUFS (EBU R 128, measured by our own meter, `lufs.rs`, as the player
+//! and the mix check do), and the gain that brings a cut's sound to the
+//! edit's target.
 //!
 //! Why: the user's footage (Kos, 2026-10) measured 15 dB under what web
 //! video is heard at. 0 dB on a level means "as recorded", not "loud
@@ -47,27 +48,30 @@ const SILENT_LUFS: f64 = -70.0;
 
 /// The integrated loudness of `duration` seconds of `input`'s first sound
 /// track from `start`, LUFS, after `filter` if any (as the cut will sound);
-/// `None` if it's silent there.
+/// `None` if it's silent there. Our meter, as the player's and the mix
+/// check's (user, 2026-11-05: one meter, not ffmpeg's beside it).
 pub fn measure(input: &Path, start: f64, duration: f64, filter: Option<&str>) -> Result<Option<f64>> {
-    let chain = filter.map_or("ebur128=framelog=quiet".to_owned(), |f| format!("{f},ebur128=framelog=quiet"));
+    const RATE: f64 = 48000.0;
+    // A mono track is one channel to BS.1770 (and to ffmpeg's ebur128):
+    // copied into both sides it would read 3 LU louder.
+    let mono = crate::ffmpeg::probe(input, "a:0", "stream=channels")?.lines().next() == Some("1");
+    let stereo = if mono { "pan=stereo|c0=c0" } else { "aformat=channel_layouts=stereo" };
+    let chain = filter.map_or(stereo.to_owned(), |f| format!("{f},{stereo}"));
     let out = crate::ffmpeg::tool("ffmpeg")
-        .args(["-hide_banner", "-nostats", "-nostdin", "-ss", &start.to_string(), "-t", &duration.to_string(), "-i"])
+        .args(["-v", "error", "-nostdin", "-ss", &start.to_string(), "-t", &duration.to_string(), "-i"])
         .arg(input)
-        .args(["-map", "0:a:0", "-af", &chain, "-f", "null", "-"])
-        .stdout(Stdio::null())
+        .args(["-map", "0:a:0", "-af", &chain, "-ar", &RATE.to_string(), "-f", "f32le", "-"])
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
         .output()
         .context("running ffmpeg")?;
     if !out.status.success() {
         bail!("ffmpeg couldn't read the sound of {}", input.display());
     }
-    // The summary comes last: "I:         -30.7 LUFS".
-    let text = String::from_utf8_lossy(&out.stderr);
-    let lufs = text
-        .lines()
-        .rev()
-        .find_map(|l| l.trim().strip_prefix("I:").and_then(|v| v.trim().trim_end_matches("LUFS").trim().parse::<f64>().ok()))
-        .with_context(|| format!("no loudness measured for {}", input.display()))?;
-    Ok((lufs > SILENT_LUFS).then_some(lufs))
+    let frames: Vec<[f32; 2]> = out.stdout.chunks_exact(8).map(|b| [f32::from_le_bytes([b[0], b[1], b[2], b[3]]), f32::from_le_bytes([b[4], b[5], b[6], b[7]])]).collect();
+    let mut meter = crate::lufs::Loudness::default();
+    meter.feed(RATE, &frames);
+    Ok(meter.integrated().filter(|&lufs| lufs > SILENT_LUFS))
 }
 
 /// Measures `file` from `start` to `end` through `filter` (its evening and
@@ -197,6 +201,17 @@ mod tests {
         assert_eq!(measure(&silent, 0.0, 3.0, None).unwrap(), None);
         // The leveler lifts a steady quiet tone towards its peak.
         assert!(measure(&quiet, 0.0, 6.0, Some(LEVELER)).unwrap().unwrap() > a + 6.0);
+        // As ffmpeg's ebur128 reads them, a mono and a stereo recording:
+        // stored levels don't move for the change of meter.
+        let theirs = |path: &Path| {
+            let out = crate::ffmpeg::tool("ffmpeg").args(["-hide_banner", "-nostdin", "-i"]).arg(path).args(["-af", "ebur128=framelog=quiet", "-f", "null", "-"]).output().unwrap();
+            String::from_utf8_lossy(&out.stderr).lines().rev().find_map(|l| l.trim().strip_prefix("I:").and_then(|v| v.trim().trim_end_matches("LUFS").trim().parse::<f64>().ok())).unwrap()
+        };
+        let stereo = make("stereo.wav", "anoisesrc=d=6:c=pink:a=0.1,aformat=channel_layouts=stereo");
+        for f in [&quiet, &stereo] {
+            let (ours, ff) = (measure(f, 0.0, 6.0, None).unwrap().unwrap(), theirs(f));
+            assert!((ours - ff).abs() < 0.3, "{}: ours {ours:.2}, ffmpeg {ff:.2}", f.display());
+        }
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }

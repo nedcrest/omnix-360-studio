@@ -39,8 +39,6 @@ In Omnix:
 
 - [ ] Dailix `Edit` (undo): dropped; undo later as inverse ops through
       `Store`, with a key.
-- [ ] One LUFS meter: ours (`lufs.rs`); `loudness::measure` feeds it
-      instead of parsing ffmpeg's `ebur128`.
 - [ ] Upstream maths copies merged (equirect direction ×5, vector
       helpers ×3): no more merging from upstream after the rename.
 - [ ] `check` takes only the flags it uses.

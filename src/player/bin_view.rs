@@ -435,9 +435,9 @@ impl App {
                     tooltip::Position::Bottom,
                 )
             }
-            _ => tip(
+            Kind::Sound(_) => tip(
                 button(text(if playing { "■" } else { "▶" }).size(14)).padding([2, 10]).on_press(if playing { Message::BinStop } else { Message::BinPreview(p.path.clone(), p.kind) }),
-                text(if playing { "Stop" } else if p.kind == Kind::Clip { "Play (in a window of its own)" } else { "Play" }),
+                text(if playing { "Stop" } else { "Play" }),
                 tooltip::Position::Bottom,
             ),
         };

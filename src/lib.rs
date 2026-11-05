@@ -12,6 +12,7 @@
 pub mod edit;
 pub mod footage;
 pub mod layout;
+pub mod marking;
 pub mod ops;
 pub mod project;
 pub mod store;

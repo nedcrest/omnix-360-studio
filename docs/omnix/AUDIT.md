@@ -44,11 +44,6 @@ In Omnix:
       crossfade X, lane boxes) copied across lanes; view structs copy the
       model field by field; five selection fields rebuilt from one.
 
-In Dailix:
-- [ ] Inside-a-segment test ×2; 0.2 for `MIN_SEGMENT`; id parse ×2;
-      `describe` in `main.rs` (core logic); `MarkShape` with
-      `allow(dead_code)` only for the schema.
-
 ## Tangled
 
 - [ ] `App` mirrors ~33 settings by hand (in at `new`, out at `settings()`).

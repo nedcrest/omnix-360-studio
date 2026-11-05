@@ -35,10 +35,11 @@ In Omnix:
 - [ ] Library modules reach into `player` (`Waveform`, `render`).
 - [ ] Tests in the wrong module (`sound_ui.rs` tests cuts and markers).
 
-## Decided by the user (2026-11-05), to do
+## Decided by the user (2026-11-05): done
 
-- [ ] Dailix `Edit` (undo): dropped; undo later as inverse ops through
-      `Store`, with a key.
+Dailix's snapshot undo dropped (undo later as inverse ops through
+`Store`); one loudness meter (ours); upstream's geometry helpers merged;
+`check` takes only its options.
 
 ## Order (user, 2026-11-05)
 

@@ -269,13 +269,8 @@ impl Music {
     /// against it, and hops past it once `want` is nearer the far side.
     pub fn place(&self, i: usize, want: f64) -> f64 {
         let len = self.clips[i].end - self.clips[i].start;
-        let others = || self.clips.iter().enumerate().filter(move |&(j, _)| j != i).map(|(_, c)| c);
-        let free = |at: f64| at >= 0.0 && others().all(|c| at + len <= c.at + 1e-6 || at >= c.ends() - 1e-6);
-        std::iter::once(want.max(0.0))
-            .chain(others().flat_map(|c| [c.ends(), c.at - len]))
-            .filter(|&at| free(at))
-            .min_by(|a, b| (a - want).abs().total_cmp(&(b - want).abs()))
-            .unwrap_or(self.end())
+        let others: Vec<(f64, f64)> = self.clips.iter().enumerate().filter(|&(j, _)| j != i).map(|(_, c)| (c.at, c.ends())).collect();
+        nearest_free(&others, len, want).unwrap_or(self.end())
     }
 
     /// Whether clip `i` fits from `at` for `len` seconds. It may overlap
@@ -799,6 +794,18 @@ pub fn settle_crossfades(cuts: &mut [Cut]) {
     for i in 0..cuts.len() {
         cuts[i].crossfade = cuts[i].crossfade.clamp(0.0, max_crossfade(cuts, i).max(0.0));
     }
+}
+
+/// The start nearest `want` where something `len` long fits among
+/// `others` (each `(start, end)`) without overlapping one: `want` itself,
+/// or edge to edge against one. None when nowhere fits. A sound clip's and
+/// an overlay item's placing alike.
+pub(crate) fn nearest_free(others: &[(f64, f64)], len: f64, want: f64) -> Option<f64> {
+    let free = |at: f64| at >= 0.0 && others.iter().all(|&(a, b)| at + len <= a + 1e-6 || at >= b - 1e-6);
+    std::iter::once(want.max(0.0))
+        .chain(others.iter().flat_map(|&(a, b)| [b, a - len]))
+        .filter(|&at| free(at))
+        .min_by(|a, b| (a - want).abs().total_cmp(&(b - want).abs()))
 }
 
 /// What `Project::drop_missing` left out (cuts, sound clips, overlay

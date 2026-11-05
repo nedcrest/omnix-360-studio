@@ -199,13 +199,8 @@ impl Lane {
     /// `want` is nearer the far side (as music clips do).
     pub fn place(&self, i: usize, want: f64) -> f64 {
         let len = self.items[i].end - self.items[i].start;
-        let others = || self.items.iter().enumerate().filter(move |&(j, _)| j != i).map(|(_, c)| c);
-        let free = |at: f64| at >= 0.0 && others().all(|c| at + len <= c.at + 1e-6 || at >= c.ends() - 1e-6);
-        std::iter::once(want.max(0.0))
-            .chain(others().flat_map(|c| [c.ends(), c.at - len]))
-            .filter(|&at| free(at))
-            .min_by(|a, b| (a - want).abs().total_cmp(&(b - want).abs()))
-            .unwrap_or_else(|| others().map(Item::ends).fold(0.0, f64::max))
+        let others: Vec<(f64, f64)> = self.items.iter().enumerate().filter(|&(j, _)| j != i).map(|(_, c)| (c.at, c.ends())).collect();
+        crate::project::nearest_free(&others, len, want).unwrap_or_else(|| others.iter().map(|o| o.1).fold(0.0, f64::max))
     }
 
     /// Item `i` dragged to start at `at`: where it fits nearest (`place`).

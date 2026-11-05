@@ -298,57 +298,20 @@ impl App {
                         return Task::none();
                     }
                 };
-                // Cuts of clips that are gone can't play; say so and leave them out.
-                let (mut cuts, missing): (Vec<_>, Vec<_>) = std::mem::take(&mut project.cuts).into_iter().partition(|c| c.input.exists());
+                // What's gone can't play: left out, and said. A cut's sound
+                // file gone plays its clip's own, its name kept.
+                let missing = project.drop_missing(Path::exists);
+                self.error = missing.said();
                 // Each cut gets a mode of its own, so changing one leaves the rest.
-                for c in &mut cuts {
+                for c in &mut project.cuts {
                     c.stabilize.get_or_insert(self.opts.stabilize);
-                }
-                self.error = (!missing.is_empty()).then(|| {
-                    let names: Vec<_> = missing.iter().map(|c| c.input.display().to_string()).collect();
-                    format!("Left out cuts of missing clips: {}", names.join(", "))
-                });
-                // A cut's audio file that's gone: its clip's own sound plays,
-                // and the file stays named, so it comes back once found.
-                let mut deaf: Vec<String> = cuts.iter().filter_map(|c| c.audio.as_ref()).filter(|a| !a.exists()).map(|a| a.display().to_string()).collect();
-                deaf.sort();
-                deaf.dedup();
-                if !deaf.is_empty() {
-                    let said = self.error.take().map_or(String::new(), |e| e + ". ");
-                    self.error = Some(format!("{said}Missing sound files, playing the clips' own: {}", deaf.join(", ")));
                 }
                 self.aspect = project.aspect.map_or(Aspect::Free, |a| Aspect::Ratio(a.0 as u16, a.1 as u16));
                 self.forget_edit_state();
-                // Sound clips that are gone are left out the same way.
-                let mut gone = Vec::new();
-                for which in SoundTrack::ALL {
-                    let word = which.name();
-                    let track = project.track_mut(which);
-                    let (here, lost): (Vec<_>, Vec<_>) = std::mem::take(&mut track.clips).into_iter().partition(|c| c.input.exists());
-                    track.clips = here;
-                    if !lost.is_empty() {
-                        let names: Vec<_> = lost.iter().map(|c| c.input.display().to_string()).collect();
-                        let said = self.error.take().map_or(String::new(), |e| e + ". ");
-                        self.error = Some(format!("{said}Left out missing {word}: {}", names.join(", ")));
-                    }
-                    gone.extend(lost);
-                }
-                // And overlay pictures.
-                let (mut overlays, texts) = (std::mem::take(&mut project.overlays), std::mem::take(&mut project.text));
-                let mut lost = Vec::new();
-                for lane in &mut overlays {
-                    let (here, gone): (Vec<_>, Vec<_>) = std::mem::take(&mut lane.items).into_iter().partition(|it| it.text.is_some() || it.input.exists());
-                    lane.items = here;
-                    lost.extend(gone.into_iter().map(|it| it.input.display().to_string()));
-                }
-                if !lost.is_empty() {
-                    let said = self.error.take().map_or(String::new(), |e| e + ". ");
-                    self.error = Some(format!("{said}Left out missing overlays: {}", lost.join(", ")));
-                }
                 let waves: Vec<_> = project.sound_clips().map(|c| self.load_waveform(&c.input)).collect();
-                self.queue.extend(cuts.iter().map(|c| (c.input.clone(), false)));
-                let complete = missing.is_empty() && gone.is_empty() && lost.is_empty();
-                self.edit.replace(Project { aspect: None, cuts, overlays, text: texts, ..project });
+                self.queue.extend(project.cuts.iter().map(|c| (c.input.clone(), false)));
+                let complete = missing.is_complete();
+                self.edit.replace(Project { aspect: None, ..project });
                 self.mark_flat();
                 self.saved_version = if complete { self.edit.version } else { 0 };
                 self.saved_aspect = self.aspect;

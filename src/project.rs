@@ -801,7 +801,74 @@ pub fn settle_crossfades(cuts: &mut [Cut]) {
     }
 }
 
+/// What `Project::drop_missing` left out (cuts, sound clips, overlay
+/// pictures whose files are gone), and the sound files gone whose cuts
+/// play their clip's own sound instead (they stay named, to come back).
+#[derive(Debug, Default, PartialEq)]
+pub struct Missing {
+    pub cuts: Vec<PathBuf>,
+    pub sounds: Vec<(SoundTrack, PathBuf)>,
+    pub overlays: Vec<PathBuf>,
+    pub deaf: Vec<PathBuf>,
+}
+
+impl Missing {
+    /// Nothing was left out (a missing sound file leaves nothing out).
+    pub fn is_complete(&self) -> bool {
+        self.cuts.is_empty() && self.sounds.is_empty() && self.overlays.is_empty()
+    }
+
+    /// What to tell the user, if anything.
+    pub fn said(&self) -> Option<String> {
+        let names = |v: &mut dyn Iterator<Item = &PathBuf>| v.map(|p| p.display().to_string()).collect::<Vec<_>>().join(", ");
+        let mut parts = Vec::new();
+        if !self.cuts.is_empty() {
+            parts.push(format!("Left out cuts of missing clips: {}", names(&mut self.cuts.iter())));
+        }
+        if !self.deaf.is_empty() {
+            parts.push(format!("Missing sound files, playing the clips' own: {}", names(&mut self.deaf.iter())));
+        }
+        for which in SoundTrack::ALL {
+            let mut of = self.sounds.iter().filter(|(w, _)| *w == which).map(|(_, p)| p).peekable();
+            if of.peek().is_some() {
+                parts.push(format!("Left out missing {}: {}", which.name(), names(&mut of)));
+            }
+        }
+        if !self.overlays.is_empty() {
+            parts.push(format!("Left out missing overlays: {}", names(&mut self.overlays.iter())));
+        }
+        (!parts.is_empty()).then(|| parts.join(". "))
+    }
+}
+
 impl Project {
+    /// Leaves out what can't play because its file is gone (as `exists`
+    /// says): cuts, sound clips, overlay pictures (text stays). What went,
+    /// and the cuts' own sound files gone, are said in the result.
+    pub fn drop_missing(&mut self, exists: impl Fn(&Path) -> bool) -> Missing {
+        let mut missing = Missing::default();
+        self.cuts.retain(|c| exists(&c.input) || {
+            missing.cuts.push(c.input.clone());
+            false
+        });
+        missing.deaf = self.cuts.iter().filter_map(|c| c.audio.clone()).filter(|a| !exists(a)).collect();
+        missing.deaf.sort();
+        missing.deaf.dedup();
+        for which in SoundTrack::ALL {
+            self.track_mut(which).clips.retain(|c| exists(&c.input) || {
+                missing.sounds.push((which, c.input.clone()));
+                false
+            });
+        }
+        for lane in &mut self.overlays {
+            lane.items.retain(|it| it.text.is_some() || exists(&it.input) || {
+                missing.overlays.push(it.input.clone());
+                false
+            });
+        }
+        missing
+    }
+
     /// The cuts' sound past their pictures (`Cut::sound_beyond`), a track
     /// each at the clips' level: one clip to a track, so the tail of one
     /// cut and the head of the next both play where they overlap rather
@@ -1228,6 +1295,24 @@ pub fn held(aim: Aim<'_>, own: bool, t: f64) -> impl Fn(&crate::view::Follow, f6
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn what_is_gone_is_left_out_and_said() {
+        let mut p = Project::default();
+        p.cuts = vec![Cut::new("a.mp4".into(), 0.0, 4.0), Cut { audio: Some("voice.flac".into()), ..Cut::new("b.mp4".into(), 0.0, 3.0) }, Cut { audio: Some("voice.flac".into()), ..Cut::new("b.mp4".into(), 3.0, 5.0) }];
+        p.music.append_part("song.wav".into(), 0.0, 0.0, 10.0);
+        p.sfx.append_part("bang.wav".into(), 0.0, 0.0, 1.0);
+        let item = |input: &str, text| crate::overlay::Item { id: 0, input: input.into(), text, at: 0.0, start: 0.0, end: 5.0, motion: Vec::new(), effects: Vec::new() };
+        p.overlays.push(crate::overlay::Lane::default());
+        p.overlays[0].items = vec![item("logo.png", None), item("", Some(Default::default()))];
+        let here = ["b.mp4", "song.wav"];
+        let m = p.drop_missing(|f| here.iter().any(|h| f == Path::new(h)));
+        assert_eq!((p.cuts.len(), p.music.clips.len(), p.sfx.clips.len(), p.overlays[0].items.len()), (2, 1, 0, 1), "the text item stays");
+        assert_eq!(m.deaf, [PathBuf::from("voice.flac")], "named once");
+        assert!(!m.is_complete());
+        assert_eq!(m.said().unwrap(), "Left out cuts of missing clips: a.mp4. Missing sound files, playing the clips' own: voice.flac. Left out missing SFX: bang.wav. Left out missing overlays: logo.png");
+        assert_eq!(Project::default().drop_missing(|_| false), Missing::default());
+    }
 
     #[test]
     fn everything_gets_an_id_once_and_a_split_half_a_new_one() {

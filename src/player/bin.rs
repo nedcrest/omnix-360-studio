@@ -186,6 +186,9 @@ pub struct Bin {
     pub hover_frames: HashMap<PathBuf, Vec<image::Handle>>,
     /// Every day's clips shown, not only the edit's days'.
     pub all_days: bool,
+    /// The headings folded to their line (user, 2026-11-05: a project's
+    /// every day in the bin is a long list); none at first.
+    pub folded: std::collections::HashSet<String>,
     /// The clip in the bin view's own player (`bin_player.rs`).
     pub source: Option<super::bin_player::Source>,
     /// Loaded clips from outside the folder taken out of the bin's list
@@ -436,6 +439,14 @@ impl App {
         }
     }
 
+    /// A heading that folds its files away and back when clicked, with how
+    /// many there are.
+    pub(super) fn fold_heading(&self, heading: String, files: usize, size: u32) -> Element<'_, Message> {
+        let mark = if self.bin.folded.contains(&heading) { "▸" } else { "▾" };
+        let label = text(format!("{mark} {heading}  ·  {files}")).size(size);
+        button(label).padding(0).style(button::text).on_press(Message::BinView(super::bin_view::BinMsg::Fold(heading))).into()
+    }
+
     /// The «all days» switch, when the edit is of some days and the folder
     /// has others.
     pub(super) fn days_toggle(&self) -> Option<Element<'_, Message>> {
@@ -488,9 +499,13 @@ impl App {
                     body = body.push(days);
                 }
                 for section in sections.iter().filter(|s| self.day_shown(s)) {
-                    body = body.push(rule::horizontal(1)).push(text(section.heading()).size(15));
-                    for path in &section.files {
-                        body = body.push(self.item(label(path), path, section.kind));
+                    let heading = section.heading();
+                    let open = !self.bin.folded.contains(&heading);
+                    body = body.push(rule::horizontal(1)).push(self.fold_heading(heading, section.files.len(), 15));
+                    if open {
+                        for path in &section.files {
+                            body = body.push(self.item(label(path), path, section.kind));
+                        }
                     }
                 }
             }

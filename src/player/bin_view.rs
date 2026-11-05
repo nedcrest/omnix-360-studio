@@ -37,6 +37,8 @@ pub enum BinMsg {
     Tile(f32),
     /// Every day's clips shown, or only the edit's days'.
     AllDays,
+    /// A heading's files folded away, or shown again.
+    Fold(String),
     /// The pointer over the view, where a menu opens.
     Pointer(Point),
     /// A tile's menu opened at the pointer, or closed.
@@ -164,6 +166,11 @@ impl App {
                 }
             }
             BinMsg::AllDays => self.bin.all_days = !self.bin.all_days,
+            BinMsg::Fold(heading) => {
+                if !self.bin.folded.remove(&heading) {
+                    self.bin.folded.insert(heading);
+                }
+            }
             BinMsg::Tile(w) => self.bin.tile = w.clamp(*TILE.start(), *TILE.end()),
             BinMsg::Pointer(p) => {
                 self.bin.pointer = p;
@@ -541,13 +548,17 @@ impl App {
 
     /// A heading and its files as tiles, wrapping to the view's width.
     fn section_tiles<'a>(&'a self, title: &'static str, heading: String, kind: Kind, files: &[PathBuf], add: bool) -> Element<'a, Message> {
-        let mut head = row![text(format!("{heading}  ·  {}", files.len())).size(15)].spacing(8).align_y(Alignment::Center);
+        let open = !self.bin.folded.contains(&heading);
+        let mut head = row![self.fold_heading(heading, files.len(), 15)].spacing(8).align_y(Alignment::Center);
         if add {
             head = head.push(tip(
                 button(text("+").size(14)).padding([0, 8]).on_press(Message::BinView(BinMsg::AddTo(title))),
                 text(format!("Copy files into {title} (or drop them on the bin)")),
                 tooltip::Position::Right,
             ));
+        }
+        if !open {
+            return head.into();
         }
         let tiles = row(files.iter().map(|f| self.tile(f, kind))).spacing(10).wrap().vertical_spacing(10);
         column![head, tiles].spacing(8).into()

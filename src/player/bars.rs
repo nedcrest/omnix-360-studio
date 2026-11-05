@@ -7,8 +7,10 @@ use super::*;
 use iced::widget::{column, row};
 
 impl App {
-    /// An empty project: its name and the start's buttons, and its bin in
-    /// tiles filling the window; adding a clip from it starts the edit.
+    /// An empty project, laid out as an edit (user, 2026-11-05: not the bin
+    /// alone): its name and the start's buttons on top, its bin in tiles in
+    /// the picture's place, the (empty) timeline below; adding a clip from
+    /// the bin starts the edit.
     pub(super) fn empty_project(&self) -> Element<'_, Message> {
         let name = self.project.as_ref().and_then(|p| p.file_name()).map_or_else(String::new, |n| n.to_string_lossy().into_owned());
         let error = self.error.as_ref().map(|e| text(e.clone()).style(text::danger));
@@ -21,7 +23,13 @@ impl App {
         ]
         .spacing(12)
         .align_y(Alignment::Center);
-        column![container(bar).padding([8, 14])].push(error).push(self.bin_view()).into()
+        let divider = tip(
+            canvas(super::divider::Divider).width(Length::Fill).height(super::divider::HEIGHT),
+            text("Drag to give the timeline or the bin more room (double-click: as it was)"),
+            tooltip::Position::Top,
+        );
+        let timeline = container(self.timeline_view()).padding([2, 10]);
+        column![container(bar).padding([8, 14])].push(error).push(container(self.bin_view()).height(Length::Fill)).push(divider).push(timeline).into()
     }
 
     /// Before any clip: open clips, a project, or start from a song.

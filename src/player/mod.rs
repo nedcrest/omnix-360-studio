@@ -1005,9 +1005,14 @@ impl App {
                 Task::none()
             }
             Message::Key(key, mods) => {
+                let before = self.position();
                 let task = self.key(key, mods);
-                // Keys can seek out of sight (arrows, [ ]): follow.
-                self.reveal_playhead();
+                // Keys can seek out of sight (arrows, [ ]): follow, but only
+                // when one did (Shift alone threw the timeline back to the
+                // playhead, user 2026-11-05).
+                if (self.position() - before).abs() > 1e-6 {
+                    self.reveal_playhead();
+                }
                 task
             }
             Message::Sound(msg) => self.sound_ui(msg),

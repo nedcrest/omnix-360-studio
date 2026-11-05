@@ -458,6 +458,10 @@ impl App {
     /// The stretch of edit time the timeline shows: (start, span).
     pub(super) fn timeline_window(&self) -> (f64, f64) {
         let d = self.edit.frame();
+        // An empty edit (an empty day): a minute of ruler to drop into.
+        if d <= 0.0 {
+            return (0.0, 60.0);
+        }
         let span = (d / self.timeline_zoom).max(TIMELINE_SPAN.min(d));
         (self.timeline_start.clamp(0.0, (d - span).max(0.0)), span)
     }

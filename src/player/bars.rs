@@ -7,31 +7,6 @@ use super::*;
 use iced::widget::{column, row};
 
 impl App {
-    /// An empty project, laid out as an edit (user, 2026-11-05: not the bin
-    /// alone): its name and the start's buttons on top, its bin in tiles in
-    /// the picture's place, the (empty) timeline below; adding a clip from
-    /// the bin starts the edit.
-    pub(super) fn empty_project(&self) -> Element<'_, Message> {
-        let name = self.project.as_ref().and_then(|p| p.file_name()).map_or_else(String::new, |n| n.to_string_lossy().into_owned());
-        let error = self.error.as_ref().map(|e| text(e.clone()).style(text::danger));
-        let bar = row![
-            text(name).size(18),
-            space().width(Length::Fill),
-            labelled_button(ADD_CLIP, "Open clips…", Some(Message::Open)),
-            labelled_button(OPEN_PROJECT, "Open project…", Some(Message::OpenProject)),
-            labelled_button(ADD_MUSIC, "Add music…", Some(Message::AddSound(SoundTrack::Music))),
-        ]
-        .spacing(12)
-        .align_y(Alignment::Center);
-        let divider = tip(
-            canvas(super::divider::Divider).width(Length::Fill).height(super::divider::HEIGHT),
-            text("Drag to give the timeline or the bin more room (double-click: as it was)"),
-            tooltip::Position::Top,
-        );
-        let timeline = container(self.timeline_view()).padding([2, 10]);
-        column![container(bar).padding([8, 14])].push(error).push(container(self.bin_view()).height(Length::Fill)).push(divider).push(timeline).into()
-    }
-
     /// Before any clip: open clips, a project, or start from a song.
     pub(super) fn start_screen(&self) -> Element<'_, Message> {
         let error = self.error.as_ref().map(|e| text(e.clone()).style(text::danger));
@@ -58,20 +33,21 @@ impl App {
 
     /// The top bar: what is global. Groups: the app | the project file |
     /// the export; then, while framing a 360 cut, how it is steadied and
-    /// drawn; at the right the meter, the window and the status.
-    pub(super) fn top_bar<'a>(&'a self, clip: &'a Clip) -> Element<'a, Message> {
-        let p = &clip.playback;
-        let media = &p.media;
-
-        let quality = p.quality();
-        let showing = if quality.starts_with("loading") {
-            status_icon(SHOWING_LOADING, format!("Showing the playback picture, {quality}"))
-        } else if quality == "proxy" {
-            status_icon(SHOWING_PROXY, "Showing the proxy (LRF): quick to decode, less detail".to_owned())
-        } else {
-            status_icon(SHOWING_FULL, format!("Showing the {}", if quality == "full res" { "OSV at full resolution".to_owned() } else { quality.clone() }))
-        };
-        let decode = match media.hw {
+    /// drawn; at the right the meter, the window and the status. Without a
+    /// clip (an empty project) what shows and decodes isn't there to say.
+    pub(super) fn top_bar<'a>(&'a self, clip: Option<&'a Clip>) -> Element<'a, Message> {
+        let media = clip.map(|c| &c.playback.media);
+        let showing = clip.map(|c| {
+            let quality = c.playback.quality();
+            if quality.starts_with("loading") {
+                status_icon(SHOWING_LOADING, format!("Showing the playback picture, {quality}"))
+            } else if quality == "proxy" {
+                status_icon(SHOWING_PROXY, "Showing the proxy (LRF): quick to decode, less detail".to_owned())
+            } else {
+                status_icon(SHOWING_FULL, format!("Showing the {}", if quality == "full res" { "OSV at full resolution".to_owned() } else { quality.clone() }))
+            }
+        });
+        let decode = media.map(|media| match media.hw {
             Hwaccel::Software => status_icon(DECODE_CPU, "Decoding in software: no GPU decoder worked here".to_owned()),
             hw => status_icon(DECODE_GPU, format!("Decoding on the GPU with {}", match hw {
                 Hwaccel::Vulkan => "Vulkan Video",
@@ -80,7 +56,7 @@ impl App {
                 Hwaccel::D3d11va => "Direct3D 11",
                 _ => "CUDA",
             })),
-        };
+        });
         // One line: wrapped, a long one stood the whole top bar on end.
         let message = self.save_status.as_ref().map(|s| text(s.clone()).style(text::secondary).wrapping(text::Wrapping::None));
         // After a delete: what went, and Undo one click away.
@@ -88,20 +64,25 @@ impl App {
         let status: Element<'_, Message> = match &self.loading {
             Some(_) => self.loading_bar(140.0),
             // What decodes and shows matters for 360 footage: shown while framing.
-            None => row![].push(toast).push(message).push(self.framing.then_some(showing)).push(self.framing.then_some(decode)).spacing(10).align_y(Alignment::Center).into(),
+            None => row![].push(toast).push(message).push(showing.filter(|_| self.framing)).push(decode.filter(|_| self.framing)).spacing(10).align_y(Alignment::Center).into(),
         };
         let shown_view = self.shown_view();
-        let mut sources = Vec::new();
-        if media.proxy.is_some() {
-            sources.push(Source::Proxy);
-        }
-        sources.push(Source::Osv(1920.min(media.osv_full)));
-        sources.push(Source::Osv(media.osv_full));
-        sources.dedup();
-        let source = match (media.osv_size, &media.proxy) {
-            (None, Some(_)) => Source::Proxy,
-            (size, _) => Source::Osv(size.unwrap_or(1920)),
-        };
+        // A 360 clip's playback sources, for its framing controls.
+        let osv = media.filter(|m| m.flat.is_none());
+        let sources = osv.map(|media| {
+            let mut sources = Vec::new();
+            if media.proxy.is_some() {
+                sources.push(Source::Proxy);
+            }
+            sources.push(Source::Osv(1920.min(media.osv_full)));
+            sources.push(Source::Osv(media.osv_full));
+            sources.dedup();
+            let source = match (media.osv_size, &media.proxy) {
+                (None, Some(_)) => Source::Proxy,
+                (size, _) => Source::Osv(size.unwrap_or(1920)),
+            };
+            (sources, source)
+        });
         // Global groups: the app | the project file | the export; then,
         // while framing a 360 cut, how it is steadied and drawn. What acts
         // on the timeline is in the transport row.
@@ -135,8 +116,8 @@ impl App {
         ]
         // How a 360 clip is steadied and drawn: only while framing one; an
         // ordinary video or a picture has neither.
-        .push((self.framing && media.flat.is_none()).then(|| separator()))
-        .push((self.framing && media.flat.is_none()).then(|| {
+        .push((self.framing && osv.is_some()).then(|| separator()))
+        .push(osv.zip(sources).filter(|_| self.framing).map(|(media, (sources, source))| {
             let pickers = row![
                 labelled("Stabilisation", pick_list(&Mode::ALL[..], Some(media.stab.mode()), Message::Stab)),
                 labelled("Projection", pick_list(&Projection::ALL[..], Some(shown_view.projection), Message::Projection)),
@@ -225,6 +206,8 @@ impl App {
                 })
                 .into()
             }
+            // An empty project shows the logo alone: nothing decodes.
+            None if self.clip.is_none() => center(self.logo()).into(),
             None => center(column![self.logo(), text("Decoding…")].spacing(16).align_x(Alignment::Center)).into(),
         };
         let view = container(view).width(Length::Fill).height(Length::Fill).style(|_| container::background(iced::Color::BLACK));
@@ -342,8 +325,11 @@ impl App {
     /// the playhead | cutting | history | effects | the Framing and Mix
     /// check switches; then the timeline's zoom and the sound. The
     /// chevron names the groups, here and in the top bar.
-    pub(super) fn transport_bar<'a>(&'a self, clip: &'a Clip) -> Element<'a, Message> {
-        let p = &clip.playback;
+    /// The transport row; without a clip (an empty project) nothing plays
+    /// and the playhead is at the start.
+    pub(super) fn transport_bar<'a>(&'a self, clip: Option<&'a Clip>) -> Element<'a, Message> {
+        let playing = clip.is_some_and(|c| c.playback.playing);
+        let target = clip.map_or(0.0, |c| c.playback.target());
         // With a song selected, C splits that instead.
         let music = self.selection.clip(&self.edit).and_then(|(which, i)| self.edit.track(which).clips.get(i));
         let point = self.selection.point(&self.edit).is_some();
@@ -351,7 +337,7 @@ impl App {
         let crossfade_cut = Some(self.selection.cut(&self.edit).unwrap_or(self.current)).filter(|&i| i > 0).and_then(|i| self.edit.cuts.get(i));
         let can_split = match music {
             Some(c) => self.position() > c.at + edit::MIN_CUT && self.position() < c.ends() - edit::MIN_CUT,
-            None => self.edit.cuts.get(self.current).is_some_and(|c| p.target() > c.start + edit::MIN_CUT && p.target() < c.end - edit::MIN_CUT),
+            None => self.edit.cuts.get(self.current).is_some_and(|c| target > c.start + edit::MIN_CUT && target < c.end - edit::MIN_CUT),
         };
         let open = self.bar_labels;
         let open_hint = if self.edit.cuts.is_empty() { "Open clips (Ctrl+O)" } else { "Add clips to the edit as cuts (Ctrl+O)" };
@@ -363,15 +349,15 @@ impl App {
             ),
             group("Play", open, row![
             tip(
-                tint_button(Tint::Move, if p.playing { PAUSE } else { PLAY }, Some(Message::Toggle)),
-                text(if p.playing { "Pause (Space)" } else { "Play (Space)" }),
+                tint_button(Tint::Move, if playing { PAUSE } else { PLAY }, Some(Message::Toggle)),
+                text(if playing { "Pause (Space)" } else { "Play (Space)" }),
                 tooltip::Position::Top,
             ),
             // A fixed width: the digits' widths differ in most fonts (macOS's
             // system font especially), and the row after it jittered as it ran.
             text(format!("{} / {}", clock(self.position()), clock(self.edit.duration()))).width(170).center(),
             tip(
-                tint_button(Tint::Move, SAVE_VIEW, (!p.playing).then_some(Message::Save(Saving::View))),
+                tint_button(Tint::Move, SAVE_VIEW, (clip.is_some() && !playing).then_some(Message::Save(Saving::View))),
                 text("Save this frame as a PNG (pause first)"),
                 tooltip::Position::Top,
             ),

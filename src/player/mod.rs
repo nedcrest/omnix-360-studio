@@ -1043,13 +1043,14 @@ impl App {
     }
 
     fn window_view(&self) -> Element<'_, Message> {
-        let Some(clip) = &self.clip else {
-            // An empty project (Dailix's empty day): its bin, to build from.
-            if self.project.is_some() && self.bin.read.is_some() && !self.has_edit() && self.loading.is_none() {
-                return self.empty_project();
-            }
+        // An empty project (Dailix's empty day) opens as any edit, with no
+        // clip yet: built from its bin (user, 2026-11-05: Omnix itself, not
+        // a view of its own).
+        let empty = self.project.is_some() && !self.has_edit() && self.loading.is_none();
+        let clip = self.clip.as_ref();
+        if clip.is_none() && !empty {
             return self.start_screen();
-        };
+        }
         let error = self.error.as_ref().map(|e| text(e.clone()).style(text::danger));
         let timeline = self.timeline_view();
         let timeline = container(timeline).padding([2, 10]);
@@ -1058,7 +1059,7 @@ impl App {
             text("Drag to give the timeline or the picture more room (double-click: as it was)"),
             tooltip::Position::Top,
         );
-        let window: Element<'_, Message> = column![self.top_bar(clip), self.picture(), divider, self.transport_bar(clip)].push(self.framing.then(|| self.framing_row(clip))).push(timeline).push(error.map(|e| container(e).padding([0, 10]))).push(credit()).into();
+        let window: Element<'_, Message> = column![self.top_bar(clip), self.picture(), divider, self.transport_bar(clip)].push(clip.filter(|_| self.framing).map(|c| self.framing_row(c))).push(timeline).push(error.map(|e| container(e).padding([0, 10]))).push(credit()).into();
         self.shortcuts_dialog(self.mark_dialog(self.normalize_dialog(self.sound_menu_layer(window))))
     }
 }

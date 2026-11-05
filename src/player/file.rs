@@ -357,6 +357,10 @@ impl App {
                 self.saved_version = if complete { self.edit.version } else { 0 };
                 self.saved_aspect = self.aspect;
                 self.project = Some(path);
+                // An empty one is built from its bin: open it.
+                if !self.has_edit() {
+                    self.bin.open = true;
+                }
                 let next = if self.loading.is_none() { self.open_next() } else { Task::none() };
                 return Task::batch(waves.into_iter().chain([next]));
             }

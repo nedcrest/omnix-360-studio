@@ -38,9 +38,9 @@ fn clip(dir: &Path, name: &str, secs: f64, hz: u32) {
 
 /// Runs the binary in `dir`, panicking with its output if it fails.
 fn omnix(dir: &Path, args: &[&str]) -> String {
-    let out = Command::new(env!("CARGO_BIN_EXE_rosmo360")).current_dir(dir).arg("--no-cache").args(args).output().unwrap();
+    let out = Command::new(env!("CARGO_BIN_EXE_omnix")).current_dir(dir).arg("--no-cache").args(args).output().unwrap();
     let text = String::from_utf8_lossy(&out.stdout).into_owned() + &String::from_utf8_lossy(&out.stderr);
-    assert!(out.status.success(), "rosmo360 {args:?} failed:\n{text}");
+    assert!(out.status.success(), "omnix {args:?} failed:\n{text}");
     text
 }
 
@@ -203,7 +203,7 @@ fn ops_from_a_file_duck_the_music_and_twice_is_once() {
     let once = omnix(&d, &["mixcheck", "c.json"]);
     // An op on what isn't there is refused, and nothing is written.
     std::fs::write(d.join("bad.json"), r#"[{"area": "sound", "op": "mute", "sound": {"cut": 42}, "on": true}]"#).unwrap();
-    let bad = Command::new(env!("CARGO_BIN_EXE_rosmo360")).current_dir(&d).args(["apply", "edit.json", "bad.json", "-o", "d.json"]).output().unwrap();
+    let bad = Command::new(env!("CARGO_BIN_EXE_omnix")).current_dir(&d).args(["apply", "edit.json", "bad.json", "-o", "d.json"]).output().unwrap();
     let wrote_bad = d.join("d.json").exists();
     std::fs::remove_dir_all(&d).unwrap();
     assert!(held.contains("cut #1") && held.contains("clip #2") && held.contains("clip #3"), "{held}");

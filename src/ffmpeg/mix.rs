@@ -55,6 +55,16 @@ pub struct Mix<'a> {
     pub fades: crate::project::Fades,
 }
 
+impl<'a> Mix<'a> {
+    /// The whole film's mix, as the export makes it: the clips' sound at
+    /// their level, every track, and `beyond` (the cuts' sound past their
+    /// pictures, `Project::sound_beyond`) as clips at the clips' level.
+    pub fn whole(project: &'a crate::project::Project, beyond: &'a [crate::project::Music], length: f64) -> Self {
+        let tracks = crate::project::SoundTrack::ALL.map(|t| project.track(t)).into_iter().chain(beyond).collect();
+        Mix { sound_db: project.sound.volume, tracks, length, fades: project.fades }
+    }
+}
+
 impl<'a> Sound<'a> {
     /// Cut `c`'s stretch under its picture, from `input` at clip time
     /// `start` for `duration`: its level, points, filters and fades, and

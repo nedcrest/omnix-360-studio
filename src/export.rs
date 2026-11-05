@@ -194,8 +194,7 @@ pub(crate) fn export(project: &project::Project, opts: &StitchOpts, out: &Export
         // The cuts' sound past their pictures (J- and L-cuts) mixed as sound
         // clips at the clips' level, as the player plays it.
         let beyond = project.sound_beyond();
-        let tracks = project::SoundTrack::ALL.map(|t| project.track(t)).into_iter().chain(&beyond).collect();
-        let mix = ffmpeg::Mix { sound_db: project.sound.volume, tracks, length, fades: project.fades };
+        let mix = ffmpeg::Mix::whole(project, &beyond, length);
         let mix = matches!(out.target, Target::One(_)).then_some(&mix);
         let mut encoder = ffmpeg::Encoder::new(&path, out.size, fps, &sound, mix, out.format, out.format == ffmpeg::Format::Resolve && gpu.is_some())?;
         // Overlays over the whole edit only; a file per cut has none.

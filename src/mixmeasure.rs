@@ -117,7 +117,7 @@ pub fn measure(project: &Project, progress: &mut dyn FnMut(usize, usize)) -> Res
     // The whole film, as the export makes it.
     let mut whole = window(0.0, length);
     let beyond = project.sound_beyond();
-    let mix = Mix { sound_db: project.sound.volume, tracks: SoundTrack::ALL.iter().map(|&w| project.track(w)).chain(&beyond).collect(), length, fades: project.fades };
+    let mix = Mix::whole(project, &beyond, length);
     let peak = run(&cuts, &mix, &mut [&mut whole])?;
     progress(renders, renders);
     let speech = speech

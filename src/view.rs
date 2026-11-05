@@ -179,7 +179,7 @@ impl Camera {
     pub fn ray(&self, aspect: f64, [nx, ny]: [f64; 2]) -> [f64; 3] {
         let Some(d) = self.planet else {
             let (lon, lat) = (nx * std::f64::consts::PI, -ny * std::f64::consts::FRAC_PI_2);
-            return [lat.cos() * lon.sin(), -lat.sin(), lat.cos() * lon.cos()];
+            return crate::stitch::direction(lat, lon);
         };
         let q = [nx * aspect * self.zoom, ny * self.zoom];
         let s = (q[0] * q[0] + q[1] * q[1]).sqrt().max(1e-12);

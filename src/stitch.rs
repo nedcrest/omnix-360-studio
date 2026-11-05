@@ -140,7 +140,7 @@ pub fn equirect(lenses: &[Lens], frames: &[Frame], out_w: usize, only: Option<us
     let ray = |x: f64, y: f64| {
         let lat = PI / 2.0 - y / out_h as f64 * PI;
         let lon = x / out_w as f64 * 2.0 * PI - PI;
-        [lat.cos() * lon.sin(), -lat.sin(), lat.cos() * lon.cos()]
+        direction(lat, lon)
     };
     render(lenses, frames, (out_w, out_h), ray, only, views, seam)
 }
@@ -386,6 +386,27 @@ pub fn transpose(m: M3) -> M3 {
 
 pub(crate) fn apply(m: M3, v: [f64; 3]) -> [f64; 3] {
     std::array::from_fn(|i| m[i][0] * v[0] + m[i][1] * v[1] + m[i][2] * v[2])
+}
+
+/// The direction at latitude `lat` and longitude `lon` (radians), in the
+/// rig's frame (x right, y down, z forward): `(cos φ sin λ, −sin φ,
+/// cos φ cos λ)`, the equirect's and a view's yaw and pitch alike.
+pub(crate) fn direction(lat: f64, lon: f64) -> [f64; 3] {
+    [lat.cos() * lon.sin(), -lat.sin(), lat.cos() * lon.cos()]
+}
+
+pub(crate) fn dot(a: [f64; 3], b: [f64; 3]) -> f64 {
+    a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+}
+
+pub(crate) fn cross(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
+    [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
+}
+
+/// `v` made one long; a zero vector stays finite.
+pub(crate) fn normalise(v: [f64; 3]) -> [f64; 3] {
+    let n = dot(v, v).sqrt().max(1e-12);
+    v.map(|x| x / n)
 }
 
 #[cfg(test)]

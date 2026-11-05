@@ -3,6 +3,7 @@
 //! seam's middle is α = 90°. Exposure matching bins along φ; seam alignment
 //! shifts along α.
 
+use crate::stitch::{dot, cross, normalise};
 use crate::stitch::Lens;
 use std::f64::consts::TAU;
 
@@ -39,15 +40,3 @@ impl Ring {
     }
 }
 
-fn dot(a: [f64; 3], b: [f64; 3]) -> f64 {
-    a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
-}
-
-fn cross(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
-    [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
-}
-
-fn normalise(v: [f64; 3]) -> [f64; 3] {
-    let n = dot(v, v).sqrt();
-    v.map(|x| x / n)
-}

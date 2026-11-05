@@ -50,17 +50,16 @@ fn looking(p: &crate::Pipeline, cuts: &[project::Cut], n: usize, t: f64) -> ([f6
         .and_then(|(k, at)| k.view_at(at, &project::held(&|f, t| p.aim(f, t), at == t, t)))
         .unwrap_or_else(|| view::View::home(view::Projection::Perspective));
     let (lon, lat) = (v.yaw.to_radians(), v.pitch.to_radians());
-    let d = [lat.cos() * lon.sin(), -lat.sin(), lat.cos() * lon.cos()];
+    let d = crate::stitch::direction(lat, lon);
     if p.flat.is_some() || !p.stab.has_data() {
         return (d, d);
     }
     let m = p.stab.world_from_view(t * 1000.0);
-    ([0, 1, 2].map(|i| m[i][0] * d[0] + m[i][1] * d[1] + m[i][2] * d[2]), d)
+    (crate::stitch::apply(m, d), d)
 }
 
 fn angle(a: [f64; 3], b: [f64; 3]) -> f64 {
-    let dot: f64 = (0..3).map(|i| a[i] * b[i]).sum();
-    dot.clamp(-1.0, 1.0).acos().to_degrees()
+    crate::stitch::dot(a, b).clamp(-1.0, 1.0).acos().to_degrees()
 }
 
 /// See `Cmd::Check`; pans over `fast` degrees a second count.

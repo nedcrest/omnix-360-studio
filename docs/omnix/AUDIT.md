@@ -39,8 +39,6 @@ In Omnix:
 
 - [ ] Dailix `Edit` (undo): dropped; undo later as inverse ops through
       `Store`, with a key.
-- [ ] Upstream maths copies merged (equirect direction ×5, vector
-      helpers ×3): no more merging from upstream after the rename.
 - [ ] `check` takes only the flags it uses.
 
 ## Order (user, 2026-11-05)
@@ -48,6 +46,12 @@ In Omnix:
 This refactor first, all of it; then the rename to omnix (gap 76) with
 Omnix's own face (gap 79: the footer «Dmytro Halushko with Claude» and
 upstream credited apart; our own start picture and icon, upstream's logo
-gone). The rename is cheaper now than later.
+gone). The rename is cheaper now than later. For gap 79, look for every
+place upstream's name or credit shows (footer, About, window title,
+desktop entries, packaging, README), not only the footer.
+
+After both: the user checks the cleanup's visible changes with a short
+"how to" for each (user, 2026-11-05: never saved a frame; the LUT and the
+frame need steps spelled out).
 
 

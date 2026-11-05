@@ -7,6 +7,7 @@
 //! axis — found on handheld footage by world-locking across fast pans until
 //! the sun held still, then checking the horizon levels at 30–50° of tilt.
 
+use crate::stitch::{cross, dot, normalise};
 use crate::stitch::{M3, apply, mat_mul, quat_to_mat, transpose};
 use telemetry_parser::rig::geometry::Quat;
 
@@ -217,7 +218,6 @@ impl Stabilizer {
     pub fn pose(&self, t_ms: f64) -> Pose {
         let down = [0.0, 0.0, self.world_down];
         let column = |m: M3, j: usize| [m[0][j], m[1][j], m[2][j]];
-        let dot = |a: [f64; 3], b: [f64; 3]| a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
         let start = column(self.world_from_rig(self.quats[0].0), 2);
         let f0 = normalise([start[0], start[1], 0.0]);
         let r0 = cross(down, f0);
@@ -263,14 +263,6 @@ fn slerp(a: Quat, mut b: Quat, t: f64) -> Quat {
     Quat { w: q[0] / n, x: q[1] / n, y: q[2] / n, z: q[3] / n }
 }
 
-fn cross(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
-    [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
-}
-
-fn normalise(v: [f64; 3]) -> [f64; 3] {
-    let n = v.iter().map(|x| x * x).sum::<f64>().sqrt().max(1e-12);
-    v.map(|x| x / n)
-}
 
 #[cfg(test)]
 mod tests {

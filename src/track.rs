@@ -8,6 +8,7 @@
 //! unlike a centroid in picture coordinates, it is right at the poles, where
 //! the equirect stretches a subject straight below the camera into a band.
 
+use crate::stitch::{dot, normalise};
 use crate::stab::{Mode, Stabilizer};
 use anyhow::{Context, Result, bail};
 use std::path::Path;
@@ -109,7 +110,7 @@ pub fn find(rgb: &[u8], w: usize, colour: &Colour, near: Option<[f64; 3]>) -> Op
             let i = (y * w + x) * 3;
             if colour.matches([rgb[i] as f64 / 255.0, rgb[i + 1] as f64 / 255.0, rgb[i + 2] as f64 / 255.0]) {
                 let lon = (x as f64 + 0.5) / w as f64 * std::f64::consts::TAU - std::f64::consts::PI;
-                hits.push(([lat.cos() * lon.sin(), -lat.sin(), lat.cos() * lon.cos()], lat.cos()));
+                hits.push((crate::stitch::direction(lat, lon), lat.cos()));
             }
         }
     }
@@ -226,18 +227,10 @@ pub fn from_level(stab: &Stabilizer, t_ms: f64, readout_ms: f64, yaw: f64, pitch
     let mut level = stab.clone();
     level.set_mode(Mode::Level);
     let (y, p) = (yaw.to_radians(), pitch.to_radians());
-    let view = [y.sin() * p.cos(), -p.sin(), y.cos() * p.cos()];
+    let view = crate::stitch::direction(p, y);
     crate::stitch::apply(level.rig_from_view(t_ms, readout_ms, 1)[0], view)
 }
 
-fn dot(a: [f64; 3], b: [f64; 3]) -> f64 {
-    a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
-}
-
-fn normalise(v: [f64; 3]) -> [f64; 3] {
-    let n = dot(v, v).sqrt().max(1e-12);
-    v.map(|x| x / n)
-}
 
 #[cfg(test)]
 mod tests {
@@ -251,7 +244,7 @@ mod tests {
             let lat = std::f64::consts::FRAC_PI_2 - (y as f64 + 0.5) / h as f64 * std::f64::consts::PI;
             for x in 0..w {
                 let lon = (x as f64 + 0.5) / w as f64 * std::f64::consts::TAU - std::f64::consts::PI;
-                let d = [lat.cos() * lon.sin(), -lat.sin(), lat.cos() * lon.cos()];
+                let d = crate::stitch::direction(lat, lon);
                 if dot(d, centre) >= radius.to_radians().cos() {
                     rgb[(y * w + x) * 3..][..3].copy_from_slice(&colour);
                 }

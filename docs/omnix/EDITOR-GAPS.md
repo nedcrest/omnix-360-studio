@@ -94,6 +94,7 @@ done in part stays here until its last card is done.
 | 72 | The contact sheet's next round: music hints, ready music, its flow, data for AI | below |
 | 73 | Multicam: several cameras as one clip, a module of its own; 360 angles the same way | below |
 | 74 | Dailix: the studio and contact sheet as a native Rust app of their own | below |
+| 75 | A cut's flags from the contact sheet as markers on the edit | below |
 
 ## Open gaps
 
@@ -1316,6 +1317,17 @@ Takes in gap 34 (import from devices) and 61 (the sheet standalone).
 Milestone «Матеріал і бін». Its first piece, the contact
 sheet's core, was built 2026-11-04 (`dailix/docs/SHEET-CORE.md`), and
 Omnix's bin runs on it (`98f2795`).
+
+### 75. A cut's flags from the contact sheet as markers on the edit — idea (user, 2026-11-05)
+
+In Dailix a flag (F) is a note to self, never material: «a meme here»,
+«find a laughing sound». When a segment goes into an Omnix edit, the
+flags inside it would come along as markers with their notes (gap 5,
+markers with notes, exists), at the same place in the cut; so the
+timeline says where the meme or the sound goes. Flags outside every
+segment stay in the sheet. Made when a cut is made from a segment (the
+bin's add buttons, or Dailix's hand-over), kept in step by the mark's
+id (a marker could carry it). Milestone «Матеріал і бін».
 
 ## Format rule for all of these
 

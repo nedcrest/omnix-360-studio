@@ -83,22 +83,30 @@ impl Store {
         let dir = self.path.parent().filter(|d| !d.as_os_str().is_empty()).unwrap_or(Path::new("."));
         let name = self.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
         std::fs::copy(&self.path, dir.join(format!("{name}.bak"))).map_err(io)?;
-        let tmp = dir.join(format!(".{name}.{}.tmp", std::process::id()));
-        let result = (|| {
-            // create_new: never through a link someone left at that name.
-            let mut file = std::fs::OpenOptions::new().write(true).create_new(true).open(&tmp)?;
-            file.write_all(doc.text().as_bytes())?;
-            if let Ok(meta) = std::fs::metadata(&self.path) {
-                file.set_permissions(meta.permissions())?;
-            }
-            file.sync_all()?;
-            std::fs::rename(&tmp, &self.path)
-        })();
-        if result.is_err() {
-            let _ = std::fs::remove_file(&tmp);
-        }
-        result.map_err(io)
+        replace(&self.path, doc.text().as_bytes()).map_err(io)
     }
+}
+
+/// Replaces the file at `path` whole or not at all: written beside it
+/// (never through a link someone left at that name), synced, renamed over
+/// it, keeping its permissions.
+pub(crate) fn replace(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    let dir = path.parent().filter(|d| !d.as_os_str().is_empty()).unwrap_or(Path::new("."));
+    let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let tmp = dir.join(format!(".{name}.{}.tmp", std::process::id()));
+    let result = (|| {
+        let mut file = std::fs::OpenOptions::new().write(true).create_new(true).open(&tmp)?;
+        file.write_all(bytes)?;
+        if let Ok(meta) = std::fs::metadata(path) {
+            file.set_permissions(meta.permissions())?;
+        }
+        file.sync_all()?;
+        std::fs::rename(&tmp, path)
+    })();
+    if result.is_err() {
+        let _ = std::fs::remove_file(&tmp);
+    }
+    result
 }
 
 #[cfg(test)]

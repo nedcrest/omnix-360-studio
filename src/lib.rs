@@ -12,6 +12,7 @@
 pub mod edit;
 pub mod layout;
 pub mod ops;
+pub mod project;
 pub mod store;
 
 pub use edit::Edit;

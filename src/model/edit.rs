@@ -236,8 +236,8 @@ impl Project {
         if t < c.start + MIN_CUT || t > c.end - MIN_CUT {
             return false;
         }
-        // Each half keeps the sound fade at its own outer end.
-        // Each half keeps its sound past the picture at its outer end only.
+        // Each half keeps its sound fade and its sound past the picture at
+        // its own outer end only.
         let mut second = c.clone();
         second.start = t;
         second.crossfade = 0.0;

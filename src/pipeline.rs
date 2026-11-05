@@ -398,8 +398,8 @@ pub(crate) fn encode(p: &Pipeline, start: f64, total: Option<usize>, encoder: &m
     Ok(())
 }
 
-/// Grades a rendered frame on the CPU, as the shader does on the GPU.
-/// Its LUT, then its effects, as the shader's `finish` does on the GPU.
+/// Grades a rendered frame on the CPU as the shader's `finish` does on the
+/// GPU: its LUT, then its effects.
 pub(crate) fn grade_frame(frame: &mut stitch::Frame, camera: &view::Camera) {
     let (grade, lut) = (&camera.grade, camera.lut.map(|id| (lut::get(id), camera.grade.lut.clamp(0.0, 1.0))));
     if grade.is_neutral() && lut.is_none() {

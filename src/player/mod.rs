@@ -951,14 +951,14 @@ impl App {
         // the next event.
         let busy = self.clip.iter().chain(self.partner.as_ref().map(|(_, c)| c)).any(|c| c.playback.busy()) || self.source_busy();
         let close = window::close_requests().map(|_| Message::CloseRequested);
-        // Files dropped from a file manager go into the bin (X11 and other
-        // systems; winit doesn't pass them on Wayland yet).
         // The wait before a hovered tile's frames show, a screen frame at a time.
         let close = if self.bin.view && self.bin.hover.as_ref().is_some_and(|(_, _, shown)| !shown) {
             Subscription::batch([close, window::frames().map(|_| Message::BinView(bin_view::BinMsg::HoverTick))])
         } else {
             close
         };
+        // Files dropped from a file manager go into the bin (X11 and other
+        // systems; winit doesn't pass them on Wayland yet).
         let close = if self.bin.view || self.bin.open {
             Subscription::batch([close, iced::event::listen_with(|e, _, _| match e {
                 iced::Event::Window(window::Event::FileDropped(path)) => Some(Message::BinView(bin_view::BinMsg::Dropped(path))),

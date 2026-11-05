@@ -1,7 +1,8 @@
-//! Loudness as the platforms measure it (ITU-R BS.1770, ffmpeg's `ebur128`):
-//! of the mix as it plays (the meter), and of each clip for the mix check; short-term (the last 3 s) and integrated since
-//! play started, beside the peak meter, so «too quiet» shows in the units
-//! the targets are given in (YouTube −14 LUFS; gap 46b).
+//! Loudness as the platforms measure it (ITU-R BS.1770, ffmpeg's `ebur128`).
+//! The meter measures the mix as it plays: short-term (the last 3 s) and
+//! integrated since play started, beside the peak meter, so «too quiet»
+//! shows in the units the targets are given in (YouTube −14 LUFS; gap 46b).
+//! The mix check measures each clip with it too.
 //!
 //! Each channel is K-weighted (a high shelf for the head's effect, a high
 //! pass), squared and summed per 100 ms; a 400 ms block every 100 ms is

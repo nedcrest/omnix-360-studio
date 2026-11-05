@@ -324,9 +324,8 @@ impl App {
     /// The transport row: what acts on the timeline. Groups: play | add at
     /// the playhead | cutting | history | effects | the Framing and Mix
     /// check switches; then the timeline's zoom and the sound. The
-    /// chevron names the groups, here and in the top bar.
-    /// The transport row; without a clip (an empty project) nothing plays
-    /// and the playhead is at the start.
+    /// chevron names the groups, here and in the top bar. Without a clip
+    /// (an empty project) nothing plays and the playhead is at the start.
     pub(super) fn transport_bar<'a>(&'a self, clip: Option<&'a Clip>) -> Element<'a, Message> {
         let playing = clip.is_some_and(|c| c.playback.playing);
         let target = clip.map_or(0.0, |c| c.playback.target());

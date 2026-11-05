@@ -178,7 +178,8 @@ impl App {
         Some((median, dir(area.x as f64 + area.width as f64 / 2.0, area.y as f64 + area.height as f64 / 2.0)))
     }
 
-    /// Export button, resolution and options, or a running export's progress.
+    /// The aspect and the button that opens the Export panel, or a running
+    /// export's or colour track's progress.
     pub(super) fn export_controls(&self) -> Element<'_, Message> {
         if let Some((_, done)) = &self.tracking {
             return row![

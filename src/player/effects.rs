@@ -424,8 +424,7 @@ impl App {
         }
     }
 
-    /// The selected overlay's text, if it's a text overlay.
-    /// The selected text item's id and text.
+    /// The selected item's id and text, if it's a text item.
     fn selected_text(&self) -> Option<(crate::project::Id, Text)> {
         let it = self.edit.item(self.selection.item(&self.edit)?)?;
         Some((it.id, it.text.clone()?))

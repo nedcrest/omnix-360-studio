@@ -49,6 +49,3 @@ In Omnix:
 
 ## Stale docs
 
-- [ ] timeline.rs header (seek bar, two lanes), misplaced doc comments
-      (timeline, icons, framing, bars, effects, keys, jobs, cuts, tracks,
-      mod, thumbs, overlay, pipeline, loudness).

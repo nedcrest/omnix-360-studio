@@ -1,23 +1,25 @@
-//! The timeline under the view. The top row holds the edit's cuts as
-//! blocks showing thumbnails of their footage: click one to select it, drag
-//! it to move it, drag its edges to trim it. Below is the seek bar with each
-//! cut's keyframes as diamonds (shaped by their ease): click the bar to seek,
-//! click a diamond to jump to it, drag one to retime it.
+//! The timeline under the view, top to bottom: the markers' flags, the
+//! time ruler (click or drag it to seek), the text and overlay lanes, the
+//! cuts, the Clip sound lane, the cuts' keyframe rows, a gap naming the
+//! sound group, and the sound lanes.
 //!
-//! Under the cuts is the Clip sound lane: each cut's waveform (what it
-//! plays: its cleaned voice or its clip's sound) with its volume line and
-//! its level tag; a right-click opens the cut's sound menu. Under the seek
-//! bar are the sound lanes, one per `SoundTrack` (Music, SFX): their clips
-//! with waveforms, moved and trimmed like cuts, crossfading with Shift, a
-//! volume line each, and a line where the video ends (sound beyond it
-//! fades out in the export). Every lane has its name pinned at the left.
-//! The View key row shows only while framing.
+//! The cuts are blocks showing thumbnails of their footage: click one to
+//! select it, drag it to move it, drag its edges to trim it. Under them is
+//! the Clip sound lane: each cut's waveform (what it plays: its cleaned
+//! voice or its clip's sound) with its volume line and its level tag; a
+//! right-click opens the cut's sound menu. Then the cuts' keyframe rows:
+//! effects and, while framing, View, each keyframe marked by its ease;
+//! click one to jump to it, drag one to retime it.
 //!
-//! Above the cuts is the overlay lane, a canvas of its own (`OverlayLane`):
-//! its pictures as blocks, selected, moved and trimmed like music. Under
-//! each track (the overlays, once there are any, and the cuts) are two rows
-//! of its keyframes: effects, then motion (an overlay's) or view (a cut's),
-//! each marked by its ease; click one to jump there.
+//! The sound lanes, one per `SoundTrack` (Music, SFX, SFX 2, Voice): their
+//! clips with waveforms, moved and trimmed like cuts, crossfading with
+//! Shift, a volume line each, and a line where the video ends (sound beyond
+//! it fades out in the export). Every lane has its name pinned at the left.
+//!
+//! The text and overlay lanes are canvases of their own (`OverlayLane`):
+//! their items as blocks, selected, moved and trimmed like sound clips.
+//! Once a lane has items, two rows of their keyframes sit under it:
+//! effects, then motion.
 //!
 //! It shows a window of the edit: the wheel zooms around the pointer, Shift
 //! or a sideways wheel pans, and when zoomed in a scrollbar at the bottom
@@ -56,8 +58,6 @@ const GAP: f32 = 2.0;
 /// cut's) or motion (an overlay's) keyframes.
 const EFFECTS: f32 = 16.0;
 const KEYS: f32 = 20.0;
-/// The rule between the picture's lanes and the sound's (it was the seek
-/// bar, before the ruler went on top).
 /// The gap between the picture's lanes and the sound's, with the sound
 /// group's name in it: the eye finds where one group ends (gap 50d).
 const SEEK: f32 = 16.0;
@@ -69,12 +69,12 @@ const SCROLL_BAR: f32 = 5.0;
 /// How far the lanes may shrink or grow, as a share of their own height.
 pub const SCALES: std::ops::RangeInclusive<f32> = 0.75..=3.0;
 
-/// Where the rows sit, top to bottom: the cuts, their keyframe rows, the
-/// seek bar, a lane per sound track (music, sound effects) and the
-/// scrollbar. Dragging the divider above
-/// the transport row scales the lanes that hold pictures and waveforms
-/// (cuts, music, overlays); the rows of marks and the seek bar keep their
-/// height, as their marks do.
+/// Where the rows sit, top to bottom: the cuts, the clip sound lane, the
+/// keyframe rows, the gap before the sound, a lane per sound track (Music,
+/// SFX, SFX 2, Voice) and the scrollbar. Dragging the divider above the
+/// transport row scales the lanes that hold pictures and waveforms (cuts,
+/// sound, overlays); the rows of marks and the gap keep their height, as
+/// their marks do.
 #[derive(Clone, Copy, Debug)]
 pub struct Rows {
     cuts: f32,
@@ -84,6 +84,7 @@ pub struct Rows {
     /// The View key row's height: 0 while editing.
     keys: f32,
     keys_top: f32,
+    /// Where the gap before the sound lanes starts (it was the seek bar).
     seek_top: f32,
     /// A sound lane's height, and where the first starts; a folded lane
     /// (SFX 2) is `FOLDED` high.
@@ -228,8 +229,8 @@ pub struct Block {
     /// Its markers: clip time and note (gap 5), drawn as flags on the ruler.
     pub marks: Vec<(f64, String)>,
     /// Its keyframes within the cut: index into the cut's keyframes, clip
-    /// time, and how it moves on to the next (drawn as its shape).
-    /// Keyframes: index, clip time, ease, and whether it follows the stick.
+    /// time, how it moves on to the next (drawn as its shape), and whether
+    /// it follows the stick.
     pub keys: Vec<(usize, f64, Ease, bool)>,
     /// Thumbnails of its clip by clip time, in order (see `thumbs`).
     pub thumbs: Vec<(f64, Handle)>,
@@ -401,9 +402,9 @@ pub enum Drag {
     /// Shift-dragging cut `cut`'s start edge: its crossfade, `from` seconds
     /// when pressed at `x0`; dragging left lengthens it.
     Crossfade { cut: usize, x0: f32, from: f64, per_px: f64 },
-    /// Dragging the fade handle at clip `clip`'s start (`in_edge`) or end on
-    /// sound lane `lane`; the fade was `from` seconds when pressed at `x0`.
-    /// A fade handle, on a sound clip or a cut's sound.
+    /// Dragging a fade handle, on a sound clip or a cut's sound (`own`), at
+    /// its start (`in_edge`) or end; the fade was `from` seconds when
+    /// pressed at `x0`.
     Fade { own: Own, in_edge: bool, x0: f32, from: f64, per_px: f64 },
     /// A point on a cut's or a sound clip's own volume line.
     Point { own: Own, key: usize },
@@ -708,10 +709,6 @@ impl Timeline {
         Some((start + self.t(p.x, b) - from, Self::volume_db(lane, p.y)))
     }
 
-    /// Edit times a sound clip's edges snap to, but for clip `clip` of lane
-    /// `lane`'s own: the start, the cut boundaries, the playhead, and every
-    /// other sound clip's edges on any lane (an effect lines up with a beat
-    /// of the song).
     /// Where things snap, edit times, and whose they are: the edit's ends,
     /// the playhead, the pictures' joins, cuts' sounds split from their
     /// pictures, markers, sound clips, overlays and text.
@@ -1634,10 +1631,9 @@ fn draw_line(frame: &mut Frame, b: Rectangle, lane: Lane, colour: iced::Color, e
     }
 }
 
-/// The two keyframe rows under a track from `top`: faint bands with their
-/// names at the left, effects above, `keys` (view or motion) below.
-/// The keyframe rows' bands under a track, over the edit's length (`t`)
-/// like the lanes and the seek bar, not the widget's whole width.
+/// The two keyframe rows under a track from `top`: faint bands over the
+/// edit's length (`t`), like the lanes, not the widget's whole width;
+/// effects above, `keys` (view or motion) below.
 fn draw_rows(frame: &mut Frame, theme: &Theme, t: &Timeline, b: Rectangle, top: f32, keys: Option<&str>) {
     let palette = theme.extended_palette();
     let (l, r) = (t.x(0.0, b).max(0.0), t.x(t.duration, b).min(b.width));
@@ -2180,9 +2176,6 @@ impl Wave {
     }
 }
 
-/// A clip's fades, `len` seconds long between `l` and `r`: shaded above a
-/// line from its corner to where each fade ends, a handle there along the
-/// top (a white knob, also where there's no fade yet, to grab one).
 /// Where a fade's knob is drawn and pressed: at the fade's end (`at`), but
 /// at least `FADE_INSET` inside the clip's end (`l` for a fade in, `r` for
 /// a fade out), so neighbours' knobs don't stack at a join.
@@ -2190,6 +2183,9 @@ fn fade_knob_x((l, r): (f32, f32), at: f32, fade_in: bool) -> f32 {
     if fade_in { at.max(l + FADE_INSET) } else { at.min(r - FADE_INSET) }
 }
 
+/// A clip's fades, `len` seconds long between `l` and `r`: shaded above a
+/// line from its corner to where each fade ends, a handle there along the
+/// top (a white knob, also where there's no fade yet, to grab one).
 fn draw_fades(frame: &mut Frame, (l, r): (f32, f32), top: f32, h: f32, len: f64, (fade_in, fade_out): (f64, f64)) {
     for (fade, at_start) in [(fade_in, true), (fade_out, false)] {
         let w = (fade / (len.max(1e-9)) * (r - l) as f64) as f32;

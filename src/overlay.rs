@@ -208,8 +208,6 @@ impl Lane {
             .unwrap_or_else(|| others().map(Item::ends).fold(0.0, f64::max))
     }
 
-    /// The edit times item `i` may stretch to before meeting a neighbour:
-    /// (earliest start, latest end).
     /// Item `i` dragged to start at `at`: where it fits nearest (`place`).
     pub fn move_to(&mut self, i: usize, at: f64) {
         if i < self.items.len() {
@@ -242,6 +240,8 @@ impl Lane {
         }
     }
 
+    /// The edit times item `i` may stretch to before meeting a neighbour:
+    /// (earliest start, latest end).
     pub fn room(&self, i: usize) -> (f64, f64) {
         let me = &self.items[i];
         let others = self.items.iter().enumerate().filter(|&(j, _)| j != i).map(|(_, c)| c);

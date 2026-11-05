@@ -1,7 +1,8 @@
-//! Pictures along each clip for the timeline's cut blocks: the stitched view
-//! straight ahead at the proxy's keyframes. Made on a thread when the clip
-//! loads and sent to the app one at a time, so the blocks fill in as they
-//! come. Clips without a proxy get none: their 3840² keyframes would cost
+//! Pictures along each clip for the timeline's cut blocks: for a 360 clip,
+//! the stitched view straight ahead at the proxy's keyframes; for an
+//! ordinary video, its own keyframes. Made on a thread when the clip loads
+//! and sent to the app one at a time, so the blocks fill in as they come.
+//! A 360 clip without a proxy gets none: its 3840² keyframes would cost
 //! seconds each.
 
 use super::{Media, Message};

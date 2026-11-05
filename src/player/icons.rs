@@ -4,7 +4,6 @@
 
 use super::*;
 
-/// Edit icons: scissors (split), a bin (delete cut), arrows (undo, redo).
 /// Two film frames and a plus: give every cut this look.
 pub(super) const TO_ALL_CUTS: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="11" height="8" rx="1"/><rect x="6" y="9" width="11" height="8" rx="1"/><path d="M9 9v2M13 9v2M20 15v6M17 18h6"/></svg>"#;
 
@@ -14,6 +13,8 @@ pub(super) const EFFECTS: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" vi
 /// Two strips crossing: one picture dissolving into the next.
 pub(super) const CROSSFADE: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="12" height="12" rx="2"/><rect x="10" y="6" width="12" height="12" rx="2" stroke-dasharray="2 2"/></svg>"#;
 
+// Edit icons: scissors (split), a bin (delete cut), arrows (undo, and
+// redo below the zoom icons).
 pub(super) const SPLIT: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4 8.1 15.9M14.5 14.5 20 20M8.1 8.1 12 12"/></svg>"#;
 
 pub(super) const DELETE_CUT: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/></svg>"#;
@@ -30,16 +31,14 @@ pub(super) const ZOOM_FIT: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" v
 
 pub(super) const REDO: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg>"#;
 
-/// Keyframe icons: a diamond with a plus (add or update) or a cross (delete).
+/// A pipette: pick a colour from the picture.
 pub(super) const PICK: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m2 22 1-1h3l9-9M3 21v-3l9-9"/><path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3z"/></svg>"#;
 
+// Keyframe icons: a diamond with a plus (add or update) or a cross (delete).
 pub(super) const KEY_ADD: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linejoin="round"><path d="M10 2 18 10 10 18 2 10z" fill="white"/><path d="M19 15v8M15 19h8" stroke-linecap="round"/></svg>"#;
 
 pub(super) const KEY_DELETE: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linejoin="round"><path d="M10 2 18 10 10 18 2 10z"/><path d="m16 16 6 6M22 16l-6 6" stroke-linecap="round"/></svg>"#;
 
-/// File icons: a page with a plus (new project), a film strip with a plus
-/// (open or add clips), a note with a plus (add music), an open folder (open
-/// a project), a diskette (save) and one with a pencil (save as).
 /// A letter A with a minus or a plus: the interface's size.
 pub(super) const TEXT_SMALLER: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 19l5-14 5 14M5 14h6M16 12h6"/></svg>"#;
 
@@ -50,8 +49,10 @@ pub(super) const ADD_SFX: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" vi
 
 /// A microphone and a plus: add a voice-over.
 pub(super) const ADD_VOICE: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="6" height="11" rx="3"/><path d="M2 10a6 6 0 0 0 12 0M8 16v4"/><path d="M19 13v6M16 16h6"/></svg>"#;
+/// A note with a plus: add music.
 pub(super) const ADD_MUSIC: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l10-2v9"/><circle cx="6" cy="18" r="3"/><path d="M19 15v6M16 18h6"/></svg>"#;
 
+/// A page with a plus: a new project.
 pub(super) const NEW_PROJECT: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v4a2 2 0 0 0 2 2h4M9 15h6M12 18v-6"/></svg>"#;
 
 pub(super) const ADD_OVERLAY: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="14" height="14" rx="2"/><circle cx="8" cy="8" r="1.5"/><path d="M17 12l-4-4-8 8"/><path d="M20 15v6M17 18h6"/></svg>"#;
@@ -68,10 +69,13 @@ pub(super) const SNAP_OFF: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" v
 
 pub(super) const ADD_TEXT: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7V4h12v3M10 4v16M7 20h6"/><path d="M19 13v8M15 17h8"/></svg>"#;
 
+/// A film strip with a plus: open or add clips.
 pub(super) const ADD_CLIP: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="14" height="18" rx="2"/><path d="M6 3v18M12 3v18M2 8h4M2 16h4M12 8h4M12 16h4M20 9v6M17 12h6"/></svg>"#;
 
+/// An open folder: open a project.
 pub(super) const OPEN_PROJECT: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg>"#;
 
+/// A diskette: save; with a pencil, save as.
 pub(super) const SAVE: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7M7 3v4a1 1 0 0 0 1 1h7"/></svg>"#;
 
 pub(super) const SAVE_AS: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h10.2a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V10"/><path d="M7 3v4a1 1 0 0 0 1 1h7M7 21v-7a1 1 0 0 1 1-1h4"/><path d="M21.4 15.6a1.98 1.98 0 0 0-2.8-2.8L14 17.4V20.2h2.8z"/></svg>"#;

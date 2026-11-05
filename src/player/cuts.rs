@@ -1,6 +1,8 @@
-//! Putting a clip into the edit: where (`spot`: the end, the playhead, the
-//! nearest join), and the cut made of it (`add_cut`); the cut's labels on
-//! the timeline.
+//! The cuts: putting a clip into the edit (where, `spot`: the end, the
+//! playhead, the nearest join; the cut made of it, `add_cut`), the cuts'
+//! labels on the timeline, and `on_cuts`, the messages that edit them:
+//! select, trim, move, split, delete, crossfades, marks, undo and redo,
+//! and the toasts that say what happened.
 
 use super::*;
 use crate::model::ops::clips::ClipOp;

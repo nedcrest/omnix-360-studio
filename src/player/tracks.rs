@@ -23,8 +23,6 @@ pub(super) fn filter_tags(low_cut: bool, clean: bool, even: bool) -> [(bool, &'s
     [(low_cut, "low cut"), (clean, "clean"), (even, "even")]
 }
 
-/// Runs `f` on its own thread so blocking work (parsing, ffprobe) stays off
-/// the executor.
 /// Reads a sound file's length on a thread (ffprobe can take seconds on a
 /// network or spinning drive, and froze the window), then adds it to track
 /// `which` at `at` (`SoundProbed`). A file that can't be read is said so,

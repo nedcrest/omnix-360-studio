@@ -249,13 +249,13 @@ impl App {
                 }
                 "g" | "G" => self.effect_message(effects::EffectMsg::Toggle),
                 "r" | "R" => return self.update(Message::RollingShutter(!self.rolling_shutter)),
-                // M marks, as in FCP, Premiere and Resolve (gap 5); mute
-                // moved to Shift+M, out of the way of a slip.
                 // D selects the cut under the playhead (Premiere's key): ↓ to a
                 // cut, D, then Alt+← moves it (gap 58).
                 "d" | "D" if !mods.command() => return self.update(Message::SelectAtPlayhead),
                 // N turns snapping on and off, as in Final Cut.
                 "n" | "N" if !mods.command() => return self.update(Message::Snapping),
+                // M marks, as in FCP, Premiere and Resolve (gap 5); mute
+                // moved to Shift+M, out of the way of a slip.
                 "m" | "M" if mods.shift() => return self.update(Message::Mute),
                 "m" | "M" => return self.update(Message::AddMark),
                 "p" | "P" => {

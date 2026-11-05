@@ -44,7 +44,6 @@ impl App {
         self.clip.as_ref().map_or(0.0, |c| 0.5 / c.playback.media.fps)
     }
 
-    /// The keyframe at the shown frame, if there is one.
     /// The playing cut's id and the time of its view key under the
     /// playhead: what a key op names.
     fn current_key_time(&self) -> Option<(crate::project::Id, f64)> {
@@ -53,6 +52,7 @@ impl App {
         Some((cut.id, cut.keyframes[k].t))
     }
 
+    /// The keyframe at the shown frame, if there is one.
     pub(super) fn current_key(&self) -> Option<usize> {
         let (cut, t) = self.playing_cut()?;
         cut.keyframes.near(t, self.tolerance())

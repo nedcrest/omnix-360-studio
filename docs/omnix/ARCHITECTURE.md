@@ -49,9 +49,9 @@ links Dailix's sheet core.
 3. **Long functions:** `Marks::update` 241 lines (after 1), `export()`
    159 (a pure plan, then the render loop), `cli::run` 157 (the preview
    and export arms into their modules).
-4. **Library modules reaching into `player` and `cli`:** the waveform
-   (`player::music::Waveform`, used by `duck`, `preview`), `render` (used
-   by `export`), `osv_under` (used by `analyse`): to the media layer.
+4. **Library modules reaching into `player`:** the waveform
+   (`player::music::Waveform`, used by `duck`, `preview`) and `render`
+   (used by `export`): to the media layer.
 5. **Smaller duplicates:** find a
    cut/clip/item by id seven times, `Lane::place` and `Music::place`, the
    mute-aware level three times, Info read and drawn twice.

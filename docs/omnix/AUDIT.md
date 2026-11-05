@@ -32,8 +32,7 @@ In Omnix:
 - [ ] `App` mirrors ~33 settings by hand (in at `new`, out at `settings()`).
 - [ ] `Marks::update` 241 lines; `export()` 159; `cli::run` 157 (preview
       and export logic inline); Dailix `update` 243.
-- [ ] Library modules reach into `player` and `cli` (`Waveform`,
-      `render`, `osv_under`).
+- [ ] Library modules reach into `player` (`Waveform`, `render`).
 - [ ] Tests in the wrong module (`sound_ui.rs` tests cuts and markers).
 
 ## For the user to decide

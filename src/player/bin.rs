@@ -278,16 +278,9 @@ pub(super) fn frames(path: &Path, duration: f64, width: u32) -> Vec<image::Handl
     (1..=PREVIEW_FRAMES).into_par_iter().filter_map(|i| frame(path, duration * (i as f64 - 0.5) / PREVIEW_FRAMES as f64, width)).collect()
 }
 
-/// One frame of `path` at `t` seconds, `width` wide, as a JPEG.
+/// One frame of `path` at `t` seconds, `width` wide.
 fn frame(path: &Path, t: f64, width: u32) -> Option<image::Handle> {
-    let out = crate::ffmpeg::tool("ffmpeg")
-        .args(["-v", "error", "-nostdin", "-ss", &format!("{t:.2}"), "-i"])
-        .arg(path)
-        .args(["-frames:v", "1", "-vf", &format!("scale={width}:-2"), "-f", "image2pipe", "-c:v", "mjpeg", "-"])
-        .stderr(Stdio::null())
-        .output()
-        .ok()?;
-    (out.status.success() && !out.stdout.is_empty()).then(|| image::Handle::from_bytes(out.stdout))
+    crate::ffmpeg::jpeg_frame(path, t, width).map(image::Handle::from_bytes)
 }
 
 /// What the bin shows of a file: its length and, for a clip or a picture,

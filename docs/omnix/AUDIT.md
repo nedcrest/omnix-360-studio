@@ -26,7 +26,6 @@ cost is duplication and drift.
 ## Duplicates
 
 Across the two repos:
-- [ ] Poster frame ×2, Dailix's with a bare `ffmpeg` (not portable).
 - [ ] `config_dir` ×3.
 
 In Omnix:

@@ -42,6 +42,12 @@ pub fn describe(path: &Path) -> anyhow::Result<Vec<(String, String)>> {
     Ok(std::iter::once(("Kind".to_owned(), file.kind.to_owned())).chain(file.rows.into_iter().map(|(k, v)| (k.to_owned(), v))).collect())
 }
 
+/// One frame of the clip at `path`, `t` seconds in, `width` wide, as
+/// JPEG bytes (a poster); ffmpeg found as Omnix finds it. Blocking.
+pub fn jpeg_frame(path: &Path, t: f64, width: u32) -> Option<Vec<u8>> {
+    crate::ffmpeg::jpeg_frame(path, t, width)
+}
+
 /// A clip playing (or paused) and its newest frame.
 pub struct Viewer {
     playback: Playback,

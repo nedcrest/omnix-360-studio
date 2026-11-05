@@ -192,6 +192,20 @@ pub fn key_frames(input: &Path, track: u32, (w, h): (usize, usize), out: Out, mu
     result
 }
 
+/// One frame of `path` at `t` seconds, `width` wide, as JPEG bytes: a
+/// bin tile, a poster. None if ffmpeg couldn't.
+pub fn jpeg_frame(path: &Path, t: f64, width: u32) -> Option<Vec<u8>> {
+    let out = tool("ffmpeg")
+        .args(["-v", "error", "-nostdin", "-ss", &format!("{t:.2}"), "-i"])
+        .arg(path)
+        .args(["-frames:v", "1", "-vf", &format!("scale={width}:-2"), "-q:v", "4", "-f", "image2pipe", "-c:v", "mjpeg", "-"])
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
+        .output()
+        .ok()?;
+    (out.status.success() && !out.stdout.is_empty()).then_some(out.stdout)
+}
+
 /// RMS and peak level in dBFS of the first audio stream, per `window`
 /// seconds from the start.
 pub fn audio_levels(input: &Path, window: f64) -> Result<Vec<(f64, f64)>> {
@@ -979,6 +993,18 @@ mod tests {
         let o = nv12(input, 0, 1.0, out, hw).unwrap().args(["-frames:v", "1", "-f", "rawvideo", "-"]).stderr(Stdio::null()).output().unwrap();
         assert!(o.status.success(), "{hw:?}");
         o.stdout
+    }
+
+    #[test]
+    fn a_frame_comes_as_a_jpeg_of_the_width_asked() {
+        let dir = testmedia::dir("jpeg-frame");
+        let clip = dir.join("c.mp4");
+        testmedia::ffmpeg(&["-f", "lavfi", "-i", "testsrc2=s=640x360:r=30:d=2", "-c:v", "libx264", "-pix_fmt", "yuv420p", clip.to_str().unwrap()]);
+        let jpeg = jpeg_frame(&clip, 1.0, 320).unwrap();
+        assert_eq!(&jpeg[..2], [0xff, 0xd8]);
+        assert_eq!(image::load_from_memory(&jpeg).unwrap().width(), 320);
+        assert!(jpeg_frame(&dir.join("gone.mp4"), 0.0, 320).is_none());
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

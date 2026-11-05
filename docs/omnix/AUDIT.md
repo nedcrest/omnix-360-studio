@@ -12,7 +12,6 @@ cost is duplication and drift.
 - [ ] Timeline: press and hover test what's under the pointer in different
       orders (level tag vs fade knob): the cursor lies (`timeline.rs`
       `Marks::update` / `mouse_interaction`; `OverlayLane` too).
-- [ ] `player/mod.rs` clock shows 59.996 s as "0:60.00".
 - [ ] Opening a project: `deaf.dedup()` without a sort (`file.rs`).
 - [ ] Settings panel says "rOsmo360's settings folder" (the name is Omnix).
 - [ ] `mixmeasure`: an unreadable voice file silently means "no speech".
@@ -38,7 +37,7 @@ Across the two repos:
       `bin_player.rs`, `notes.rs`): one table in `dailix_sheet`.
 - [ ] Sidecar reading ×2 (Dailix `footage.rs`, Omnix `from_sheet.rs`).
 - [ ] Poster frame ×2, Dailix's with a bare `ffmpeg` (not portable).
-- [ ] `clock` ×6 with two roundings; `is_day` ×3; `config_dir` ×3;
+- [ ] `is_day` ×3; `config_dir` ×3;
       `04_project` hard-coded beside `Layout`.
 
 In Omnix:

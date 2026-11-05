@@ -3,7 +3,7 @@
 //! of the view like the Effects panel, so the top bar keeps only the
 //! button that opens it.
 
-use super::{App, Aspect, EXPORT, Message, clock, labelled_button, tip};
+use super::{App, Aspect, EXPORT, Message, labelled_button, tip};
 use crate::ffmpeg::Format;
 use iced::widget::{checkbox, column, container, pick_list, radio, row, rule, scrollable, space, text, tooltip};
 use iced::{Element, Length};
@@ -52,7 +52,7 @@ impl App {
         let what = if self.export_clips {
             format!("{} clips, {w} × {h}", self.edit.cuts.len())
         } else {
-            format!("{w} × {h}, {}", clock(self.edit.duration()))
+            format!("{w} × {h}, {}", dailix_sheet::clock(self.edit.duration(), 2))
         };
         let format = |f: Format, name: &'static str, about: &'static str| {
             column![radio(name, f, Some(self.export_format), Message::ExportFormat), row![space().width(INDENT), note(about)]].spacing(2)

@@ -271,11 +271,6 @@ fn label(path: &Path) -> String {
     path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()
 }
 
-pub(super) fn clock(seconds: f64) -> String {
-    let s = seconds.round() as u64;
-    format!("{}:{:02}", s / 60, s % 60)
-}
-
 /// A clip's frames spread over its length, `width` wide, read at once (a
 /// frame of 2.7K HEVC takes about a second).
 pub(super) fn frames(path: &Path, duration: f64, width: u32) -> Vec<image::Handle> {
@@ -548,7 +543,7 @@ impl App {
             Some(h) => image(h).width(64).height(36).into(),
             None => container(text(if matches!(kind, Kind::Sound(_)) { "♪" } else { "…" }).size(16)).width(64).height(36).center_x(64).center_y(36).into(),
         };
-        let length = meta.and_then(|m| m.duration).map(clock).unwrap_or_default();
+        let length = meta.and_then(|m| m.duration).map(|d| dailix_sheet::clock(d, 0)).unwrap_or_default();
         let selected = self.bin.preview.as_ref().is_some_and(|p| p.path == path);
         // A camera's names have no spaces to break at: broken anywhere, so
         // a long one wraps under itself rather than under the add buttons.
@@ -627,12 +622,6 @@ mod tests {
         assert_eq!(s.iter().map(Section::heading).take(3).collect::<Vec<_>>(), ["Footage", "Footage · 2030-05-01", "Footage · 2030-05-02"]);
         assert_eq!(s[1].files, [dir.join("01_footage/2030-05-01/A.MP4")]);
         std::fs::remove_dir_all(&dir).unwrap();
-    }
-
-    #[test]
-    fn length_reads_as_minutes() {
-        assert_eq!(clock(65.4), "1:05");
-        assert_eq!(clock(3.0), "0:03");
     }
 }
 

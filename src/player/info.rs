@@ -3,7 +3,7 @@
 //! show it in its folder or copy its path. Docked at the left of the view,
 //! in the Text panel's place.
 
-use super::{App, COPY, FOLDER, Message, clock, icon_button, tip};
+use super::{App, COPY, FOLDER, Message, icon_button, tip};
 use crate::overlay::ItemRef;
 use anyhow::Result;
 use iced::widget::{button, column, container, row, rule, scrollable, text, tooltip};
@@ -59,7 +59,7 @@ pub fn read(path: &Path, song: bool) -> Result<File> {
     if kind != "Picture"
         && let Some(d) = number(&format["duration"])
     {
-        rows.push(("Length", clock(d)));
+        rows.push(("Length", dailix_sheet::clock(d, 2)));
     }
     if let Some(v) = video.first() {
         let (w, h) = flat.map_or((v["width"].as_u64().unwrap_or(0) as u32, v["height"].as_u64().unwrap_or(0) as u32), |f| f.size());
@@ -234,7 +234,7 @@ impl App {
     /// Where the panel's item sits in the edit, if it's still there (an
     /// edit since may have moved or removed it).
     fn info_place(&self, info: &Info) -> Vec<(&'static str, String)> {
-        let span = |a: f64, b: f64| format!("{} – {}", clock(a), clock(b));
+        let span = |a: f64, b: f64| format!("{} – {}", dailix_sheet::clock(a, 2), dailix_sheet::clock(b, 2));
         let mut rows = Vec::new();
         match info.of {
             Of::Cut(i) => {

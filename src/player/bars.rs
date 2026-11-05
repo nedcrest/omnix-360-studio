@@ -13,7 +13,7 @@ impl App {
         // Music first: the song is chosen and sets the length to fill.
         let song = self.edit.music.clips.first().map(|c| {
             let name = c.input.file_stem().map_or_else(String::new, |s| s.to_string_lossy().into_owned());
-            format!("Music: {name} ({}). Add clips to fill it.", clock(self.edit.music.end()))
+            format!("Music: {name} ({}). Add clips to fill it.", dailix_sheet::clock(self.edit.music.end(), 2))
         });
         let status: Element<'_, Message> = match (&self.loading, song) {
             (Some(_), _) => self.loading_bar(280.0),
@@ -355,7 +355,7 @@ impl App {
             ),
             // A fixed width: the digits' widths differ in most fonts (macOS's
             // system font especially), and the row after it jittered as it ran.
-            text(format!("{} / {}", clock(self.position()), clock(self.edit.duration()))).width(170).center(),
+            text(format!("{} / {}", dailix_sheet::clock(self.position(), 2), dailix_sheet::clock(self.edit.duration(), 2))).width(170).center(),
             tip(
                 tint_button(Tint::Move, SAVE_VIEW, (clip.is_some() && !playing).then_some(Message::Save(Saving::View))),
                 text("Save this frame as a PNG (pause first)"),

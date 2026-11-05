@@ -116,12 +116,6 @@ pub fn copy_in(file: &Path, dir: &Path) -> Result<PathBuf, String> {
     Ok(target)
 }
 
-/// A time as minutes, seconds and tenths: the bin player's readout.
-fn fine_clock(t: f64) -> String {
-    let tenths = (t.max(0.0) * 10.0).round() as u64;
-    format!("{}:{:02}.{}", tenths / 600, tenths / 10 % 60, tenths % 10)
-}
-
 /// Where a file is used in the edit, as a line: "cuts 2, 5 · Music · Overlay";
 /// `None` when nothing uses it.
 pub fn uses(edit: &crate::project::Project, path: &Path) -> Option<String> {
@@ -464,12 +458,12 @@ impl App {
                     mark_in: source.and_then(|s| s.mark_in),
                 };
                 col = col.push(iced::widget::canvas(strip).width(Length::Fill).height(if marks.is_empty() { 18 } else { 30 }));
-                col = col.push(text(format!("{} / {}", fine_clock(at), fine_clock(length))).size(12).style(text::secondary));
+                col = col.push(text(format!("{} / {}", dailix_sheet::clock(at, 1), dailix_sheet::clock(length, 1))).size(12).style(text::secondary));
                 // The picked segment: its role, span and the sheet's note.
                 if let Some(m) = source.and_then(|s| s.picked.and_then(|i| s.marks.get(i))) {
                     let span = match m.end {
-                        Some(e) => format!("{} – {}", fine_clock(m.start), fine_clock(e)),
-                        None => fine_clock(m.start),
+                        Some(e) => format!("{} – {}", dailix_sheet::clock(m.start, 1), dailix_sheet::clock(e, 1)),
+                        None => dailix_sheet::clock(m.start, 1),
                     };
                     // Its role and note, as the contact sheet sets them.
                     let none = crate::notes::Role { key: String::new(), name: "—".to_owned() };
@@ -581,7 +575,7 @@ impl App {
                 .into(),
         };
         let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-        let length = meta.and_then(|m| m.duration).map(super::bin::clock).unwrap_or_default();
+        let length = meta.and_then(|m| m.duration).map(|d| dailix_sheet::clock(d, 0)).unwrap_or_default();
         let mut info = column![text(name).size(13).wrapping(text::Wrapping::None), text(length).size(11).style(text::secondary)].spacing(1).width(w).clip(true);
         if let Some(used) = uses(&self.edit, path) {
             info = info.push(text(format!("In the edit: {used}")).size(11).style(text::success));

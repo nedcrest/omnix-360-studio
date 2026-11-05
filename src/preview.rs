@@ -1,6 +1,6 @@
 //! Contact sheets of a project (`rosmo360 preview`): a row per cut, with the music's waveform.
 
-use crate::{check, overlay, player, project, sheet, stitch, view};
+use crate::{overlay, player, project, sheet, stitch, view};
 use crate::{pipeline::{Shot, StitchOpts, Carry}, cut_pipelines};
 use anyhow::Result;
 use rayon::prelude::*;
@@ -38,9 +38,9 @@ pub(crate) fn preview_project(project: &project::Project, opts: &StitchOpts, eve
         let edit = |t: f64| offsets[n] + t - cut.start;
         for (r, row) in times.chunks(columns).enumerate() {
             let heading = if r == 0 {
-                format!("{} #{} {} {:.1}-{:.1}", check::clock(offsets[n]), n + 1, clip_number(&cut.input), cut.start, cut.end)
+                format!("{} #{} {} {:.1}-{:.1}", dailix_sheet::clock(offsets[n], 1), n + 1, clip_number(&cut.input), cut.start, cut.end)
             } else {
-                format!("{} #{}", check::clock(edit(row[0])), n + 1)
+                format!("{} #{}", dailix_sheet::clock(edit(row[0]), 1), n + 1)
             };
             // Each pixel across the row stands for the edit time between
             // its tiles' times, as far as the cut goes.
@@ -75,7 +75,7 @@ pub(crate) fn preview_project(project: &project::Project, opts: &StitchOpts, eve
             let cut = &project.cuts[n];
             let edit = offsets[n] + t - cut.start;
             overlays.draw(&mut f, edit);
-            sheet::label(&mut f, 4, 4, &format!("{} {t:.1}s", check::clock(edit)));
+            sheet::label(&mut f, 4, 4, &format!("{} {t:.1}s", dailix_sheet::clock(edit, 1)));
             Ok(f)
         })
         .collect::<Result<Vec<_>>>()?;

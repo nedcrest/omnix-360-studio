@@ -43,13 +43,6 @@ fn utc_seconds(s: &str) -> Option<f64> {
     Some(days as f64 * 86_400.0 + h * 3600.0 + min * 60.0 + sec)
 }
 
-/// `m:ss.s` of edit time.
-pub fn clock(t: f64) -> String {
-    // In tenths first, so 59.96 reads 1:00.0, not 0:60.0.
-    let tenths = (t.max(0.0) * 10.0).round() as u64;
-    format!("{}:{:02}.{}", tenths / 600, tenths / 10 % 60, tenths % 10)
-}
-
 /// The world direction a cut's view looks along at clip time `t`, and the
 /// direction its keyframes alone look along (in the stabilised view).
 fn looking(p: &crate::Pipeline, cuts: &[project::Cut], n: usize, t: f64) -> ([f64; 3], [f64; 3]) {
@@ -155,18 +148,18 @@ pub fn check(path: &Path, opts: &StitchOpts, fast_pan: f64) -> Result<()> {
     let length = project::edit_length(cuts);
     if let Some(end) = project.music.clips.iter().map(|m| m.ends()).reduce(f64::max) {
         if end < length - MUSIC_SHORT {
-            say(end, None, "music", format!("ends at {} but the edit runs to {}: the last {:.0} s have no music", clock(end), clock(length), length - end));
+            say(end, None, "music", format!("ends at {} but the edit runs to {}: the last {:.0} s have no music", dailix_sheet::clock(end, 1), dailix_sheet::clock(length, 1), length - end));
         } else if end > length + project::END_FADE + MUSIC_SHORT {
-            say(length, None, "music", format!("runs to {} past the edit's end at {}: export fades it out over the last {:.0} s", clock(end), clock(length), project::END_FADE));
+            say(length, None, "music", format!("runs to {} past the edit's end at {}: export fades it out over the last {:.0} s", dailix_sheet::clock(end, 1), dailix_sheet::clock(length, 1), project::END_FADE));
         }
     }
 
     found.sort_by(|a, b| a.at.total_cmp(&b.at));
     for f in &found {
         let cut = f.cut.map_or_else(|| "   ".to_owned(), |n| format!("#{}", n + 1));
-        println!("{} {cut:>4} {}: {}", clock(f.at), f.what, f.why);
+        println!("{} {cut:>4} {}: {}", dailix_sheet::clock(f.at, 1), f.what, f.why);
     }
-    eprintln!("{}: {} cuts, {} long, {} finding{}", path.display(), cuts.len(), clock(length), found.len(), if found.len() == 1 { "" } else { "s" });
+    eprintln!("{}: {} cuts, {} long, {} finding{}", path.display(), cuts.len(), dailix_sheet::clock(length, 1), found.len(), if found.len() == 1 { "" } else { "s" });
     Ok(())
 }
 
@@ -179,11 +172,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn times_read_and_print() {
+    fn times_read() {
         // 2026-07-13 13:30:35 UTC, by `date -u -d ... +%s`.
         assert_eq!(utc_seconds("2026-07-13T13:30:35.000000Z"), Some(1_783_949_435.0));
         assert_eq!(utc_seconds("1970-01-01T00:00:00Z"), Some(0.0));
-        assert_eq!(clock(59.96), "1:00.0");
-        assert_eq!(clock(136.4), "2:16.4");
     }
 }

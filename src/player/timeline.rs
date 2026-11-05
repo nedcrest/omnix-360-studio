@@ -520,7 +520,7 @@ impl Timeline {
                 if past >= 0.0 { format!("sound {} past the picture", seconds(past)) } else { format!("sound {} short", seconds(-past)) }
             }),
             Drag::MusicTrim { lane, clip, start, from, .. } => self.sounds.get(lane)?.blocks.get(clip).map(|m| format!("{} · {}", signed(edge(m.start, m.len, start) - from), seconds(m.len))),
-            Drag::MusicMove { lane, clip, at, .. } => self.sounds.get(lane)?.blocks.get(clip).map(|m| format!("{} · at {}", signed(m.from - at), clock(m.from))),
+            Drag::MusicMove { lane, clip, at, .. } => self.sounds.get(lane)?.blocks.get(clip).map(|m| format!("{} · at {}", signed(m.from - at), dailix_sheet::clock(m.from, 1))),
             // At 0 it says which way: dragged into its own cut (as a sound's
             // fade in is) it stays 0, which looked like nothing working.
             Drag::Crossfade { cut, .. } => self.blocks.get(cut).map(|c| if c.crossfade > 0.0 { format!("crossfade {}", seconds(c.crossfade)) } else { "← onto the cut before".to_owned() }),
@@ -1445,7 +1445,7 @@ impl canvas::Program<Message> for OverlayLane {
                 let edge = if start { o.start } else { o.start + o.len };
                 format!("{} · {}", signed(edge - from), seconds(o.len))
             }),
-            OverlayDrag::Move { item, at, .. } => self.blocks().get(item).map(|o| format!("{} · at {}", signed(o.from - at), clock(o.from))),
+            OverlayDrag::Move { item, at, .. } => self.blocks().get(item).map(|o| format!("{} · at {}", signed(o.from - at), dailix_sheet::clock(o.from, 1))),
             _ => None,
         };
         if let (Some(p), Some(said)) = (cursor.position_in(bounds), said) {
@@ -1539,20 +1539,12 @@ fn lane_tag(frame: &mut Frame, name: &str, colour: iced::Color, mid: f32) {
 
 /// A signed change of time: «+0:01.2», «−0:00.4».
 fn signed(d: f64) -> String {
-    format!("{}{}", if d < -0.05 { '−' } else { '+' }, clock(d.abs()))
+    format!("{}{}", if d < -0.05 { '−' } else { '+' }, dailix_sheet::clock(d.abs(), 1))
 }
 
 /// A length: «4.3 s», or «1:02.5» from a minute.
 fn seconds(s: f64) -> String {
-    if s < 60.0 { format!("{s:.1} s") } else { clock(s) }
-}
-
-/// A time on the edit: «0:12.3».
-fn clock(t: f64) -> String {
-    // Rounded to tenths first, or 59.96 s would read «0:60.0».
-    let t = (t.max(0.0) * 10.0).round() / 10.0;
-    let m = (t / 60.0).floor();
-    format!("{}:{:04.1}", m as u32, t - m * 60.0)
+    if s < 60.0 { format!("{s:.1} s") } else { dailix_sheet::clock(s, 1) }
 }
 
 /// `said` on a dark tag beside the pointer `p`, kept inside `b`: what a
@@ -2444,7 +2436,7 @@ mod tests {
         let f = t3.flags(b);
         assert_eq!(f.iter().map(|f| (f.0, f.1)).collect::<Vec<_>>(), [(0, 2.0), (2, 1.0)]);
         assert!((f[1].2 - x(8.0)).abs() < 0.01, "cut 2 starts at 7 s: its 1 s is 8 s");
-        assert_eq!((signed(1.24), signed(-0.4), signed(0.0), seconds(4.31), seconds(62.5), clock(59.96)), ("+0:01.2".into(), "−0:00.4".into(), "+0:00.0".into(), "4.3 s".into(), "1:02.5".into(), "1:00.0".into()));
+        assert_eq!((signed(1.24), signed(-0.4), signed(0.0), seconds(4.31), seconds(62.5), dailix_sheet::clock(59.96, 1)), ("+0:01.2".into(), "−0:00.4".into(), "+0:00.0".into(), "4.3 s".into(), "1:02.5".into(), "1:00.0".into()));
         // The level line: y back to dB, every level outside 0 dB's ±1 dB
         // reachable on the narrow clip sound lane too.
         let lane = t.rows.cut_lane();

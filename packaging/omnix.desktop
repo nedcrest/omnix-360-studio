@@ -1,12 +1,12 @@
 [Desktop Entry]
 Type=Application
-Name=rOsmo360
-GenericName=360° Video Editor
-Comment=Play and edit DJI Osmo 360 footage
-Exec=rosmo360 play %F
+Name=Omnix
+GenericName=Video Editor
+Comment=Edit home video and DJI Osmo 360 footage
+Exec=omnix play %F
 MimeType=video/mp4;video/quicktime;video/x-matroska;video/webm;video/x-msvideo;video/mp2t;image/jpeg;image/png;image/webp;image/bmp;image/tiff;application/json;
-Icon=rosmo360
+Icon=omnix
 Terminal=false
 Categories=AudioVideo;Video;AudioVideoEditing;
 Keywords=360;Osmo;DJI;OSV;video;stitch;reframe;
-StartupWMClass=rOsmo360
+StartupWMClass=Omnix

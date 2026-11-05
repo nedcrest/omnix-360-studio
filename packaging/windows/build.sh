@@ -1,32 +1,32 @@
 #!/bin/sh
-# Builds the Windows version on Linux: rosmo360.exe cross-compiled in docker
+# Builds the Windows version on Linux: omnix.exe cross-compiled in docker
 # (MinGW), with ffmpeg and ffprobe in an ffmpeg\ folder beside it, where
-# rOsmo360 looks first (`ffmpeg::tool`), zipped as
-# target/windows/rOsmo360-x86_64-windows.zip, with ffmpeg's sources beside it
-# as rOsmo360-windows-ffmpeg-sources.tar. Unsigned.
+# Omnix looks first (`ffmpeg::tool`), zipped as
+# target/windows/Omnix-x86_64-windows.zip, with ffmpeg's sources beside it
+# as Omnix-windows-ffmpeg-sources.tar. Unsigned.
 #
 # Needs docker, curl, git, python3 and network access; wine (optional) checks
 # the ffmpeg. Run from anywhere: packaging/windows/build.sh [--fresh-ffmpeg]
 set -eu
 cd "$(dirname "$0")/../.."
 
-# The icon (rosmo360.ico, rendered from packaging/rosmo360.svg at 16-256 px)
+# The icon (omnix.ico, rendered from packaging/omnix.svg at 16-256 px)
 # goes into the .exe as a resource, compiled by MinGW's windres and linked
 # in, so Explorer, the desktop and shortcuts show it.
 mkdir -p target/windows
-printf '1 ICON "packaging/windows/rosmo360.ico"\n' > target/windows/icon.rc
-docker build -q -t rosmo360-build:windows packaging/windows >/dev/null
+printf '1 ICON "packaging/windows/omnix.ico"\n' > target/windows/icon.rc
+docker build -q -t omnix-build:windows packaging/windows >/dev/null
 docker run --rm -u "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD":/src -w /src \
-    -e CARGO_TARGET_DIR=/src/target/windows -e RUSTFLAGS="-C link-arg=/src/target/windows/icon.o" rosmo360-build:windows \
+    -e CARGO_TARGET_DIR=/src/target/windows -e RUSTFLAGS="-C link-arg=/src/target/windows/icon.o" omnix-build:windows \
     sh -c 'x86_64-w64-mingw32-windres target/windows/icon.rc -O coff -o target/windows/icon.o &&
            cargo build --release --locked --target x86_64-pc-windows-gnu &&
-           x86_64-w64-mingw32-strip target/windows/x86_64-pc-windows-gnu/release/rosmo360.exe'
-exe=target/windows/x86_64-pc-windows-gnu/release/rosmo360.exe
+           x86_64-w64-mingw32-strip target/windows/x86_64-pc-windows-gnu/release/omnix.exe'
+exe=target/windows/x86_64-pc-windows-gnu/release/omnix.exe
 
 # ffmpeg, built by ffmpeg.sh from sources pinned here: the Flatpak's ffmpeg
 # tarball, and x264, nv-codec-headers and Vulkan-Headers at fixed commits.
 # The sources are kept in target/windows/ffmpeg-src and go into
-# rOsmo360-windows-ffmpeg-sources.tar beside the zip (the GPL's corresponding
+# Omnix-windows-ffmpeg-sources.tar beside the zip (the GPL's corresponding
 # source); the build is kept unless --fresh-ffmpeg is given.
 ff=target/windows/ffmpeg
 srcs=target/windows/ffmpeg-src
@@ -55,11 +55,11 @@ if [ ! -f "$ff/ffmpeg.exe" ] || [ ! -f "$ff/ffprobe.exe" ]; then
     for archive in "$srcs"/tarballs/*.tar.gz; do tar -xzf "$archive" -C "$srcs"; done
     cp packaging/windows/ffmpeg.sh "$srcs/tarballs/"
     echo "Building ffmpeg..."
-    docker run --rm -u "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD":/src -w /src rosmo360-build:windows \
+    docker run --rm -u "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD":/src -w /src omnix-build:windows \
         sh packaging/windows/ffmpeg.sh /src/$srcs /src/$ff
 fi
 
-# What rOsmo360 depends on: a Windows GPU decoder for the Osmo's HEVC, x264
+# What Omnix depends on: a Windows GPU decoder for the Osmo's HEVC, x264
 # for MP4 export, DNxHR for the Resolve format.
 if command -v wine >/dev/null; then
     run() { WINEDEBUG=-all wine "$ff/ffmpeg.exe" -hide_banner "$@" 2>/dev/null | tr -d '\r'; }
@@ -71,7 +71,7 @@ fi
 
 # The folder to zip: the program, ffmpeg\, the licences (ours, the fonts'
 # and ffmpeg's) and where ffmpeg's source is.
-out=target/windows/rOsmo360
+out=target/windows/Omnix
 rm -rf "$out" && mkdir -p "$out/fonts"
 cp "$exe" README.md LICENSE-MIT LICENSE-APACHE "$out/"
 cp -r "$ff" "$out/ffmpeg"
@@ -80,12 +80,12 @@ cp fonts/README.md "$out/fonts/"
 cat > "$out/ffmpeg/SOURCE.txt" <<EOF
 ffmpeg.exe, ffprobe.exe and the DLLs beside them are FFmpeg $ffmpeg_version
 (https://ffmpeg.org) with x264, licensed under the GNU GPL version 2 or later
-(LICENSE.txt). rOsmo360 runs them as separate programs. The sources they were
+(LICENSE.txt). Omnix runs them as separate programs. The sources they were
 built from, with the build script (ffmpeg.sh), are published beside this zip
-as rOsmo360-windows-ffmpeg-sources.tar on each release:
-https://github.com/ravelund/rOsmo360/releases
+as Omnix-windows-ffmpeg-sources.tar on each release:
+(the release page, once Omnix is published)
 EOF
-rm -f target/windows/rOsmo360-x86_64-windows.zip
-(cd target/windows && python3 -m zipfile -c rOsmo360-x86_64-windows.zip rOsmo360)
-tar -cf target/windows/rOsmo360-windows-ffmpeg-sources.tar -C "$srcs" --transform 's,^tarballs,rOsmo360-windows-ffmpeg-sources,' tarballs
-ls -l target/windows/rOsmo360-x86_64-windows.zip target/windows/rOsmo360-windows-ffmpeg-sources.tar
+rm -f target/windows/Omnix-x86_64-windows.zip
+(cd target/windows && python3 -m zipfile -c Omnix-x86_64-windows.zip Omnix)
+tar -cf target/windows/Omnix-windows-ffmpeg-sources.tar -C "$srcs" --transform 's,^tarballs,Omnix-windows-ffmpeg-sources,' tarballs
+ls -l target/windows/Omnix-x86_64-windows.zip target/windows/Omnix-windows-ffmpeg-sources.tar

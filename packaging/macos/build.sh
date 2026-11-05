@@ -1,7 +1,7 @@
 #!/bin/sh
-# Builds rOsmo360 from source on an Apple Silicon Mac, puts ffmpeg and
-# ffprobe beside the binary (target/release/ffmpeg/), where rOsmo360 looks
-# for them first, and wraps both in target/release/rOsmo360.app to open by
+# Builds Omnix from source on an Apple Silicon Mac, puts ffmpeg and
+# ffprobe beside the binary (target/release/ffmpeg/), where Omnix looks
+# for them first, and wraps both in target/release/Omnix.app to open by
 # double-clicking. For testing on the Mac; not a release (not notarised, so
 # it runs only on the Mac that built it, or after "Open Anyway" elsewhere).
 #
@@ -31,7 +31,7 @@ if [ ! -x "$dir/ffmpeg" ] || [ ! -x "$dir/ffprobe" ]; then
     rm -rf "$tmp"
 fi
 
-# What rOsmo360 depends on: VideoToolbox to decode the Osmo's HEVC on the
+# What Omnix depends on: VideoToolbox to decode the Osmo's HEVC on the
 # GPU, x264 for MP4 export, DNxHR for the Resolve format.
 ok=1
 "$dir/ffmpeg" -hide_banner -hwaccels | grep -q videotoolbox || { echo "warning: this ffmpeg has no VideoToolbox: OSV playback will decode in software (slow)"; ok=0; }
@@ -42,19 +42,19 @@ ok=1
 # The app: the binary itself (it opens the player when Finder starts it with
 # nothing, `app_args`), ffmpeg and the icon.
 version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
-app=target/release/rOsmo360.app
+app=target/release/Omnix.app
 rm -rf "$app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
-cp target/release/rosmo360 "$app/Contents/MacOS/"
+cp target/release/omnix "$app/Contents/MacOS/"
 cp -R "$dir" "$app/Contents/MacOS/ffmpeg"
 
-iconset=$(mktemp -d)/rOsmo360.iconset
+iconset=$(mktemp -d)/Omnix.iconset
 mkdir -p "$iconset"
 for size in 16 32 128 256 512; do
-    sips -z $size $size packaging/macos/rosmo360-1024.png --out "$iconset/icon_${size}x${size}.png" >/dev/null
-    sips -z $((size * 2)) $((size * 2)) packaging/macos/rosmo360-1024.png --out "$iconset/icon_${size}x${size}@2x.png" >/dev/null
+    sips -z $size $size packaging/macos/omnix-1024.png --out "$iconset/icon_${size}x${size}.png" >/dev/null
+    sips -z $((size * 2)) $((size * 2)) packaging/macos/omnix-1024.png --out "$iconset/icon_${size}x${size}@2x.png" >/dev/null
 done
-iconutil -c icns "$iconset" -o "$app/Contents/Resources/rOsmo360.icns"
+iconutil -c icns "$iconset" -o "$app/Contents/Resources/Omnix.icns"
 rm -rf "$(dirname "$iconset")"
 
 cat > "$app/Contents/Info.plist" <<PLIST
@@ -62,11 +62,11 @@ cat > "$app/Contents/Info.plist" <<PLIST
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CFBundleName</key><string>rOsmo360</string>
-    <key>CFBundleDisplayName</key><string>rOsmo360</string>
-    <key>CFBundleIdentifier</key><string>io.github.ravelund.rOsmo360</string>
-    <key>CFBundleExecutable</key><string>rosmo360</string>
-    <key>CFBundleIconFile</key><string>rOsmo360</string>
+    <key>CFBundleName</key><string>Omnix</string>
+    <key>CFBundleDisplayName</key><string>Omnix</string>
+    <key>CFBundleIdentifier</key><string>local.omnix.Omnix</string>
+    <key>CFBundleExecutable</key><string>omnix</string>
+    <key>CFBundleIconFile</key><string>Omnix</string>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleShortVersionString</key><string>$version</string>
     <key>CFBundleVersion</key><string>$version</string>
@@ -82,6 +82,6 @@ codesign --force --deep --sign - "$app" 2>/dev/null || echo "warning: couldn't s
 echo
 [ $ok = 1 ] && echo "Built $app (version $version), with ffmpeg inside." || echo "Built $app, but see the warnings above."
 echo "Open it by double-clicking in Finder: open target/release"
-echo "If it doesn't open, run it from here to see why: $app/Contents/MacOS/rosmo360 play"
+echo "If it doesn't open, run it from here to see why: $app/Contents/MacOS/omnix play"
 echo "Drag it to Applications to keep it there."
-echo "From the terminal: target/release/rosmo360 play [clip or project]"
+echo "From the terminal: target/release/omnix play [clip or project]"

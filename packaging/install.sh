@@ -1,16 +1,18 @@
 #!/bin/sh
-# Installs rOsmo360 for the current user (or system-wide with --prefix /usr/local, as root):
+# Installs Omnix for the current user (or system-wide with --prefix /usr/local, as root):
 # the binary, a menu entry and its icon.
 #
 # Run it from the unpacked release archive, or on its own, in which case it downloads
 # the latest release first:
-#   curl -fsSL https://github.com/ravelund/rOsmo360/releases/latest/download/install.sh | sh
+#   curl -fsSL <the release page, once Omnix is published>/install.sh | sh
 #
 # Options: --prefix DIR (default ~/.local), --uninstall.
 set -eu
 
-REPO=ravelund/rOsmo360
-ARCHIVE=rosmo360-x86_64-linux.tar.gz
+# Where releases are published: none yet (gap 76). Until then this installs
+# only from an unpacked archive beside it, never a download.
+REPO=
+ARCHIVE=omnix-x86_64-linux.tar.gz
 prefix="${HOME}/.local"
 uninstall=0
 
@@ -34,10 +36,10 @@ refresh() {
 }
 
 if [ "$uninstall" = 1 ]; then
-    rm -f "$bin/rosmo360" "$apps/rOsmo360.desktop" \
-        "$icons/256x256/apps/rosmo360.png" "$icons/scalable/apps/rosmo360.svg"
+    rm -f "$bin/omnix" "$apps/omnix.desktop" \
+        "$icons/256x256/apps/omnix.png" "$icons/scalable/apps/omnix.svg"
     refresh
-    echo "Removed rOsmo360 from $prefix (your settings in ~/.config/rosmo360 are kept)."
+    echo "Removed Omnix from $prefix (your settings in ~/.config/omnix are kept)."
     exit 0
 fi
 
@@ -48,9 +50,10 @@ fi
 
 # Files beside this script (the unpacked archive), or download the archive.
 src="$(cd "$(dirname "$0")" 2>/dev/null && pwd || echo .)"
-if [ ! -f "$src/rosmo360" ] || [ ! -f "$src/rOsmo360.desktop" ]; then
+if [ ! -f "$src/omnix" ] || [ ! -f "$src/omnix.desktop" ]; then
     tmp="$(mktemp -d)"
     trap 'rm -rf "$tmp"' EXIT
+    [ -n "$REPO" ] || { echo "Omnix has no published releases yet: run this from an unpacked archive, or build from source (README)." >&2; exit 1; }
     base="https://github.com/$REPO/releases/latest/download"
     echo "Downloading $base/$ARCHIVE"
     if command -v curl >/dev/null 2>&1; then
@@ -77,15 +80,15 @@ if [ ! -f "$src/rosmo360" ] || [ ! -f "$src/rOsmo360.desktop" ]; then
 fi
 
 mkdir -p "$bin" "$apps" "$icons/256x256/apps" "$icons/scalable/apps"
-install -m 755 "$src/rosmo360" "$bin/rosmo360"
-install -m 644 "$src/rosmo360.png" "$icons/256x256/apps/rosmo360.png"
-install -m 644 "$src/rosmo360.svg" "$icons/scalable/apps/rosmo360.svg"
+install -m 755 "$src/omnix" "$bin/omnix"
+install -m 644 "$src/omnix.png" "$icons/256x256/apps/omnix.png"
+install -m 644 "$src/omnix.svg" "$icons/scalable/apps/omnix.svg"
 # The menu entry names the binary by full path, so it works even when $bin isn't on PATH.
-sed "s|^Exec=rosmo360|Exec=$bin/rosmo360|" "$src/rOsmo360.desktop" > "$apps/rOsmo360.desktop"
-chmod 644 "$apps/rOsmo360.desktop"
+sed "s|^Exec=omnix|Exec=$bin/omnix|" "$src/omnix.desktop" > "$apps/omnix.desktop"
+chmod 644 "$apps/omnix.desktop"
 refresh
 
-echo "Installed $("$bin/rosmo360" --version) to $bin/rosmo360"
+echo "Installed $("$bin/omnix" --version) to $bin/omnix"
 
 # Runtime needs that a binary can't bring along.
 missing=""
@@ -94,7 +97,7 @@ for tool in ffmpeg ffprobe; do
 done
 if [ -n "$missing" ]; then
     echo
-    echo "Missing:$missing. rOsmo360 decodes and encodes video through them; install ffmpeg, e.g."
+    echo "Missing:$missing. Omnix decodes and encodes video through them; install ffmpeg, e.g."
     echo "  sudo apt install ffmpeg   |   sudo dnf install ffmpeg   |   sudo pacman -S ffmpeg"
 fi
 if ! ldconfig -p 2>/dev/null | grep -q 'libasound\.so\.2'; then
@@ -103,7 +106,7 @@ if ! ldconfig -p 2>/dev/null | grep -q 'libasound\.so\.2'; then
 fi
 case ":$PATH:" in
     *":$bin:"*) ;;
-    *) echo; echo "Note: $bin is not on your PATH; add it to run 'rosmo360' from a terminal." ;;
+    *) echo; echo "Note: $bin is not on your PATH; add it to run 'omnix' from a terminal." ;;
 esac
 echo
-echo "Start it from the application menu (rOsmo360), or: rosmo360 play [clip.OSV | project.json]"
+echo "Start it from the application menu (Omnix), or: omnix play [clip.OSV | project.json]"

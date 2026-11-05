@@ -77,5 +77,3 @@ In Omnix:
 - [ ] timeline.rs header (seek bar, two lanes), misplaced doc comments
       (timeline, icons, framing, bars, effects, keys, jobs, cuts, tracks,
       mod, thumbs, overlay, pipeline, loudness).
-- [ ] Dailix: main.rs/app.rs/README "window comes next", SHEET-CORE §6–7,
-      `03_proxies` "DJI's LRF", Backspace missing from F1, "Kos" in code.

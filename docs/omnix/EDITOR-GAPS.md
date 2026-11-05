@@ -96,6 +96,7 @@ done in part stays here until its last card is done.
 | 74 | Dailix: the studio and contact sheet as a native Rust app of their own | below |
 | 75 | A cut's flags from the contact sheet as markers on the edit | below |
 | 76 | The program's name: rosmo360 → omnix | below |
+| 77 | Dailix: voice clean-up and loudness for camera and phone sound | below |
 
 ## Open gaps
 
@@ -1359,6 +1360,29 @@ because the name is in 34 files across three repos:
 Upstream (rOsmo360) is unchanged since our fork point; merging from it
 later gets harder with the rename, so it waits until we know we won't.
 Milestone «Інші платформи» (packaging).
+
+### 77. Dailix: voice clean-up and loudness for camera and phone sound — idea (user, 2026-11-05)
+
+Most of the material has no lavalier: the voice is the camera's or the
+phone's own microphone, behind the speaker, under traffic, sea and wind.
+footage-agent's contact sheet already solved this
+(`footage_agent/voice.py`, `docs/VOICE.md`, measured on Kos): named
+recipes, `dnn6` (DeepFilterNet, at most 6 dB taken off) the default,
+an EQ and compression chain for wind, every variant made from the
+original, kept in `voice/<day>/<clip>/<recipe>.flac` with a stamp of
+how it was made, deletable without loss; the sheet's `audio` field picks
+which one the edit uses. Dailix needs the same, as its parity step 4
+(`dailix/docs/CONTEXT.md`) already plans:
+- the recipes as a tested module plus a CLI (`dailix voice …`), the
+  window only calling them; DeepFilterNet run as a CLI process (no
+  vendor SDK), ffmpeg as a CLI;
+- in the sheet: make a variant, listen to it against the original,
+  choose it (the `audio` field `from-sheet` already reads);
+- loudness normalisation of the chosen voice, also from the original,
+  never stacked (the sound rule);
+- the same `voice/` layout and recipe names, so Kos's variants made by
+  the web sheet stay valid.
+Milestone «Звук для Косу».
 
 ## Format rule for all of these
 

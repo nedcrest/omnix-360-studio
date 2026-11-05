@@ -25,7 +25,6 @@ In Omnix:
 ## Tangled
 
 - [ ] `Marks::update` 241 lines (with the timeline's `Hit`).
-- [ ] The export reaches into `player` for the GPU (`render`, `gpu`): to `src/gpu/`.
 
 ## Looked at and kept
 
@@ -34,6 +33,9 @@ In Omnix:
   what's saved: a projection, not a copy. One `settings` field would put
   `self.settings.…` in every file for no gain.
 - The mute-aware level: a line each on `Cut`, `MusicClip`, `OwnSound`.
+- The export using `player::render`: `gpu.rs` is an iced shader primitive
+  and `render.rs` shares the player's decoding (`source.rs`); moving them
+  to `src/gpu/` would rename a folder, not cut a dependency.
 
 ## Decided by the user (2026-11-05): done
 

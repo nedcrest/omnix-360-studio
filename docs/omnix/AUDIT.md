@@ -9,8 +9,6 @@ cost is duplication and drift.
 
 ## Bugs found on the way (first)
 
-- [ ] Contact-sheet segment writes ("sheet, else here only") ×3 in
-      `bin_player.rs`; `Remove` uses commit/begin by hand, not `self.ops`.
 
 ## Duplicates
 

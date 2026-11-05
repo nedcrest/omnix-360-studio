@@ -38,6 +38,16 @@ pub struct Source {
     note_for: Option<(usize, f64, Option<f64>)>,
 }
 
+/// What `write_sheet` did.
+enum Written<T> {
+    /// Written; the clip's marks as the sheet has them now.
+    Sheet(T, Vec<Segment>),
+    /// The clip is in no sheet: kept here only.
+    HereOnly,
+    /// Not written (said).
+    Failed,
+}
+
 /// The player's messages.
 #[derive(Debug, Clone)]
 pub enum SourceMsg {
@@ -93,6 +103,23 @@ impl App {
             self.error = Some(format!("{e:#}"));
             Vec::new()
         })
+    }
+
+    /// Writes to the contact sheet with `write` when `path`'s clip is in
+    /// one, then reads its marks afresh; an error said. Without a sheet for
+    /// it, the caller keeps the change here only.
+    fn write_sheet<T>(&mut self, path: &std::path::Path, write: impl FnOnce(&crate::notes::Sheet) -> anyhow::Result<T>) -> Written<T> {
+        let result = match &self.bin.sheet {
+            Some(sheet) if sheet.key(path).is_some() => write(sheet),
+            _ => return Written::HereOnly,
+        };
+        match result {
+            Ok(t) => Written::Sheet(t, self.sheet_marks(path)),
+            Err(e) => {
+                self.error = Some(format!("Couldn't write the contact sheet: {e:#}"));
+                Written::Failed
+            }
+        }
     }
 
     fn source_clip(&self, media: Media) -> Clip {
@@ -223,19 +250,12 @@ impl App {
                 let Some(s) = &self.bin.source else { return Task::none() };
                 let Some(m) = s.picked.and_then(|i| s.marks.get(i)).cloned() else { return Task::none() };
                 let path = s.path.clone();
-                let removed = match &self.bin.sheet {
-                    Some(sheet) if sheet.key(&path).is_some() => Some(sheet.remove(&m)),
-                    _ => None,
-                };
-                if let Some(Err(e)) = removed {
-                    self.error = Some(format!("Couldn't write the contact sheet: {e:#}"));
-                    return Task::none();
-                }
-                let fresh = removed.is_some().then(|| self.sheet_marks(&path));
+                let written = self.write_sheet(&path, |sheet| sheet.remove(&m));
                 let Some(s) = &mut self.bin.source else { return Task::none() };
-                match fresh {
-                    Some(marks) => s.marks = marks,
-                    None => {
+                match written {
+                    Written::Failed => return Task::none(),
+                    Written::Sheet((), marks) => s.marks = marks,
+                    Written::HereOnly => {
                         s.marks.remove(m.index);
                         for (i, x) in s.marks.iter_mut().enumerate() {
                             x.index = i;
@@ -252,12 +272,7 @@ impl App {
                 let near = |a: f64, b: f64| (a - b).abs() <= frame;
                 let cuts: Vec<(usize, crate::project::Id)> = self.edit.cuts.iter().enumerate().filter(|(_, c)| c.input == path && near(c.start, m.start) && near(c.end, end)).map(|(i, c)| (i, c.id)).collect();
                 let Some(&(first, _)) = cuts.first() else { return Task::none() };
-                self.edit.commit();
-                self.edit.begin();
-                for (_, id) in &cuts {
-                    self.op(crate::model::ops::Op::Cut(crate::model::ops::cuts::CutOp::Delete { cut: *id }));
-                }
-                self.edit.commit();
+                self.ops(&cuts.iter().map(|&(_, cut)| crate::model::ops::Op::Cut(crate::model::ops::cuts::CutOp::Delete { cut })).collect::<Vec<_>>());
                 self.selection = crate::model::selection::Selection::None;
                 self.after_edit(self.edit.offset(first.min(self.edit.cuts.len())));
             }
@@ -290,27 +305,18 @@ impl App {
             self.error = Some("The segment is too short: set the out point further from the in point".to_owned());
             return;
         }
-        let written = match &self.bin.sheet {
-            Some(sheet) if sheet.key(&path).is_some() => Some(sheet.set(&path, was.as_ref(), start, end)),
-            _ => None,
-        };
-        let marks = match written {
-            Some(Err(e)) => {
-                self.error = Some(format!("Couldn't write the contact sheet: {e:#}"));
-                return;
-            }
-            Some(Ok(index)) => Some((self.sheet_marks(&path), index)),
-            None => None,
-        };
+        let written = self.write_sheet(&path, |sheet| sheet.set(&path, was.as_ref(), start, end));
         let Some(s) = &mut self.bin.source else { return };
-        s.mark_in = None;
-        match marks {
-            Some((marks, index)) => {
+        match written {
+            Written::Failed => return,
+            Written::Sheet(index, marks) => {
+                s.mark_in = None;
                 s.marks = marks;
                 s.picked = Some(index);
             }
             // Here only: over the picked one, or a new one at the end.
-            None => {
+            Written::HereOnly => {
+                s.mark_in = None;
                 let at = was.map(|w| w.index).filter(|&i| i < s.marks.len());
                 let index = at.unwrap_or(s.marks.len());
                 let (role, note) = at.map(|i| (s.marks[i].role.clone(), s.marks[i].note.clone())).unwrap_or_default();
@@ -339,20 +345,16 @@ impl App {
         let Some(m) = s.picked.and_then(|i| s.marks.get(i)).cloned() else { return };
         let note = note.unwrap_or_else(|| m.note.clone());
         let path = s.path.clone();
-        let written = match &self.bin.sheet {
-            Some(sheet) if sheet.key(&path).is_some() => Some(sheet.describe(&m, role.as_deref(), &note)),
-            _ => None,
-        };
-        if let Some(Err(e)) = written {
-            self.error = Some(format!("Couldn't write the contact sheet: {e:#}"));
-            return;
-        }
-        let fresh = written.is_some().then(|| self.sheet_marks(&path));
+        let written = self.write_sheet(&path, |sheet| sheet.describe(&m, role.as_deref(), &note));
         let Some(s) = &mut self.bin.source else { return };
-        s.draft = None;
-        match fresh {
-            Some(marks) => s.marks = marks,
-            None => {
+        match written {
+            Written::Failed => return,
+            Written::Sheet((), marks) => {
+                s.draft = None;
+                s.marks = marks;
+            }
+            Written::HereOnly => {
+                s.draft = None;
                 if let Some(x) = s.marks.get_mut(m.index) {
                     x.role = role;
                     x.note = note;

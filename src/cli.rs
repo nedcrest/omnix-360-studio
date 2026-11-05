@@ -24,6 +24,37 @@ pub(crate) struct Cli {
     pub(crate) no_cache: bool,
 }
 
+/// What `check` reads of a clip: only the attitude (where the camera and
+/// the view turn), so only the options that change it; the stitch's own
+/// (one lens, rolling shutter, the seam) would do nothing there.
+#[derive(clap::Args, Clone)]
+pub(crate) struct CheckOpts {
+    /// Use this alternative calibration (see `rig`'s `variants`).
+    #[arg(long)]
+    variant: Option<usize>,
+    /// Stabilisation mode [default: each cut's own, else horizon].
+    #[arg(long, value_enum)]
+    stabilize: Option<crate::stab::Mode>,
+    /// Heading smoothing window for `horizon`, in ms either side.
+    #[arg(long, default_value_t = 500.0)]
+    smooth: f64,
+    /// How the IMU's axes sit relative to the rig's.
+    #[arg(long, value_enum, default_value_t = crate::stab::ImuAxes::X180)]
+    imu_axes: crate::stab::ImuAxes,
+    /// Treat the attitude's world z as pointing down rather than up.
+    #[arg(long)]
+    world_z_down: bool,
+    /// Give each lens the other's video track (see `export --help`).
+    #[arg(long)]
+    swap_lenses: bool,
+}
+
+impl From<CheckOpts> for StitchOpts {
+    fn from(c: CheckOpts) -> Self {
+        StitchOpts { variant: c.variant, stabilize: c.stabilize, smooth: c.smooth, imu_axes: c.imu_axes, world_z_down: c.world_z_down, swap_lenses: c.swap_lenses, ..StitchOpts::default() }
+    }
+}
+
 #[derive(Subcommand)]
 pub(crate) enum Cmd {
     /// Dump the camera rig (DJI Studio's default stitch geometry) as JSON.
@@ -53,7 +84,7 @@ pub(crate) enum Cmd {
         #[arg(long, default_value_t = 30.0)]
         fast_pan: f64,
         #[command(flatten)]
-        opts: StitchOpts,
+        opts: CheckOpts,
     },
     /// Bring each cut's sound to -16 LUFS: measure what it plays over its
     /// own stretch and give it the gain (the export's limiter holds the
@@ -588,7 +619,7 @@ pub(crate) fn run() -> Result<()> {
             }
         }
         Cmd::Info { input } => info(&input)?,
-        Cmd::Check { project, fast_pan, opts } => check::check(&project, &opts, fast_pan)?,
+        Cmd::Check { project, fast_pan, opts } => check::check(&project, &opts.into(), fast_pan)?,
         Cmd::Normalize { project, cuts, track, even, output } => loudness::normalize(&project, &cuts, track, even, output.as_deref())?,
         Cmd::Duck { project, depth, output } => crate::duck::run(&project, depth, output.as_deref())?,
         Cmd::Apply { project, ops, output } => crate::apply::run(&project, &ops, output.as_deref())?,

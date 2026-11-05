@@ -39,7 +39,6 @@ In Omnix:
 
 - [ ] Dailix `Edit` (undo): dropped; undo later as inverse ops through
       `Store`, with a key.
-- [ ] `check` takes only the flags it uses.
 
 ## Order (user, 2026-11-05)
 

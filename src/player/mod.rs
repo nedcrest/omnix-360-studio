@@ -1088,8 +1088,17 @@ fn blocking<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> impl F
 }
 
 #[cfg(test)]
-mod tests {
+pub(super) mod tests {
     use super::*;
+
+    /// An app with two cuts of files that aren't there (nothing is read;
+    /// what a test needs measured it feeds in by hand).
+    pub(in crate::player) fn app() -> App {
+        let mut app = App::new(Options::software(), settings::Settings::default());
+        app.edit.cuts = vec![crate::project::Cut::new("nowhere/a.mp4".into(), 0.0, 2.0), crate::project::Cut::new("nowhere/b.mp4".into(), 0.0, 2.0)];
+        app.edit.settle_ids();
+        app
+    }
 
     #[test]
     fn editing_keeps_the_editing_keys() {

@@ -272,3 +272,64 @@ impl App {
         Task::none()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::super::tests::app;
+    use super::*;
+
+    /// Pack 2's key routes for drags: Alt+] trims the selected cut's end
+    /// to the playhead, Alt+[ its start; Alt+→ moves it one place.
+    #[test]
+    fn a_cut_trims_to_the_playhead_and_moves_by_keys() {
+        let mut app = app();
+        app.selection = Selection::cut_at(&app.edit, 0);
+        // The playhead 1.5 s into cut 0 (0..2 s).
+        assert_eq!(app.trim_to(false, 1.5), Some(0));
+        assert_eq!(app.edit.cuts[0].end, 1.5);
+        assert_eq!(app.trim_to(true, 9.0), None, "the playhead outside the cut: nothing");
+        let first = app.edit.cuts[0].id;
+        let _ = app.update(Message::MoveCut(0, 2));
+        assert_eq!(app.edit.cuts[1].id, first);
+        assert!(app.edit.undo() && app.edit.undo() && app.edit.cuts[0].end == 2.0 && !app.edit.undo());
+    }
+
+    /// After a delete, «… deleted · Undo» shows; Undo takes it back and the
+    /// note goes; an older note's timer leaves a newer one alone.
+    #[test]
+    fn a_delete_offers_its_undo() {
+        let mut app = app();
+        app.edit.voice.clips.push(crate::project::MusicClip { input: "nowhere/take.wav".into(), at: 0.0, start: 0.0, end: 3.0, ..Default::default() });
+        app.edit.voice.clips.push(crate::project::MusicClip { input: "nowhere/take.wav".into(), at: 4.0, start: 0.0, end: 3.0, ..Default::default() });
+        app.edit.settle_ids();
+        app.selection = Selection::clip_at(&app.edit, SoundTrack::Voice, 0);
+        let _ = app.update(Message::DeleteCut);
+        assert_eq!(app.toast.map(|t| t.0), Some("Sound deleted"));
+        let first = app.toast.unwrap().1;
+        app.selection = Selection::clip_at(&app.edit, SoundTrack::Voice, 0);
+        let _ = app.update(Message::DeleteCut);
+        let _ = app.update(Message::ToastGone(first));
+        assert!(app.toast.is_some(), "the newer note stays");
+        let _ = app.update(Message::Undo);
+        assert!(app.toast.is_none() && app.edit.voice.clips.len() == 1);
+    }
+
+    #[test]
+    fn a_deleted_cut_comes_back_with_undo() {
+        let mut app = app();
+        app.selection = Selection::cut_at(&app.edit, 0);
+        let _ = app.update(Message::DeleteCut);
+        assert_eq!(app.edit.cuts.len(), 1);
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.edit.cuts.len(), 2, "back");
+        // Through a marker's drag before it, too.
+        let cut = app.edit.cuts[0].id;
+        app.edit.apply(&crate::model::ops::Op::Cut(crate::model::ops::cuts::CutOp::Mark { cut, t: 1.0, note: String::new() })).unwrap();
+        let _ = app.update(Message::MarkMove(0, 1.0, 1.5));
+        let _ = app.update(Message::ScrubDone);
+        app.selection = Selection::cut_at(&app.edit, 1);
+        let _ = app.update(Message::DeleteCut);
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.edit.cuts.len(), 2, "back after a marker drag");
+    }
+}

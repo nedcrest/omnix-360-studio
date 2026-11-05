@@ -75,3 +75,39 @@ impl App {
         iced::widget::stack![below, super::ask::modal(card, None)].into()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::super::tests::app;
+    use super::*;
+
+    /// A marker named in its window, then deleted, each one undo step.
+    #[test]
+    fn a_marker_is_named_and_deleted_in_its_window() {
+        let mut app = app();
+        let cut = app.edit.cuts[0].id;
+        app.edit.apply(&crate::model::ops::Op::Cut(crate::model::ops::cuts::CutOp::Mark { cut, t: 1.0, note: String::new() })).unwrap();
+        let _ = app.update(Message::MarkEdit(0, 1.0));
+        let _ = app.update(Message::MarkNote("  the castle ".into()));
+        let _ = app.update(Message::MarkSave);
+        assert!(app.mark_edit.is_none());
+        assert_eq!(app.edit.cuts[0].marks[0].note, "the castle");
+        let _ = app.update(Message::MarkEdit(0, 1.0));
+        let _ = app.update(Message::MarkDelete);
+        assert!(app.edit.cuts[0].marks.is_empty());
+        assert!(app.edit.undo() && app.edit.cuts[0].marks[0].note == "the castle");
+    }
+
+    /// A flag clicked selects its marker: Del then takes the marker, not
+    /// the cut under the playhead (the user, 2026-11-03).
+    #[test]
+    fn del_after_a_flag_s_click_takes_the_marker() {
+        let mut app = app();
+        let cut = app.edit.cuts[0].id;
+        app.edit.apply(&crate::model::ops::Op::Cut(crate::model::ops::cuts::CutOp::Mark { cut, t: 1.0, note: String::new() })).unwrap();
+        let _ = app.update(Message::MarkSelect(0, 1.0));
+        let _ = app.update(Message::DeleteCut);
+        assert_eq!((app.edit.cuts.len(), app.edit.cuts[0].marks.len()), (2, 0));
+        assert_eq!(app.toast.map(|t| t.0), Some("Marker deleted"));
+    }
+}

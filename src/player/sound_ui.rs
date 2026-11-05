@@ -427,15 +427,7 @@ fn summary(done: usize, total: usize, gains: &[f64], silent: usize, failed: &[St
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn app() -> App {
-        let mut app = App::new(super::super::Options::software(), super::super::settings::Settings::default());
-        // Files that aren't there: the dialog's measuring finds no sound,
-        // and the results are fed in below by hand.
-        app.edit.cuts = vec![crate::project::Cut::new("nowhere/a.mp4".into(), 0.0, 2.0), crate::project::Cut::new("nowhere/b.mp4".into(), 0.0, 2.0)];
-        app.edit.settle_ids();
-        app
-    }
+    use super::super::tests::app;
 
     #[test]
     fn normalizing_every_cut_is_one_undo_step_and_says_what_it_did() {
@@ -477,90 +469,5 @@ mod tests {
         assert_eq!(summary(3, 3, &[2.6, 7.7, 0.7], 0, &[], false), "3 clips done. Levels from +0.7 to +7.7 dB.");
         assert_eq!(summary(1, 1, &[16.1], 0, &[], false), "1 clip done. Level +16.1 dB.");
         assert_eq!(summary(2, 39, &[1.0, 2.0], 1, &[], true), "Stopped after 2 of 39 clips. Levels from +1.0 to +2.0 dB. 1 without sound, left as they were.");
-    }
-
-    /// Pack 2's key routes for drags: Alt+] trims the selected cut's end
-    /// to the playhead, Alt+[ its start; Alt+→ moves it one place.
-    #[test]
-    fn a_cut_trims_to_the_playhead_and_moves_by_keys() {
-        let mut app = app();
-        app.selection = Selection::cut_at(&app.edit, 0);
-        // The playhead 1.5 s into cut 0 (0..2 s).
-        assert_eq!(app.trim_to(false, 1.5), Some(0));
-        assert_eq!(app.edit.cuts[0].end, 1.5);
-        assert_eq!(app.trim_to(true, 9.0), None, "the playhead outside the cut: nothing");
-        let first = app.edit.cuts[0].id;
-        let _ = app.update(Message::MoveCut(0, 2));
-        assert_eq!(app.edit.cuts[1].id, first);
-        assert!(app.edit.undo() && app.edit.undo() && app.edit.cuts[0].end == 2.0 && !app.edit.undo());
-    }
-
-    /// After a delete, «… deleted · Undo» shows; Undo takes it back and the
-    /// note goes; an older note's timer leaves a newer one alone.
-    #[test]
-    fn a_delete_offers_its_undo() {
-        let mut app = app();
-        app.edit.voice.clips.push(crate::project::MusicClip { input: "nowhere/take.wav".into(), at: 0.0, start: 0.0, end: 3.0, ..Default::default() });
-        app.edit.voice.clips.push(crate::project::MusicClip { input: "nowhere/take.wav".into(), at: 4.0, start: 0.0, end: 3.0, ..Default::default() });
-        app.edit.settle_ids();
-        app.selection = Selection::clip_at(&app.edit, SoundTrack::Voice, 0);
-        let _ = app.update(Message::DeleteCut);
-        assert_eq!(app.toast.map(|t| t.0), Some("Sound deleted"));
-        let first = app.toast.unwrap().1;
-        app.selection = Selection::clip_at(&app.edit, SoundTrack::Voice, 0);
-        let _ = app.update(Message::DeleteCut);
-        let _ = app.update(Message::ToastGone(first));
-        assert!(app.toast.is_some(), "the newer note stays");
-        let _ = app.update(Message::Undo);
-        assert!(app.toast.is_none() && app.edit.voice.clips.len() == 1);
-    }
-
-    /// A marker named in its window, then deleted, each one undo step.
-    #[test]
-    fn a_marker_is_named_and_deleted_in_its_window() {
-        let mut app = app();
-        let cut = app.edit.cuts[0].id;
-        app.edit.apply(&crate::model::ops::Op::Cut(crate::model::ops::cuts::CutOp::Mark { cut, t: 1.0, note: String::new() })).unwrap();
-        let _ = app.update(Message::MarkEdit(0, 1.0));
-        let _ = app.update(Message::MarkNote("  the castle ".into()));
-        let _ = app.update(Message::MarkSave);
-        assert!(app.mark_edit.is_none());
-        assert_eq!(app.edit.cuts[0].marks[0].note, "the castle");
-        let _ = app.update(Message::MarkEdit(0, 1.0));
-        let _ = app.update(Message::MarkDelete);
-        assert!(app.edit.cuts[0].marks.is_empty());
-        assert!(app.edit.undo() && app.edit.cuts[0].marks[0].note == "the castle");
-    }
-
-    #[test]
-    fn a_deleted_cut_comes_back_with_undo() {
-        let mut app = app();
-        app.selection = Selection::cut_at(&app.edit, 0);
-        let _ = app.update(Message::DeleteCut);
-        assert_eq!(app.edit.cuts.len(), 1);
-        let _ = app.update(Message::Undo);
-        assert_eq!(app.edit.cuts.len(), 2, "back");
-        // Through a marker's drag before it, too.
-        let cut = app.edit.cuts[0].id;
-        app.edit.apply(&crate::model::ops::Op::Cut(crate::model::ops::cuts::CutOp::Mark { cut, t: 1.0, note: String::new() })).unwrap();
-        let _ = app.update(Message::MarkMove(0, 1.0, 1.5));
-        let _ = app.update(Message::ScrubDone);
-        app.selection = Selection::cut_at(&app.edit, 1);
-        let _ = app.update(Message::DeleteCut);
-        let _ = app.update(Message::Undo);
-        assert_eq!(app.edit.cuts.len(), 2, "back after a marker drag");
-    }
-
-    /// A flag clicked selects its marker: Del then takes the marker, not
-    /// the cut under the playhead (the user, 2026-11-03).
-    #[test]
-    fn del_after_a_flag_s_click_takes_the_marker() {
-        let mut app = app();
-        let cut = app.edit.cuts[0].id;
-        app.edit.apply(&crate::model::ops::Op::Cut(crate::model::ops::cuts::CutOp::Mark { cut, t: 1.0, note: String::new() })).unwrap();
-        let _ = app.update(Message::MarkSelect(0, 1.0));
-        let _ = app.update(Message::DeleteCut);
-        assert_eq!((app.edit.cuts.len(), app.edit.cuts[0].marks.len()), (2, 0));
-        assert_eq!(app.toast.map(|t| t.0), Some("Marker deleted"));
     }
 }

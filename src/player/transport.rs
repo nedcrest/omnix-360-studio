@@ -45,8 +45,7 @@ impl App {
             c.playback.set_volume(v);
         }
         if let (Some((_, theirs)), Some((i, inc))) = (shares, &self.partner) {
-            let (own, points, fade) = self.edit.cuts.get(*i).map_or((0.0, 0.0, 1.0), |c| (c.sound_db(), crate::project::volume_at(&c.volume, inc.playback.now()), c.sound_fade(inc.playback.now())));
-            let v = (crate::mixdown::cut_gain(self.edit.sound.volume, own, points, fade) * crate::mixdown::equal_power(theirs)) as f32 * self.listen.heard(listen::CLIP_SOUND);
+            let v = self.cut_level(*i, inc.playback.now()) * crate::mixdown::equal_power(theirs) as f32;
             if let Some((_, inc)) = &mut self.partner {
                 inc.playback.set_volume(v);
             }
@@ -139,10 +138,7 @@ impl App {
                 self.partner = Some((i, Clip { playback: primed, shown: None }));
             }
             _ => {
-                let Some(media) = self.library.iter().find(|m| m.input == input) else { return };
-                let mut media = media.for_cut(&self.edit.cuts[i]);
-                media.osv_size = self.opts.osv_size;
-                media.stab.set_mode(self.edit.cuts[i].stabilize.unwrap_or(self.opts.stabilize));
+                let Some(media) = cut_media(&self.library, &self.opts, &self.edit.cuts[i]) else { return };
                 // Playing, primed ahead to start as the edit gets there, as
                 // a resync is.
                 let playback = if playing {
@@ -173,12 +169,17 @@ impl App {
     /// (normalized, lowered or muted), its fades and volume points where it is
     /// (the listening volume is `audio::set_listening`'s).
     pub(super) fn clip_volume(&self) -> f32 {
-        let (own, points, fade) = match (&self.clip, self.edit.cuts.get(self.current)) {
-            (Some(c), Some(cut)) => (cut.sound_db(), crate::project::volume_at(&cut.volume, c.playback.now()), cut.sound_fade(c.playback.now())),
-            _ => (0.0, 0.0, 1.0),
-        };
+        self.cut_level(self.current, self.clip.as_ref().map_or(0.0, |c| c.playback.now()))
+    }
+
+    /// Cut `i`'s sound at clip time `t`: the clips' level, its own (normalized,
+    /// lowered or muted), its volume points and fades; heard as the lane is.
+    /// None there: the clips' level alone.
+    fn cut_level(&self, i: usize, t: f64) -> f32 {
+        let (own, points, fade) = self.edit.cuts.get(i).map_or((0.0, 0.0, 1.0), |c| (c.sound_db(), crate::project::volume_at(&c.volume, t), c.sound_fade(t)));
         crate::mixdown::cut_gain(self.edit.sound.volume, own, points, fade) as f32 * self.listen.heard(listen::CLIP_SOUND)
     }
+
 
     pub(super) fn with_playback(&mut self, f: impl FnOnce(&mut Playback)) {
         if let Some(c) = &mut self.clip {
@@ -225,11 +226,8 @@ impl App {
             && self.partner.as_ref().is_none_or(|(i, _)| *i != next)
             && let Some(n) = next_cut
             && self.preroll.as_ref().is_none_or(|(i, input, start, _)| (*i, input, *start) != (next, &n.input, n.start))
-            && let Some(media) = loaded(&n.input)
+            && let Some(media) = cut_media(&self.library, &self.opts, n)
         {
-            let mut media = media.for_cut(n);
-            media.osv_size = self.opts.osv_size;
-            media.stab.set_mode(n.stabilize.unwrap_or(self.opts.stabilize));
             let primed = Playback::primed(media, n.start, volume, self.full_on_pause);
             self.preroll = Some((next, n.input.clone(), n.start, primed));
         }
@@ -315,9 +313,7 @@ impl App {
         match &mut self.clip {
             Some(c) if !other_clip => c.playback.jump(t, play),
             _ => {
-                let Some(media) = self.library.iter().find(|m| m.input == cut.input) else { return };
-                let mut media = media.for_cut(cut);
-                media.osv_size = self.opts.osv_size;
+                let Some(media) = cut_media(&self.library, &self.opts, cut) else { return };
                 let mut playback = Playback::new(media, self.clip_volume(), self.full_on_pause);
                 playback.jump(t, play);
                 self.clip = Some(Clip { playback, shown: None });
@@ -556,4 +552,14 @@ impl App {
         }
         Task::none()
     }
+}
+
+/// A cut's clip as the player opens it from the loaded `library`: its own
+/// sound and filters, the play size, its stabilisation. (Free of `App`, so
+/// it can be called while the playing clip is borrowed.)
+fn cut_media(library: &[Media], opts: &Options, cut: &Cut) -> Option<Media> {
+    let mut media = library.iter().find(|m| m.input == cut.input)?.for_cut(cut);
+    media.osv_size = opts.osv_size;
+    media.stab.set_mode(cut.stabilize.unwrap_or(opts.stabilize));
+    Some(media)
 }

@@ -98,6 +98,7 @@ done in part stays here until its last card is done.
 | 76 | The program's name: rosmo360 → omnix | below |
 | 77 | Dailix: voice clean-up and loudness for camera and phone sound | below |
 | 78 | A vertical video in a wide edit: its sides filled from itself, not black | below |
+| 79 | Omnix's own face: the footer's credit and the start picture | below |
 
 ## Open gaps
 
@@ -1395,6 +1396,25 @@ the overlays (the clip over a background of itself): a cut's option,
 on by default for a clip whose shape isn't the edit's, the same in the
 player (GPU) and in the export (ffmpeg `split`, `scale`, `boxblur`,
 `overlay`), tested to match. Milestone «Кадрування».
+
+### 79. Omnix's own face: the footer's credit and the start picture — idea (user, 2026-11-05)
+
+The footer (`player/icons.rs`) still reads «Omnix · built on rOsmo360 …
+· Made by Vibing with Ravelund · 2026», and the picture shown while it
+starts (`LOGO`, `vibewithravelund-lowres-corrected.jpg`) is upstream's
+logo, which its README keeps out of the licence («all rights
+reserved»): it can't stay in a program we might publish. User: "I write
+this with you, with Claude: that belongs there."
+- Footer: Omnix and its version, made by Dmytro Halushko with Claude,
+  2026; upstream credited in a line of its own (built on rOsmo360 by
+  Vibing with Ravelund, MIT/Apache), as the licence and fairness ask.
+- Start picture and window icon (`packaging/rosmo360.png` is upstream's
+  too): Omnix's own, drawn as an SVG (a sphere over a timeline, say), in
+  the style of Dailix's `assets/dailix.svg`; the user picks from two or
+  three drafts.
+- README's credits and licence notes the same.
+Done together with the rename (gap 76): name, icon, footer and start
+picture are one change of face. Milestone «Інші платформи» (packaging).
 
 ## Format rule for all of these
 

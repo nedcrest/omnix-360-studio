@@ -1038,7 +1038,13 @@ impl App {
     }
 
     fn window_view(&self) -> Element<'_, Message> {
-        let Some(clip) = &self.clip else { return self.start_screen() };
+        let Some(clip) = &self.clip else {
+            // An empty project (Dailix's empty day): its bin, to build from.
+            if self.project.is_some() && self.bin.read.is_some() && !self.has_edit() && self.loading.is_none() {
+                return self.empty_project();
+            }
+            return self.start_screen();
+        };
         let error = self.error.as_ref().map(|e| text(e.clone()).style(text::danger));
         let timeline = self.timeline_view();
         let timeline = container(timeline).padding([2, 10]);

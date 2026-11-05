@@ -124,6 +124,9 @@ pub(crate) enum Cmd {
         /// One day only (YYYY-MM-DD).
         #[arg(long)]
         day: Option<String>,
+        /// An empty edit of the day (--day), to build from the bin.
+        #[arg(long, requires = "day")]
+        empty: bool,
     },
     /// Stitch one frame to an equirectangular PNG.
     Stitch {
@@ -618,7 +621,8 @@ pub(crate) fn run() -> Result<()> {
         Cmd::Describe { project } => crate::apply::describe(&project)?,
         Cmd::OpsSchema => println!("{}", crate::apply::schema()),
         Cmd::Blank { dir } => println!("{}", crate::blank::ensure(&dir)?.display()),
-        Cmd::FromSheet { project, day } => println!("{}", crate::from_sheet::write(&project, day.as_deref())?.display()),
+        Cmd::FromSheet { project, day, empty: true } => println!("{}", crate::from_sheet::write_empty(&project, day.as_deref().unwrap_or_default())?.display()),
+        Cmd::FromSheet { project, day, empty: false } => println!("{}", crate::from_sheet::write(&project, day.as_deref())?.display()),
         Cmd::Mixcheck { project, target } => crate::mixmeasure::run_cli(&project, target)?,
         Cmd::Play { input, osv_size, hwaccel, stabilize, imu_axes, world_z_down } => {
             player::run(input, player::Launch { osv_size, hw: hwaccel, stabilize, imu_axes, world_z_down })?;

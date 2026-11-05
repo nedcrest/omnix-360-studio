@@ -35,6 +35,8 @@ pub enum BinMsg {
     Toggle,
     /// The tiles' width.
     Tile(f32),
+    /// Every day's clips shown, or only the edit's days'.
+    AllDays,
     /// The pointer over the view, where a menu opens.
     Pointer(Point),
     /// A tile's menu opened at the pointer, or closed.
@@ -161,6 +163,7 @@ impl App {
                     return Task::batch([meta, reopen.map_or_else(Task::none, |p| self.source_open(p))]);
                 }
             }
+            BinMsg::AllDays => self.bin.all_days = !self.bin.all_days,
             BinMsg::Tile(w) => self.bin.tile = w.clamp(*TILE.start(), *TILE.end()),
             BinMsg::Pointer(p) => {
                 self.bin.pointer = p;
@@ -362,7 +365,7 @@ impl App {
         } else if let Some(note) = &self.bin.copied {
             head = head.push(text(note.clone()).size(13).style(text::success));
         }
-        let head = head.push(space().width(Length::Fill)).push(size).push(refresh).push(close);
+        let head = head.push(space().width(Length::Fill)).push(self.days_toggle()).push(size).push(refresh).push(close);
         let mut body = column![].spacing(10);
         match &self.bin.read {
             None => body = body.push(text("Save the project to see its folder here.").size(13).style(text::secondary)),
@@ -371,7 +374,7 @@ impl App {
                 for &(title, kind, _) in &super::bin::SECTIONS {
                     // Its own files and each subfolder's (a day's), the «+» on
                     // the first; an empty section still shows, for its «+».
-                    let mine: Vec<&super::bin::Section> = sections.iter().filter(|s| s.title == title).collect();
+                    let mine: Vec<&super::bin::Section> = sections.iter().filter(|s| s.title == title && self.day_shown(s)).collect();
                     if mine.is_empty() {
                         body = body.push(rule::horizontal(1)).push(self.section_tiles(title, title.to_owned(), kind, &[], true));
                     }

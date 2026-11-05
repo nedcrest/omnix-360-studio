@@ -296,7 +296,7 @@ impl App {
             Message::ProjectPicked(None) => {}
             Message::SaveProjectTo(None) => self.after_save = None,
             Message::ProjectPicked(Some(path)) => {
-                let mut project = match Project::load(&path) {
+                let mut project = match Project::read(&path) {
                     Ok(p) => p,
                     Err(e) => {
                         self.error = Some(format!("{e:#}"));

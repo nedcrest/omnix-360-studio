@@ -827,13 +827,22 @@ impl Project {
         self.fades.black(at, self.duration())
     }
 
+    /// A project to work on: it must have cuts, or music to fill (the
+    /// command line's tools have nothing to do with an empty one).
     pub fn load(path: &Path) -> Result<Project> {
-        let text = std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
-        let mut project: Project = serde_json::from_str(&text).with_context(|| format!("reading {}", path.display()))?;
+        let project = Self::read(path)?;
         // Music alone is a start: its length is the frame to fill.
         if project.cuts.is_empty() && project.sound_clips().next().is_none() {
             bail!("{} has no cuts", path.display());
         }
+        Ok(project)
+    }
+
+    /// A project file read, empty or not: the player opens an empty one (a
+    /// day to build from its bin, Dailix's «empty day»).
+    pub fn read(path: &Path) -> Result<Project> {
+        let text = std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
+        let mut project: Project = serde_json::from_str(&text).with_context(|| format!("reading {}", path.display()))?;
         let dir = &project_dir(path)?;
         for (n, cut) in project.cuts.iter_mut().enumerate() {
             if cut.end <= cut.start {

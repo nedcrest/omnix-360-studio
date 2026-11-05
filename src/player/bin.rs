@@ -184,6 +184,8 @@ pub struct Bin {
     /// show; the frames read for hovering, by clip.
     pub hover: Option<(PathBuf, std::time::Instant, bool)>,
     pub hover_frames: HashMap<PathBuf, Vec<image::Handle>>,
+    /// Every day's clips shown, not only the edit's days'.
+    pub all_days: bool,
     /// The clip in the bin view's own player (`bin_player.rs`).
     pub source: Option<super::bin_player::Source>,
     /// Loaded clips from outside the folder taken out of the bin's list
@@ -410,6 +412,48 @@ impl App {
         }
     }
 
+    /// The days this edit is of: its cuts' (clips under `01_footage/<day>/`)
+    /// and its file's name's (`omnix-<day>`, an empty day). None for none:
+    /// then every day shows.
+    pub(super) fn edit_days(&self) -> Option<std::collections::HashSet<String>> {
+        let (_, root) = self.bin.read.as_ref()?;
+        let footage = root.join("01_footage");
+        let mut days: std::collections::HashSet<String> = self.edit.cuts.iter().filter_map(|c| c.input.strip_prefix(&footage).ok()?.components().next().map(|d| d.as_os_str().to_string_lossy().into_owned())).collect();
+        days.extend(self.project.as_deref().and_then(crate::from_sheet::day_of));
+        (!days.is_empty()).then_some(days)
+    }
+
+    /// Whether a section shows: a day's clips only for the edit's days,
+    /// unless every day is asked for (user, 2026-11-05: a day's edit showed
+    /// every day's clips); music, effects and the rest always.
+    pub(super) fn day_shown(&self, s: &Section) -> bool {
+        if self.bin.all_days || s.kind != Kind::Clip {
+            return true;
+        }
+        match (&s.sub, self.edit_days()) {
+            (Some(day), Some(days)) => days.contains(day),
+            _ => true,
+        }
+    }
+
+    /// The «all days» switch, when the edit is of some days and the folder
+    /// has others.
+    pub(super) fn days_toggle(&self) -> Option<Element<'_, Message>> {
+        let days = self.edit_days()?;
+        let (sections, _) = self.bin.read.as_ref()?;
+        let others = sections.iter().any(|s| s.kind == Kind::Clip && s.sub.as_ref().is_some_and(|d| !days.contains(d)));
+        others.then(|| {
+            let mut v: Vec<&String> = days.iter().collect();
+            v.sort();
+            let label = v.into_iter().cloned().collect::<Vec<_>>().join(", ");
+            tip(
+                iced::widget::toggler(self.bin.all_days).label("All days").text_size(13).on_toggle(|_| Message::BinView(super::bin_view::BinMsg::AllDays)),
+                text(format!("Every day's clips, not only this edit's ({label})")),
+                tooltip::Position::Bottom,
+            )
+        })
+    }
+
     /// The bin at the far left: open, or the strip it folds to.
     pub(super) fn bin_panel(&self) -> Element<'_, Message> {
         if !self.bin.open {
@@ -440,7 +484,10 @@ impl App {
             None => body = body.push(text("Save the project to see its folder here.").size(13).style(text::secondary)),
             Some((sections, root)) => {
                 body = body.push(text(root.display().to_string()).size(12).style(text::secondary));
-                for section in sections {
+                if let Some(days) = self.days_toggle() {
+                    body = body.push(days);
+                }
+                for section in sections.iter().filter(|s| self.day_shown(s)) {
                     body = body.push(rule::horizontal(1)).push(text(section.heading()).size(15));
                     for path in &section.files {
                         body = body.push(self.item(label(path), path, section.kind));

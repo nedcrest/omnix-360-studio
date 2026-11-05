@@ -105,13 +105,31 @@ pub fn build(root: &Path, day: Option<&str>) -> Result<Project> {
 /// name not taken (`omnix-<day>.json`, `omnix-<day>-2.json`, …): never over
 /// an edit already there. Where it went.
 pub fn write(root: &Path, day: Option<&str>) -> Result<PathBuf> {
-    let project = build(root, day)?;
+    save(root, day, &build(root, day)?)
+}
+
+/// An empty edit of `day` in the project's `04_project` (user, 2026-11-05:
+/// a day to build from the bin, its idea made afresh): the bin shows that
+/// day's clips (`omnix-<day>` names it). Where it went.
+pub fn write_empty(root: &Path, day: &str) -> Result<PathBuf> {
+    save(root, Some(day), &Project { aspect: Some(Aspect(16, 9)), ..Default::default() })
+}
+
+fn save(root: &Path, day: Option<&str>, project: &Project) -> Result<PathBuf> {
     let folder = root.join("04_project");
     std::fs::create_dir_all(&folder)?;
     let stem = format!("omnix-{}", day.unwrap_or("all-days"));
     let path = (1..).map(|n| folder.join(if n == 1 { format!("{stem}.json") } else { format!("{stem}-{n}.json") })).find(|p| !p.exists()).expect("a free name");
     project.save(&path)?;
     Ok(path)
+}
+
+/// The day an edit's file is named for (`omnix-<day>…`), if it is.
+pub fn day_of(file: &Path) -> Option<String> {
+    let name = file.file_stem()?.to_str()?;
+    let day = name.strip_prefix("omnix-")?.get(..10)?;
+    let date = day.len() == 10 && day.chars().enumerate().all(|(i, c)| if i == 4 || i == 7 { c == '-' } else { c.is_ascii_digit() });
+    date.then(|| day.to_owned())
 }
 
 #[cfg(test)]
@@ -169,6 +187,12 @@ mod tests {
         let a = write(&root, Some("2030-05-01")).unwrap();
         let b = write(&root, Some("2030-05-01")).unwrap();
         assert_eq!((a.file_name().unwrap(), b.file_name().unwrap()), ("omnix-2030-05-01.json".as_ref(), "omnix-2030-05-01-2.json".as_ref()));
+        assert_eq!(day_of(&a).as_deref(), Some("2030-05-01"));
+        assert_eq!(day_of(&b).as_deref(), Some("2030-05-01"));
+        assert_eq!(day_of(Path::new("/x/my-edit.json")), None);
+        // An empty day: the player reads it, the command line's tools don't.
+        let empty = write_empty(&root, "2030-05-02").unwrap();
+        assert!(Project::read(&empty).unwrap().cuts.is_empty() && Project::load(&empty).is_err());
         let back = Project::load(&a).unwrap();
         assert_eq!(back.cuts.len(), 3);
         // Beside 04_project, not under it: kept whole, as Omnix saves them.

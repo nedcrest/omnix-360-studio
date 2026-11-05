@@ -7,6 +7,23 @@ use super::*;
 use iced::widget::{column, row};
 
 impl App {
+    /// An empty project: its name and the start's buttons, and its bin in
+    /// tiles filling the window; adding a clip from it starts the edit.
+    pub(super) fn empty_project(&self) -> Element<'_, Message> {
+        let name = self.project.as_ref().and_then(|p| p.file_name()).map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+        let error = self.error.as_ref().map(|e| text(e.clone()).style(text::danger));
+        let bar = row![
+            text(name).size(18),
+            space().width(Length::Fill),
+            labelled_button(ADD_CLIP, "Open clips…", Some(Message::Open)),
+            labelled_button(OPEN_PROJECT, "Open project…", Some(Message::OpenProject)),
+            labelled_button(ADD_MUSIC, "Add music…", Some(Message::AddSound(SoundTrack::Music))),
+        ]
+        .spacing(12)
+        .align_y(Alignment::Center);
+        column![container(bar).padding([8, 14])].push(error).push(self.bin_view()).into()
+    }
+
     /// Before any clip: open clips, a project, or start from a song.
     pub(super) fn start_screen(&self) -> Element<'_, Message> {
         let error = self.error.as_ref().map(|e| text(e.clone()).style(text::danger));

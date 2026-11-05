@@ -1,0 +1,112 @@
+# Code audit, 2026-11-05: what's left to clean
+
+Five read-only passes over Omnix and Dailix (dead code, code that does
+nothing, duplicates, over-engineering, tangled logic, stale docs), each
+finding checked before it's fixed. A finding leaves this page when its
+commit lands; the page goes when the list is empty. Strictly dead code
+turned out rare (Dailix's sheet core had some, gone in `1573719`); the
+cost is duplication and drift.
+
+## Bugs found on the way (first)
+
+- [ ] Export: an error after the encoder starts (overlay burn, a cut's
+      sound, `finish`) leaves a half-written file; `Encoder` has no drop
+      guard (`export.rs` `export`, `ffmpeg/mod.rs` `Encoder`).
+- [ ] Save frame (PNG): no grade, no LUT, so a D-Log M cut saves flat
+      (`player/export.rs` `Request`, `jobs.rs`). CPU/GPU rule.
+- [ ] Bin panel lists folder clips twice under «Loaded clips»: use
+      `loaded_outside()` (`bin.rs` `bin_panel`).
+- [ ] Bin add tooltips say "music lane" for SFX and voice-over (`bin.rs`).
+- [ ] Timeline: press and hover test what's under the pointer in different
+      orders (level tag vs fade knob): the cursor lies (`timeline.rs`
+      `Marks::update` / `mouse_interaction`; `OverlayLane` too).
+- [ ] `Selection::item` looks only in the first overlay lane; `items::find`
+      looks in all (`model/selection.rs`).
+- [ ] Right-click on a flag under the header works, left-click doesn't
+      (`timeline.rs` flags, `HEAD` filter).
+- [ ] `player/mod.rs` clock shows 59.996 s as "0:60.00".
+- [ ] Opening a project: `deaf.dedup()` without a sort (`file.rs`).
+- [ ] Settings panel says "rOsmo360's settings folder" (the name is Omnix).
+- [ ] `mixmeasure`: an unreadable voice file silently means "no speech".
+- [ ] Dailix: user roles get a colour written and never read (grey).
+
+## The core API: edits that bypass it
+
+- [ ] Edit fades, clip-sound level, track level: no `Op`, set directly
+      (`effects.rs`, `tracks.rs`).
+- [ ] `rosmo360 duck` saves directly; `SoundOp::Duck` exists (`duck.rs`).
+- [ ] Opening a project drops missing files in a UI handler: a tested
+      `Project::drop_missing` (`file.rs`).
+- [ ] Dailix: I/O/M/N/PageUp-Down marking logic in `pane_key` (100 lines,
+      untested): a pure `marking.rs` returning ops.
+- [ ] Dailix: «→ Omnix» lookup and launch in `update`: an `omnix.rs`.
+- [ ] Contact-sheet segment writes ("sheet, else here only") ×3 in
+      `bin_player.rs`; `Remove` uses commit/begin by hand, not `self.ops`.
+
+## Duplicates
+
+Across the two repos:
+- [ ] Built-in roles ×4 (`dailix_sheet` ops, Dailix `pane.rs`, Omnix
+      `bin_player.rs`, `notes.rs`): one table in `dailix_sheet`.
+- [ ] Sidecar reading ×2 (Dailix `footage.rs`, Omnix `from_sheet.rs`).
+- [ ] Poster frame ×2, Dailix's with a bare `ffmpeg` (not portable).
+- [ ] `clock` ×6 with two roundings; `is_day` ×3; `config_dir` ×3;
+      `04_project` hard-coded beside `Layout`.
+
+In Omnix:
+- [ ] Bin player re-implements `viewer::Viewer` (`Picture`, tick, aspect).
+- [ ] `Flat::size()` spelled out twice.
+- [ ] Modal shade ×4; job thread scaffolding ×2; `note()` ×2.
+- [ ] A cut's media built ×3 (`transport.rs`); cut level formula ×2.
+- [ ] `request_still` thread ×2; mono PCM decode ×2 (`music.rs`, ffmpeg).
+- [ ] Info read and drawn twice (bin side pane, Info panel).
+- [ ] `bin::Spot` = `ops::cuts::Place`; preview frames loop ×2.
+- [ ] File type lists disagree (Open dialog vs `CLIP_EXT`).
+- [ ] Whole-film `Mix` assembly ×3; `Sound` spelt out by hand.
+- [ ] Find-by-id ×7; `Lane::place` = `Music::place`; mute-aware level ×3.
+- [ ] Loading `Options` literal ×3; "is the edit playing" ×9; pass-through
+      wrappers (`cut_wave_file`, `Media::filter`, `now`).
+- [ ] Timeline per-lane code (edges, fades, blocks, folded strips,
+      crossfade X, lane boxes) copied across lanes; view structs copy the
+      model field by field; five selection fields rebuilt from one.
+
+In Dailix:
+- [ ] Inside-a-segment test ×2; 0.2 for `MIN_SEGMENT`; id parse ×2;
+      `describe` in `main.rs` (core logic); `MarkShape` with
+      `allow(dead_code)` only for the schema.
+
+## Tangled
+
+- [ ] `App` mirrors ~33 settings by hand (in at `new`, out at `settings()`).
+- [ ] `Marks::update` 241 lines; `export()` 159; `cli::run` 157 (preview
+      and export logic inline); Dailix `update` 243.
+- [ ] Library modules reach into `player` and `cli` (`config_dir`,
+      `Waveform`, `render`, `osv_under`).
+- [ ] Tests in the wrong module (`sound_ui.rs` tests cuts and markers).
+
+## Help text in panels (house rule)
+
+- [ ] Audio and Export panels' paragraphs → tooltips. Settings' notes were
+      accepted by the user; they stay.
+
+## For the user to decide
+
+- Dailix `Edit` (undo): built, tested, used by nothing; its snapshots
+  would overwrite another writer's change. Drop it, or build undo as
+  inverse ops through `Store` with a key.
+- Two LUFS meters (ffmpeg `ebur128` and our own, agreeing within 0.3 LU):
+  one would do, but stored gains would shift slightly on a re-run.
+- Upstream maths copies (equirect direction ×5, vector helpers ×3): merge
+  them unless upstream merges are still wanted (the rename says no).
+- `check` parses stitch flags it ignores; IMU flags threaded through the
+  player though AGENTS.md fixes their values: trim the CLI?
+
+## Stale docs
+
+- [ ] AGENTS.md Layout (main.rs, ffmpeg.rs, missing modules).
+- [ ] ARCHITECTURE.md shape table and steps; CORE-API.md names.
+- [ ] timeline.rs header (seek bar, two lanes), misplaced doc comments
+      (timeline, icons, framing, bars, effects, keys, jobs, cuts, tracks,
+      mod, thumbs, overlay, pipeline, loudness).
+- [ ] Dailix: main.rs/app.rs/README "window comes next", SHEET-CORE §6–7,
+      `03_proxies` "DJI's LRF", Backspace missing from F1, "Kos" in code.

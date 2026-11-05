@@ -197,12 +197,7 @@ impl App {
                     async move {
                         let mut dialog = rfd::AsyncFileDialog::new()
                             .set_title("Add clips")
-                            .add_filter(
-                                "Videos and pictures",
-                                &[
-                                    "OSV", "osv", "mp4", "MP4", "mov", "MOV", "mkv", "MKV", "m4v", "M4V", "avi", "AVI", "webm", "WEBM", "mts", "MTS", "jpg", "JPG", "jpeg", "JPEG", "png", "PNG", "webp", "WEBP", "bmp", "BMP", "tif", "TIF", "tiff", "TIFF",
-                                ],
-                            )
+                            .add_filter("Videos and pictures", &super::bin::exts([super::bin::CLIP_EXT, super::bin::PICTURE_EXT].concat().as_slice()))
                             .add_filter("Osmo 360 video", &["OSV", "osv"]);
                         if let Some(dir) = dir {
                             dialog = dialog.set_directory(dir);

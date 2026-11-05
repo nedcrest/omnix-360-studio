@@ -243,8 +243,7 @@ impl App {
                     Kind::Sound(_) => super::bin::SOUND_EXT,
                     Kind::Picture => super::bin::PICTURE_EXT,
                 };
-                // Upper case too: the file dialog's filter is exact on Linux.
-                let exts: Vec<String> = exts.iter().flat_map(|e| [e.to_string(), e.to_uppercase()]).collect();
+                let exts = super::bin::exts(exts);
                 return Task::perform(
                     async move { rfd::AsyncFileDialog::new().set_title(format!("Add to {title}")).add_filter(title, &exts).pick_files().await.map(|fs| fs.iter().map(|f| f.path().to_owned()).collect::<Vec<_>>()) },
                     move |files| Message::BinView(BinMsg::CopyIn(files.unwrap_or_default(), Some(title))),

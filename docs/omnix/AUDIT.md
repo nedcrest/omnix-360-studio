@@ -32,7 +32,6 @@ In Omnix:
 - [ ] A cut's media built ×3 (`transport.rs`); cut level formula ×2.
 - [ ] `request_still` thread ×2; mono PCM decode ×2 (`music.rs`, ffmpeg).
 - [ ] Info read and drawn twice (bin side pane, Info panel).
-- [ ] File type lists disagree (Open dialog vs `CLIP_EXT`).
 - [ ] Whole-film `Mix` assembly ×3; `Sound` spelt out by hand.
 - [ ] Find-by-id ×7; `Lane::place` = `Music::place`; mute-aware level ×3.
 - [ ] Timeline per-lane code (edges, fades, blocks, folded strips,

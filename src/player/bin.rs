@@ -76,9 +76,15 @@ pub(super) const SECTIONS: [(&str, Kind, &[&str]); 6] = [
     ("Graphics", Kind::Picture, &["08_graphics"]),
 ];
 
-pub(super) const CLIP_EXT: &[&str] = &["mp4", "mov", "mkv", "webm", "osv", "insv"];
+pub(super) const CLIP_EXT: &[&str] = &["mp4", "mov", "mkv", "m4v", "avi", "mts", "webm", "osv", "insv"];
 pub(super) const SOUND_EXT: &[&str] = &["mp3", "flac", "wav", "m4a", "aac", "ogg", "opus", "wma"];
 pub(super) const PICTURE_EXT: &[&str] = &["png", "jpg", "jpeg", "webp", "bmp", "tif", "tiff"];
+
+/// Extensions for a file dialog's filter: upper case too, as the filter is
+/// exact on Linux.
+pub(super) fn exts(of: &[&str]) -> Vec<String> {
+    of.iter().flat_map(|e| [e.to_string(), e.to_uppercase()]).collect()
+}
 
 /// One heading's files, by name: a folder's own, or one of its
 /// subfolders' (`sub`: a day's, as Dailix files a project's clips under

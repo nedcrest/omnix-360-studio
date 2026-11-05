@@ -27,7 +27,7 @@ In Omnix:
 - [ ] `App` mirrors ~33 settings by hand (in at `new`, out at `settings()`).
 - [ ] `Marks::update` 241 lines; `export()` 159; `cli::run` 157 (preview
       and export logic inline); Dailix `update` 243.
-- [ ] Library modules reach into `player` (`Waveform`, `render`).
+- [ ] The export reaches into `player` for the GPU (`render`, `gpu`): to `src/gpu/`.
 
 ## Decided by the user (2026-11-05): done
 

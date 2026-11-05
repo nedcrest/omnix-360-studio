@@ -1,6 +1,5 @@
 //! A sound track in the player (the music, the sound effects: one `Player`
-//! each): its files' waveforms for the timeline, and its sound kept in step
-//! with the edit while it plays.
+//! each): its sound kept in step with the edit while it plays.
 //!
 //! A track has an audio stream of its own, apart from the clips' sound, so it
 //! plays on through cut changes untouched. It follows edit time: started at
@@ -14,45 +13,12 @@
 use super::audio::Audio;
 use crate::project::{self, MusicClip};
 use anyhow::Result;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
-/// Seconds per waveform peak.
-pub const WAVE_STEP: f64 = 0.05;
 /// Restart the music when it is this far from where the edit is.
 const DRIFT: f64 = 0.15;
 /// Open the next clip's sound this long before it starts.
 const PRIME: f64 = 1.0;
-
-/// A song's waveform: the loudest sample in each `WAVE_STEP`, 0..1, and the
-/// song's length.
-#[derive(Debug)]
-pub struct Waveform {
-    pub peaks: Vec<f32>,
-    pub duration: f64,
-}
-
-impl Waveform {
-    /// From the clip cache, else decoded from `path` to mono at 8 kHz, which
-    /// is plenty for a picture of its loudness: a 6-minute song takes about
-    /// a second. `even`: as the leveler gives it (`loudness::LEVELER`), so an
-    /// evened-out cut is drawn as it's heard.
-    pub fn read(path: &Path, even: bool) -> Result<Waveform> {
-        let kind = if even { "wave-even" } else { "wave" };
-        if let Some((peaks, duration)) = crate::cache::waveform(path, kind, WAVE_STEP) {
-            return Ok(Waveform { peaks, duration });
-        }
-        const RATE: usize = 8000;
-        let samples: Vec<f32> = crate::ffmpeg::mono(path, RATE as u32, even.then_some(crate::loudness::LEVELER))?.into_iter().map(f32::abs).collect();
-        let per = (WAVE_STEP * RATE as f64) as usize;
-        if samples.is_empty() {
-            anyhow::bail!("{} has no sound", path.display());
-        }
-        let peaks: Vec<f32> = samples.chunks(per).map(|c| c.iter().fold(0.0f32, |m, &v| m.max(v)).min(1.0)).collect();
-        let duration = samples.len() as f64 / RATE as f64;
-        crate::cache::store_waveform(path, kind, WAVE_STEP, &peaks, duration);
-        Ok(Waveform { peaks, duration })
-    }
-}
 
 /// A clip's sound, open: its song, where the clip sits on the edit, from
 /// where in the song the stream started (so it's at `from + elapsed` once
@@ -159,27 +125,5 @@ impl Player {
             }
             self.open.push(open);
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn an_evened_waveform_is_read_through_the_leveler() {
-        crate::cache::disable();
-        let dir = std::env::temp_dir().join(format!("omnix-wave-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let quiet = dir.join("quiet.wav");
-        let ok = crate::ffmpeg::tool("ffmpeg").args(["-v", "error", "-y", "-f", "lavfi", "-i", "sine=f=440:d=6,volume=-30dB", "-ar", "48000"]).arg(&quiet).status().unwrap().success();
-        assert!(ok);
-        let (plain, even) = (Waveform::read(&quiet, false).unwrap(), Waveform::read(&quiet, true).unwrap());
-        std::fs::remove_dir_all(&dir).unwrap();
-        let middle = |w: &Waveform| w.peaks[w.peaks.len() / 2];
-        // −30 dB is 0.03 of full scale; the leveler lifts a steady tone
-        // well up (as `loudness`'s test measures it).
-        assert!(middle(&plain) < 0.04, "{}", middle(&plain));
-        assert!(middle(&even) > 2.0 * middle(&plain), "{} vs {}", middle(&even), middle(&plain));
     }
 }

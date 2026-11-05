@@ -41,6 +41,7 @@ mod stitch;
 mod text;
 mod track;
 mod view;
+mod waveform;
 pub mod cli;
 mod analyse;
 mod export;

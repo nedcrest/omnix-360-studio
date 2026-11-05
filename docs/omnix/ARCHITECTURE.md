@@ -49,6 +49,5 @@ links Dailix's sheet core.
 3. **Long functions:** `Marks::update` 241 lines (after 1), `export()`
    159 (a pure plan, then the render loop), `cli::run` 157 (the preview
    and export arms into their modules).
-4. **Library modules reaching into `player`:** the waveform
-   (`player::music::Waveform`, used by `duck`, `preview`) and `render`
-   (used by `export`): to the media layer.
+4. **The export reaching into `player`** for the GPU (`render`, `gpu`,
+   the shaders): to `src/gpu/`, used by both.

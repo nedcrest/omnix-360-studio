@@ -1,6 +1,6 @@
 //! Contact sheets of a project (`rosmo360 preview`): a row per cut, with the music's waveform.
 
-use crate::{overlay, player, project, sheet, stitch, view};
+use crate::{overlay, project, sheet, stitch, view};
 use crate::{pipeline::{Shot, StitchOpts, Carry}, cut_pipelines};
 use anyhow::Result;
 use rayon::prelude::*;
@@ -51,7 +51,7 @@ pub(crate) fn preview_project(project: &project::Project, opts: &StitchOpts, eve
                         let (a, b) = (at(x as f64), at(x as f64 + 1.0));
                         let (from, to) = (offsets[n], offsets[n] + len);
                         (b > from && a < to).then(|| {
-                            let k = ((b - a) / player::music::WAVE_STEP).ceil().max(1.0) as usize;
+                            let k = ((b - a) / crate::waveform::WAVE_STEP).ceil().max(1.0) as usize;
                             (0..k).map(|j| level(a + (b - a) * j as f64 / k as f64)).fold(0.0, f32::max)
                         })
                     })
@@ -101,7 +101,7 @@ pub(crate) fn sheet_music(project: &project::Project) -> Option<impl Fn(f64) -> 
     }
     let waves: Vec<Vec<_>> = tracks
         .iter()
-        .map(|track| track.clips.iter().map(|c| player::music::Waveform::read(&c.input, false).inspect_err(|e| eprintln!("no waveform for {}: {e:#}", c.input.display())).ok()).collect())
+        .map(|track| track.clips.iter().map(|c| crate::waveform::Waveform::read(&c.input, false).inspect_err(|e| eprintln!("no waveform for {}: {e:#}", c.input.display())).ok()).collect())
         .collect();
     let end = project::edit_length(&project.cuts);
     Some(move |t: f64| {
@@ -112,7 +112,7 @@ pub(crate) fn sheet_music(project: &project::Project) -> Option<impl Fn(f64) -> 
                 if t < clip.at || t >= clip.ends() {
                     continue;
                 }
-                let peak = wave.peaks.get(((clip.start + t - clip.at) / player::music::WAVE_STEP) as usize).copied().unwrap_or(0.0);
+                let peak = wave.peaks.get(((clip.start + t - clip.at) / crate::waveform::WAVE_STEP) as usize).copied().unwrap_or(0.0);
                 let level = crate::mixdown::clip_gain(track, i, t, end) as f32;
                 loudest = loudest.max(peak * level);
             }

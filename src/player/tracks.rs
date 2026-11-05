@@ -47,7 +47,7 @@ impl App {
         Task::perform(
             blocking({
                 let path = path.clone();
-                move || music::Waveform::read(&path, false).map(Arc::new).map_err(|e| format!("{e:#}"))
+                move || crate::waveform::Waveform::read(&path, false).map(Arc::new).map_err(|e| format!("{e:#}"))
             }),
             move |r| Message::Waveform(path.clone(), r),
         )
@@ -81,7 +81,7 @@ impl App {
             Task::perform(
                 blocking({
                     let path = path.clone();
-                    move || music::Waveform::read(&path, even).map(Arc::new).ok()
+                    move || crate::waveform::Waveform::read(&path, even).map(Arc::new).ok()
                 }),
                 move |wave| Message::CutWave(path.clone(), even, wave),
             )

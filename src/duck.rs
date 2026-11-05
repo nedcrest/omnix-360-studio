@@ -76,11 +76,10 @@ pub fn speech(peaks: &[f32], step: f64, source: &Source) -> Vec<(f64, f64)> {
 }
 
 /// Where `project` holds speech, edit time: each source's waveform read
-/// (from the cache, or decoded once; `player::music::Waveform` until the
-/// waveform moves to the media layer, `CORE-API.md` step 7). Slow on a
-/// cold cache: off the UI thread.
+/// (from the cache, or decoded once, `waveform`). Slow on a cold cache:
+/// off the UI thread.
 pub fn find_speech(project: &Project) -> anyhow::Result<Vec<(f64, f64)>> {
-    use crate::player::music::{WAVE_STEP, Waveform};
+    use crate::waveform::{WAVE_STEP, Waveform};
     let mut spans = Vec::new();
     for s in sources(project) {
         let wave = Waveform::read(&s.file, false)?;

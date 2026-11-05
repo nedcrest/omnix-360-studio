@@ -25,7 +25,7 @@
 //! or a sideways wheel pans, and when zoomed in a scrollbar at the bottom
 //! shows and moves the window.
 
-use super::{Message, music, thumbs};
+use super::{Message, thumbs};
 use crate::project::{Own, SoundTrack};
 use crate::overlay::Track;
 use crate::view::Ease;
@@ -238,9 +238,9 @@ pub struct Block {
     pub sound: Vec<crate::project::VolumeKey>,
     /// The waveform of the sound it plays (its cleaned voice, else its
     /// clip's), by clip time, once read; none for a silent clip.
-    pub wave: Option<Arc<music::Waveform>>,
+    pub wave: Option<Arc<crate::waveform::Waveform>>,
     /// The same through the leveler, if the cut is evened out (and read).
-    pub even_wave: Option<Arc<music::Waveform>>,
+    pub even_wave: Option<Arc<crate::waveform::Waveform>>,
     /// Its own level, dB (`Cut::sound_db`: `OFF_DB` when muted).
     pub own_db: f64,
     /// Its own level, dB, muted or not (what its level tag turns).
@@ -293,14 +293,14 @@ pub struct MusicBlock {
     /// The file's length (infinite until its waveform is read).
     pub most: f64,
     /// The song's waveform, once read.
-    pub wave: Option<Arc<music::Waveform>>,
+    pub wave: Option<Arc<crate::waveform::Waveform>>,
     /// Its fades in and out, seconds: a handle at each top corner.
     pub fade_in: f64,
     pub fade_out: f64,
     /// Its own volume points in the file's time (gap 33e).
     pub volume: Vec<crate::project::VolumeKey>,
     /// Its waveform through the leveler, if it's evened out (and read).
-    pub even_wave: Option<Arc<music::Waveform>>,
+    pub even_wave: Option<Arc<crate::waveform::Waveform>>,
     /// Its own level as a tag, the knob a drag turns (`Block::level`).
     pub level: String,
 }
@@ -1043,7 +1043,7 @@ impl Timeline {
         for v in [self.start, self.span, self.clips_db, self.duration, self.video, b.width as f64, b.height as f64] {
             f(&mut h, v);
         }
-        let ptr = |w: &Option<Arc<music::Waveform>>| w.as_ref().map_or(0, |w| Arc::as_ptr(w) as usize);
+        let ptr = |w: &Option<Arc<crate::waveform::Waveform>>| w.as_ref().map_or(0, |w| Arc::as_ptr(w) as usize);
         for c in &self.blocks {
             for v in [c.from, c.len, c.start, c.most, c.sound_before, c.sound_after, c.fade_in, c.fade_out, c.own_db, c.gain, c.crossfade] {
                 f(&mut h, v);
@@ -2150,12 +2150,12 @@ impl Wave {
     /// by `gain` at that file time, drawn in `colour`; what goes over full
     /// scale (the limiter will hold it) in orange; and `file`'s own peaks
     /// faint behind, so a level change shows against what was there.
-    fn draw(&self, frame: &mut Frame, b: Rectangle, file: &music::Waveform, heard: &music::Waveform, gain: impl Fn(f64) -> f32, colour: iced::Color) {
+    fn draw(&self, frame: &mut Frame, b: Rectangle, file: &crate::waveform::Waveform, heard: &crate::waveform::Waveform, gain: impl Fn(f64) -> f32, colour: iced::Color) {
         let (l, r, h) = (self.left, self.right, self.height - 4.0);
         let per_px = self.len / (r - l).max(1.0) as f64;
         let mid = self.top + self.height / 2.0;
-        let peak = |w: &music::Waveform, t0: f64, t1: f64| {
-            let (i0, i1) = ((t0 / music::WAVE_STEP) as usize, ((t1 / music::WAVE_STEP) as usize).max((t0 / music::WAVE_STEP) as usize + 1));
+        let peak = |w: &crate::waveform::Waveform, t0: f64, t1: f64| {
+            let (i0, i1) = ((t0 / crate::waveform::WAVE_STEP) as usize, ((t1 / crate::waveform::WAVE_STEP) as usize).max((t0 / crate::waveform::WAVE_STEP) as usize + 1));
             w.peaks.get(i0..i1.min(w.peaks.len())).map_or(0.0, |s| s.iter().fold(0.0f32, |a, &v| a.max(v)))
         };
         let (mut behind, mut bars, mut over) = (canvas::path::Builder::new(), canvas::path::Builder::new(), canvas::path::Builder::new());

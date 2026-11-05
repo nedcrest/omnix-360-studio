@@ -294,9 +294,9 @@ enum Message {
     /// The mix check in the viewer's place (gap 45).
     Check(mixcheck_ui::CheckMsg),
     /// A song's waveform, read off the UI thread.
-    Waveform(PathBuf, Result<Arc<music::Waveform>, String>),
+    Waveform(PathBuf, Result<Arc<crate::waveform::Waveform>, String>),
     /// The waveform of what a cut plays, if it has sound.
-    CutWave(PathBuf, bool, Option<Arc<music::Waveform>>),
+    CutWave(PathBuf, bool, Option<Arc<crate::waveform::Waveform>>),
     /// A cut's sound's or a sound clip's fade in (`true`) or out dragged to
     /// this many seconds.
     Fade(Own, bool, f64),
@@ -522,9 +522,9 @@ struct App {
     /// Each clip's timeline thumbnails by clip time, as they arrive.
     thumbs: std::collections::HashMap<PathBuf, Vec<(f64, image::Handle)>>,
     /// Waveforms of sound clips and of what cuts play, by file.
-    waveforms: std::collections::HashMap<PathBuf, Arc<music::Waveform>>,
+    waveforms: std::collections::HashMap<PathBuf, Arc<crate::waveform::Waveform>>,
     /// The same through the leveler, for cuts evened out.
-    even_waves: std::collections::HashMap<PathBuf, Arc<music::Waveform>>,
+    even_waves: std::collections::HashMap<PathBuf, Arc<crate::waveform::Waveform>>,
     /// The cuts' sound files whose waveforms were asked for, plain or
     /// evened: each once, a silent one too (pictures, clips without sound).
     cut_waves_asked: std::collections::HashSet<(PathBuf, bool)>,

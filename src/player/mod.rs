@@ -586,7 +586,7 @@ struct App {
     queue: std::collections::VecDeque<(PathBuf, bool)>,
     /// Where a clip added from the bin goes once it's loaded, by its file:
     /// at the end if it has no entry.
-    placing: std::collections::HashMap<PathBuf, bin::Spot>,
+    placing: std::collections::HashMap<PathBuf, crate::model::ops::cuts::Place>,
     /// Whether the clip loading now is added as a cut.
     loading_adds: bool,
     /// The next cut's playback, primed in the last `PREROLL` seconds of the

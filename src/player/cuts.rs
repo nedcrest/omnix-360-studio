@@ -30,11 +30,11 @@ pub(super) fn cut_labels(c: &Cut, default: Mode) -> Vec<String> {
 
 impl App {
     /// A bin button's place as a spot on the edit, from the playhead now.
-    pub(super) fn spot(&self, place: bin::Place) -> bin::Spot {
+    pub(super) fn spot(&self, place: bin::Place) -> Place {
         match place {
-            bin::Place::End => bin::Spot::End,
-            bin::Place::Playhead => bin::Spot::At(self.position()),
-            bin::Place::Join => bin::Spot::Join(self.position()),
+            bin::Place::End => Place::End,
+            bin::Place::Playhead => Place::At(self.position()),
+            bin::Place::Join => Place::Join(self.position()),
         }
     }
 
@@ -65,12 +65,7 @@ impl App {
             _ => (0.0, if picture { ffmpeg::PICTURE_SECONDS } else { duration }),
         };
         let lut = self.auto_lut(&input);
-        let spot = self.placing.remove(&input).unwrap_or(bin::Spot::End);
-        let place = match spot {
-            bin::Spot::End => Place::End,
-            bin::Spot::At(t) => Place::At(t),
-            bin::Spot::Join(t) => Place::Join(t),
-        };
+        let place = self.placing.remove(&input).unwrap_or(Place::End);
         let added = self.op(Op::Cut(CutOp::Add { input, start, end, place, stabilize: Some(self.opts.stabilize), lut }));
         let Some(i) = added.and_then(|o| o.made).and_then(|id| self.cut_index(id)) else { return };
         self.mark_flat();
@@ -78,7 +73,7 @@ impl App {
         if self.clip.is_none() {
             self.follow = true;
             self.goto(i, 0.0, true);
-        } else if spot != bin::Spot::End {
+        } else if place != Place::End {
             // Put in among the cuts, it shifts the ones after it: show it,
             // paused at its start, so the playhead stays on what's shown.
             self.follow = true;
@@ -106,7 +101,7 @@ impl App {
                 match crate::blank::ensure(&dir) {
                     Ok(path) => {
                         // Placed from the playhead now, as a bin button does.
-                        self.placing.insert(path.clone(), bin::Spot::At(self.position()));
+                        self.placing.insert(path.clone(), Place::At(self.position()));
                         return self.update(Message::Picked(vec![path]));
                     }
                     Err(e) => self.error = Some(format!("Can't make the blank picture: {e:#}")),

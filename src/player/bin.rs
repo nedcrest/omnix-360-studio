@@ -18,6 +18,7 @@
 
 use super::{App, Message, blocking, tip};
 use super::tracks::probe_sound;
+use crate::model::ops::cuts::Place as CutPlace;
 use crate::project::SoundTrack;
 use iced::widget::{button, column, container, image, row, rule, scrollable, text, tooltip};
 use iced::{Alignment, Element, Length, Task};
@@ -56,14 +57,6 @@ pub enum Place {
     End,
     Playhead,
     Join,
-}
-
-/// A `Place` made definite: the playhead's edit time when it was pressed.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum Spot {
-    End,
-    At(f64),
-    Join(f64),
 }
 
 /// The add buttons' icons.
@@ -653,9 +646,9 @@ impl App {
                 // Onto its section's track, where it fits nearest the spot,
                 // decided now from the playhead now.
                 let at = match self.spot(place) {
-                    Spot::End => None,
-                    Spot::At(t) => Some(t),
-                    Spot::Join(t) => Some(crate::project::offsets(&self.edit.cuts).into_iter().chain([self.edit.duration()]).nth(self.edit.nearest_join(t)).unwrap_or(t)),
+                    CutPlace::End => None,
+                    CutPlace::At(t) => Some(t),
+                    CutPlace::Join(t) => Some(crate::project::offsets(&self.edit.cuts).into_iter().chain([self.edit.duration()]).nth(self.edit.nearest_join(t)).unwrap_or(t)),
                 };
                 return probe_sound(which, path, at);
             }

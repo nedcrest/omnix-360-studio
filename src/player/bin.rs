@@ -489,7 +489,9 @@ impl App {
         };
         let length = meta.and_then(|m| m.duration).map(clock).unwrap_or_default();
         let selected = self.bin.preview.as_ref().is_some_and(|p| p.path == path);
-        let info = column![text(name).size(13), text(length).size(11).style(text::secondary)].spacing(1).width(Length::Fill);
+        // A camera's names have no spaces to break at: broken anywhere, so
+        // a long one wraps under itself rather than under the add buttons.
+        let info = column![text(name).size(13).wrapping(text::Wrapping::WordOrGlyph), text(length).size(11).style(text::secondary)].spacing(1).width(Length::Fill);
         let body = button(row![picture, info].spacing(8).align_y(Alignment::Center))
             .width(Length::Fill)
             .padding([3, 4])

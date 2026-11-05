@@ -503,6 +503,16 @@ impl App {
                 }
             }
             Message::TimelineZoom(factor, anchor) => self.zoom_timeline(self.timeline_zoom * factor, anchor),
+            Message::TimelineWheel(dx, dy, at) => {
+                let (pan, zoom) = if self.modifiers.shift() { (dx + dy, 0.0) } else { (dx, dy) };
+                if zoom != 0.0 {
+                    self.zoom_timeline(self.timeline_zoom * 1.25f64.powf(zoom as f64), Some(at));
+                } else if pan != 0.0 {
+                    let (start, span) = self.timeline_window();
+                    self.timeline_start = start - pan as f64 * span * 0.1;
+                    self.timeline_start = self.timeline_window().0;
+                }
+            }
             Message::TimelineZoomTo(v) => self.zoom_timeline(self.timeline_most_zoom().powf(v), None),
             Message::TimelinePan(start) => self.timeline_start = start,
             // Space while the bin shows a clip plays that clip.

@@ -1252,6 +1252,23 @@ impl OverlayLane {
     }
 }
 
+/// The wheel anywhere on the timeline (its lanes, ruler, markers): the
+/// app zooms, or with Shift pans (`TimelineWheel`). Shift is the app's to
+/// know: a lane learned it from its own events and missed it when Shift
+/// was pressed elsewhere, and the ruler and markers had no wheel at all
+/// (user, 2026-11-05).
+fn wheel(delta: &mouse::ScrollDelta, t: &Timeline, cursor: mouse::Cursor, bounds: Rectangle) -> Option<canvas::Action<Message>> {
+    let p = cursor.position_in(bounds)?;
+    let (dx, dy) = match *delta {
+        mouse::ScrollDelta::Lines { x, y } => (x, y),
+        mouse::ScrollDelta::Pixels { x, y } => (x / 40.0, y / 40.0),
+    };
+    if dx == 0.0 && dy == 0.0 {
+        return None;
+    }
+    Some(canvas::Action::publish(Message::TimelineWheel(dx, dy, t.t(p.x, bounds))).and_capture())
+}
+
 impl canvas::Program<Message> for OverlayLane {
     /// Its drag, and the drag epoch it began in (see `State::epoch`).
     type State = (OverlayDrag, u64);
@@ -1264,21 +1281,7 @@ impl canvas::Program<Message> for OverlayLane {
         }
         let drag = &mut state.0;
         match event {
-            Mouse(mouse::Event::WheelScrolled { delta }) => {
-                let p = cursor.position_in(bounds)?;
-                let (dx, dy) = match *delta {
-                    mouse::ScrollDelta::Lines { x, y } => (x, y),
-                    mouse::ScrollDelta::Pixels { x, y } => (x / 40.0, y / 40.0),
-                };
-                let message = if dy != 0.0 {
-                    Message::TimelineZoom(1.25f64.powf(dy as f64), Some(t.t(p.x, bounds)))
-                } else if dx != 0.0 {
-                    Message::TimelinePan(t.start - dx as f64 * t.span * 0.1)
-                } else {
-                    return None;
-                };
-                Some(canvas::Action::publish(message).and_capture())
-            }
+            Mouse(mouse::Event::WheelScrolled { delta }) => wheel(delta, t, cursor, bounds),
             // Right-click an overlay picture: what file it is (text has none).
             Mouse(mouse::Event::ButtonPressed(mouse::Button::Right)) if self.1 == Track::Overlay => {
                 let p = cursor.position_in(bounds)?;
@@ -1731,22 +1734,7 @@ impl canvas::Program<Message> for Marks {
                 state.ctrl = m.command();
                 None
             }
-            Mouse(mouse::Event::WheelScrolled { delta }) => {
-                let p = cursor.position_in(bounds)?;
-                let (dx, dy) = match *delta {
-                    mouse::ScrollDelta::Lines { x, y } => (x, y),
-                    mouse::ScrollDelta::Pixels { x, y } => (x / 40.0, y / 40.0),
-                };
-                let (pan, zoom) = if state.shift { (dx + dy, 0.0) } else { (dx, dy) };
-                let message = if zoom != 0.0 {
-                    Message::TimelineZoom(1.25f64.powf(zoom as f64), Some(self.t(p.x, bounds)))
-                } else if pan != 0.0 {
-                    Message::TimelinePan(self.start - pan as f64 * self.span * 0.1)
-                } else {
-                    return None;
-                };
-                Some(canvas::Action::publish(message).and_capture())
-            }
+            Mouse(mouse::Event::WheelScrolled { delta }) => wheel(delta, self, cursor, bounds),
             // Right-click a cut: what file it is; a cut's sound or a sound
             // clip: its menu, where the pointer is (Info is in it); a sound
             // lane's empty stretch: the track's menu.
@@ -2662,6 +2650,9 @@ impl canvas::Program<Message> for Flags {
         if state.epoch != t.drag_epoch {
             (state.epoch, state.mark) = (t.drag_epoch, None);
         }
+        if let Mouse(mouse::Event::WheelScrolled { delta }) = event {
+            return wheel(delta, t, cursor, bounds);
+        }
         match event {
             Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
                 let p = cursor.position_in(bounds)?;
@@ -2776,6 +2767,7 @@ impl canvas::Program<Message> for Ruler {
     fn update(&self, state: &mut RulerState, event: &iced::Event, bounds: Rectangle, cursor: mouse::Cursor) -> Option<canvas::Action<Message>> {
         use iced::Event::Mouse;
         match event {
+            Mouse(mouse::Event::WheelScrolled { delta }) => wheel(delta, &self.0, cursor, bounds),
             Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
                 let p = cursor.position_in(bounds).filter(|p| p.x >= HEAD)?;
                 state.dragging = true;

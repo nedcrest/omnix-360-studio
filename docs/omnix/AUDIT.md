@@ -26,7 +26,6 @@ cost is duplication and drift.
 ## Duplicates
 
 Across the two repos:
-- [ ] Sidecar reading ×2 (Dailix `footage.rs`, Omnix `from_sheet.rs`).
 - [ ] Poster frame ×2, Dailix's with a bare `ffmpeg` (not portable).
 - [ ] `is_day` ×3; `config_dir` ×3;
       `04_project` hard-coded beside `Layout`.

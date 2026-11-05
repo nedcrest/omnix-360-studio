@@ -25,31 +25,6 @@ const POINT: f64 = 6.0;
 /// Shorter than Omnix's shortest cut, a mark makes none.
 const MIN_CUT: f64 = crate::model::edit::MIN_CUT;
 
-/// A clip as the analysis knows it: its key, file and length.
-struct Clip {
-    key: String,
-    path: PathBuf,
-    duration: f64,
-}
-
-/// The project's clips, day by day, by file: from the analysis's sidecars.
-fn clips(layout: &Layout) -> Result<Vec<Clip>> {
-    let mut out = Vec::new();
-    let mut days: Vec<PathBuf> = std::fs::read_dir(layout.analysis()).with_context(|| format!("reading {}", layout.analysis().display()))?.flatten().map(|e| e.path()).filter(|p| p.is_dir()).collect();
-    days.sort();
-    for dir in days {
-        let mut files: Vec<PathBuf> = std::fs::read_dir(&dir)?.flatten().map(|e| e.path()).filter(|p| p.to_string_lossy().ends_with(".footage.json")).collect();
-        files.sort();
-        for f in files {
-            let Ok(v) = std::fs::read(&f).map_err(anyhow::Error::from).and_then(|b| Ok(serde_json::from_slice::<serde_json::Value>(&b)?)) else { continue };
-            let (Some(source), Some(day), Some(duration)) = (v["source"].as_str(), v["day"].as_str(), v["technical"]["duration_s"].as_f64()) else { continue };
-            let key = format!("{day}/{source}");
-            out.push(Clip { path: layout.clip(&key), key, duration });
-        }
-    }
-    Ok(out)
-}
-
 /// A mark's label for a cut's note: its role and note.
 fn label(role: Option<&str>, note: &str) -> String {
     [role.unwrap_or_default(), note].into_iter().filter(|s| !s.is_empty()).collect::<Vec<_>>().join(" · ")
@@ -62,7 +37,10 @@ pub fn build(root: &Path, day: Option<&str>) -> Result<Project> {
     let text = std::fs::read_to_string(layout.sheet()).with_context(|| format!("reading {}", layout.sheet().display()))?;
     let sheet = Doc::parse(&text)?.sheet()?;
     let mut cuts = Vec::new();
-    for clip in clips(&layout)?.into_iter().filter(|c| day.is_none_or(|d| c.key.starts_with(&format!("{d}/")))) {
+    // A sidecar that can't be read leaves its clip out, as Dailix's sheet
+    // does (and says).
+    let (footage, _) = dailix_sheet::footage::read(&layout).with_context(|| format!("reading {}", layout.analysis().display()))?;
+    for clip in footage.days.into_iter().filter(|d| day.is_none_or(|only| d.day == only)).flat_map(|d| d.clips) {
         let Some(mark) = sheet.clips.get(&clip.key) else { continue };
         if !matches!(mark.rating, Some(Rating::Take | Rating::Think)) {
             continue;

@@ -28,7 +28,6 @@ cost is duplication and drift.
 Across the two repos:
 
 In Omnix:
-- [ ] `note()` ×2 (with the panels' help text, below).
 - [ ] Info read and drawn twice (bin side pane, Info panel).
 - [ ] Whole-film `Mix` assembly ×3; `Sound` spelt out by hand.
 - [ ] Find-by-id ×7; `Lane::place` = `Music::place`; mute-aware level ×3.
@@ -44,11 +43,6 @@ In Omnix:
 - [ ] Library modules reach into `player` and `cli` (`Waveform`,
       `render`, `osv_under`).
 - [ ] Tests in the wrong module (`sound_ui.rs` tests cuts and markers).
-
-## Help text in panels (house rule)
-
-- [ ] Audio and Export panels' paragraphs → tooltips. Settings' notes were
-      accepted by the user; they stay.
 
 ## For the user to decide
 

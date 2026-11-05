@@ -38,15 +38,11 @@ impl std::fmt::Display for Loudness {
 const INDENT: f32 = 26.0;
 
 /// Small dimmed text under an option, saying what it does.
-fn note<'a>(s: impl text::IntoFragment<'a>) -> Element<'a, Message> {
-    text(s).size(13).style(text::secondary).into()
-}
-
 impl App {
     pub(super) fn export_panel(&self) -> Element<'_, Message> {
         let (shape, about_shape) = match self.aspect {
-            Aspect::Ratio(w, h) => (crate::view::Aspect(w.into(), h.into()), "In the aspect's shape (top bar)."),
-            Aspect::Free => (crate::view::Aspect(16, 9), "16:9, as the aspect (top bar) is Free."),
+            Aspect::Ratio(w, h) => (crate::view::Aspect(w.into(), h.into()), "In the aspect's shape (top bar)"),
+            Aspect::Free => (crate::view::Aspect(16, 9), "16:9, as the aspect (top bar) is Free"),
         };
         let [w, h] = shape.size(self.resolution.short_side());
         let what = if self.export_clips {
@@ -55,7 +51,7 @@ impl App {
             format!("{w} × {h}, {}", dailix_sheet::clock(self.edit.duration(), 2))
         };
         let format = |f: Format, name: &'static str, about: &'static str| {
-            column![radio(name, f, Some(self.export_format), Message::ExportFormat), row![space().width(INDENT), note(about)]].spacing(2)
+            tip(radio(name, f, Some(self.export_format), Message::ExportFormat), text(about), tooltip::Position::Left)
         };
         let clips = column![
             tip(
@@ -80,14 +76,13 @@ impl App {
             text("Export").size(18),
             column![
                 text("Resolution"),
-                pick_list(&crate::Resolution::ALL[..], Some(self.resolution), Message::Resolution).width(Length::Fill),
-                note("Pixels on the picture's short side."),
+                tip(pick_list(&crate::Resolution::ALL[..], Some(self.resolution), Message::Resolution).width(Length::Fill), text("Pixels on the picture's short side"), tooltip::Position::Left),
             ]
             .spacing(4),
             column![
                 text("Format"),
-                format(Format::Mp4, "MP4", "H.264 and AAC: plays anywhere, small."),
-                format(Format::Resolve, "DaVinci Resolve", "10-bit DNxHR HQX with PCM sound in .mov, which Resolve's free Linux version reads, with room to grade. Large: about 28 MB a second at 1080p."),
+                format(Format::Mp4, "MP4", "H.264 and AAC: plays anywhere, small"),
+                format(Format::Resolve, "DaVinci Resolve", "10-bit DNxHR HQX with PCM sound in .mov, which Resolve's free Linux version reads, with room to grade. Large: about 28 MB a second at 1080p"),
             ]
             .spacing(6),
             column![text("Clips"), clips].spacing(6),
@@ -101,7 +96,7 @@ impl App {
             ]
             .spacing(4),
             rule::horizontal(1),
-            column![text(what), note(about_shape)].spacing(2),
+            tip(text(what), text(about_shape), tooltip::Position::Left),
             labelled_button(EXPORT, if self.export_clips { "Export clips…" } else { "Export…" }, go),
         ]
         .spacing(14)

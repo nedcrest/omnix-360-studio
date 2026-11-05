@@ -95,6 +95,7 @@ done in part stays here until its last card is done.
 | 73 | Multicam: several cameras as one clip, a module of its own; 360 angles the same way | below |
 | 74 | Dailix: the studio and contact sheet as a native Rust app of their own | below |
 | 75 | A cut's flags from the contact sheet as markers on the edit | below |
+| 76 | The program's name: rosmo360 → omnix | below |
 
 ## Open gaps
 
@@ -1340,6 +1341,24 @@ calls it. The bin also lists a section's subfolders (Dailix's days,
 segment stay in the sheet. Made when a cut is made from a segment (the
 bin's add buttons, or Dailix's hand-over), kept in step by the mark's
 id (a marker could carry it). Milestone «Матеріал і бін».
+
+### 76. The program's name: rosmo360 → omnix — later (user, 2026-11-05)
+
+The binary is still upstream's `rosmo360`. To do later, as one change,
+because the name is in 34 files across three repos:
+- the Cargo package and binary (`Cargo.toml`), and with it the library's
+  crate name Dailix uses (`rosmo360::viewer`, `rosmo360::from_sheet`);
+- the settings and cache folders (`settings.rs`, `cache.rs`:
+  `~/.config/rosmo360`, the clip cache): moved or read from the old
+  place once, so nothing set or cached is lost;
+- `packaging/` (desktop entry, icon names, Flatpak, macOS, Windows);
+- the CLI's examples and docs; `tests/cli.rs`;
+- footage-agent's `export/omnix.py` (`app()` looks for `rosmo360`) and
+  Dailix's `omnix()` (OMNIX_BIN, PATH, the sibling build);
+- the desktop entries installed on this machine.
+Upstream (rOsmo360) is unchanged since our fork point; merging from it
+later gets harder with the rename, so it waits until we know we won't.
+Milestone «Інші платформи» (packaging).
 
 ## Format rule for all of these
 

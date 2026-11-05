@@ -44,8 +44,8 @@ impl SoundRef {
     /// Where it is in `p` now.
     pub fn own(self, p: &Project) -> Option<Own> {
         match self {
-            SoundRef::Cut(id) => p.cuts.iter().position(|c| c.id == id).map(Own::Cut),
-            SoundRef::Clip(id) => SoundTrack::ALL.into_iter().find_map(|w| p.track(w).clips.iter().position(|c| c.id == id).map(|i| Own::Clip(w, i))),
+            SoundRef::Cut(id) => p.cut_index(id).map(Own::Cut),
+            SoundRef::Clip(id) => p.clip_index(id).map(|(w, i)| Own::Clip(w, i)),
         }
     }
 

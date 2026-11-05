@@ -197,7 +197,7 @@ fn mark_at(marks: &[crate::project::Mark], t: f64) -> Option<usize> {
 
 /// Where cut `id` is.
 fn find(p: &Project, id: Id) -> Result<usize, OpError> {
-    p.cuts.iter().position(|c| c.id == id).ok_or_else(|| OpError::NotFound(format!("cut #{id}")))
+    p.cut_index(id).ok_or_else(|| OpError::NotFound(format!("cut #{id}")))
 }
 
 fn position(i: usize, of: usize) -> String {

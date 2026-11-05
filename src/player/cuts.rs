@@ -69,7 +69,7 @@ impl App {
         let lut = self.auto_lut(&input);
         let place = self.placing.remove(&input).unwrap_or(Place::End);
         let added = self.op(Op::Cut(CutOp::Add { input, start, end, place, stabilize: Some(self.opts.stabilize), lut }));
-        let Some(i) = added.and_then(|o| o.made).and_then(|id| self.cut_index(id)) else { return };
+        let Some(i) = added.and_then(|o| o.made).and_then(|id| self.edit.cut_index(id)) else { return };
         self.mark_flat();
         self.selection = Selection::cut_at(&self.edit, i);
         if self.clip.is_none() {

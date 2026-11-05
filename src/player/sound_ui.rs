@@ -183,7 +183,7 @@ impl App {
                 self.sound_menu = None;
                 let Some(clip) = self.edit.track(from).clips.get(i).map(|c| c.id) else { return Task::none() };
                 if self.edit.apply(&Op::Clip(crate::model::ops::clips::ClipOp::OtherSfx { clip })).is_ok()
-                    && let Some((w, j)) = self.clip_index(clip)
+                    && let Some((w, j)) = self.edit.clip_index(clip)
                 {
                     self.selection = Selection::clip_at(&self.edit, w, j);
                 }

@@ -102,10 +102,7 @@ fn lanes(p: &mut Project, track: Track) -> &mut Vec<crate::overlay::Lane> {
 
 /// Which track, lane and place item `id` is in.
 fn find(p: &Project, id: Id) -> Result<(Track, usize, usize), OpError> {
-    [(Track::Overlay, &p.overlays), (Track::Text, &p.text)]
-        .into_iter()
-        .find_map(|(track, lanes)| lanes.iter().enumerate().find_map(|(l, lane)| lane.items.iter().position(|it| it.id == id).map(|i| (track, l, i))))
-        .ok_or_else(|| OpError::NotFound(format!("item #{id}")))
+    p.item_index(id).ok_or_else(|| OpError::NotFound(format!("item #{id}")))
 }
 
 #[cfg(test)]

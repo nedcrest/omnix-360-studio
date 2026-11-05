@@ -5,7 +5,7 @@
 
 use super::edit::Edit;
 use super::ops::SoundRef;
-use crate::overlay::{ItemRef, Track};
+use crate::overlay::ItemRef;
 use crate::project::{Id, Own, Project, SoundTrack};
 
 /// Named by id (a point by its sound and time), as the ops name things: a
@@ -66,16 +66,13 @@ impl Selection {
     /// Where the selected cut is in `p`.
     pub fn cut(self, p: &Project) -> Option<usize> {
         let Selection::Cut(id) = self else { return None };
-        p.cuts.iter().position(|c| c.id == id)
+        p.cut_index(id)
     }
 
     /// The selected sound clip's track and place in `p`.
     pub fn clip(self, p: &Project) -> Option<(SoundTrack, usize)> {
         let Selection::Clip(id) = self else { return None };
-        match SoundRef::Clip(id).own(p)? {
-            Own::Clip(w, i) => Some((w, i)),
-            Own::Cut(_) => None,
-        }
+        p.clip_index(id)
     }
 
     /// The selected point's line and place on it in `p`.
@@ -89,7 +86,8 @@ impl Selection {
     /// The selected item's track and place, in the lanes the player shows.
     pub fn item(self, p: &Project) -> Option<ItemRef> {
         let Selection::Item(id) = self else { return None };
-        [Track::Overlay, Track::Text].into_iter().find_map(|t| p.lane(t)?.items.iter().position(|it| it.id == id).map(|i| (t, i)))
+        // The player shows each track's first lane (lanes as groups: gap 70).
+        p.item_index(id).filter(|&(_, lane, _)| lane == 0).map(|(t, _, i)| (t, i))
     }
 
     /// The sound a volume point would go on: the selected point's line, or
@@ -139,6 +137,7 @@ impl Edit {
 
 #[cfg(test)]
 mod tests {
+    use crate::overlay::Track;
     use super::*;
     use crate::project::{Cut, VolumeKey};
     use std::path::PathBuf;

@@ -144,7 +144,7 @@ impl App {
                 let at = at.unwrap_or_else(|| self.edit.track(which).end());
                 // An SFX over another lands on SFX 2 (the op's rule): open it.
                 let added = self.op(Op::Clip(ClipOp::Add { track: which, input: path.clone(), at, start: 0.0, end: len }));
-                if let Some((w, i)) = added.and_then(|o| o.made).and_then(|id| self.clip_index(id)) {
+                if let Some((w, i)) = added.and_then(|o| o.made).and_then(|id| self.edit.clip_index(id)) {
                     if w == SoundTrack::Sfx2 {
                         self.folds.sfx2 = false;
                     }

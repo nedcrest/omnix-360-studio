@@ -148,7 +148,8 @@ fn set<K: Key>(keys: &mut Vec<K>, t: f64, v: K::V, tolerance: f64) {
 }
 
 fn find_cut(p: &mut Project, id: Id) -> Result<&mut crate::project::Cut, OpError> {
-    p.cuts.iter_mut().find(|c| c.id == id).ok_or_else(|| OpError::NotFound(format!("cut #{id}")))
+    let i = p.cut_index(id).ok_or_else(|| OpError::NotFound(format!("cut #{id}")))?;
+    Ok(&mut p.cuts[i])
 }
 
 /// Where `f` points, from the player's `aims`.
@@ -164,7 +165,12 @@ fn effects(p: &mut Project, on: Graded) -> Result<&mut Vec<EffectKey>, OpError> 
 }
 
 fn find_item(p: &mut Project, id: Id) -> Result<&mut Item, OpError> {
-    p.overlays.iter_mut().chain(&mut p.text).flat_map(|l| &mut l.items).find(|it| it.id == id).ok_or_else(|| OpError::NotFound(format!("item #{id}")))
+    let (track, l, i) = p.item_index(id).ok_or_else(|| OpError::NotFound(format!("item #{id}")))?;
+    let lanes = match track {
+        crate::overlay::Track::Overlay => &mut p.overlays,
+        crate::overlay::Track::Text => &mut p.text,
+    };
+    Ok(&mut lanes[l].items[i])
 }
 
 /// Where the key at `t` on `line` is.

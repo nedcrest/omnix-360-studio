@@ -1100,6 +1100,25 @@ impl Project {
         SoundTrack::ALL.into_iter().flat_map(|t| &self.track(t).clips)
     }
 
+    /// Where the cut with id `id` is.
+    pub fn cut_index(&self, id: Id) -> Option<usize> {
+        self.cuts.iter().position(|c| c.id == id)
+    }
+
+    /// Which sound track the clip with id `id` is on, and where.
+    pub fn clip_index(&self, id: Id) -> Option<(SoundTrack, usize)> {
+        SoundTrack::ALL.into_iter().find_map(|w| self.track(w).clips.iter().position(|c| c.id == id).map(|i| (w, i)))
+    }
+
+    /// Which track (overlays or text), lane and place the item with id `id`
+    /// is at.
+    pub fn item_index(&self, id: Id) -> Option<(crate::overlay::Track, usize, usize)> {
+        use crate::overlay::Track;
+        [(Track::Overlay, &self.overlays), (Track::Text, &self.text)]
+            .into_iter()
+            .find_map(|(track, lanes)| lanes.iter().enumerate().find_map(|(l, lane)| lane.items.iter().position(|it| it.id == id).map(|i| (track, l, i))))
+    }
+
     pub fn track(&self, which: SoundTrack) -> &Music {
         match which {
             SoundTrack::Music => &self.music,

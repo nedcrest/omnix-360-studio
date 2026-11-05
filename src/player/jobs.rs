@@ -103,7 +103,7 @@ impl App {
     pub(super) fn follow_track(&mut self, done: TrackDone) {
         self.save_status = Some(format!("Tracked {}: found in {} of {} samples", done.colour, done.found, done.rows));
         // Gone from the edit meanwhile: the track's file stays, unused.
-        let Some(at) = self.cut_index(done.cut) else { return };
+        let Some(at) = self.edit.cut_index(done.cut) else { return };
         self.followed.borrow_mut().remove(&done.path);
         let follow = Follow::Track(done.path);
         let here = at == self.current;

@@ -83,7 +83,7 @@ pub(super) fn apply(p: &mut Project, op: &ClipOp) -> Result<Outcome, OpError> {
 
 /// Which track clip `id` is on, and where.
 fn find(p: &Project, id: Id) -> Result<(SoundTrack, usize), OpError> {
-    SoundTrack::ALL.into_iter().find_map(|w| p.track(w).clips.iter().position(|c| c.id == id).map(|i| (w, i))).ok_or_else(|| OpError::NotFound(format!("sound clip #{id}")))
+    p.clip_index(id).ok_or_else(|| OpError::NotFound(format!("sound clip #{id}")))
 }
 
 #[cfg(test)]

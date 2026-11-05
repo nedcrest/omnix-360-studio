@@ -7,14 +7,8 @@ commit lands; the page goes when the list is empty. Strictly dead code
 turned out rare (Dailix's sheet core had some, gone in `1573719`); the
 cost is duplication and drift.
 
-## Bugs found on the way (first)
+## Left: the timeline package (its own milestone step, CORE-API step 10)
 
-
-## Duplicates
-
-Across the two repos:
-
-In Omnix:
 - [ ] Timeline: press and hover each walk what's under the pointer (now in
       the same order, `Marks` and `OverlayLane`): one `Hit` per canvas,
       used by both (CORE-API step 10).
@@ -22,9 +16,7 @@ In Omnix:
       crossfade X, lane boxes) copied across lanes; view structs copy the
       model field by field; five selection fields rebuilt from one.
 
-## Tangled
-
-- [ ] `Marks::update` 241 lines (with the timeline's `Hit`).
+- [ ] `Marks::update` 241 lines (split once `Hit` exists).
 
 ## Looked at and kept
 

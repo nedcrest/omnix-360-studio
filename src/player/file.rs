@@ -156,9 +156,11 @@ impl App {
         row![text(label), progress_bar(0.0..=1.0, self.load_progress()).length(length).girth(8)].spacing(8).align_y(Alignment::Center).into()
     }
 
-    /// The logo shown while a clip loads or decodes its first frame.
+    /// Omnix's mark and name, shown at the start and while a clip loads or
+    /// decodes its first frame.
     pub(super) fn logo(&self) -> Element<'_, Message> {
-        image(self.logo.clone()).width(Length::Fixed(420.0)).into()
+        let mark = iced::widget::svg(self.logo.clone()).width(160).height(160);
+        iced::widget::column![mark, text(NAME).size(40)].spacing(10).align_x(Alignment::Center).into()
     }
 
     /// Forgets what pointed into the edit being left: selections, the

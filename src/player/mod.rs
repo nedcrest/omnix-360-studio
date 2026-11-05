@@ -121,7 +121,7 @@ pub fn run(inputs: Vec<PathBuf>, launch: Launch) -> Result<()> {
         // Closing asks first when the edit has unsaved changes.
         exit_on_close_request: false,
         // Wayland matches the window to its menu entry and icon by this id: in a
-        // Flatpak that's the Flatpak's own (io.github.ravelund.rOsmo360).
+        // Flatpak that's the Flatpak's own id.
         #[cfg(target_os = "linux")]
         platform_specific: window::settings::PlatformSpecific {
             application_id: std::env::var("FLATPAK_ID").unwrap_or_else(|_| NAME.to_owned()),
@@ -130,7 +130,7 @@ pub fn run(inputs: Vec<PathBuf>, launch: Launch) -> Result<()> {
         // Windows takes the title bar's and taskbar's icon from the window,
         // not the .exe's resource (which Explorer shows).
         #[cfg(windows)]
-        icon: window::icon::from_file_data(include_bytes!("../../packaging/rosmo360.png"), None).ok(),
+        icon: window::icon::from_file_data(include_bytes!("../../packaging/omnix.png"), None).ok(),
         ..Default::default()
     })
     .run()
@@ -516,7 +516,7 @@ struct App {
     followed: std::cell::RefCell<std::collections::HashMap<PathBuf, Option<Arc<crate::track::Track>>>>,
     /// The colour theme (the Settings panel's; Kanagawa Dragon unless chosen).
     theme: Theme,
-    logo: image::Handle,
+    logo: svg::Handle,
     /// Every clip opened so far, ready for the cuts that use it.
     library: Vec<Media>,
     /// Each clip's timeline thumbnails by clip time, as they arrive.
@@ -733,7 +733,7 @@ impl App {
             ten_bit: saved.ten_bit,
             dlog_m_lut: saved.dlog_m_lut.clone(),
             luts: crate::lut::library_names(),
-            logo: image::Handle::from_bytes(LOGO),
+            logo: svg::Handle::from_memory(LOGO),
             library: Vec::new(),
             thumbs: Default::default(),
             waveforms: Default::default(),

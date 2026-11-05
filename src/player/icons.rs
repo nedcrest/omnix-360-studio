@@ -125,12 +125,15 @@ pub(super) const SPEAKER: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" vi
 
 pub(super) const SPEAKER_MUTED: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z" fill="white"/><path d="m22 9-6 6"/><path d="m16 9 6 6"/></svg>"#;
 
-pub(super) const LOGO: &[u8] = include_bytes!("../../vibewithravelund-lowres-corrected.jpg");
+/// Omnix's own mark (`packaging/omnix.svg`, the app's icon too): a
+/// sphere over a timeline, its playhead through the lanes.
+pub(super) const LOGO: &[u8] = include_bytes!("../../packaging/omnix.svg");
 
-/// Who made it, and how: credit to rOsmo360's author, whose work this is
-/// built on, and to the AI-assisted way it was made.
+/// Who made it, and how: Omnix made with Claude, and, apart, rOsmo360,
+/// whose stitching and player it grew from (user, 2026-11-05, gap 79).
 pub(super) fn credit<'a>() -> Element<'a, Message> {
-    container(text(concat!("Omnix · built on rOsmo360 ", env!("CARGO_PKG_VERSION"), " · Made by Vibing with Ravelund · 2026")).size(12).style(text::secondary)).width(Length::Fill).align_x(Alignment::Center).padding([2, 10]).into()
+    let line = concat!("Omnix ", env!("CARGO_PKG_VERSION"), " · made by Dmytro Halushko with Claude · 2026  ·  built on rOsmo360 by Vibing with Ravelund");
+    container(text(line).size(12).style(text::secondary)).width(Length::Fill).align_x(Alignment::Center).padding([2, 10]).into()
 }
 
 /// A hint on hover, on a box of its own so it reads over the picture.

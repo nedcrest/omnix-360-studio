@@ -796,6 +796,21 @@ pub struct Encoder {
     stdin: Option<ChildStdin>,
     /// It takes 16-bit frames.
     deep: bool,
+    /// The file being written: removed unless `finish` succeeds, so an
+    /// export that fails or is cancelled at any step leaves no half file.
+    output: PathBuf,
+    finished: bool,
+}
+
+impl Drop for Encoder {
+    fn drop(&mut self) {
+        if !self.finished {
+            drop(self.stdin.take());
+            let _ = self.child.kill();
+            let _ = self.child.wait();
+            let _ = std::fs::remove_file(&self.output);
+        }
+    }
 }
 
 /// Where rendered frames go: an encoder, or something blending them first.
@@ -885,7 +900,7 @@ impl Encoder {
             cmd.args(["-filter_complex", &graph, "-map", "[a]"]);
         } else if let [_] = audio {
             cmd.args(["-map", "1:a:0?"]);
-        } else if audio.iter().all(Sound::sounds) {
+        } else if !audio.is_empty() && audio.iter().all(Sound::sounds) {
             // Same camera, but resample anyway: concat needs matching formats.
             let parts: String = (1..).zip(audio).map(|(i, s)| format!("[{i}:a:0]aresample=48000,aformat=channel_layouts=stereo{}[a{i}];", pad(s))).collect();
             let inputs: String = (1..=audio.len()).map(|i| format!("[a{i}]")).collect();
@@ -900,7 +915,7 @@ impl Encoder {
             .spawn()
             .context("running ffmpeg")?;
         let stdin = child.stdin.take();
-        Ok(Encoder { child, stdin, deep })
+        Ok(Encoder { child, stdin, deep, output: output.to_owned(), finished: false })
     }
 
     pub fn write(&mut self, frame: &Frame) -> Result<()> {
@@ -911,18 +926,13 @@ impl Encoder {
         Ok(())
     }
 
-    /// Stops encoding, leaving whatever was written.
-    pub fn abort(mut self) {
-        drop(self.stdin.take());
-        let _ = self.child.kill();
-        let _ = self.child.wait();
-    }
-
+    /// The file complete; dropped without this, it's removed.
     pub fn finish(mut self) -> Result<()> {
         drop(self.stdin.take());
         if !self.child.wait()?.success() {
             bail!("ffmpeg encoder failed");
         }
+        self.finished = true;
         Ok(())
     }
 }
@@ -969,6 +979,28 @@ mod tests {
         let o = nv12(input, 0, 1.0, out, hw).unwrap().args(["-frames:v", "1", "-f", "rawvideo", "-"]).stderr(Stdio::null()).output().unwrap();
         assert!(o.status.success(), "{hw:?}");
         o.stdout
+    }
+
+    #[test]
+    fn an_export_left_unfinished_leaves_no_file() {
+        let dir = testmedia::dir("encoder-drop");
+        let frame = Frame { width: 64, height: 36, rgb: vec![128; 64 * 36 * 3], deep: false };
+        let write = |name: &str, finish: bool| {
+            let path = dir.join(name);
+            let mut e = Encoder::new(&path, (64, 36), 30.0, &[], None, Format::Mp4, false).unwrap();
+            for _ in 0..30 {
+                e.write(&frame).unwrap();
+            }
+            if finish {
+                e.finish().unwrap();
+            } else {
+                drop(e);
+            }
+            path.exists()
+        };
+        assert!(write("done.mp4", true));
+        assert!(!write("failed.mp4", false), "dropped mid-way (an error, a cancel): gone");
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

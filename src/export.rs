@@ -226,16 +226,10 @@ pub(crate) fn export(project: &project::Project, opts: &StitchOpts, out: &Export
                 }
                 c
             };
-            let result = match &mut gpu {
-                Some(gpu) => player::render::encode(gpu, &pipelines[i], &clips[i], start, frames, &mut sink, camera, size, &mut tick),
-                None => encode(&pipelines[i], start, Some(frames), &mut sink, |t| Shot::View { camera: Box::new(camera(t)), size }, &mut tick),
-            };
-            if let Err(e) = result {
-                drop(sink);
-                drop(burn);
-                encoder.abort();
-                let _ = std::fs::remove_file(&path);
-                return Err(e);
+            // On an error the encoder, dropped unfinished, removes the file.
+            match &mut gpu {
+                Some(gpu) => player::render::encode(gpu, &pipelines[i], &clips[i], start, frames, &mut sink, camera, size, &mut tick)?,
+                None => encode(&pipelines[i], start, Some(frames), &mut sink, |t| Shot::View { camera: Box::new(camera(t)), size }, &mut tick)?,
             }
             done += frames;
         }

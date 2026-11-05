@@ -9,9 +9,6 @@ cost is duplication and drift.
 
 ## Bugs found on the way (first)
 
-- [ ] Export: an error after the encoder starts (overlay burn, a cut's
-      sound, `finish`) leaves a half-written file; `Encoder` has no drop
-      guard (`export.rs` `export`, `ffmpeg/mod.rs` `Encoder`).
 - [ ] Save frame (PNG): no grade, no LUT, so a D-Log M cut saves flat
       (`player/export.rs` `Request`, `jobs.rs`). CPU/GPU rule.
 - [ ] Bin panel lists folder clips twice under «Loaded clips»: use

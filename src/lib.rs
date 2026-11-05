@@ -9,7 +9,6 @@
 //! for now) keep adding fields; none may be lost here. What a program
 //! reads is the typed view over it ([`Sheet`]).
 
-pub mod edit;
 pub mod footage;
 pub mod layout;
 pub mod marking;
@@ -17,7 +16,6 @@ pub mod ops;
 pub mod project;
 pub mod store;
 
-pub use edit::Edit;
 pub use layout::Layout;
 pub use store::{Store, StoreError};
 

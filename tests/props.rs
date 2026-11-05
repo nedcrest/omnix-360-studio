@@ -1,10 +1,10 @@
 //! Random runs of ops on a sheet: after each, the sheet has no problem
-//! `check` finds, reads back from its own text as it is, and undo walks
-//! back through every state it was in. Deeper runs:
+//! `check` finds, and reads back from its own text as it is; an op refused
+//! leaves it as it was. Deeper runs:
 //! `PROPTEST_CASES=20000 cargo test --test props`.
 
 use proptest::prelude::*;
-use dailix_sheet::{ClipOp, DayOp, Doc, Edit, MarkOp, Op, RoleOp};
+use dailix_sheet::{ClipOp, DayOp, Doc, MarkOp, Op, RoleOp};
 
 const CLIPS: [&str; 3] = ["2030-05-01/a.mp4", "2030-05-01/b.mp4", "2030-05-02/c.mov"];
 
@@ -38,26 +38,15 @@ fn op() -> impl Strategy<Value = Op> {
 
 proptest! {
     #[test]
-    fn runs_of_ops_keep_the_sheet_sound_and_undo_walks_back(ops in proptest::collection::vec(op(), 1..40)) {
-        let mut edit = Edit::new(Doc::parse("{}").unwrap());
-        let mut states = vec![edit.doc().text()];
+    fn runs_of_ops_keep_the_sheet_sound(ops in proptest::collection::vec(op(), 1..40)) {
+        let mut doc = Doc::parse("{}").unwrap();
         for op in &ops {
-            if edit.apply(op).is_ok() && edit.doc().text() != *states.last().unwrap() {
-                states.push(edit.doc().text());
+            let before = doc.text();
+            if doc.apply(op).is_err() {
+                prop_assert_eq!(doc.text(), before, "refused, unchanged: {:?}", op);
             }
-            let doc = edit.doc();
             prop_assert!(doc.check().is_empty(), "{:?} after {:?}", doc.check(), op);
             prop_assert_eq!(Doc::parse(&doc.text()).unwrap().text(), doc.text());
-        }
-        // Undo back through every state, then redo forward again.
-        for state in states.iter().rev().skip(1) {
-            prop_assert!(edit.undo());
-            prop_assert_eq!(&edit.doc().text(), state);
-        }
-        prop_assert!(!edit.undo());
-        for state in states.iter().skip(1) {
-            prop_assert!(edit.redo());
-            prop_assert_eq!(&edit.doc().text(), state);
         }
     }
 }

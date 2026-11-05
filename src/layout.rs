@@ -8,7 +8,7 @@
 //! <project>/
 //!   01_footage/<day>/<clip>   the clips, copied in (originals stay in the archive)
 //!   02_audio/music, 02_audio/voiceover
-//!   03_proxies/<day>/<clip>   the cameras' own light copies (DJI's LRF)
+//!   03_proxies/<day>/<clip>   light copies for quick editing (none made yet)
 //!   04_project … 09_luts
 //!   dailix/
 //!     project.json            what the project is and where it came from

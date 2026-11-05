@@ -46,10 +46,6 @@ impl Store {
         Store { path: path.into() }
     }
 
-    pub fn path(&self) -> &Path {
-        &self.path
-    }
-
     /// The sheet as it is now, with every mark given an id, written first
     /// if any had none: an id counts only once it's in the file.
     pub fn read(&self) -> Result<Doc, StoreError> {

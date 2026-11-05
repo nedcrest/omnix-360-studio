@@ -22,19 +22,18 @@
 
 use std::path::{Path, PathBuf};
 
-/// The numbered folders and what each is for (footage-agent's
-/// `layout.py`, the same tree).
-pub const FOLDERS: [(&str, &str); 10] = [
-    ("01_footage", "the clips, copied in; the originals stay in the archive"),
-    ("02_audio/music", "music"),
-    ("02_audio/voiceover", "voice-over recorded on its own"),
-    ("03_proxies", "the cameras' own light copies, for quick editing"),
-    ("04_project", "edits: .json for Omnix, .mlt for Kdenlive"),
-    ("05_export", "finished videos"),
-    ("06_external", "outside video: memes, inserts, transitions"),
-    ("07_sfx", "sound effects"),
-    ("08_graphics", "pictures over the video: logos, captions, arrows"),
-    ("09_luts", "LUT files (.cube) for this project's colour"),
+/// The numbered folders (footage-agent's `layout.py`, the same tree).
+pub const FOLDERS: [&str; 10] = [
+    "01_footage",         // the clips, copied in; the originals stay in the sources
+    "02_audio/music",     // music
+    "02_audio/voiceover", // voice-over recorded on its own
+    "03_proxies",         // light copies for quick editing (none made yet)
+    "04_project",         // edits: .json for Omnix
+    "05_export",          // finished videos
+    "06_external",        // outside video: memes, inserts, transitions
+    "07_sfx",             // sound effects
+    "08_graphics",        // pictures over the video: logos, captions, arrows
+    "09_luts",            // LUT files (.cube) for this project's colour
 ];
 
 /// The folders whose files come from elsewhere: each gets a `LICENSES.md`
@@ -80,9 +79,6 @@ impl Layout {
     pub fn footage(&self) -> PathBuf {
         self.root.join("01_footage")
     }
-    pub fn proxies(&self) -> PathBuf {
-        self.root.join("03_proxies")
-    }
 
     /// Whether `root` is a Dailix project (it has `dailix/project.json`).
     pub fn is_project(&self) -> bool {
@@ -94,19 +90,12 @@ impl Layout {
         self.footage().join(key)
     }
 
-    /// The sheet key of a clip file under `01_footage`.
-    pub fn key(&self, clip: &Path) -> Option<String> {
-        let rel = clip.strip_prefix(self.footage()).ok()?;
-        let parts: Vec<String> = rel.components().map(|c| c.as_os_str().to_string_lossy().into_owned()).collect();
-        (parts.len() >= 2).then(|| parts.join("/"))
-    }
-
     /// Makes the folders (and the licence notes) not there yet; touches
     /// nothing that is, so it's safe on a project made before a folder
     /// was added. What it made.
     pub fn create(&self) -> std::io::Result<Vec<PathBuf>> {
         let mut made = Vec::new();
-        let dirs = FOLDERS.iter().map(|(d, _)| self.root.join(d)).chain([self.data(), self.analysis(), self.thumbs(), self.voice()]);
+        let dirs = FOLDERS.iter().map(|d| self.root.join(d)).chain([self.data(), self.analysis(), self.thumbs(), self.voice()]);
         for d in dirs {
             if !d.is_dir() {
                 std::fs::create_dir_all(&d)?;
@@ -129,11 +118,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_clips_key_is_its_path_under_the_footage() {
+    fn a_clips_key_names_its_file_under_the_footage() {
         let l = Layout::new("/p");
-        assert_eq!(l.key(Path::new("/p/01_footage/2030-05-01/A.MP4")).as_deref(), Some("2030-05-01/A.MP4"));
-        assert_eq!(l.key(Path::new("/p/01_footage/A.MP4")), None);
-        assert_eq!(l.key(Path::new("/q/01_footage/2030-05-01/A.MP4")), None);
         assert_eq!(l.clip("2030-05-01/A.MP4"), PathBuf::from("/p/01_footage/2030-05-01/A.MP4"));
         assert_eq!(l.sheet(), PathBuf::from("/p/dailix/sheet.json"));
         assert_eq!(l.poster("2030-05-01/A.MP4"), PathBuf::from("/p/dailix/thumbs/2030-05-01/A.jpg"));

@@ -52,4 +52,3 @@ links Dailix's sheet core.
 4. **Library modules reaching into `player`:** the waveform
    (`player::music::Waveform`, used by `duck`, `preview`) and `render`
    (used by `export`): to the media layer.
-5. **Smaller duplicates:** `Sound` spelt out field by field in `cli.rs`.

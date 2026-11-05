@@ -66,6 +66,12 @@ impl<'a> Mix<'a> {
 }
 
 impl<'a> Sound<'a> {
+    /// `duration` seconds of `input` from `start`, as recorded: no level,
+    /// points, filters or fades.
+    pub fn plain(input: &'a Path, start: f64, duration: Option<f64>) -> Self {
+        Sound { input, start, duration, volume: &[], gain: 0.0, filter: None, crossfade: 0.0, fade_in: 0.0, fade_out: 0.0, head: 0.0, tail: 0.0 }
+    }
+
     /// Cut `c`'s stretch under its picture, from `input` at clip time
     /// `start` for `duration`: its level, points, filters and fades, and
     /// silence where its sound stops short. A fade at an edge its sound runs

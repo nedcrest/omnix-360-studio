@@ -99,6 +99,7 @@ done in part stays here until its last card is done.
 | 77 | Dailix: voice clean-up and loudness for camera and phone sound | below |
 | 78 | A vertical video in a wide edit: its sides filled from itself, not black | below |
 | 79 | Omnix's own face: the footer's credit and the start picture | below |
+| 80 | Omnix starts at a small window of recent projects; «New project» goes to Dailix: one fixed project layout | below |
 
 ## Open gaps
 
@@ -1430,6 +1431,23 @@ footer; README's credits. Left for publishing: the screenshots
 reserved, to be taken again in Omnix; the app id and release repository
 are placeholders (`local.omnix.Omnix`, `REPO=` in `install.sh`).
 
+
+### 80. Omnix starts at its recent projects; a new one is made in Dailix — idea (user, 2026-11-05)
+
+For the release: Omnix opens a small window of the projects opened last;
+«New project» opens Dailix (or goes to it), where a project is made in the
+one fixed layout (`dailix_sheet::Layout`: `01_footage/<day>/`, `04_project`
+for edits, ...). The point (user): "a fixed structure of projects, so I
+never wonder where that video is". Every edit lives in a project's
+`04_project`, every clip in its `01_footage` (or its sources), whatever
+camera it came from.
+- Omnix: the recent list (projects, by when opened; their folder's name
+  as Dailix's `title` gives it), opening one, «New project» → Dailix;
+  a clip or project dropped on it still opens as now.
+- Dailix: adding one's own videos to a project (a folder, a phone dump),
+  which is ingest's first step (`dailix/docs/INGEST.md`), at least
+  "copy these into `01_footage/<day>/`" with sidecars made.
+Milestone «Матеріал і бін».
 ## Format rule for all of these
 
 New fields only, each `#[serde(default, skip_serializing_if = …)]`, so every

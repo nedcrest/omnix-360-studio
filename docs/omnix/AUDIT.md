@@ -27,8 +27,7 @@ cost is duplication and drift.
 
 Across the two repos:
 - [ ] Poster frame ×2, Dailix's with a bare `ffmpeg` (not portable).
-- [ ] `is_day` ×3; `config_dir` ×3;
-      `04_project` hard-coded beside `Layout`.
+- [ ] `config_dir` ×3.
 
 In Omnix:
 - [ ] Bin player re-implements `viewer::Viewer` (`Picture`, tick, aspect).

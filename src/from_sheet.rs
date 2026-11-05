@@ -95,7 +95,7 @@ pub fn write_empty(root: &Path, day: Option<&str>) -> Result<PathBuf> {
 }
 
 fn save(root: &Path, day: Option<&str>, project: &Project) -> Result<PathBuf> {
-    let folder = root.join("04_project");
+    let folder = Layout::new(root).edits();
     std::fs::create_dir_all(&folder)?;
     let stem = format!("omnix-{}", day.unwrap_or("all-days"));
     let path = (1..).map(|n| folder.join(if n == 1 { format!("{stem}.json") } else { format!("{stem}-{n}.json") })).find(|p| !p.exists()).expect("a free name");
@@ -107,8 +107,7 @@ fn save(root: &Path, day: Option<&str>, project: &Project) -> Result<PathBuf> {
 pub fn day_of(file: &Path) -> Option<String> {
     let name = file.file_stem()?.to_str()?;
     let day = name.strip_prefix("omnix-")?.get(..10)?;
-    let date = day.len() == 10 && day.chars().enumerate().all(|(i, c)| if i == 4 || i == 7 { c == '-' } else { c.is_ascii_digit() });
-    date.then(|| day.to_owned())
+    dailix_sheet::is_day(day).then(|| day.to_owned())
 }
 
 #[cfg(test)]

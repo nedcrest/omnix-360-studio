@@ -369,14 +369,21 @@ impl App {
             // Every section, an empty one too: its «+» is where to add.
             Some((sections, _)) => {
                 for &(title, kind, _) in &super::bin::SECTIONS {
-                    let files = sections.iter().find(|s| s.title == title).map_or(&[][..], |s| &s.files[..]);
-                    body = body.push(rule::horizontal(1)).push(self.section_tiles(title, kind, files, true));
+                    // Its own files and each subfolder's (a day's), the «+» on
+                    // the first; an empty section still shows, for its «+».
+                    let mine: Vec<&super::bin::Section> = sections.iter().filter(|s| s.title == title).collect();
+                    if mine.is_empty() {
+                        body = body.push(rule::horizontal(1)).push(self.section_tiles(title, title.to_owned(), kind, &[], true));
+                    }
+                    for (i, s) in mine.into_iter().enumerate() {
+                        body = body.push(rule::horizontal(1)).push(self.section_tiles(title, s.heading(), kind, &s.files, i == 0));
+                    }
                 }
             }
         }
         let loaded = self.loaded_outside();
         if !loaded.is_empty() {
-            body = body.push(rule::horizontal(1)).push(self.section_tiles("Loaded clips", Kind::Clip, &loaded, false));
+            body = body.push(rule::horizontal(1)).push(self.section_tiles("Loaded clips", "Loaded clips".to_owned(), Kind::Clip, &loaded, false));
         }
         let tiles = scrollable(body.padding([0, 14])).width(Length::Fill).height(Length::Fill);
         // The file shown at the right, beside the tiles, once one is picked;
@@ -530,8 +537,8 @@ impl App {
     }
 
     /// A heading and its files as tiles, wrapping to the view's width.
-    fn section_tiles<'a>(&'a self, title: &'static str, kind: Kind, files: &[PathBuf], add: bool) -> Element<'a, Message> {
-        let mut head = row![text(format!("{title}  ·  {}", files.len())).size(15)].spacing(8).align_y(Alignment::Center);
+    fn section_tiles<'a>(&'a self, title: &'static str, heading: String, kind: Kind, files: &[PathBuf], add: bool) -> Element<'a, Message> {
+        let mut head = row![text(format!("{heading}  ·  {}", files.len())).size(15)].spacing(8).align_y(Alignment::Center);
         if add {
             head = head.push(tip(
                 button(text("+").size(14)).padding([0, 8]).on_press(Message::BinView(BinMsg::AddTo(title))),

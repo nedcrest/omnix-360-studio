@@ -86,12 +86,25 @@ pub(super) const CLIP_EXT: &[&str] = &["mp4", "mov", "mkv", "webm", "osv", "insv
 pub(super) const SOUND_EXT: &[&str] = &["mp3", "flac", "wav", "m4a", "aac", "ogg", "opus", "wma"];
 pub(super) const PICTURE_EXT: &[&str] = &["png", "jpg", "jpeg", "webp", "bmp", "tif", "tiff"];
 
-/// One heading's files, by name.
+/// One heading's files, by name: a folder's own, or one of its
+/// subfolders' (`sub`: a day's, as Dailix files a project's clips under
+/// `01_footage/<day>/`).
 #[derive(Debug, Clone, PartialEq)]
 pub struct Section {
     pub title: &'static str,
+    pub sub: Option<String>,
     pub kind: Kind,
     pub files: Vec<PathBuf>,
+}
+
+impl Section {
+    /// Its heading: the section's name, and its subfolder's.
+    pub fn heading(&self) -> String {
+        match &self.sub {
+            Some(sub) => format!("{} · {sub}", self.title),
+            None => self.title.to_owned(),
+        }
+    }
 }
 
 /// What the bin read about a file: its length (none for a picture) and a
@@ -211,20 +224,40 @@ fn files(dir: &Path, kind: Kind, out: &mut Vec<PathBuf>) {
 }
 
 /// What the bin shows for the project's folder `root`: the sections that
-/// have files, in a fixed order. DJI's `.LRF` proxies aren't clips of their
-/// own, so they're never listed.
+/// have files, in a fixed order; a section's folder's own files, then a
+/// section per subfolder (a day's, in a Dailix project), by name. DJI's
+/// `.LRF` proxies aren't clips of their own, so they're never listed.
 pub fn scan(root: &Path) -> Vec<Section> {
-    SECTIONS
-        .iter()
-        .filter_map(|&(title, kind, dirs)| {
-            let mut found = Vec::new();
-            for dir in dirs {
-                files(&root.join(dir), kind, &mut found);
+    let mut out = Vec::new();
+    for &(title, kind, dirs) in &SECTIONS {
+        let mut own = Vec::new();
+        let mut subs: Vec<(String, PathBuf)> = Vec::new();
+        for dir in dirs {
+            let dir = root.join(dir);
+            files(&dir, kind, &mut own);
+            let Ok(entries) = std::fs::read_dir(&dir) else { continue };
+            for e in entries.flatten() {
+                let name = e.file_name().to_string_lossy().into_owned();
+                if e.path().is_dir() && !name.starts_with('.') && !name.starts_with('_') {
+                    subs.push((name, e.path()));
+                }
             }
+        }
+        own.sort();
+        if !own.is_empty() {
+            out.push(Section { title, sub: None, kind, files: own });
+        }
+        subs.sort();
+        for (name, dir) in subs {
+            let mut found = Vec::new();
+            files(&dir, kind, &mut found);
             found.sort();
-            (!found.is_empty()).then_some(Section { title, kind, files: found })
-        })
-        .collect()
+            if !found.is_empty() {
+                out.push(Section { title, sub: Some(name), kind, files: found });
+            }
+        }
+    }
+    out
 }
 
 /// A file's name as the bin lists it.
@@ -408,7 +441,7 @@ impl App {
             Some((sections, root)) => {
                 body = body.push(text(root.display().to_string()).size(12).style(text::secondary));
                 for section in sections {
-                    body = body.push(rule::horizontal(1)).push(text(section.title).size(15));
+                    body = body.push(rule::horizontal(1)).push(text(section.heading()).size(15));
                     for path in &section.files {
                         body = body.push(self.item(label(path), path, section.kind));
                     }
@@ -518,12 +551,18 @@ mod tests {
         make("07_sfx/boom.mp3");
         make("voice/2026-08-22/DJI_0001/dnn6.flac");
         make("08_graphics/logo.png");
+        // A Dailix project files its clips by day.
+        make("01_footage/2030-05-02/B.MP4");
+        make("01_footage/2030-05-01/A.MP4");
+        make("01_footage/_old/skip.MP4");
         make("_trash/old.mp3");
         let s = scan(&dir);
         let titles: Vec<_> = s.iter().map(|s| s.title).collect();
         // Cleaned voice belongs to its clip: not listed.
-        assert_eq!(titles, ["Footage", "Music", "Sound effects", "Graphics"]);
+        assert_eq!(titles, ["Footage", "Footage", "Footage", "Music", "Sound effects", "Graphics"]);
         assert_eq!(s[0].files, [dir.join("01_footage/DJI_0001.MP4")]);
+        assert_eq!(s.iter().map(Section::heading).take(3).collect::<Vec<_>>(), ["Footage", "Footage · 2030-05-01", "Footage · 2030-05-02"]);
+        assert_eq!(s[1].files, [dir.join("01_footage/2030-05-01/A.MP4")]);
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

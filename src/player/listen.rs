@@ -30,6 +30,17 @@ impl Listen {
         let soloing = self.solo.iter().any(|&s| s);
         if self.muted[lane] || (soloing && !self.solo[lane]) { 0.0 } else { 1.0 }
     }
+
+    /// Lane `lane`'s solo (`solo`) or mute button pressed: it turns over,
+    /// and turned on it turns the other off. Both on would only silence
+    /// the soloed lane (user, 2026-11-06: one or the other).
+    pub fn press(&mut self, lane: usize, solo: bool) {
+        let (this, other) = if solo { (&mut self.solo, &mut self.muted) } else { (&mut self.muted, &mut self.solo) };
+        this[lane] = !this[lane];
+        if this[lane] {
+            other[lane] = false;
+        }
+    }
 }
 
 #[cfg(test)]
@@ -43,10 +54,16 @@ mod tests {
         let voice = lane_of(SoundTrack::Voice);
         l.solo[voice] = true;
         assert_eq!((l.heard(voice), l.heard(CLIP_SOUND), l.heard(lane_of(SoundTrack::Music))), (1.0, 0.0, 0.0));
-        // Two soloed: both heard; a soloed lane muted is still silent.
-        l.solo[CLIP_SOUND] = true;
-        l.muted[voice] = true;
+        // Two soloed: both heard; muting a soloed lane takes its solo off.
+        l.press(CLIP_SOUND, true);
+        l.press(voice, false);
+        assert_eq!((l.solo[voice], l.muted[voice]), (false, true));
         assert_eq!((l.heard(voice), l.heard(CLIP_SOUND)), (0.0, 1.0));
+        // And soloing it again takes the mute off; pressed again, both off.
+        l.press(voice, true);
+        assert_eq!((l.solo[voice], l.muted[voice], l.heard(voice)), (true, false, 1.0));
+        l.press(voice, true);
+        assert_eq!((l.solo[voice], l.muted[voice]), (false, false));
         assert_ne!(lane_of(SoundTrack::Music), lane_of(SoundTrack::Sfx));
     }
 }

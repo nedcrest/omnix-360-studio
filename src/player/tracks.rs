@@ -199,11 +199,7 @@ impl App {
                 let (clip, most) = (c.id, self.waveforms.get(&c.input).map_or(f64::INFINITY, |w| w.duration));
                 self.op(Op::Clip(ClipOp::Trim { clip, end: if in_edge { End::In } else { End::Out }, t, most, overlap }));
             }
-            Message::Listen(lane, solo) => {
-                let l = &mut self.listen;
-                let flag = if solo { &mut l.solo[lane] } else { &mut l.muted[lane] };
-                *flag = !*flag;
-            }
+            Message::Listen(lane, solo) => self.listen.press(lane, solo),
             // Drags: one undo step each, from press to release.
             Message::Level(own, db) => {
                 self.edit.begin();

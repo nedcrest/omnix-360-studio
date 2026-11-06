@@ -154,6 +154,8 @@ const SOUND_LANES: usize = SoundTrack::ALL.len();
 /// The lanes' heights at scale 1, which a drag of the divider shares out:
 /// the cuts, the sound lanes and the two overlay lanes (text and pictures).
 pub const SCALABLE: f32 = CUTS + CLIP_SOUND + SOUND_LANES as f32 * MUSIC + 2.0 * OVERLAY;
+/// A text's or picture's thumbnail on its block, width to height.
+const THUMB_ASPECT: f32 = 1.5;
 /// A press on a cut that moves less than this is a click, not a drag.
 const DRAG_FROM: f32 = 4.0;
 /// An edge dragged this close to a cut boundary, the playhead or another
@@ -1562,13 +1564,17 @@ impl canvas::Program<Message> for OverlayLane {
                 // but before its start.
                 selected_block(&mut frame, theme, (l, r), (top, h), (o.start > 1e-3, true));
             }
-            // The picture, then its name, where there's room.
+            // The picture, as tall as the lane at most and as wide as the
+            // block allows (user, 2026-11-07: shown at any size), then its
+            // name where there's room.
             let mut text_x = l + 9.0;
-            if let Some(thumb) = &o.thumb
-                && r - l > 3.0 * h
-            {
-                frame.draw_image(Rectangle::new(Point::new(l + 8.0, top + 2.0), Size::new(h * 1.5, h - 4.0)), canvas::Image::new(thumb.clone()));
-                text_x += h * 1.5 + 2.0;
+            if let Some(thumb) = &o.thumb {
+                let w = ((h - 4.0) * THUMB_ASPECT).min(r - l - 16.0);
+                if w >= 12.0 {
+                    let th = w / THUMB_ASPECT;
+                    frame.draw_image(Rectangle::new(Point::new(l + 8.0, top + (h - th) / 2.0), Size::new(w, th)), canvas::Image::new(thumb.clone()));
+                    text_x += w + 2.0;
+                }
             }
             if r - text_x > o.label.chars().count() as f32 * 6.0 + 12.0 {
                 frame.fill_text(Text {

@@ -38,10 +38,9 @@ links Dailix's sheet core.
 ## What's still to move (from `AUDIT.md`)
 
 1. **Timeline lanes behind one lane type.** `timeline.rs` (2 800 lines)
-   repeats per lane what's under the pointer (twice: press and hover),
-   edges, fades, blocks, folded strips; its view structs copy the model
+   repeats per lane edges, fades, blocks, folded strips (what's under
+   the pointer is one `Hit` per canvas now, read by press and hover); its view structs copy the model
    field by field and rebuild five selection fields from the one
-   `Selection`. The plan: `Rows` boxes per lane, one `Hit` per canvas used
-   by press and hover, shared drawing helpers, blocks that reference the
+   `Selection`. The plan: `Rows` boxes per lane, shared drawing helpers, blocks that reference the
    cut or clip they show. Visible: wants the user's eyes after each step.
 2. **Long functions:** `Marks::update` 241 lines (after 1).

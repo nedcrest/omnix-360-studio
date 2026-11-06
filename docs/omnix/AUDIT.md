@@ -9,9 +9,6 @@ cost is duplication and drift.
 
 ## Left: the timeline package (its own milestone step, CORE-API step 10)
 
-- [ ] Timeline: press and hover each walk what's under the pointer (now in
-      the same order, `Marks` and `OverlayLane`): one `Hit` per canvas,
-      used by both (CORE-API step 10).
 - [ ] Timeline per-lane code (edges, fades, blocks, folded strips,
       crossfade X, lane boxes) copied across lanes; view structs copy the
       model field by field; five selection fields rebuilt from one.

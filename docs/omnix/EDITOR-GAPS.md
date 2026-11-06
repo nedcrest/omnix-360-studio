@@ -100,6 +100,7 @@ done in part stays here until its last card is done.
 | 78 | A vertical video in a wide edit: its sides filled from itself, not black | below |
 | 79 | Omnix's own face: the footer's credit and the start picture | below |
 | 80 | Omnix starts at a window of recent and found projects (a projects folder set in both programs); «New project» goes to Dailix | below |
+| 81 | Auto-duck under talk in a cut's own sound, not only cleaned voices | below |
 
 ## Open gaps
 
@@ -1407,6 +1408,22 @@ camera it came from.
   which is ingest's first step (`dailix/docs/INGEST.md`), at least
   "copy these into `01_footage/<day>/`" with sidecars made.
 Milestone «Матеріал і бін».
+### 81. Auto-duck under talk in a cut's own sound — idea (user, 2026-11-06)
+
+Found while checking: music over a Kos cut where people talk; «Auto-duck»
+says "No speech to lower the music under". By design (gap 3, `duck.rs`)
+speech is looked for only in cleaned voices (`Cut::audio`, made by
+footage-agent's web sheet) and Voice takes: a cut's own sound is wind
+and traffic as often as talk. Kos lives in Dailix now, which has no
+voice clean-up yet (gap 77), so no cut has a cleaned voice and the
+duck finds nothing. Ways (the user to choose):
+- a. The user marks a cut's sound as speech (the clip sound menu); the
+  duck reads its own sound then. Small, certain.
+- b. Speech found in any cut's own sound by its speech band (roughly
+  200–3500 Hz against the rest): automatic, fooled by wind sometimes.
+- c. Wait for gap 77: cleaned voices from Dailix, the duck as it is.
+Milestone «Звук для Косу».
+
 ## Format rule for all of these
 
 New fields only, each `#[serde(default, skip_serializing_if = …)]`, so every

@@ -99,7 +99,7 @@ done in part stays here until its last card is done.
 | 77 | Dailix: voice clean-up and loudness for camera and phone sound | below |
 | 78 | A vertical video in a wide edit: its sides filled from itself, not black | below |
 | 79 | Omnix's own face: the footer's credit and the start picture | below |
-| 80 | Omnix starts at a small window of recent projects; «New project» goes to Dailix: one fixed project layout | below |
+| 80 | Omnix starts at a window of recent and found projects (a projects folder set in both programs); «New project» goes to Dailix | below |
 
 ## Open gaps
 
@@ -1384,7 +1384,7 @@ reserved, to be taken again in Omnix; the app id and release repository
 are placeholders (`local.omnix.Omnix`, `REPO=` in `install.sh`).
 
 
-### 80. Omnix starts at its recent projects; a new one is made in Dailix — idea (user, 2026-11-05)
+### 80. Omnix starts at its recent and found projects; a new one is made in Dailix — idea, next after the timeline package (user, 2026-11-05, 2026-11-06)
 
 For the release: Omnix opens a small window of the projects opened last;
 «New project» opens Dailix (or goes to it), where a project is made in the
@@ -1393,9 +1393,16 @@ for edits, ...). The point (user): "a fixed structure of projects, so I
 never wonder where that video is". Every edit lives in a project's
 `04_project`, every clip in its `01_footage` (or its sources), whatever
 camera it came from.
-- Omnix: the recent list (projects, by when opened; their folder's name
-  as Dailix's `title` gives it), opening one, «New project» → Dailix;
-  a clip or project dropped on it still opens as now.
+- Both are standalone programs, so each has its projects folder as a
+  setting the user types or picks in the window (user, 2026-11-06):
+  Dailix's `projects` place, today set only by `dailix places
+  --projects`; Omnix gets the same folder. Then Omnix runs from a
+  desktop icon without opening Dailix first.
+- Omnix's start window: the recent projects (by when opened; their
+  name as Dailix's `title` gives it) and, below, the projects found in
+  that folder (`dailix_sheet::project`, as Dailix's home lists them);
+  opening one, «New project» → Dailix; a clip or project dropped on it
+  still opens as now.
 - Dailix: adding one's own videos to a project (a folder, a phone dump),
   which is ingest's first step (`dailix/docs/INGEST.md`), at least
   "copy these into `01_footage/<day>/`" with sidecars made.

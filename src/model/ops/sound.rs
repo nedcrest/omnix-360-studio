@@ -29,8 +29,9 @@ pub enum SoundOp {
     LowCut { sound: SoundRef, on: bool },
     /// Its steady noise cleaned (`loudness::CLEAN`).
     Clean { sound: SoundRef, on: bool },
-    /// Its line shown: points at its in and out at 0 dB, so nothing sounds
-    /// different until one is moved.
+    /// Its line shown: one point in its middle at the level there (0 dB),
+    /// so nothing sounds different until it's moved. The line runs flat
+    /// from its first and last points to its edges, wherever they go.
     ShowLine { sound: SoundRef },
     /// Its line removed, all its points.
     DeleteLine { sound: SoundRef },
@@ -97,10 +98,11 @@ pub(super) fn apply(p: &mut Project, op: &SoundOp) -> Result<Outcome, OpError> {
         &SoundOp::Clean { sound, on } => switch(p, sound, on, "cleaned", |s| s.clean),
         &SoundOp::ShowLine { sound } => {
             change(p, sound, |s| {
-                // The level there kept (0 dB on a line with no points), and
-                // a point already there reused: shown twice is shown once.
-                for t in [s.range.0, s.range.1] {
-                    crate::project::volume_key_at(s.volume, t);
+                // Not at its edges: there a point stayed behind when the
+                // clip was trimmed longer (user, 2026-11-07). A line already
+                // there is shown: shown twice is shown once.
+                if s.volume.is_empty() {
+                    crate::project::volume_key_at(s.volume, (s.range.0 + s.range.1) / 2.0);
                 }
             })?;
             said(format!("{sound}: line shown"))
@@ -309,6 +311,16 @@ mod tests {
             twice.apply(&op(o(s(&twice)))).unwrap();
             assert_eq!(Project::clone(&once), Project::clone(&twice), "{:?}", o(s(&once)));
         }
+    }
+
+    #[test]
+    fn a_shown_line_has_no_point_at_an_edge_to_stay_behind() {
+        let mut e = edit();
+        let s = song(&e);
+        e.apply(&op(SoundOp::ShowLine { sound: s })).unwrap();
+        let c = &e.music.clips[0];
+        assert_eq!(c.volume.len(), 1);
+        assert!((c.volume[0].t - (c.start + c.end) / 2.0).abs() < 1e-9 && c.volume[0].volume == 0.0);
     }
 
     #[test]

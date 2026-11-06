@@ -78,8 +78,7 @@ pub enum SoundMsg {
     Lower(Own),
     Restore(Own),
     Mute(Own, bool),
-    /// Its volume line shown: points at its in and out at 0 dB, so nothing
-    /// sounds different until one is moved.
+    /// Its volume line shown (`SoundOp::ShowLine`).
     ShowLine(Own),
     Even1(Own, bool),
     /// Its line started where what plays before it ends

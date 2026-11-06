@@ -271,6 +271,13 @@ impl Block {
             (a, b) => a.or(b).map(|x| &x.1),
         }
     }
+
+    /// Where its sound runs, which a J- or L-cut moves off its picture's
+    /// edges: (edit time, clip time, length). Its sound's waveform, fades
+    /// and volume line all live there.
+    fn sound_span(&self) -> (f64, f64, f64) {
+        (self.from - self.sound_before, self.start - self.sound_before, self.len + self.sound_before + self.sound_after)
+    }
 }
 
 /// A sound track as its lane shows it: its clips and its volume points
@@ -655,7 +662,10 @@ impl Timeline {
     /// point in its file, its length and its points.
     fn own_place(&self, own: Own) -> Option<(Lane, f64, f64, f64, &[crate::project::VolumeKey])> {
         match own {
-            Own::Cut(i) => self.blocks.get(i).map(|c| (self.rows.cut_lane(), c.from, c.start, c.len, &c.sound[..])),
+            Own::Cut(i) => self.blocks.get(i).map(|c| {
+                let (from, start, len) = c.sound_span();
+                (self.rows.cut_lane(), from, start, len, &c.sound[..])
+            }),
             Own::Clip(which, i) => {
                 let li = self.sounds.iter().position(|l| l.which == which)?;
                 self.sounds[li].blocks.get(i).map(|m| (self.rows.sound_lane(li), m.from, m.start, m.len, &m.volume[..]))
@@ -1025,7 +1035,7 @@ impl Timeline {
             let Some(w) = &c.wave else { continue };
             // As it's heard: evened out (once that's read), its level and
             // points, the clips' level; what the file holds faint behind.
-            let (from, len) = (c.start - c.sound_before, c.len + c.sound_before + c.sound_after);
+            let (_, from, len) = c.sound_span();
             let ramp = |t: f64| crate::project::fade_ramp(t - from, from + len - t, c.fade_in, c.fade_out);
             let heard = |t: f64| crate::mixdown::cut_gain(self.clips_db, c.own_db, crate::project::volume_at(&c.sound, t), ramp(t)) as f32;
             let wave = Wave { left: l, right: r, top, height: h, start: from, len };
@@ -1037,7 +1047,7 @@ impl Timeline {
             if r < 0.0 || l > b.width || c.wave.is_none() {
                 continue;
             }
-            draw_fades(frame, (l, r), top, h, c.len + c.sound_before + c.sound_after, (c.fade_in, c.fade_out));
+            draw_fades(frame, (l, r), top, h, c.sound_span().2, (c.fade_in, c.fade_out));
         }
         // The selected cut's sound edges, to drag apart from its picture:
         // yellow where its clip has more sound, red at the file's end.
@@ -1064,7 +1074,8 @@ impl Timeline {
     /// the points within the cut, and the line from its in to its out point.
     fn draw_sound(&self, frame: &mut Frame, b: Rectangle) {
         for (ci, c) in self.blocks.iter().enumerate() {
-            self.draw_own_line(frame, b, Own::Cut(ci), self.rows.cut_lane(), c.from, c.start, c.len, &c.sound);
+            let (from, start, len) = c.sound_span();
+            self.draw_own_line(frame, b, Own::Cut(ci), self.rows.cut_lane(), from, start, len, &c.sound);
         }
     }
 
@@ -1261,7 +1272,8 @@ impl Timeline {
     /// Where a cut's sound is drawn on the clip sound lane: its picture's
     /// stretch, wider or narrower by what runs past it or stops short.
     fn sound_x(&self, c: &Block, b: Rectangle) -> (f32, f32) {
-        (self.x(c.from - c.sound_before, b) + GAP / 2.0, self.x(c.from + c.len + c.sound_after, b) - GAP / 2.0)
+        let (from, _, len) = c.sound_span();
+        (self.x(from, b) + GAP / 2.0, self.x(from + len, b) - GAP / 2.0)
     }
 
     /// The selected cut's sound edge under `x` on the clip sound lane: in
@@ -2549,6 +2561,23 @@ mod tests {
         }
         assert_eq!(Timeline::volume_db(lane, Timeline::volume_y(lane, 0.5)), 0.0, "0 dB caught");
         assert_eq!(Timeline::volume_db(lane, lane.0 + lane.1 + 50.0), VOLUME_BOTTOM, "below the lane is off");
+    }
+
+    #[test]
+    fn a_cuts_volume_line_runs_where_its_sound_does() {
+        let (mut t, b) = timeline();
+        let ruler = timeline().0;
+        let x = |s: f64| ruler.x(s, b);
+        // The last cut (7..10 s) with a point at clip time 1 s, its sound
+        // cut a second short (an L-cut the other way).
+        t.blocks[2].sound = vec![VolumeKey { t: 1.0, volume: 0.0 }];
+        t.blocks[2].sound_after = -1.0;
+        let y = Timeline::volume_y(t.rows.cut_lane(), 0.0);
+        assert_eq!(t.on_sound_line(Point::new(x(8.5), y), b), Some(Own::Cut(2)));
+        assert_eq!(t.on_sound_line(Point::new(x(9.5), y), b), None, "past its sound's end: no line");
+        // Run on half a second before its picture: the line reaches there.
+        t.blocks[2].sound_before = 0.5;
+        assert_eq!(t.on_sound_line(Point::new(x(6.7), y), b), Some(Own::Cut(2)));
     }
 
     #[test]

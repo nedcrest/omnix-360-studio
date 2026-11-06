@@ -154,8 +154,6 @@ const SOUND_LANES: usize = SoundTrack::ALL.len();
 /// The lanes' heights at scale 1, which a drag of the divider shares out:
 /// the cuts, the sound lanes and the two overlay lanes (text and pictures).
 pub const SCALABLE: f32 = CUTS + CLIP_SOUND + SOUND_LANES as f32 * MUSIC + 2.0 * OVERLAY;
-/// A text's or picture's thumbnail on its block, width to height.
-const THUMB_ASPECT: f32 = 1.5;
 /// A press on a cut that moves less than this is a click, not a drag.
 const DRAG_FROM: f32 = 4.0;
 /// An edge dragged this close to a cut boundary, the playhead or another
@@ -213,7 +211,15 @@ pub struct OverlayBlock {
     /// Its effect keyframes' and motion keyframes' own times.
     pub effects: Vec<f64>,
     pub motion: Vec<(f64, Ease)>,
-    pub thumb: Option<Handle>,
+    pub thumb: Option<Thumb>,
+}
+
+/// A text's or picture's small picture for its block, and its width to
+/// its height, so it's drawn in its own shape.
+#[derive(Clone)]
+pub struct Thumb {
+    pub image: Handle,
+    pub aspect: f32,
 }
 
 /// One cut as the timeline shows it.
@@ -1569,10 +1575,10 @@ impl canvas::Program<Message> for OverlayLane {
             // name where there's room.
             let mut text_x = l + 9.0;
             if let Some(thumb) = &o.thumb {
-                let w = ((h - 4.0) * THUMB_ASPECT).min(r - l - 16.0);
+                let w = ((h - 4.0) * thumb.aspect).min(r - l - 16.0);
                 if w >= 12.0 {
-                    let th = w / THUMB_ASPECT;
-                    frame.draw_image(Rectangle::new(Point::new(l + 8.0, top + (h - th) / 2.0), Size::new(w, th)), canvas::Image::new(thumb.clone()));
+                    let th = w / thumb.aspect;
+                    frame.draw_image(Rectangle::new(Point::new(l + 8.0, top + (h - th) / 2.0), Size::new(w, th)), canvas::Image::new(thumb.image.clone()));
                     text_x += w + 2.0;
                 }
             }

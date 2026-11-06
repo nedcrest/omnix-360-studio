@@ -8,7 +8,7 @@ use crate::model::ops::{End, Op};
 
 /// A small picture of an overlay for its timeline block: 48 px high,
 /// over a dark checker so transparency shows.
-pub(super) fn overlay_thumb(picture: &crate::overlay::Picture) -> iced::widget::image::Handle {
+pub(super) fn overlay_thumb(picture: &crate::overlay::Picture) -> timeline::Thumb {
     let h = 48usize;
     let w = (picture.width * h / picture.height.max(1)).clamp(1, 4 * h);
     let mut rgba = Vec::with_capacity(w * h * 4);
@@ -22,7 +22,7 @@ pub(super) fn overlay_thumb(picture: &crate::overlay::Picture) -> iced::widget::
             rgba.push(255);
         }
     }
-    iced::widget::image::Handle::from_rgba(w as u32, h as u32, rgba)
+    timeline::Thumb { image: iced::widget::image::Handle::from_rgba(w as u32, h as u32, rgba), aspect: w as f32 / h as f32 }
 }
 
 impl App {

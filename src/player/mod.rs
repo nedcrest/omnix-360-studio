@@ -535,7 +535,7 @@ struct App {
     /// The overlays' pictures, scaled for the view: `None` while loading.
     overlay_pictures: std::collections::HashMap<String, Option<(u64, Arc<crate::overlay::Picture>)>>,
     /// Their timeline thumbnails.
-    overlay_thumbs: std::collections::HashMap<String, iced::widget::image::Handle>,
+    overlay_thumbs: std::collections::HashMap<String, timeline::Thumb>,
     /// The selected text overlay's words as edited in the panel, and which
     /// overlay they're of.
     text_content: iced::widget::text_editor::Content,

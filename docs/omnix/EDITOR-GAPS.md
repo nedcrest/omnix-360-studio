@@ -1408,7 +1408,7 @@ camera it came from.
   which is ingest's first step (`dailix/docs/INGEST.md`), at least
   "copy these into `01_footage/<day>/`" with sidecars made.
 Milestone «Матеріал і бін».
-### 81. Auto-duck under talk in a cut's own sound — idea (user, 2026-11-06)
+### 81. Auto-duck under talk in a cut's own sound — waits for gap 77 (user, 2026-11-06)
 
 Found while checking: music over a Kos cut where people talk; «Auto-duck»
 says "No speech to lower the music under". By design (gap 3, `duck.rs`)
@@ -1422,7 +1422,8 @@ duck finds nothing. Ways (the user to choose):
 - b. Speech found in any cut's own sound by its speech band (roughly
   200–3500 Hz against the rest): automatic, fooled by wind sometimes.
 - c. Wait for gap 77: cleaned voices from Dailix, the duck as it is.
-Milestone «Звук для Косу».
+Chosen (user, 2026-11-06): c. Nothing changes in Omnix; gap 77 closes
+this one. Milestone «Звук для Косу».
 
 ## Format rule for all of these
 

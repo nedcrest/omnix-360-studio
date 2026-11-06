@@ -933,22 +933,17 @@ impl Timeline {
         if self.rows.folded[li] {
             // Folded: where its clips are, thin, its name to open it.
             let mid = self.rows.sound_top(li) + self.rows.lane_h(li) / 2.0;
-            for m in blocks {
-                let (l, r) = (self.x(m.from, b), self.x(m.from + m.len, b));
-                frame.fill(&Path::rounded_rectangle(Point::new(l, mid - 3.0), Size::new((r - l).max(2.0), 6.0), 2.0.into()), colour.scale_alpha(0.7));
-            }
+            folded_strips(frame, self, b, mid, blocks.iter().map(|m| (m.from, m.len)), colour);
             return;
         }
-        let lane = Path::rounded_rectangle(Point::new(self.x(0.0, b), top), Size::new((self.x(self.duration, b) - self.x(0.0, b)).max(0.0), h), 4.0.into());
-        frame.fill(&lane, palette.background.weak.color.scale_alpha(0.5));
+        lane_ground(frame, self, b, (top, h), self.duration, 4.0, palette.background.weak.color.scale_alpha(0.5));
         for (i, m) in blocks.iter().enumerate() {
             let (l, r) = (self.x(m.from, b) + GAP / 2.0, self.x(m.from + m.len, b) - GAP / 2.0);
             if r < 0.0 || l > b.width {
                 continue;
             }
-            let block = Path::rounded_rectangle(Point::new(l, top), Size::new((r - l).max(1.0), h), 4.0.into());
             let selected = Some((*which, i)) == self.selected_music;
-            frame.fill(&block, if selected { colour } else { colour.scale_alpha(0.55) });
+            coloured_block(frame, (l, r), (top, h), colour, selected);
             // The waveform as it's heard: the track's level and line, the
             // clip's own, its fades and crossfades (`mixdown::clip_gain`).
             if let Some(w) = &m.wave {
@@ -958,40 +953,20 @@ impl Timeline {
             }
             draw_fades(frame, (l, r), top, h, m.len, (m.fade_in, m.fade_out));
             if selected {
-                selection_frame(frame, &block, theme);
-                trim_handles(frame, (l, r), top, h, (m.start > 1e-3, m.start + m.len < m.most - 1e-3));
+                selected_block(frame, theme, (l, r), (top, h), (m.start > 1e-3, m.start + m.len < m.most - 1e-3));
             }
-            // On a dark tag, as on the cuts, so it reads over the waveform.
+            // At the bottom: the volume line runs along the top.
             if r - l > m.label.chars().count() as f32 * 6.0 + 28.0 {
-                // At the bottom: the volume line runs along the top.
-                let tag = Path::rounded_rectangle(Point::new(l + 9.0, top + h - 18.0), Size::new(m.label.chars().count() as f32 * 5.5 + 8.0, 16.0), 3.0.into());
-                frame.fill(&tag, iced::Color::from_rgba(0.0, 0.0, 0.0, 0.6));
-                frame.fill_text(Text {
-                    content: m.label.clone(),
-                    position: Point::new(l + 13.0, top + h - 10.0),
-                    color: iced::Color::WHITE,
-                    size: 11.0.into(),
-                    align_y: Vertical::Center,
-                    ..Default::default()
-                });
+                name_tag(frame, (l + 9.0, top + h - 18.0), 16.0, &m.label, 11.0, 5.5);
             }
         }
-        // Overlaps are crossfades: an X across each, as editors draw them.
+        // Overlaps are crossfades.
         for (i, a) in blocks.iter().enumerate() {
             for c in &blocks[i + 1..] {
                 let (t0, t1) = (a.from.max(c.from), (a.from + a.len).min(c.from + c.len));
-                if t1 - t0 <= 1e-6 {
-                    continue;
+                if t1 - t0 > 1e-6 {
+                    crossfade(frame, (self.x(t0, b), self.x(t1, b)), (top, h), true);
                 }
-                let (l, r) = (self.x(t0, b), self.x(t1, b));
-                frame.fill(&Path::rectangle(Point::new(l, top), Size::new(r - l, h)), iced::Color::from_rgba(0.0, 0.0, 0.0, 0.35));
-                let x = Path::new(|p| {
-                    p.move_to(Point::new(l, top + h));
-                    p.line_to(Point::new(r, top));
-                    p.move_to(Point::new(l, top));
-                    p.line_to(Point::new(r, top + h));
-                });
-                frame.stroke(&x, Stroke::default().with_width(1.5).with_color(iced::Color::from_rgba(1.0, 1.0, 1.0, 0.85)));
             }
         }
         // Past the video's end the sound fades out in the export: dim it,
@@ -1006,8 +981,8 @@ impl Timeline {
         for (i, m) in blocks.iter().enumerate() {
             self.draw_own_line(frame, b, Own::Clip(*which, i), self.rows.sound_lane(li), m.from, m.start, m.len, &m.volume);
         }
-        for i in 0..blocks.len() {
-            draw_tag(frame, self.level_tag_at(Own::Clip(*which, i), b), &blocks[i].level);
+        for (i, m) in blocks.iter().enumerate() {
+            draw_tag(frame, self.level_tag_at(Own::Clip(*which, i), b), &m.level);
         }
     }
 
@@ -1034,8 +1009,7 @@ impl Timeline {
     fn draw_clip_sound(&self, frame: &mut Frame, theme: &Theme, b: Rectangle) {
         let palette = theme.extended_palette();
         let (top, h) = (self.rows.cuts + 1.0, self.rows.clip_sound - 2.0);
-        let lane = Path::rounded_rectangle(Point::new(self.x(0.0, b), top), Size::new((self.x(self.video, b) - self.x(0.0, b)).max(0.0), h), 3.0.into());
-        frame.fill(&lane, palette.background.weak.color.scale_alpha(0.35));
+        lane_ground(frame, self, b, (top, h), self.video, 3.0, palette.background.weak.color.scale_alpha(0.35));
         for (i, c) in self.blocks.iter().enumerate() {
             let (l, r) = self.sound_x(c, b);
             if r < 0.0 || l > b.width {
@@ -1080,8 +1054,7 @@ impl Timeline {
         // Through a crossfade the two cuts' sounds overlap, as their
         // pictures do.
         for c in self.blocks.iter().filter(|c| c.crossfade > 0.0) {
-            let (l, r) = (self.x(c.from, b), self.x(c.from + c.crossfade, b));
-            frame.fill(&Path::rectangle(Point::new(l, top), Size::new(r - l, h)), iced::Color::from_rgba(0.0, 0.0, 0.0, 0.35));
+            crossfade(frame, (self.x(c.from, b), self.x(c.from + c.crossfade, b)), (top, h), false);
         }
         self.draw_sound(frame, b);
 
@@ -1555,10 +1528,7 @@ impl canvas::Program<Message> for OverlayLane {
         if self.folded() {
             // Folded: where its items are, thin, and its name to open it.
             let mid = FOLDED / 2.0;
-            for o in self.blocks() {
-                let (l, r) = (t.x(o.from, bounds), t.x(o.from + o.len, bounds));
-                frame.fill(&Path::rounded_rectangle(Point::new(l, mid - 3.0), Size::new((r - l).max(2.0), 6.0), 2.0.into()), colour.scale_alpha(0.7));
-            }
+            folded_strips(&mut frame, t, bounds, mid, self.blocks().iter().map(|o| (o.from, o.len)), colour);
             let at = t.x(t.position, bounds);
             frame.fill(&Path::rectangle(Point::new(at - 1.0, 0.0), Size::new(2.0, FOLDED)), palette.primary.strong.color);
             draw_head_ground(&mut frame, theme, FOLDED);
@@ -1567,21 +1537,18 @@ impl canvas::Program<Message> for OverlayLane {
             return vec![frame.into_geometry()];
         }
         let (top, h) = (2.0, self.0.rows.overlay - 4.0);
-        let lane = Path::rounded_rectangle(Point::new(t.x(0.0, bounds), top), Size::new((t.x(t.duration, bounds) - t.x(0.0, bounds)).max(0.0), h), 4.0.into());
-        frame.fill(&lane, palette.background.weak.color.scale_alpha(0.5));
+        lane_ground(&mut frame, t, bounds, (top, h), t.duration, 4.0, palette.background.weak.color.scale_alpha(0.5));
         for (i, o) in self.blocks().iter().enumerate() {
             let (l, r) = (t.x(o.from, bounds) + GAP / 2.0, t.x(o.from + o.len, bounds) - GAP / 2.0);
             if r < 0.0 || l > bounds.width {
                 continue;
             }
-            let block = Path::rounded_rectangle(Point::new(l, top), Size::new((r - l).max(1.0), h), 4.0.into());
             let selected = Some((self.1, i)) == t.selected_overlay;
-            frame.fill(&block, if selected { colour } else { colour.scale_alpha(0.55) });
+            coloured_block(&mut frame, (l, r), (top, h), colour, selected);
             if selected {
-                selection_frame(&mut frame, &block, theme);
                 // A picture or text has no end of its own: footage both ways
                 // but before its start.
-                trim_handles(&mut frame, (l, r), top, h, (o.start > 1e-3, true));
+                selected_block(&mut frame, theme, (l, r), (top, h), (o.start > 1e-3, true));
             }
             // The picture, then its name, where there's room.
             let mut text_x = l + 9.0;
@@ -1607,10 +1574,7 @@ impl canvas::Program<Message> for OverlayLane {
             let inside = |o: &OverlayBlock, k: f64| k >= o.start && k <= o.start + o.len;
             for o in self.blocks() {
                 for &k in o.effects.iter().filter(|&&k| inside(o, k)) {
-                    let x = t.x(o.from + k - o.start, bounds);
-                    let mark = Path::rectangle(Point::new(x - 3.5, self.0.rows.overlay + EFFECTS / 2.0 - 3.5), Size::new(7.0, 7.0));
-                    frame.fill(&mark, EFFECT_MARK);
-                    frame.stroke(&mark, Stroke::default().with_width(1.0).with_color(iced::Color::from_rgba(0.0, 0.0, 0.0, 0.7)));
+                    effect_mark(&mut frame, t.x(o.from + k - o.start, bounds), self.0.rows.overlay + EFFECTS / 2.0);
                 }
                 for &(k, ease) in o.motion.iter().filter(|(k, _)| inside(o, *k)) {
                     let mark = key_mark(t.x(o.from + k - o.start, bounds), self.0.rows.overlay + EFFECTS + KEYS / 2.0, ease);
@@ -1732,6 +1696,75 @@ fn readout(frame: &mut Frame, b: Rectangle, p: Point, said: &str) {
     let y = (p.y - 26.0).max(2.0);
     frame.fill(&Path::rounded_rectangle(Point::new(x, y), Size::new(w, 18.0), 4.0.into()), iced::Color::from_rgba(0.0, 0.0, 0.0, 0.8));
     frame.fill_text(Text { content: said.to_owned(), position: Point::new(x + 6.0, y + 9.0), color: iced::Color::WHITE, size: 12.0.into(), font: iced::Font::MONOSPACE, align_y: Vertical::Center, ..Default::default() });
+}
+
+/// A lane's ground under its blocks, from the edit's start to `end`
+/// (edit time).
+fn lane_ground(frame: &mut Frame, t: &Timeline, b: Rectangle, (top, h): (f32, f32), end: f64, radius: f32, colour: iced::Color) {
+    let x0 = t.x(0.0, b);
+    frame.fill(&Path::rounded_rectangle(Point::new(x0, top), Size::new((t.x(end, b) - x0).max(0.0), h), radius.into()), colour);
+}
+
+/// A folded lane: where its blocks are (`spans`: edit time, length), thin
+/// strips about `mid`.
+fn folded_strips(frame: &mut Frame, t: &Timeline, b: Rectangle, mid: f32, spans: impl IntoIterator<Item = (f64, f64)>, colour: iced::Color) {
+    for (from, len) in spans {
+        let (l, r) = (t.x(from, b), t.x(from + len, b));
+        frame.fill(&Path::rounded_rectangle(Point::new(l, mid - 3.0), Size::new((r - l).max(2.0), 6.0), 2.0.into()), colour.scale_alpha(0.7));
+    }
+}
+
+/// A block of a coloured lane (a sound clip, a text or picture): full
+/// colour when selected.
+fn coloured_block(frame: &mut Frame, (l, r): (f32, f32), (top, h): (f32, f32), colour: iced::Color, selected: bool) {
+    frame.fill(&block_path((l, r), top, h), if selected { colour } else { colour.scale_alpha(0.55) });
+}
+
+fn block_path((l, r): (f32, f32), top: f32, h: f32) -> Path {
+    Path::rounded_rectangle(Point::new(l, top), Size::new((r - l).max(1.0), h), 4.0.into())
+}
+
+/// The selected block's frame and trim handles, on any lane.
+fn selected_block(frame: &mut Frame, theme: &Theme, (l, r): (f32, f32), (top, h): (f32, f32), more: (bool, bool)) {
+    selection_frame(frame, &block_path((l, r), top, h), theme);
+    trim_handles(frame, (l, r), top, h, more);
+}
+
+/// Where two blocks overlap (`l`..`r`): shaded, and with `cross` an X
+/// across it, as editors draw a crossfade.
+fn crossfade(frame: &mut Frame, (l, r): (f32, f32), (top, h): (f32, f32), cross: bool) {
+    frame.fill(&Path::rectangle(Point::new(l, top), Size::new(r - l, h)), iced::Color::from_rgba(0.0, 0.0, 0.0, 0.35));
+    if cross {
+        let x = Path::new(|p| {
+            p.move_to(Point::new(l, top + h));
+            p.line_to(Point::new(r, top));
+            p.move_to(Point::new(l, top));
+            p.line_to(Point::new(r, top + h));
+        });
+        frame.stroke(&x, Stroke::default().with_width(1.5).with_color(iced::Color::from_rgba(1.0, 1.0, 1.0, 0.85)));
+    }
+}
+
+/// An effect keyframe: a small square at (`x`, `mid`).
+fn effect_mark(frame: &mut Frame, x: f32, mid: f32) {
+    let mark = Path::rectangle(Point::new(x - 3.5, mid - 3.5), Size::new(7.0, 7.0));
+    frame.fill(&mark, EFFECT_MARK);
+    frame.stroke(&mark, Stroke::default().with_width(1.0).with_color(iced::Color::from_rgba(0.0, 0.0, 0.0, 0.7)));
+}
+
+/// A block's name on a dark tag from (`x`, `top`), `h` high, so it reads
+/// over a picture or a waveform; `size` the text's, `per_char` about how
+/// wide a character is.
+fn name_tag(frame: &mut Frame, (x, top): (f32, f32), h: f32, name: &str, size: f32, per_char: f32) {
+    frame.fill(&Path::rounded_rectangle(Point::new(x, top), Size::new(name.chars().count() as f32 * per_char + 8.0, h), 3.0.into()), iced::Color::from_rgba(0.0, 0.0, 0.0, 0.6));
+    frame.fill_text(Text {
+        content: name.to_owned(),
+        position: Point::new(x + 4.0, top + h / 2.0),
+        color: iced::Color::WHITE,
+        size: size.into(),
+        align_y: Vertical::Center,
+        ..Default::default()
+    });
 }
 
 /// The selected clip's frame: thick in the accent colour, over a dark
@@ -2117,46 +2150,23 @@ impl canvas::Program<Message> for Marks {
         draw_rows(&mut frame, theme, self, bounds, self.rows.effects_top, (self.rows.keys > 0.0).then_some("View"));
         for (i, c) in self.blocks.iter().enumerate() {
             let (l, r) = self.block_x(c, bounds);
-            let block = Path::rounded_rectangle(Point::new(l, 0.0), Size::new((r - l).max(1.0), self.rows.cuts), 4.0.into());
             if Some(i) == self.selected {
-                selection_frame(&mut frame, &block, theme);
-                trim_handles(&mut frame, (l, r), 0.0, self.rows.cuts, (c.start > 1e-3, c.start + c.len < c.most - 1e-3));
+                selected_block(&mut frame, theme, (l, r), (0.0, self.rows.cuts), (c.start > 1e-3, c.start + c.len < c.most - 1e-3));
             }
-            // The longest label that fits (about 7 px a character), on a
-            // dark tag, readable over any picture.
+            // The longest label that fits (about 7 px a character).
             if let Some(label) = c.labels.iter().find(|s| r - l > s.chars().count() as f32 * 7.0 + 24.0) {
-                let tag = Path::rounded_rectangle(Point::new(l + 9.0, self.rows.cuts - 19.0), Size::new(label.chars().count() as f32 * 5.9 + 8.0, 15.0), 3.0.into());
-                frame.fill(&tag, iced::Color::from_rgba(0.0, 0.0, 0.0, 0.6));
-                frame.fill_text(Text {
-                    content: label.clone(),
-                    position: Point::new(l + 13.0, self.rows.cuts - 11.5),
-                    color: iced::Color::WHITE,
-                    size: 12.0.into(),
-                    align_y: Vertical::Center,
-                    ..Default::default()
-                });
+                name_tag(&mut frame, (l + 9.0, self.rows.cuts - 19.0), 15.0, label, 12.0, 5.9);
             }
         }
         // Effect keyframes: small squares along the bottom of their cut.
         for c in &self.blocks {
             for &t in c.effects.iter().filter(|&&t| t >= c.start && t <= c.start + c.len) {
-                let x = self.x(c.from + t - c.start, bounds);
-                let mark = Path::rectangle(Point::new(x - 3.5, self.rows.effects_top + EFFECTS / 2.0 - 3.5), Size::new(7.0, 7.0));
-                frame.fill(&mark, EFFECT_MARK);
-                frame.stroke(&mark, Stroke::default().with_width(1.0).with_color(iced::Color::from_rgba(0.0, 0.0, 0.0, 0.7)));
+                effect_mark(&mut frame, self.x(c.from + t - c.start, bounds), self.rows.effects_top + EFFECTS / 2.0);
             }
         }
         // Crossfades: an X over each overlap, as on the music lane.
         for c in self.blocks.iter().filter(|c| c.crossfade > 0.0) {
-            let (l, r) = (self.x(c.from, bounds), self.x(c.from + c.crossfade, bounds));
-            frame.fill(&Path::rectangle(Point::new(l, 0.0), Size::new(r - l, self.rows.cuts)), iced::Color::from_rgba(0.0, 0.0, 0.0, 0.35));
-            let x = Path::new(|p| {
-                p.move_to(Point::new(l, self.rows.cuts));
-                p.line_to(Point::new(r, 0.0));
-                p.move_to(Point::new(l, 0.0));
-                p.line_to(Point::new(r, self.rows.cuts));
-            });
-            frame.stroke(&x, Stroke::default().with_width(1.5).with_color(iced::Color::from_rgba(1.0, 1.0, 1.0, 0.85)));
+            crossfade(&mut frame, (self.x(c.from, bounds), self.x(c.from + c.crossfade, bounds)), (0.0, self.rows.cuts), true);
         }
         if let Drag::Move { moved: true, to, .. } = drag {
             let t = self.blocks.get(*to).map_or(self.duration, |c| c.from);
@@ -2631,7 +2641,7 @@ fn listen_buttons(name: &str, mid: f32) -> [Rectangle; 2] {
 
 /// Lane `lane`'s «S» and «M», lit when on: yellow solo, red mute.
 fn draw_listen(frame: &mut Frame, name: &str, mid: f32, listen: &super::listen::Listen, lane: usize) {
-    let [solo, mute] = listen_buttons(&name, mid);
+    let [solo, mute] = listen_buttons(name, mid);
     for (r, label, on, lit) in [(solo, "S", listen.solo[lane], iced::Color::from_rgb(0.95, 0.79, 0.3)), (mute, "M", listen.muted[lane], iced::Color::from_rgb(1.0, 0.3, 0.3))] {
         frame.fill(&Path::rounded_rectangle(r.position(), r.size(), 3.0.into()), if on { lit } else { iced::Color::from_rgba(0.0, 0.0, 0.0, 0.7) });
         let ink = if on { iced::Color::BLACK } else { iced::Color::from_rgba(1.0, 1.0, 1.0, 0.75) };

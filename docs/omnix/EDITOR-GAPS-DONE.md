@@ -1082,6 +1082,54 @@ layout during real editing):
 - A chevron at the transport row's start shows or hides every group's
   name above its buttons (`settings.json` `bar_labels`, off by default).
 
+### 60. The bin as a view of its own, in tiles — done 2026-11-04, confirmed by the user 2026-11-06 (user, 2026-11-03)
+
+User: "a separate view, instead of the playback screen: an edit bin. The
+project is made as folders from the start, so it would be logical to have
+it all in tiles. Click «Edit bin» and a window opens where, by drag and
+drop or a click and a context menu, you add or remove resources."
+
+What it would be:
+- A button (and a key) swaps the picture for the bin, as Mix check
+  already stands in the picture's place; the timeline stays below, so a
+  tile can be put on it.
+- Tiles by the project's folders (Footage, External video, Music,
+  Voice-over, Sound effects, Graphics, LUTs), big thumbnails with a size
+  slider, the length on each; the skimmer and ratings of gap 2 belong
+  here.
+- **Add**: drop files from the file manager onto the view (iced gives the
+  window's dropped files) or a «+» per folder; each file is copied into
+  the folder its kind belongs to (originals, like the Kos archive, only
+  read, never moved).
+- **Remove** (decided by the user, 2026-11-03): from the right-click menu,
+  to the system's trash, asked first, and only for a file inside the
+  project's folder (a copy). Raw material outside it (the Kos archive, a
+  card) is never trashed: the menu only takes it out of the bin. A file
+  the edit still uses can't be removed (the menu says which cuts use it).
+  Also in the menu: add at the end / at the playhead / at the join (the
+  bin's three buttons today), Info, Show in folder.
+- No drag from a tile onto the timeline (user, 2026-11-03): the add
+  buttons do it, and most projects come already cut in footage-agent's
+  contact sheet.
+
+Built 2026-11-04 (`bin_view.rs`; `c059e1f`, `cbaaea6`, `07c03b5`, `c5808fd`): the
+file picked shows at the right with its Info, the edge between dragged
+(user's ask the same day); a tile's click only shows. A clip plays
+there in the bin's own player (`bin_player.rs`, `e3dd968`): a second
+`Playback`, a strip to scrub, Space; the first part of 71a (in and out
+points still to come). The pictures stop at half the view's height. The Bin
+toggle in the Mode group or Shift+B; every section shown, an empty one
+too, with its «+»; a drop goes to its kind's first section (Footage,
+Music, Graphics), since X11 drops carry no position; the tile says where
+the edit uses the file; the trash is the system's (`trash` crate). Left
+for later: ratings and the skimmer (gap 2), LUTs as a section, moving a
+file between sections. Drops don't arrive on Wayland (winit).
+
+It grows the narrow bin panel (gap 2) rather than replacing it: the panel
+for quick adding while cutting, the view for sorting the material. Joins
+the «Перегляд з біна у вікні Omnix» card: the view where a tile is
+previewed is the same place.
+
 ### 63. Quick copies of ordinary videos for the playhead — done 2026-11-04 (`3c06119`), confirmed by the user ("smoother, not perfect": the rest is gap 65)
 
 User (checking pack 3's snapping): dragging the playhead lagged and a

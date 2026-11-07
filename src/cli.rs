@@ -141,6 +141,9 @@ pub(crate) enum Cmd {
     /// The JSON Schema of an ops file for `apply`: every operation, its
     /// fields and what they mean (for an agent's tools, or an editor).
     OpsSchema,
+    /// Omnix's icon and a desktop entry, in the menu and on the desktop,
+    /// starting this very binary (Linux).
+    Install,
     /// Makes the black picture a blank cut uses (`Blank.png` in DIR, kept
     /// if there) and prints its path, for a cut `add` op: a gap in the
     /// edit for a title, an overlay or a sound.
@@ -633,6 +636,12 @@ pub(crate) fn run() -> Result<()> {
         Cmd::Apply { project, ops, output } => crate::apply::run(&project, &ops, output.as_deref())?,
         Cmd::Describe { project } => crate::apply::describe(&project)?,
         Cmd::OpsSchema => println!("{}", crate::apply::schema()),
+        Cmd::Install => {
+            let written = crate::desktop::install("omnix", &crate::desktop::omnix_entry(&std::env::current_exe()?), crate::desktop::OMNIX_ICON).map_err(|e| anyhow::anyhow!("{e}"))?;
+            for f in written {
+                println!("{}", f.display());
+            }
+        }
         Cmd::Blank { dir } => println!("{}", crate::blank::ensure(&dir)?.display()),
         Cmd::FromSheet { project, day, empty: true } => println!("{}", crate::from_sheet::write_empty(&project, day.as_deref())?.display()),
         Cmd::FromSheet { project, day, empty: false } => println!("{}", crate::from_sheet::write(&project, day.as_deref())?.display()),

@@ -45,6 +45,7 @@ mod waveform;
 pub mod cli;
 mod analyse;
 mod export;
+pub mod desktop;
 mod fsutil;
 mod pipeline;
 mod preview;

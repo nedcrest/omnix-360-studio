@@ -74,6 +74,20 @@ pub struct Settings {
     pub fold_marks: bool,
     /// The projects place, chosen in Omnix; none: Dailix's.
     pub projects: Option<PathBuf>,
+    /// The edits opened or saved last, the latest first (`RECENT` at most).
+    pub recent: Vec<PathBuf>,
+    /// The start window's browser of the projects place open.
+    pub browse: bool,
+}
+
+/// How many edits the start window offers.
+pub const RECENT: usize = 5;
+
+/// `edit` the latest of `recent`: once, first, `RECENT` kept.
+pub fn remember(recent: &mut Vec<PathBuf>, edit: &std::path::Path) {
+    recent.retain(|p| p != edit);
+    recent.insert(0, edit.to_owned());
+    recent.truncate(RECENT);
 }
 
 /// The interface's size range and steps (A− / A+ in the top bar), and its
@@ -121,6 +135,8 @@ impl Default for Settings {
             fold_sfx2: true,
             fold_marks: false,
             projects: None,
+            recent: Vec::new(),
+            browse: false,
         }
     }
 }
@@ -153,5 +169,21 @@ impl Settings {
         if let Err(e) = write() {
             eprintln!("couldn't save the settings to {}: {e:#}", path.display());
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_latest_edit_comes_first_once_and_five_are_kept() {
+        let mut r = Vec::new();
+        for n in ["a", "b", "c", "d", "e", "f"] {
+            remember(&mut r, std::path::Path::new(n));
+        }
+        assert_eq!(r, ["f", "e", "d", "c", "b"].map(PathBuf::from));
+        remember(&mut r, std::path::Path::new("c"));
+        assert_eq!(r, ["c", "f", "e", "d", "b"].map(PathBuf::from));
     }
 }

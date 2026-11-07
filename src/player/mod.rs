@@ -97,6 +97,7 @@ pub fn run(inputs: Vec<PathBuf>, launch: Launch) -> Result<()> {
     iced::application(
         move || {
             let mut app = App::new(opts.clone(), settings.clone());
+            app.read_browsed();
             let is_project = |p: &PathBuf| p.extension().is_some_and(|e| e.eq_ignore_ascii_case("json"));
             let task = match inputs.iter().find(|p| is_project(p)) {
                 Some(project) => app.update(Message::ProjectPicked(Some(project.clone()))),
@@ -490,6 +491,8 @@ enum Message {
     ProjectsChoose,
     ProjectsPicked(Option<PathBuf>),
     ProjectsFromDailix,
+    /// The start window's browser of the projects place opened or closed.
+    Browse(bool),
     /// The bars' group names shown or hidden.
     BarLabels,
     /// Snapping on the timeline on or off (N).
@@ -717,6 +720,12 @@ struct App {
     /// none of its own.
     projects: Option<PathBuf>,
     dailix_projects: Option<PathBuf>,
+    /// The edits opened or saved last (the start window offers them), and
+    /// the start window's browser of the projects place: open or not,
+    /// and what it found when opened (each project, its edits).
+    recent: Vec<PathBuf>,
+    browse: bool,
+    browsed: Vec<(PathBuf, Vec<PathBuf>)>,
     /// The bars' groups named above their buttons.
     bar_labels: bool,
     /// Timeline drags snap (N toggles; Shift held lets one go free).
@@ -815,6 +824,9 @@ impl App {
             ruler_large: saved.ruler_large,
             projects: saved.projects.clone(),
             dailix_projects: crate::dailix_projects(),
+            recent: saved.recent.clone(),
+            browse: saved.browse,
+            browsed: Vec::new(),
             bar_labels: saved.bar_labels,
             snapping: saved.snapping,
             snap_line: None,
@@ -884,6 +896,8 @@ impl App {
             fold_sfx2: self.folds.sfx2,
             fold_marks: self.folds.marks,
             projects: self.projects.clone(),
+            recent: self.recent.clone(),
+            browse: self.browse,
         }
     }
 
@@ -1006,7 +1020,7 @@ impl App {
         match message {
             m @ (Message::Open { .. } | Message::Picked { .. } | Message::Loaded { .. } | Message::OpenProject { .. } | Message::NewProject { .. } | Message::CloseRequested { .. } | Message::StopAndClose { .. } | Message::Confirmed { .. } | Message::ProjectPicked { .. } | Message::SaveProjectTo { .. } | Message::SaveProject { .. } | Message::LoadingTick { .. } | Message::Thumb { .. }) => self.on_file(m),
             m @ (Message::Export { .. } | Message::ExportTo { .. } | Message::ExportProgress { .. } | Message::ExportCancel { .. } | Message::PickColour { .. } | Message::PickArea { .. } | Message::AreaPicked { .. } | Message::TrackProgress { .. } | Message::TrackCancel { .. } | Message::Tracked { .. } | Message::ExportDone { .. } | Message::Save { .. } | Message::SaveTo { .. } | Message::Saved { .. }) => self.on_jobs(m),
-            m @ (Message::Resolution { .. } | Message::ExportClips { .. } | Message::ExportGraded { .. } | Message::ExportFormat { .. } | Message::ExportLoudness { .. } | Message::Info { .. } | Message::InfoRead { .. } | Message::InfoClose { .. } | Message::Reveal { .. } | Message::CopyPath { .. } | Message::ExportPanel { .. } | Message::AudioPanel { .. } | Message::SettingsPanel { .. } | Message::SettingsGroup(_) | Message::Shortcuts { .. } | Message::AutoKey { .. } | Message::SplitDrag { .. } | Message::SplitDone { .. } | Message::SplitReset { .. } | Message::TenBit { .. } | Message::AddLut { .. } | Message::LutPicked { .. } | Message::RemoveLut { .. } | Message::DlogMLut { .. } | Message::UiScale { .. } | Message::ShowAngles { .. } | Message::RulerLarge { .. } | Message::ProjectsChoose | Message::ProjectsPicked { .. } | Message::ProjectsFromDailix | Message::BarLabels | Message::Snapping | Message::Fold { .. } | Message::Modifiers { .. } | Message::ViewSize { .. } | Message::Aspect { .. } | Message::Theme { .. } | Message::Mute { .. } | Message::Volume { .. } | Message::Fullscreen { .. }) => self.on_panels(m),
+            m @ (Message::Resolution { .. } | Message::ExportClips { .. } | Message::ExportGraded { .. } | Message::ExportFormat { .. } | Message::ExportLoudness { .. } | Message::Info { .. } | Message::InfoRead { .. } | Message::InfoClose { .. } | Message::Reveal { .. } | Message::CopyPath { .. } | Message::ExportPanel { .. } | Message::AudioPanel { .. } | Message::SettingsPanel { .. } | Message::SettingsGroup(_) | Message::Shortcuts { .. } | Message::AutoKey { .. } | Message::SplitDrag { .. } | Message::SplitDone { .. } | Message::SplitReset { .. } | Message::TenBit { .. } | Message::AddLut { .. } | Message::LutPicked { .. } | Message::RemoveLut { .. } | Message::DlogMLut { .. } | Message::UiScale { .. } | Message::ShowAngles { .. } | Message::RulerLarge { .. } | Message::ProjectsChoose | Message::ProjectsPicked { .. } | Message::ProjectsFromDailix | Message::Browse(_) | Message::BarLabels | Message::Snapping | Message::Fold { .. } | Message::Modifiers { .. } | Message::ViewSize { .. } | Message::Aspect { .. } | Message::Theme { .. } | Message::Mute { .. } | Message::Volume { .. } | Message::Fullscreen { .. }) => self.on_panels(m),
             m @ (Message::BinPanel { .. } | Message::BinPin { .. } | Message::BinRefresh { .. } | Message::BinPreview { .. } | Message::BinStop { .. } | Message::BinMeta { .. } | Message::BinFrames { .. } | Message::BinAdd { .. }) => self.on_bin(m),
             Message::BinView(msg) => self.on_bin_view(msg),
             Message::BinPlayer(msg) => self.on_source(msg),

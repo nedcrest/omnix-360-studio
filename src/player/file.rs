@@ -317,6 +317,7 @@ impl App {
                 self.mark_flat();
                 self.saved_version = if complete { self.edit.version } else { 0 };
                 self.saved_aspect = self.aspect;
+                settings::remember(&mut self.recent, &path);
                 self.project = Some(path);
                 // An empty one is built from its bin: open it.
                 if !self.has_edit() {
@@ -360,6 +361,7 @@ impl App {
                     // No "Saved …" (user: just annoying): the title's unsaved
                     // mark going is enough.
                     self.save_status = None;
+                    settings::remember(&mut self.recent, &path);
                     self.project = Some(path);
                     if let Some(then) = self.after_save.take() {
                         return self.proceed(then);

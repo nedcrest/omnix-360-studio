@@ -28,8 +28,59 @@ impl App {
             labelled_button(SETTINGS, "Settings…", Some(Message::SettingsPanel)),
         ]
         .spacing(12);
-        let start = center(column![self.logo(), status, buttons].push(error).spacing(16).align_x(Alignment::Center));
-        column![start, credit()].into()
+        let start = column![self.logo(), status, buttons].push(error).push(self.start_projects()).spacing(16).align_x(Alignment::Center);
+        // Scrolls once the lists are taller than the window.
+        column![iced::widget::scrollable(container(start).center_x(Length::Fill).padding([48, 16])).height(Length::Fill), credit()].into()
+    }
+
+    /// Under the start screen's buttons (user, 2026-11-07): the edits
+    /// opened last, a click each to open; and a browser of the projects
+    /// place, each project with its edits. The first run has neither yet.
+    fn start_projects(&self) -> Element<'_, Message> {
+        let open = |edit: &PathBuf, label: String, hint: String| -> Element<'_, Message> {
+            let shown = column![text(label).size(15), text(hint).size(12).style(text::secondary)].spacing(2);
+            button(shown).width(Length::Fill).padding([6, 12]).style(button::text).on_press(Message::ProjectPicked(Some(edit.clone()))).into()
+        };
+        let name = |edit: &PathBuf| edit.file_stem().map_or_else(String::new, |s| s.to_string_lossy().into_owned());
+        let mut col = column![].spacing(6).width(560);
+        let recent: Vec<&PathBuf> = self.recent.iter().filter(|p| p.is_file()).collect();
+        if !recent.is_empty() {
+            col = col.push(text("Recent").size(16));
+            for edit in recent {
+                let place = dailix_sheet::project::of_edit(edit).map_or_else(|| edit.parent().map(|p| p.display().to_string()).unwrap_or_default(), |root| dailix_sheet::project::title(&root));
+                col = col.push(open(edit, name(edit), place));
+            }
+        }
+        if self.projects_place().is_some() {
+            col = col.push(toggler(self.browse).label("Browse projects").on_toggle(Message::Browse));
+            if self.browse {
+                if self.browsed.is_empty() {
+                    col = col.push(text("No projects there yet.").size(13).style(text::secondary));
+                }
+                for (root, edits) in &self.browsed {
+                    col = col.push(text(dailix_sheet::project::title(root)).size(15));
+                    if edits.is_empty() {
+                        col = col.push(text("no edits yet").size(12).style(text::secondary));
+                    }
+                    for edit in edits {
+                        col = col.push(open(edit, name(edit), String::new()));
+                    }
+                }
+            }
+        }
+        col.into()
+    }
+
+    /// The projects place read again for the start window's browser,
+    /// while it's open.
+    pub(super) fn read_browsed(&mut self) {
+        self.browsed = match (self.browse, self.projects_place()) {
+            (true, Some(place)) => dailix_sheet::project::all(&place).into_iter().map(|root| {
+                let edits = dailix_sheet::project::edits(&root);
+                (root, edits)
+            }).collect(),
+            _ => Vec::new(),
+        };
     }
 
     /// The top bar: what is global. Groups: the app | the project file |

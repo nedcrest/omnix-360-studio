@@ -122,9 +122,19 @@ impl App {
                     Message::ProjectsPicked,
                 );
             }
-            Message::ProjectsPicked(Some(folder)) => self.projects = Some(folder),
+            Message::ProjectsPicked(Some(folder)) => {
+                self.projects = Some(folder);
+                self.read_browsed();
+            }
             Message::ProjectsPicked(None) => {}
-            Message::ProjectsFromDailix => self.projects = None,
+            Message::ProjectsFromDailix => {
+                self.projects = None;
+                self.read_browsed();
+            }
+            Message::Browse(on) => {
+                self.browse = on;
+                self.read_browsed();
+            }
             Message::BarLabels => self.bar_labels = !self.bar_labels,
             Message::Snapping => self.snapping = !self.snapping,
             Message::Fold(lane, folded) => self.folds.set(lane, folded),

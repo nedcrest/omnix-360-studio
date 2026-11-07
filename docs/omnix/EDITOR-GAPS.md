@@ -101,6 +101,7 @@ done in part stays here until its last card is done.
 | 79 | Omnix's own face: the footer's credit and the start picture | [done](EDITOR-GAPS-DONE.md) |
 | 80 | Omnix starts at a window of recent and found projects (a projects folder set in both programs); «New project» goes to Dailix | below |
 | 81 | Auto-duck under talk in a cut's own sound, not only cleaned voices | below |
+| 82 | Dailix: global projects (a trip, an event) holding video projects; a home of them with notes and tags; opening where it was closed | below |
 
 ## Open gaps
 
@@ -1331,10 +1332,12 @@ Dailix's until one is chosen in Omnix; the order below, own videos after.
    Omnix General / Picture / Editing, also from the start screen;
    Dailix Places / Look, a Settings button and Ctrl+,, every place's
    chip choosing its folder).
-2. Omnix's start window: the edits opened last, and every project in the
-   place with its ready edits (`04_project/*.json`, named by the
-   project's `title`); one click opens one.
-3. Omnix's desktop entry and icon, as `dailix install` makes Dailix's.
+2. Omnix's start window (user, 2026-11-07): the first run, the start
+   page as now; every run after, the 5 edits opened last to open, and a
+   browser to toggle open of Dailix's projects: each global project and
+   the video projects inside it (gap 82), with their edits.
+3. Omnix's desktop entry and icon: built (`omnix install`; one installer,
+   `omnix::desktop`, for both programs).
 4. «New project» in Omnix opens Dailix, which makes an empty project in
    the fixed layout (a name, `Layout::create`, `project.json`'s title).
 5. Later, its own card: adding one's own videos to a project in Dailix
@@ -1358,6 +1361,25 @@ duck finds nothing. Ways (the user to choose):
 - c. Wait for gap 77: cleaned voices from Dailix, the duck as it is.
 Chosen (user, 2026-11-06): c. Nothing changes in Omnix; gap 77 closes
 this one. Milestone «Звук для Косу».
+
+### 82. Dailix: global projects holding video projects; their home — idea (user, 2026-11-07)
+
+User: the Dailix place holds global projects (a trip, an event, a hike, a
+motorbike ride); inside one, a folder per more specific project, so that
+several videos made from one trip each sit in a logical folder of their
+own inside it. Today a Dailix project is the global one (its footage by
+days, its sheet) and its edits lie loose in `04_project`.
+- The structure of a video project inside a global one: to agree with
+  the user (where its edits, exports, own graphics go; the loose edits
+  made so far by «→ Omnix»).
+- The home: the global projects, each with parameters of its own in
+  `project.json` (a description, tags; `project::update` keeps fields it
+  doesn't know), and its video projects.
+- The first run opens the home; every run after opens where it was
+  closed (the home, or a project and its day).
+- Omnix's start browser (gap 80 step 2) lists the same: global projects,
+  the video projects inside, their edits.
+Milestone «Матеріал і бін».
 
 ## Format rule for all of these
 

@@ -1450,9 +1450,16 @@ edits the clips marked in the contact sheet.
 - First: look at what exists and its licence (code-driven animation
   tools such as Manim or Motion Canvas; whether any takes a story and a
   style), so it builds on an open one rather than from nothing.
+- The input (user, 2026-11-07): not the voice-over, a much simpler
+  parametrised description (scenes, who, what happens, the style); free
+  models only, nothing paid; free outside services acceptable. Asked
+  first for the real possibilities: procedural animation from sprite and
+  slide templates, local image models for the assets, local
+  text-to-video for short moods (answered in the session; to research
+  properly before building).
 - Its output: a video file (with alpha where it helps) that lands in a
   trip's `06_external` and on Omnix's overlay or main lane as a stinger
-  (gap 25d); the voice-over's words could come from the transcript (29).
+  (gap 25d).
 Milestone «Ритм і переходи».
 
 ## Format rule for all of these

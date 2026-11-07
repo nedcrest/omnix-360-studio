@@ -100,7 +100,7 @@ And two of process:
   or a label fits the block it's in (lane height and block width as
   limits, its own aspect); never "only when wider than three heights".
   Try a new piece at the smallest and the largest lane and window.
-- **Checks on the test place**: `<drive>/DAILIX/TESTS` (CONTEXT),
+- **Checks on the test project**: `<drive>/DAILIX/2026-08_test` (CONTEXT),
   every lane filled; add to its edit what a new feature needs to be seen.
 
 ## Before each commit

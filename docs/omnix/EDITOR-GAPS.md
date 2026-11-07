@@ -1367,23 +1367,35 @@ duck finds nothing. Ways (the user to choose):
 Chosen (user, 2026-11-06): c. Nothing changes in Omnix; gap 77 closes
 this one. Milestone «Звук для Косу».
 
-### 82. Dailix: global projects holding video projects; their home — idea (user, 2026-11-07)
+### 82. Dailix: global projects holding video projects; their home — building (user, 2026-11-07)
 
 User: the Dailix place holds global projects (a trip, an event, a hike, a
-motorbike ride); inside one, a folder per more specific project, so that
-several videos made from one trip each sit in a logical folder of their
-own inside it. Today a Dailix project is the global one (its footage by
-days, its sheet) and its edits lie loose in `04_project`.
-- The structure of a video project inside a global one: to agree with
-  the user (where its edits, exports, own graphics go; the loose edits
-  made so far by «→ Omnix»).
-- The home: the global projects, each with parameters of its own in
-  `project.json` (a description, tags; `project::update` keeps fields it
-  doesn't know), and its video projects.
-- The first run opens the home; every run after opens where it was
-  closed (the home, or a project and its day).
-- Omnix's start browser (gap 80 step 2) lists the same: global projects,
-  the video projects inside, their edits.
+motorbike ride); inside one, a folder per video made from it, so several
+videos from one trip each sit in a logical folder of their own.
+
+Decided (user, 2026-11-07):
+- The global project is the trip as today's Dailix project: all its
+  footage by days, its marking. Its videos are folders inside it:
+  `videos/<name>/` holding the video's edit (`edit.json`) and its
+  `export/`; they all take the trip's footage.
+- The projects place is the global Dailix folder (`DAILIX/`), for both
+  programs; the test project moved there (`DAILIX/2026-08_test`, the
+  `TESTS` place gone).
+- Dailix's Home is a page of its own: a card per trip (its poster, name,
+  dates, days and clips, a description and tags from `project.json`). A
+  card opens the trip's page: its days (the cards of today's home) and
+  its videos.
+- Dailix opens where it was closed (Home, a trip, a day's clip).
+
+Steps, each checked by the user:
+1. Home: trip cards; a trip's page with its days and its edits (the
+   loose `04_project` ones until 2); description and tags shown and
+   edited on the trip's page.
+2. Videos: `videos/<name>/` in the core (`Layout`, list, make one);
+   «→ Omnix» and «Empty day/edit» make a video folder; a trip's page and
+   Omnix's start browser list trips → videos → edits; the edits made so
+   far in `04_project` listed as they are.
+3. «New project» (gap 80 step 4) on top of it.
 Milestone «Матеріал і бін».
 
 ### 83. Dailix finds where people talk, even in bad sound — idea (user, 2026-11-07)

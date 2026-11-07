@@ -1929,6 +1929,216 @@ impl std::ops::Deref for Marks {
     }
 }
 
+impl Timeline {
+    /// A right-click: on a cut, what file it is; on a cut's sound or a
+    /// sound clip, its menu where the pointer is (Info is in it); on a
+    /// sound lane's empty stretch, the track's menu.
+    fn right_press(&self, bounds: Rectangle, cursor: mouse::Cursor) -> Option<canvas::Action<Message>> {
+        use super::sound_ui::{Menu, SoundMsg};
+        let p = cursor.position_in(bounds)?;
+        // A lane's header first, then a point or a line: each has a
+        // menu of its own.
+        let menu = if p.x < HEAD {
+            self.head_menu(p)?
+        } else if let Some((own, i)) = self.sound_at(p, bounds) {
+            Menu::Point(own, i)
+        } else if let Some(own) = self.on_sound_line(p, bounds) {
+            Menu::Line(own)
+        } else if self.rows.on_clip_sound(p.y) {
+            Menu::Own(Own::Cut(self.block_at(p.x, bounds)?))
+        } else if let Some(lane) = self.rows.sound_at_y(p.y) {
+            let which = self.sounds[lane].which;
+            self.music_at(lane, p.x, bounds).map_or(Menu::Track(which), |i| Menu::Own(Own::Clip(which, i)))
+        } else if p.y < self.rows.effects_top {
+            return Some(canvas::Action::publish(Message::Info(super::info::Of::Cut(self.block_at(p.x, bounds)?))).and_capture());
+        } else {
+            return None;
+        };
+        Some(canvas::Action::publish(Message::Sound(SoundMsg::Menu(Some((menu, cursor.position()?))))).and_capture())
+    }
+
+    /// A left press: what's under it (`hit`) acted on, and the drag it
+    /// starts kept in `state`.
+    fn press(&self, state: &mut State, bounds: Rectangle, cursor: mouse::Cursor) -> Option<canvas::Action<Message>> {
+        let p = cursor.position_in(bounds)?;
+        let drag = &mut state.drag;
+        let per_px = self.span / Timeline::width(bounds) as f64;
+        let message = match self.hit(p, bounds, state.ctrl, state.shift) {
+            Hit::Nothing => return None,
+            Hit::Scroll => {
+                // On the thumb, drag it; elsewhere on the bar, centre it there first.
+                let (l, r) = self.scroll_thumb(bounds);
+                let per_px = self.duration / Timeline::width(bounds) as f64;
+                let start = if p.x >= l && p.x <= r { self.start } else { self.start + (p.x - (l + r) / 2.0) as f64 * per_px };
+                *drag = Drag::Scroll { x0: p.x, start };
+                Message::TimelinePan(start)
+            }
+            Hit::Listen(lane, solo) => Message::Listen(lane, solo),
+            Hit::Fold(lane, folded) => Message::Fold(lane, folded),
+            // A lane's header: its own settings in one place.
+            Hit::Head => Message::Sound(super::sound_ui::SoundMsg::Menu(Some((self.head_menu(p)?, cursor.position()?)))),
+            Hit::Effect { cut, key, t } => {
+                // A jump there, and a drag retimes it.
+                *drag = Drag::Effect { cut, key };
+                Message::Effect(super::effects::EffectMsg::Jump(cut, t))
+            }
+            Hit::CutFade { cut, in_edge } => {
+                let c = &self.blocks[cut];
+                *drag = Drag::Fade { own: Own::Cut(cut), in_edge, x0: p.x, from: if in_edge { c.cut.sound_fade_in } else { c.cut.sound_fade_out }, per_px };
+                Message::Select(cut)
+            }
+            Hit::SoundEdge { cut, start } => {
+                // Its sound alone runs on past the picture or stops
+                // short (a J- or L-cut).
+                let c = &self.blocks[cut];
+                let from = if start { c.cut.start - c.cut.sound_before } else { c.cut.start + c.len() + c.cut.sound_after };
+                *drag = Drag::SoundEdge { cut, start, x0: p.x, from, per_px };
+                Message::Select(cut)
+            }
+            Hit::Point { own, key, delete: true } => Message::Sound(super::sound_ui::SoundMsg::DeletePoint(own, key)),
+            Hit::Point { own, key, .. } => {
+                *drag = Drag::Point { own, key };
+                Message::PointSelect(own, key)
+            }
+            // The clip's level knob.
+            Hit::LevelTag(own) => self.tag_press(drag, &mut state.tag_click, own, p)?,
+            // A sound point where clicked, dragged on.
+            Hit::NewPoint(own) => self.add_point(drag, own, p, bounds)?,
+            Hit::CutSound(cut) => Message::Select(cut),
+            Hit::CutEdge { cut, crossfade: true, .. } => {
+                // How far it overlaps the cut before.
+                *drag = Drag::Crossfade { cut, x0: p.x, from: self.blocks[cut].cut.crossfade, per_px };
+                Message::Select(cut)
+            }
+            Hit::CutEdge { cut, start, .. } => {
+                let c = &self.blocks[cut];
+                *drag = Drag::Trim { cut, start, x0: p.x, from: if start { c.cut.start } else { c.cut.start + c.len() }, per_px };
+                Message::Select(cut)
+            }
+            Hit::Cut(cut) => {
+                *drag = Drag::Move { cut, x0: p.x, moved: false, to: cut };
+                Message::Select(cut)
+            }
+            Hit::ClipFade { lane, clip, in_edge } => {
+                let m = &self.sounds[lane].blocks[clip];
+                *drag = Drag::Fade { own: Own::Clip(self.sounds[lane].which, clip), in_edge, x0: p.x, from: if in_edge { m.clip.fade_in } else { m.clip.fade_out }, per_px };
+                Message::SelectMusic(self.sounds[lane].which, clip)
+            }
+            Hit::Clip { lane, clip, edge } => {
+                let m = &self.sounds[lane].blocks[clip];
+                *drag = match edge {
+                    Some(start) => Drag::MusicTrim { lane, clip, start, x0: p.x, from: if start { m.clip.start } else { m.clip.start + m.len() }, per_px },
+                    None => Drag::MusicMove { lane, clip, x0: p.x, at: m.clip.at, per_px },
+                };
+                Message::SelectMusic(self.sounds[lane].which, clip)
+            }
+            Hit::Key { cut, key } => {
+                *drag = Drag::Key { cut, key };
+                Message::KeyJump(cut, key)
+            }
+            Hit::Playhead => {
+                *drag = Drag::Playhead;
+                Message::Scrub(self.t(p.x, bounds))
+            }
+        };
+        Some(canvas::Action::publish(message).and_capture())
+    }
+
+    /// The pointer moved during a drag: what the drag does at `position`.
+    fn drag_to(&self, state: &mut State, position: Point, bounds: Rectangle) -> Option<canvas::Action<Message>> {
+        let x = position.x - bounds.x;
+        let drag = &mut state.drag;
+        let message = match drag {
+            Drag::None => return None,
+            Drag::Playhead => {
+                let t = self.t(x, bounds);
+                snapped(self.snap(&[t], self.span / Timeline::width(bounds) as f64, |of| of == Of::Playhead), |by| Message::Scrub(t + by))
+            }
+            Drag::Key { cut, key } => {
+                let c = &self.blocks[*cut];
+                let edit_t = self.t(x, bounds).clamp(c.from, c.from + c.len());
+                Message::KeyMove(*cut, *key, c.cut.start + edit_t - c.from)
+            }
+            Drag::Effect { cut, key } => {
+                let c = &self.blocks[*cut];
+                let edit_t = self.t(x, bounds).clamp(c.from, c.from + c.len());
+                Message::Effect(super::effects::EffectMsg::KeyMove(*cut, *key, c.cut.start + edit_t - c.from))
+            }
+            Drag::Trim { cut, start, x0, from, per_px } => {
+                let t = *from + (x - *x0) as f64 * *per_px;
+                // Its out edge snaps; what comes after it moves with
+                // it. Its in edge stays put on screen as it trims.
+                let c = &self.blocks[*cut];
+                let at = (!*start).then(|| self.snap(&[c.from + t - c.cut.start], *per_px, |of| matches!(of, Of::Cut(j) | Of::CutSound(j) | Of::Mark(j) if j >= *cut))).flatten();
+                let (cut, start) = (*cut, *start);
+                snapped(at, |by| Message::Trim(cut, start, t + by))
+            }
+            Drag::SoundEdge { cut, start, x0, from, per_px } => {
+                // Onto a join (its own picture's too, back home) or a
+                // neighbour's sound edge.
+                let t = *from + (x - *x0) as f64 * *per_px;
+                let c = &self.blocks[*cut];
+                let at = self.snap(&[c.from + t - c.cut.start], *per_px, |of| of == Of::CutSound(*cut));
+                let (cut, start) = (*cut, *start);
+                snapped(at, |by| Message::SoundEdge(cut, start, t + by))
+            }
+            Drag::Move { x0, moved, to, .. } => {
+                *moved |= (x - *x0).abs() > DRAG_FROM;
+                *to = self.drop_at(x, bounds);
+                return Some(canvas::Action::request_redraw().and_capture());
+            }
+            Drag::Scroll { x0, start } => Message::TimelinePan(*start + (x - *x0) as f64 * self.duration / Timeline::width(bounds) as f64),
+            Drag::MusicMove { lane, clip, x0, at, per_px } => {
+                let at = *at + (x - *x0) as f64 * *per_px;
+                let len = self.sounds[*lane].blocks[*clip].len();
+                let (lane, clip, overlap) = (*lane, *clip, state.shift);
+                let to = self.snap(&[at, at + len], *per_px, |of| of == Of::Sound(lane, clip));
+                snapped(to, |by| Message::MusicMove(self.sounds[lane].which, clip, at + by, overlap))
+            }
+            Drag::Crossfade { cut, x0, from, per_px } => Message::Crossfade(*cut, *from + (*x0 - x) as f64 * *per_px),
+            Drag::Fade { own, in_edge, x0, from, per_px } => {
+                // Rightwards lengthens a fade in, leftwards a fade out.
+                let dx = (x - *x0) as f64 * *per_px;
+                Message::Fade(*own, *in_edge, *from + if *in_edge { dx } else { -dx })
+            }
+            Drag::Point { own, key } => {
+                let (t, db) = self.own_point(*own, Point::new(x, position.y - bounds.y), bounds)?;
+                Message::PointMove(*own, *key, t, db)
+            }
+            Drag::Level { own, y0, from } => {
+                // Up is louder: 0.25 dB a pixel in 0.5 dB steps,
+                // Shift a fifth of that in 0.1 dB steps.
+                let (per_px, step) = if state.shift { (0.05, 0.1) } else { (0.25, 0.5) };
+                let db = *from + ((*y0 - (position.y - bounds.y)) as f64 * per_px / step).round() * step;
+                Message::Level(*own, db)
+            }
+            Drag::MusicTrim { lane, clip, start, x0, from, per_px } => {
+                // File time to edit time is fixed while trimming:
+                // either edge moves, the sound stays put.
+                let m = &self.sounds[*lane].blocks[*clip];
+                let t = *from + (x - *x0) as f64 * *per_px;
+                let to_edit = m.clip.at - m.clip.start;
+                let (lane, clip, start, overlap) = (*lane, *clip, *start, state.shift);
+                let to = self.snap(&[t + to_edit], *per_px, |of| of == Of::Sound(lane, clip));
+                snapped(to, |by| Message::MusicTrim(self.sounds[lane].which, clip, start, t + by, overlap))
+            }
+        };
+        Some(canvas::Action::publish(message).and_capture())
+    }
+}
+
+/// The left button let go: a moved cut lands, any other drag ends.
+fn release(drag: Drag) -> Option<canvas::Action<Message>> {
+    match drag {
+        Drag::None => None,
+        Drag::Move { cut, moved: true, to, .. } => Some(canvas::Action::publish(Message::MoveCut(cut, to)).and_capture()),
+        Drag::Move { .. } | Drag::Scroll { .. } => Some(canvas::Action::request_redraw().and_capture()),
+        Drag::Playhead | Drag::Key { .. } | Drag::Effect { .. } | Drag::Trim { .. } | Drag::MusicMove { .. } | Drag::MusicTrim { .. } | Drag::Fade { .. } | Drag::Point { .. } | Drag::Level { .. } | Drag::Crossfade { .. } | Drag::SoundEdge { .. } => {
+            Some(canvas::Action::publish(Message::ScrubDone).and_capture())
+        }
+    }
+}
+
 impl canvas::Program<Message> for Marks {
     type State = State;
 
@@ -1940,7 +2150,6 @@ impl canvas::Program<Message> for Marks {
             state.epoch = self.drag_epoch;
             state.drag = Drag::None;
         }
-        let drag = &mut state.drag;
         match event {
             Keyboard(iced::keyboard::Event::ModifiersChanged(m)) => {
                 state.shift = m.shift();
@@ -1948,202 +2157,10 @@ impl canvas::Program<Message> for Marks {
                 None
             }
             Mouse(mouse::Event::WheelScrolled { delta }) => wheel(delta, self, cursor, bounds),
-            // Right-click a cut: what file it is; a cut's sound or a sound
-            // clip: its menu, where the pointer is (Info is in it); a sound
-            // lane's empty stretch: the track's menu.
-            Mouse(mouse::Event::ButtonPressed(mouse::Button::Right)) => {
-                use super::sound_ui::{Menu, SoundMsg};
-                let p = cursor.position_in(bounds)?;
-                // A lane's header first, then a point or a line: each has a
-                // menu of its own.
-                let menu = if p.x < HEAD {
-                    self.head_menu(p)?
-                } else if let Some((own, i)) = self.sound_at(p, bounds) {
-                    Menu::Point(own, i)
-                } else if let Some(own) = self.on_sound_line(p, bounds) {
-                    Menu::Line(own)
-                } else if self.rows.on_clip_sound(p.y) {
-                    Menu::Own(Own::Cut(self.block_at(p.x, bounds)?))
-                } else if let Some(lane) = self.rows.sound_at_y(p.y) {
-                    let which = self.sounds[lane].which;
-                    self.music_at(lane, p.x, bounds).map_or(Menu::Track(which), |i| Menu::Own(Own::Clip(which, i)))
-                } else if p.y < self.rows.effects_top {
-                    return Some(canvas::Action::publish(Message::Info(super::info::Of::Cut(self.block_at(p.x, bounds)?))).and_capture());
-                } else {
-                    return None;
-                };
-                Some(canvas::Action::publish(Message::Sound(SoundMsg::Menu(Some((menu, cursor.position()?))))).and_capture())
-            }
-            Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
-                let p = cursor.position_in(bounds)?;
-                let per_px = self.span / Timeline::width(bounds) as f64;
-                let message = match self.hit(p, bounds, state.ctrl, state.shift) {
-                    Hit::Nothing => return None,
-                    Hit::Scroll => {
-                        // On the thumb, drag it; elsewhere on the bar, centre it there first.
-                        let (l, r) = self.scroll_thumb(bounds);
-                        let per_px = self.duration / Timeline::width(bounds) as f64;
-                        let start = if p.x >= l && p.x <= r { self.start } else { self.start + (p.x - (l + r) / 2.0) as f64 * per_px };
-                        *drag = Drag::Scroll { x0: p.x, start };
-                        Message::TimelinePan(start)
-                    }
-                    Hit::Listen(lane, solo) => Message::Listen(lane, solo),
-                    Hit::Fold(lane, folded) => Message::Fold(lane, folded),
-                    // A lane's header: its own settings in one place.
-                    Hit::Head => Message::Sound(super::sound_ui::SoundMsg::Menu(Some((self.head_menu(p)?, cursor.position()?)))),
-                    Hit::Effect { cut, key, t } => {
-                        // A jump there, and a drag retimes it.
-                        *drag = Drag::Effect { cut, key };
-                        Message::Effect(super::effects::EffectMsg::Jump(cut, t))
-                    }
-                    Hit::CutFade { cut, in_edge } => {
-                        let c = &self.blocks[cut];
-                        *drag = Drag::Fade { own: Own::Cut(cut), in_edge, x0: p.x, from: if in_edge { c.cut.sound_fade_in } else { c.cut.sound_fade_out }, per_px };
-                        Message::Select(cut)
-                    }
-                    Hit::SoundEdge { cut, start } => {
-                        // Its sound alone runs on past the picture or stops
-                        // short (a J- or L-cut).
-                        let c = &self.blocks[cut];
-                        let from = if start { c.cut.start - c.cut.sound_before } else { c.cut.start + c.len() + c.cut.sound_after };
-                        *drag = Drag::SoundEdge { cut, start, x0: p.x, from, per_px };
-                        Message::Select(cut)
-                    }
-                    Hit::Point { own, key, delete: true } => Message::Sound(super::sound_ui::SoundMsg::DeletePoint(own, key)),
-                    Hit::Point { own, key, .. } => {
-                        *drag = Drag::Point { own, key };
-                        Message::PointSelect(own, key)
-                    }
-                    // The clip's level knob.
-                    Hit::LevelTag(own) => self.tag_press(drag, &mut state.tag_click, own, p)?,
-                    // A sound point where clicked, dragged on.
-                    Hit::NewPoint(own) => self.add_point(drag, own, p, bounds)?,
-                    Hit::CutSound(cut) => Message::Select(cut),
-                    Hit::CutEdge { cut, crossfade: true, .. } => {
-                        // How far it overlaps the cut before.
-                        *drag = Drag::Crossfade { cut, x0: p.x, from: self.blocks[cut].cut.crossfade, per_px };
-                        Message::Select(cut)
-                    }
-                    Hit::CutEdge { cut, start, .. } => {
-                        let c = &self.blocks[cut];
-                        *drag = Drag::Trim { cut, start, x0: p.x, from: if start { c.cut.start } else { c.cut.start + c.len() }, per_px };
-                        Message::Select(cut)
-                    }
-                    Hit::Cut(cut) => {
-                        *drag = Drag::Move { cut, x0: p.x, moved: false, to: cut };
-                        Message::Select(cut)
-                    }
-                    Hit::ClipFade { lane, clip, in_edge } => {
-                        let m = &self.sounds[lane].blocks[clip];
-                        *drag = Drag::Fade { own: Own::Clip(self.sounds[lane].which, clip), in_edge, x0: p.x, from: if in_edge { m.clip.fade_in } else { m.clip.fade_out }, per_px };
-                        Message::SelectMusic(self.sounds[lane].which, clip)
-                    }
-                    Hit::Clip { lane, clip, edge } => {
-                        let m = &self.sounds[lane].blocks[clip];
-                        *drag = match edge {
-                            Some(start) => Drag::MusicTrim { lane, clip, start, x0: p.x, from: if start { m.clip.start } else { m.clip.start + m.len() }, per_px },
-                            None => Drag::MusicMove { lane, clip, x0: p.x, at: m.clip.at, per_px },
-                        };
-                        Message::SelectMusic(self.sounds[lane].which, clip)
-                    }
-                    Hit::Key { cut, key } => {
-                        *drag = Drag::Key { cut, key };
-                        Message::KeyJump(cut, key)
-                    }
-                    Hit::Playhead => {
-                        *drag = Drag::Playhead;
-                        Message::Scrub(self.t(p.x, bounds))
-                    }
-                };
-                Some(canvas::Action::publish(message).and_capture())
-            }
-            Mouse(mouse::Event::CursorMoved { position }) => {
-                let x = position.x - bounds.x;
-                let message = match drag {
-                    Drag::None => return None,
-                    Drag::Playhead => {
-                        let t = self.t(x, bounds);
-                        snapped(self.snap(&[t], self.span / Timeline::width(bounds) as f64, |of| of == Of::Playhead), |by| Message::Scrub(t + by))
-                    }
-                    Drag::Key { cut, key } => {
-                        let c = &self.blocks[*cut];
-                        let edit_t = self.t(x, bounds).clamp(c.from, c.from + c.len());
-                        Message::KeyMove(*cut, *key, c.cut.start + edit_t - c.from)
-                    }
-                    Drag::Effect { cut, key } => {
-                        let c = &self.blocks[*cut];
-                        let edit_t = self.t(x, bounds).clamp(c.from, c.from + c.len());
-                        Message::Effect(super::effects::EffectMsg::KeyMove(*cut, *key, c.cut.start + edit_t - c.from))
-                    }
-                    Drag::Trim { cut, start, x0, from, per_px } => {
-                        let t = *from + (x - *x0) as f64 * *per_px;
-                        // Its out edge snaps; what comes after it moves with
-                        // it. Its in edge stays put on screen as it trims.
-                        let c = &self.blocks[*cut];
-                        let at = (!*start).then(|| self.snap(&[c.from + t - c.cut.start], *per_px, |of| matches!(of, Of::Cut(j) | Of::CutSound(j) | Of::Mark(j) if j >= *cut))).flatten();
-                        let (cut, start) = (*cut, *start);
-                        snapped(at, |by| Message::Trim(cut, start, t + by))
-                    }
-                    Drag::SoundEdge { cut, start, x0, from, per_px } => {
-                        // Onto a join (its own picture's too, back home) or a
-                        // neighbour's sound edge.
-                        let t = *from + (x - *x0) as f64 * *per_px;
-                        let c = &self.blocks[*cut];
-                        let at = self.snap(&[c.from + t - c.cut.start], *per_px, |of| of == Of::CutSound(*cut));
-                        let (cut, start) = (*cut, *start);
-                        snapped(at, |by| Message::SoundEdge(cut, start, t + by))
-                    }
-                    Drag::Move { x0, moved, to, .. } => {
-                        *moved |= (x - *x0).abs() > DRAG_FROM;
-                        *to = self.drop_at(x, bounds);
-                        return Some(canvas::Action::request_redraw().and_capture());
-                    }
-                    Drag::Scroll { x0, start } => Message::TimelinePan(*start + (x - *x0) as f64 * self.duration / Timeline::width(bounds) as f64),
-                    Drag::MusicMove { lane, clip, x0, at, per_px } => {
-                        let at = *at + (x - *x0) as f64 * *per_px;
-                        let len = self.sounds[*lane].blocks[*clip].len();
-                        let (lane, clip, overlap) = (*lane, *clip, state.shift);
-                        let to = self.snap(&[at, at + len], *per_px, |of| of == Of::Sound(lane, clip));
-                        snapped(to, |by| Message::MusicMove(self.sounds[lane].which, clip, at + by, overlap))
-                    }
-                    Drag::Crossfade { cut, x0, from, per_px } => Message::Crossfade(*cut, *from + (*x0 - x) as f64 * *per_px),
-                    Drag::Fade { own, in_edge, x0, from, per_px } => {
-                        // Rightwards lengthens a fade in, leftwards a fade out.
-                        let dx = (x - *x0) as f64 * *per_px;
-                        Message::Fade(*own, *in_edge, *from + if *in_edge { dx } else { -dx })
-                    }
-                    Drag::Point { own, key } => {
-                        let (t, db) = self.own_point(*own, Point::new(x, position.y - bounds.y), bounds)?;
-                        Message::PointMove(*own, *key, t, db)
-                    }
-                    Drag::Level { own, y0, from } => {
-                        // Up is louder: 0.25 dB a pixel in 0.5 dB steps,
-                        // Shift a fifth of that in 0.1 dB steps.
-                        let (per_px, step) = if state.shift { (0.05, 0.1) } else { (0.25, 0.5) };
-                        let db = *from + ((*y0 - (position.y - bounds.y)) as f64 * per_px / step).round() * step;
-                        Message::Level(*own, db)
-                    }
-                    Drag::MusicTrim { lane, clip, start, x0, from, per_px } => {
-                        // File time to edit time is fixed while trimming:
-                        // either edge moves, the sound stays put.
-                        let m = &self.sounds[*lane].blocks[*clip];
-                        let t = *from + (x - *x0) as f64 * *per_px;
-                        let to_edit = m.clip.at - m.clip.start;
-                        let (lane, clip, start, overlap) = (*lane, *clip, *start, state.shift);
-                        let to = self.snap(&[t + to_edit], *per_px, |of| of == Of::Sound(lane, clip));
-                        snapped(to, |by| Message::MusicTrim(self.sounds[lane].which, clip, start, t + by, overlap))
-                    }
-                };
-                Some(canvas::Action::publish(message).and_capture())
-            }
-            Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => match std::mem::take(drag) {
-                Drag::None => None,
-                Drag::Move { cut, moved: true, to, .. } => Some(canvas::Action::publish(Message::MoveCut(cut, to)).and_capture()),
-                Drag::Move { .. } | Drag::Scroll { .. } => Some(canvas::Action::request_redraw().and_capture()),
-                Drag::Playhead | Drag::Key { .. } | Drag::Effect { .. } | Drag::Trim { .. } | Drag::MusicMove { .. } | Drag::MusicTrim { .. } | Drag::Fade { .. } | Drag::Point { .. } | Drag::Level { .. } | Drag::Crossfade { .. } | Drag::SoundEdge { .. } => {
-                    Some(canvas::Action::publish(Message::ScrubDone).and_capture())
-                }
-            },
+            Mouse(mouse::Event::ButtonPressed(mouse::Button::Right)) => self.right_press(bounds, cursor),
+            Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => self.press(state, bounds, cursor),
+            Mouse(mouse::Event::CursorMoved { position }) => self.drag_to(state, *position, bounds),
+            Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => release(std::mem::take(&mut state.drag)),
             _ => None,
         }
     }

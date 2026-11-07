@@ -44,9 +44,59 @@ pub fn set_title(root: &Path, title: &str) -> std::io::Result<()> {
     })
 }
 
+/// The projects in the place `projects`: its folders that are Dailix
+/// projects, by name. The home view and Omnix's start window both list
+/// them.
+pub fn all(projects: &Path) -> Vec<std::path::PathBuf> {
+    let Ok(entries) = std::fs::read_dir(projects) else { return Vec::new() };
+    let mut roots: Vec<_> = entries.flatten().map(|e| e.path()).filter(|p| Layout::new(p).is_project()).collect();
+    roots.sort();
+    roots
+}
+
+/// A project's edits (`04_project/*.json`), the latest changed first.
+pub fn edits(root: &Path) -> Vec<std::path::PathBuf> {
+    let Ok(entries) = std::fs::read_dir(Layout::new(root).edits()) else { return Vec::new() };
+    let mut found: Vec<_> = entries.flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|x| x == "json")).map(|p| (std::fs::metadata(&p).and_then(|m| m.modified()).ok(), p)).collect();
+    found.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.cmp(&b.1)));
+    found.into_iter().map(|(_, p)| p).collect()
+}
+
+/// The project an edit file is one of (it lies in its `04_project`).
+pub fn of_edit(edit: &Path) -> Option<std::path::PathBuf> {
+    let root = edit.parent()?.parent()?;
+    let l = Layout::new(root);
+    (edit.parent() == Some(l.edits().as_path()) && l.is_project()).then(|| root.to_owned())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_place_lists_its_projects_and_each_its_edits() {
+        let place = std::env::temp_dir().join(format!("dailix-all-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&place);
+        for name in ["b_trip", "a_trip"] {
+            let l = Layout::new(place.join(name));
+            std::fs::create_dir_all(l.data()).unwrap();
+            update(&l, |_| {}).unwrap();
+        }
+        std::fs::create_dir_all(place.join("not_a_project")).unwrap();
+        assert_eq!(all(&place), [place.join("a_trip"), place.join("b_trip")]);
+        let edits_dir = Layout::new(place.join("a_trip")).edits();
+        std::fs::create_dir_all(&edits_dir).unwrap();
+        std::fs::write(edits_dir.join("old.json"), "{}").unwrap();
+        std::fs::write(edits_dir.join("notes.txt"), "").unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        std::fs::write(edits_dir.join("new.json"), "{}").unwrap();
+        assert_eq!(edits(&place.join("a_trip")), [edits_dir.join("new.json"), edits_dir.join("old.json")]);
+        assert!(edits(&place.join("b_trip")).is_empty());
+        assert_eq!(of_edit(&edits_dir.join("new.json")), Some(place.join("a_trip")));
+        assert_eq!(of_edit(&place.join("a_trip/elsewhere.json")), None);
+        assert!(all(&place.join("gone")).is_empty());
+        std::fs::remove_dir_all(&place).unwrap();
+    }
 
     #[test]
     fn fields_one_writer_does_not_know_survive_it() {

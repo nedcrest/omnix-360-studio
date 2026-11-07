@@ -1391,7 +1391,8 @@ Decided (user, 2026-11-07):
 Steps, each checked by the user:
 1. Home: trip cards; a trip's page with its days and its edits (the
    loose `04_project` ones until 2); description and tags shown and
-   edited on the trip's page.
+   edited on the trip's page. Built (Dailix `e2687c5`), waiting for the
+   check.
 2. Videos: `videos/<name>/` in the core (`Layout`, list, make one);
    «→ Omnix» and «Empty day/edit» make a video folder; a trip's page and
    Omnix's start browser list trips → videos → edits; the edits made so

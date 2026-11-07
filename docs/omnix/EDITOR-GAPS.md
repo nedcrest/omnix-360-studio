@@ -109,7 +109,7 @@ done in part stays here until its last card is done.
 ## Open gaps
 
 
-### 2. A bin (project library panel), like Kdenlive's — v2 done; add buttons user-tested 2026-10-23
+### 2. A bin (project library panel), like Kdenlive's — v2 done; the bin view in tiles with its own player and I/O done in gap 60
 
 User: wants a bin, maybe with better UI, with "our extra sound tracks" in it.
 
@@ -142,14 +142,15 @@ W inserts at the playhead without dragging), DaVinci Resolve's media pool
 (thumbnail / list views, icon size, hover scrub shown in the viewer),
 CapCut (thumbnail grid, "+", drag to the timeline).
 
-**Next for the bin:**
-- hover-scrub a clip's picture (Final Cut's skimmer) — a canvas per row;
+**Next for the bin** (2026-11-07: the grid with its size slider, the
+player inside Omnix and I/O are done in gap 60's bin view; the hover
+skimmer in the bin gives way to the source viewer, 71a):
 - E / W from the bin: append / insert at the playhead (needs gap 1);
-- grid view with bigger pictures, and a size slider;
 - drag-and-drop to the timeline (harder in iced);
 - sounds to their own lanes (gap 3); LUTs from `09_luts`;
-- footage-agent's ratings, notes and tags from `report/notes.json`;
-- **preview inside the app's own viewer instead of an ffplay window** — the
+- ratings, notes and tags from Dailix's marking (once `notes.json`);
+- the narrow bin panel still previews in an ffplay window: in Omnix, as
+  the source viewer (71a). The first note on it — the
   user noticed the separate window (2026-10-22) and expects it in Omnix's
   viewer, like a source monitor in Kdenlive / Resolve. Idea: a preview mode
   that plays the bin's file in the main view (loaded into the library, not
@@ -324,7 +325,7 @@ line runs through every lane, the ruler and the markers' row where a
 drag snapped (`Message::Snapped`), gone at the drag's end or Esc. N
 toggles snapping (kept in `settings.json`), shown by the magnet button
 beside the zoom; Shift held lets one drag go free. Not yet: keyframe
-marks, and beats (gap 57).
+marks, and beats (found for gap 13, used by 57).
 
 ### 13. Cuts on the beat — medium (Kos TODO, 2026-10-23)
 
@@ -407,7 +408,8 @@ Split into steps so each can be tried on Kos on its own:
   `TRANSITIONS.md` → "Quick ways": T at the playhead, between two selected
   clips, or on every join. Builds on the existing crossfade.
 - **25b. Edge transitions** (out on one cut, in on the next, no overlap).
-- **25c. Templates:** a configured transition saved into the project and
+- **25c. Templates** (its card merged into the transitions lane's, 25f,
+  2026-11-07)**:** a configured transition saved into the project and
   picked for any join.
 - **25d. Stingers («перебивки», video transitions)**, their own yellow
   group: a short clip with its own sound on a cut, insert or cover, from the
@@ -986,6 +988,9 @@ praise and curse. Then the parts below get ordered from it.
 
 ### 57. Cutting footage to music's beat, for the AI edit — idea, large (user, 2026-11-03)
 
+Builds on the beats found for gap 13 (cuts on the music's beat, in the
+user's editing order, 2026-11-07); this gap adds the ways of cutting.
+
 User: "an idea for the AI-editing API: sometimes there's video that can
 be cut to music. It needs to find the beats (as in a sampler) and have
 several ways of cutting to them (in a row, separate scenes, and so on),
@@ -1353,7 +1358,7 @@ Dailix's until one is chosen in Omnix; the order below, own videos after.
    first step (`dailix/docs/INGEST.md`).
 Milestone «Матеріал і бін».
 
-### 81. Auto-duck under talk in a cut's own sound — waits for gap 77 (user, 2026-11-06)
+### 81. Auto-duck under talk in a cut's own sound — waits for gaps 77 and 83 (user, 2026-11-06); no card of its own: «Dailix: де в кадрі говорять» closes it
 
 Found while checking: music over a Kos cut where people talk; «Auto-duck»
 says "No speech to lower the music under". By design (gap 3, `duck.rs`)
@@ -1453,11 +1458,13 @@ whenever a better grouping shows. `ROADMAP.md` shows the same as cards (field
    two modes → 9 pack 1 (with 7) → 5 markers → 9 click routes → 9 snapping
    → 9 skimmer on the timeline (needs 10 for S; in the bin 71a replaces it) → 9 action bar → 9 typed time and UI scale
    → 27 overview strip, centred playhead option.
-3. **Матеріал і бін** (material in): 34 import from devices in the studio; 1 + 2 bin buttons (done) → bin
-   preview in Omnix's viewer as a second viewer (71a; designed with 10) → bin grid, ratings from `notes.json`, LUTs, E/W → «new project
-   with folders» in Omnix.
-4. **Розуміння матеріалу** (footage-agent, can run beside the Omnix work):
-   29 speech transcription → 30 who is in the frame (names from Immich).
+3. **Матеріал і бін** (material in): trips holding their videos in
+   Dailix (82), «New project» through Dailix (80 → 82); the source viewer
+   beside the edit (71a); ratings from Dailix, LUTs, E/W in the bin (2);
+   ingest in Dailix (74 with 34; one's own videos first).
+4. **Розуміння матеріалу** (Dailix takes the material apart, Omnix edits
+   with it): 83 where people talk, with 77's clean voice → 29 speech
+   transcription → 30 who is in the frame (names from Immich).
    Feeds subtitles, text editing, bin search, and later AI auto-edit.
 5. **B-roll і групи**: video on the overlay lane (cheap cutaway) → 4B
    group/ungroup + connected clips + 8 multi-select, one format change,
@@ -1465,8 +1472,8 @@ whenever a better grouping shows. `ROADMAP.md` shows the same as cards (field
 6. **Кадрування** (gap 53, user 2026-11-02): framing grown up from gap
    10's switch: research the best practices first (Insta360 Studio, DJI
    Studio, GoPro, Auto/Smart Reframe), then faces and people (53a, with
-   footage-agent's 30), object tracking (37 → 53b), angles as a multicam
-   (49 → 53c), framing aids. After B-roll and groups, as angles change the
+   Dailix's 30), framing aids; object tracking (37) and angles as a
+   multicam (49, now 73e) have cards of their own. After B-roll and groups, as angles change the
    format beside groups; reordered freely.
 7. **Мультикамерність** (gap 73, user 2026-11-04): 73a the multicam
    clip (a file naming its angles, synced by time, then sound) → 73b in

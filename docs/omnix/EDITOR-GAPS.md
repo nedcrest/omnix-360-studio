@@ -1310,29 +1310,34 @@ on by default for a clip whose shape isn't the edit's, the same in the
 player (GPU) and in the export (ffmpeg `split`, `scale`, `boxblur`,
 `overlay`), tested to match. Milestone «Кадрування».
 
-### 80. Omnix starts at its recent and found projects; a new one is made in Dailix — idea, next after the timeline package (user, 2026-11-05, 2026-11-06)
+### 80. Omnix starts at its recent and found projects; a new one is made in Dailix — building (user, 2026-11-05, 2026-11-06, 2026-11-07)
 
-For the release: Omnix opens a small window of the projects opened last;
-«New project» opens Dailix (or goes to it), where a project is made in the
-one fixed layout (`dailix_sheet::Layout`: `01_footage/<day>/`, `04_project`
-for edits, ...). The point (user): "a fixed structure of projects, so I
-never wonder where that video is". Every edit lives in a project's
-`04_project`, every clip in its `01_footage` (or its sources), whatever
-camera it came from.
-- Both are standalone programs, so each has its projects folder as a
-  setting the user types or picks in the window (user, 2026-11-06):
-  Dailix's `projects` place, today set only by `dailix places
-  --projects`; Omnix gets the same folder. Then Omnix runs from a
-  desktop icon without opening Dailix first.
-- Omnix's start window: the recent projects (by when opened; their
-  name as Dailix's `title` gives it) and, below, the projects found in
-  that folder (`dailix_sheet::project`, as Dailix's home lists them);
-  opening one, «New project» → Dailix; a clip or project dropped on it
-  still opens as now.
-- Dailix: adding one's own videos to a project (a folder, a phone dump),
-  which is ingest's first step (`dailix/docs/INGEST.md`), at least
-  "copy these into `01_footage/<day>/`" with sidecars made.
+For the release: Omnix opens at the projects opened last and those found
+in the projects place; «New project» goes to Dailix, where a project is
+made in the one fixed layout (`dailix_sheet::Layout`: `01_footage/<day>/`,
+`04_project` for edits, ...). The point (user): "a fixed structure of
+projects, so I never wonder where that video is". Both are standalone, so
+each has its projects folder chosen in its window; then Omnix runs from a
+desktop icon without opening Dailix first.
+
+Decided (user, 2026-11-07): Omnix keeps a projects place of its own,
+Dailix's until one is chosen in Omnix; the order below, own videos after.
+1. The projects place in both windows — built: Omnix's Settings
+   «Projects» (Choose…, Use Dailix's; `fsutil::dailix_projects` reads
+   Dailix's settings file, whose place both take from
+   `fsutil::dailix_settings`); Dailix's «projects» chip opens a folder
+   dialog.
+2. Omnix's start window: the edits opened last, and every project in the
+   place with its ready edits (`04_project/*.json`, named by the
+   project's `title`); one click opens one.
+3. Omnix's desktop entry and icon, as `dailix install` makes Dailix's.
+4. «New project» in Omnix opens Dailix, which makes an empty project in
+   the fixed layout (a name, `Layout::create`, `project.json`'s title).
+5. Later, its own card: adding one's own videos to a project in Dailix
+   (copied to `01_footage/<day>/`, a sidecar and a poster each): ingest's
+   first step (`dailix/docs/INGEST.md`).
 Milestone «Матеріал і бін».
+
 ### 81. Auto-duck under talk in a cut's own sound — waits for gap 77 (user, 2026-11-06)
 
 Found while checking: music over a Kos cut where people talk; «Auto-duck»

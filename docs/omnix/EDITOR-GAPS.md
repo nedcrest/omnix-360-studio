@@ -1460,6 +1460,14 @@ edits the clips marked in the contact sheet.
 - Its output: a video file (with alpha where it helps) that lands in a
   trip's `06_external` and on Omnix's overlay or main lane as a stinger
   (gap 25d).
+- Non-commercial (user, 2026-11-07: «what Linux lacks»), so models free
+  for non-commercial use are open to the user himself; the program, if
+  published, is better built on freely licensed ones. Ready Linux tools
+  to try first: ComfyUI (local, generation of pictures and short videos
+  through workflows: Wan, LTX, AnimateDiff), Glaxnimate (vector
+  animation, inside Kdenlive), Synfig, Blender's Grease Pencil, Manim and
+  Motion Canvas (code), Pixelorama / LibreSprite (pixel art). None known
+  to take a scene description to an 8-bit cartoon end to end, offline.
 Milestone «Ритм і переходи».
 
 ## Format rule for all of these

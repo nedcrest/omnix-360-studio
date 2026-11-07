@@ -896,7 +896,14 @@ impl App {
         if !quiet && !matches!(message, Message::AngleInput(..)) {
             self.angle_draft = None;
         }
+        let (selected, opens_info) = (self.selection, matches!(message, Message::Info(_)));
         let task = self.handle(message);
+        // Something else selected: the Info panel told of what was
+        // right-clicked before, and it stood over the Text panel (user,
+        // 2026-11-07).
+        if self.selection != selected && !opens_info {
+            self.info = None;
+        }
         // What the message added or split gets its id (`OPS-API.md`; the
         // operations' `Editor` will do it as it applies them).
         self.edit.settle_ids();

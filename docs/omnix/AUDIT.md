@@ -9,8 +9,6 @@ cost is duplication and drift.
 
 ## Left: the timeline package (its own milestone step, CORE-API step 10)
 
-- [ ] Timeline view structs copy the model field by field; five
-      selection fields rebuilt from one.
 
 - [ ] `Marks::update` 241 lines (split once `Hit` exists).
 

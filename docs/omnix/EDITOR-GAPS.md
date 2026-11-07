@@ -103,6 +103,7 @@ done in part stays here until its last card is done.
 | 81 | Auto-duck under talk in a cut's own sound, not only cleaned voices | below |
 | 82 | Dailix: global projects (a trip, an event) holding video projects; a home of them with notes and tags; opening where it was closed | below |
 | 83 | Dailix finds where people talk in a clip, even in bad sound, and pulls the voice out | below |
+| 84 | A video drawing on several trips (a year in review) | below |
 
 ## Open gaps
 
@@ -1408,6 +1409,14 @@ duck under a cut's own talk) and feeds the marking.
 Order (user, 2026-11-07), after gap 80: transitions, the source viewer
 (71a), cuts on the music's beat (13), then this.
 Milestone «Розуміння матеріалу».
+
+### 84. A video drawing on several trips («a year in review») — idea, backlog (user, 2026-11-07)
+
+A trip's videos take only its own footage (gap 82). A video made of
+several trips would name the other trips' clips (by trip and clip key),
+not copy them; the bin would show those trips' days too. Nothing in gap
+82's layout stands in its way.
+Milestone «Матеріал і бін».
 
 ## Format rule for all of these
 

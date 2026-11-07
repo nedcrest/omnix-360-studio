@@ -3,7 +3,7 @@
 The map of the code as it is, and what's still to move. Rewrite it as
 the code changes; the history is in git (the first refactor, gap 35,
 2026-10-28; the core API, `CORE-API.md`, from 2026-11-01; the audit of
-2026-11-05, `AUDIT.md`). Where each file lives: `AGENTS.md`, «Layout».
+2026-11-05, worked off by 2026-11-07). Where each file lives: `AGENTS.md`, «Layout».
 
 ## The shape today
 
@@ -35,6 +35,19 @@ links Dailix's sheet core.
 - **Upstream's stitching and colour files** are kept as they are; the
   rename (gap 76) ends merging from upstream anyway.
 
-## What's still to move (from `AUDIT.md`)
+## Looked at and kept (audit of 2026-11-05)
 
-1. **Long functions:** `Marks::update` 241 lines (after 1).
+The audit's list was worked off (the last of it the timeline package,
+2026-11-07; the list itself is in git). These were looked at and left:
+
+- `App::settings()` gathers ~33 fields from where they live (the bin,
+  recording, the lanes' folds; the aspect and theme in other types) into
+  what's saved: a projection, not a copy. One `settings` field would put
+  `self.settings.…` in every file for no gain.
+- The mute-aware level: a line each on `Cut`, `MusicClip`, `OwnSound`.
+- The export using `player::render`: `gpu.rs` is an iced shader
+  primitive and `render.rs` shares the player's decoding (`source.rs`);
+  moving them to `src/gpu/` would rename a folder, not cut a dependency.
+- The timeline's blocks hold a clone of the cut, clip or item they show,
+  not a reference: a reference would carry a lifetime through all five
+  canvases for no gain the user would see.

@@ -7,7 +7,7 @@ description: The rules for changing Omnix's code, and the checks before a commit
 
 `AGENTS.md` is the long form (the CPU/GPU pairs, the facts not to re-derive,
 the layout). This page is what to hold in mind while writing, learned from
-building fast and from the audit of 2026-11-05 (`docs/omnix/AUDIT.md`): the
+building fast and from the audit of 2026-11-05 (in git; what was kept: `ARCHITECTURE.md`): the
 cost was almost never dead code; it was the same fact written in several
 places, drifting apart, and rules living in UI handlers without tests.
 
@@ -64,8 +64,8 @@ cargo test -q             # all pass (GPU tests need the GPU)
   measured; never push.
 - A change the user will see: the roadmap card (`roadmap` skill) to
   «чекає перевірки». A new idea: a gap in `EDITOR-GAPS.md` and a card.
-- A finding not fixed now: a line in `docs/omnix/AUDIT.md`, removed when
-  its commit lands.
+- A finding not fixed now: a line in `docs/omnix/AUDIT.md` (made again
+  if gone), removed when its commit lands; the page goes when empty.
 - After a structural change: `AGENTS.md` «Layout» and
   `docs/omnix/ARCHITECTURE.md` say what the code is now (rewrite, don't
   append).

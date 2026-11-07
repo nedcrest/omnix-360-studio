@@ -1171,3 +1171,76 @@ snapping), Add green `#3A7A50`, Cut amber `#9A6026`, History grey
 The shortcuts window shows each group's swatch. Panels' own buttons keep
 the theme's.
 
+### 75. A cut's flags from the contact sheet as markers on the edit — done 2026-11-05 with from-sheet, confirmed by the user (user, 2026-11-05)
+
+In Dailix a flag (F) is a note to self, never material: «a meme here»,
+«find a laughing sound». When a segment goes into an Omnix edit, the
+flags inside it would come along as markers with their notes, at the
+same place in the cut; so the timeline says where the meme or the sound
+goes. The markers exist (gap 5, built 2026-11-03: `Cut::marks`, M,
+the Markers row); this is gap 5's one leftover, «footage-agent's flags
+exported into them», now from Dailix's sheet.
+A flag lands in its cut's `marks`, in clip time, so it travels with the
+cut (user, 2026-11-05: «move a video's flags with it»): moved with the
+cut, kept on its frame through a trim (hidden past the cut's ends, back
+when trimmed out again), carried by both halves of a split. Must stay
+so; `markers_are_set_noted_moved_and_removed_by_time` checks it.
+Built with `omnix from-sheet` (`src/from_sheet.rs`, `f0b37ed`): a Dailix
+project's marking made into an edit by footage-agent's «→ Omnix» rules,
+a clip's flags inside a cut its markers; Dailix's «→ Omnix» by each day
+calls it. The bin also lists a section's subfolders (Dailix's days,
+`f522ab7`). Flags outside every
+segment stay in the sheet. Made when a cut is made from a segment (the
+bin's add buttons, or Dailix's hand-over), kept in step by the mark's
+id (a marker could carry it). Milestone «Матеріал і бін».
+
+### 76. The program's name: rosmo360 → omnix — done 2026-11-05, confirmed by the user 2026-11-07 (user, 2026-11-05)
+
+The binary is still upstream's `omnix`. To do later, as one change,
+because the name is in 34 files across three repos:
+- the Cargo package and binary (`Cargo.toml`), and with it the library's
+  crate name Dailix uses (`rosmo360::viewer`, `rosmo360::from_sheet`);
+- the settings and cache folders (`settings.rs`, `cache.rs`:
+  `~/.config/omnix`, the clip cache): moved or read from the old
+  place once, so nothing set or cached is lost;
+- `packaging/` (desktop entry, icon names, Flatpak, macOS, Windows);
+- the CLI's examples and docs; `tests/cli.rs`;
+- footage-agent's `export/omnix.py` (`app()` looks for `omnix`) and
+  Dailix's `omnix()` (OMNIX_BIN, PATH, the sibling build);
+- the desktop entries installed on this machine.
+Upstream (rOsmo360) is unchanged since our fork point; merging from it
+later gets harder with the rename, so it waits until we know we won't.
+Milestone «Інші платформи» (packaging).
+Done 2026-11-05, a commit a step: the crate, library and binary (`omnix`;
+Dailix's dependency and its module `editor.rs`); the settings and cache
+folders (`~/.config/omnix`, `~/.cache/omnix`, the old ones renamed over on
+first use, tested); `OMNIX_CACHE`, `OMNIX_10BIT`; packaging (with a
+placeholder app id `local.omnix.Omnix` and no release repository until
+published); the docs; footage-agent's lookup. Kept: the cache's file mark
+`rOsmo360` (changing it would remake every entry) and the 0.7 project
+fixture.
+
+### 79. Omnix's own face: the footer's credit and the start picture — done 2026-11-05, confirmed by the user 2026-11-07 (user, 2026-11-05)
+
+The footer (`player/icons.rs`) still reads «Omnix · built on rOsmo360 …
+· Made by Vibing with Ravelund · 2026», and the picture shown while it
+starts (`LOGO`, `vibewithravelund-lowres-corrected.jpg`) is upstream's
+logo, which its README keeps out of the licence («all rights
+reserved»): it can't stay in a program we might publish. User: "I write
+this with you, with Claude: that belongs there."
+- Footer: Omnix and its version, made by Dmytro Halushko with Claude,
+  2026; upstream credited in a line of its own (built on rOsmo360 by
+  Vibing with Ravelund, MIT/Apache), as the licence and fairness ask.
+- Start picture and window icon (`packaging/rosmo360.png` is upstream's
+  too): Omnix's own, drawn as an SVG (a sphere over a timeline, say), in
+  the style of Dailix's `assets/dailix.svg`; the user picks from two or
+  three drafts.
+- README's credits and licence notes the same.
+Done together with the rename (gap 76): name, icon, footer and start
+picture are one change of face. Milestone «Інші платформи» (packaging).
+Done 2026-11-05: the user's pick A2 (a sphere over a timeline, a playhead
+through it), `packaging/omnix.svg` and the PNG/ICO made from it; the
+footer; README's credits. Left for publishing: the screenshots
+(`docs/screenshot.png`, `docs/guide/`) are upstream's, all rights
+reserved, to be taken again in Omnix; the app id and release repository
+are placeholders (`local.omnix.Omnix`, `REPO=` in `install.sh`).

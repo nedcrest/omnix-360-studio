@@ -25,6 +25,7 @@ impl App {
             labelled_button(ADD_CLIP, "Open clips…", idle.then_some(Message::Open)),
             labelled_button(OPEN_PROJECT, "Open project…", idle.then_some(Message::OpenProject)),
             labelled_button(ADD_MUSIC, "Add music…", idle.then_some(Message::AddSound(SoundTrack::Music))),
+            labelled_button(SETTINGS, "Settings…", Some(Message::SettingsPanel)),
         ]
         .spacing(12);
         let start = center(column![self.logo(), status, buttons].push(error).spacing(16).align_x(Alignment::Center));
@@ -91,7 +92,7 @@ impl App {
             group("App", open, row![
                 tip(
                     tint_button(Tint::Global, SETTINGS, Some(Message::SettingsPanel)),
-                    text(if self.settings_open { "Close the Settings panel (Ctrl+,)" } else { "Settings (Ctrl+,)" }),
+                    text("Settings (Ctrl+,)"),
                     tooltip::Position::Bottom,
                 ),
                 tip(tint_button(Tint::Global, KEYBOARD, Some(Message::Shortcuts)), text("Keyboard and mouse shortcuts (F1)"), tooltip::Position::Bottom),
@@ -229,7 +230,7 @@ impl App {
         // A text item's words and look, at the left while it's selected.
         // The Info and Settings panels win the left side over the Text panel
         // while open.
-        let view: Element<'_, Message> = match self.info_panel().or_else(|| self.settings_panel()).or_else(|| self.text_panel()) {
+        let view: Element<'_, Message> = match self.info_panel().or_else(|| self.text_panel()) {
             Some(panel) => row![panel, view].into(),
             None => view,
         };

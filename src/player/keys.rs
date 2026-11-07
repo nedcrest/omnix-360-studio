@@ -93,6 +93,10 @@ impl App {
         if self.normalize.is_some() {
             return if escape { self.update(Message::Sound(sound_ui::SoundMsg::Cancel)) } else { Task::none() };
         }
+        // The Settings window open: Esc closes it, the rest wait.
+        if self.settings_open.is_some() {
+            return if escape { self.update(Message::SettingsPanel) } else { Task::none() };
+        }
         // A marker's window open: Esc closes it; its field takes the rest.
         if self.mark_edit.is_some() {
             return if escape { self.update(Message::MarkClose) } else { Task::none() };

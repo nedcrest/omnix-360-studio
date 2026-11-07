@@ -47,13 +47,16 @@ impl App {
             Message::AudioPanel => self.toggle_side(Side::Audio),
             Message::Shortcuts => self.shortcuts = !self.shortcuts,
             Message::SettingsPanel => {
-                self.settings_open = !self.settings_open;
-                if self.settings_open {
-                    self.info = None;
-                    // Dailix may have moved its place since the start.
-                    self.dailix_projects = crate::dailix_projects();
-                }
+                self.settings_open = match self.settings_open {
+                    Some(_) => None,
+                    None => {
+                        // Dailix may have moved its place since the start.
+                        self.dailix_projects = crate::dailix_projects();
+                        Some(settings_panel::Group::General)
+                    }
+                };
             }
+            Message::SettingsGroup(g) => self.settings_open = Some(g),
             Message::AutoKey(on) => self.auto_key = on,
             Message::SplitDrag(dy) => self.split = (self.split_kept - dy / timeline::SCALABLE).clamp(*timeline::SCALES.start(), *timeline::SCALES.end()),
             Message::SplitDone => self.split_kept = self.split,
@@ -150,7 +153,6 @@ impl App {
 
     /// The Info panel on `path`, as `of` names it.
     pub(super) fn open_info(&mut self, of: info::Of, path: PathBuf) -> Task<Message> {
-        self.settings_open = false;
         // Read once per file: another cut of it shows at once.
         let file = self.info.take().filter(|i| i.path == path).and_then(|i| i.file).filter(|f| f.is_ok());
         let read = file.is_none();

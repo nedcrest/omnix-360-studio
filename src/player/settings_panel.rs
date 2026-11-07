@@ -1,12 +1,15 @@
-//! The Settings panel: how the player behaves, kept between runs
-//! (`settings.rs`), docked at the left of the view like the Info panel.
+//! The Settings window: how the player behaves, kept between runs
+//! (`settings.rs`), in groups, over the program.
 
 use super::effects::LutChoice;
 use super::{App, Message, tip};
 use iced::widget::{button, column, container, pick_list, row, rule, scrollable, text, toggler, tooltip};
 use iced::{Alignment, Element, Length, Theme};
 
-const WIDTH: f32 = 300.0;
+/// The Settings window's size, and its groups' column.
+const WIDTH: f32 = 760.0;
+const HEIGHT: f32 = 520.0;
+const GROUPS: f32 = 150.0;
 
 /// The theme the settings file names, as iced names it; Kanagawa Dragon
 /// (the user's choice, 2026-10-14) for none or one iced no longer has.
@@ -65,61 +68,121 @@ impl App {
         self.projects.clone().or_else(|| self.dailix_projects.clone())
     }
 
-    /// The Settings panel, while it's open.
-    pub(super) fn settings_panel(&self) -> Option<Element<'_, Message>> {
-        if !self.settings_open {
-            return None;
-        }
-        let close = tip(button(text("✕").size(14)).padding([0, 6]).style(button::text).on_press(Message::SettingsPanel), text("Close"), tooltip::Position::Bottom);
-        let note = |s: &'static str| text(s).size(13).style(text::secondary);
-        let body = column![
-            row![text("Settings").size(18).width(Length::Fill), close].align_y(Alignment::Center),
-            text("Look").size(15),
+    /// The Settings window over the program while it's open (user,
+    /// 2026-11-07: a window of its own with groups, not a list down the
+    /// side): the groups at the left, the chosen one's settings at the
+    /// right. ✕, Esc or a click outside close it.
+    pub(super) fn settings_layer(&self) -> Element<'_, Message> {
+        let Some(open) = self.settings_open else { return iced::widget::space().into() };
+        let close = tip(button(text("✕").size(14)).padding([0, 6]).style(button::text).on_press(Message::SettingsPanel), text("Close (Esc)"), tooltip::Position::Bottom);
+        let groups = column(Group::ALL.iter().map(|&g| {
+            button(text(g.name()).size(15)).width(Length::Fill).padding([6, 10]).style(if g == open { button::primary } else { button::text }).on_press(Message::SettingsGroup(g)).into()
+        }))
+        .spacing(4)
+        .width(GROUPS);
+        let page = match open {
+            Group::General => self.general_page(),
+            Group::Picture => self.picture_page(),
+            Group::Editing => self.editing_page(),
+        };
+        let card = container(
             column![
-                pick_list(Theme::ALL, Some(self.theme.clone()), Message::Theme).width(Length::Fill),
-                note("Kanagawa Dragon unless you choose another."),
+                row![text("Settings").size(20).width(Length::Fill), close].align_y(Alignment::Center),
+                row![groups, rule::vertical(1), scrollable(container(page).padding([0, 12])).width(Length::Fill).height(Length::Fill)].spacing(12),
             ]
-            .spacing(6),
-            rule::horizontal(1),
-            text("Decoding").size(15),
-            column![
-                toggler(self.ten_bit).label("10-bit").on_toggle(Message::TenBit),
-                note("Decodes the OSV and 10-bit videos (a phone's HDR) at all their 10 bits instead of 8: smoother skies and gradients, twice the data to move. Applies from the next seek or clip."),
-            ]
-            .spacing(6),
-            rule::horizontal(1),
-            text("LUTs").size(15),
-            self.lut_library(),
-            rule::horizontal(1),
-            text("Keyframes").size(15),
-            column![
-                toggler(self.auto_key).label("Auto keyframe").on_toggle(Message::AutoKey),
-                note("On: looking around while paused sets the view keyframe at the playhead, or updates the one there, as K does. Each look-around is one undo step. While playing, looking around stays free."),
-                note("Off: looking around is free until you press K."),
-            ]
-            .spacing(6),
-            rule::horizontal(1),
-            text("View angles").size(15),
-            column![
-                toggler(self.angles_shown).label("Show the view as numbers").on_toggle(Message::ShowAngles),
-                note("A strip under the transport row with the yaw, pitch, roll, FOV and correction: type one, or drag its name sideways, to set it as dragging the view would; scroll or ↑ ↓ on a field nudges it, Shift for finer steps. Handy for giving clips from a camera mounted the same way the same framing."),
-            ]
-            .spacing(6),
-            rule::horizontal(1),
-            text("Projects").size(15),
-            self.projects_setting(),
-            rule::horizontal(1),
-            text("Timeline").size(15),
-            column![
-                toggler(self.ruler_large).label("Large time ruler").on_toggle(Message::RulerLarge),
-                note("Off: a compact ruler, more room for the lanes."),
-            ]
-            .spacing(6),
-        ]
-        .spacing(12)
-        .padding(12);
-        Some(container(scrollable(body)).width(WIDTH).height(Length::Fill).into())
+            .spacing(12),
+        )
+        .padding(16)
+        .width(WIDTH)
+        .height(HEIGHT)
+        .style(container::rounded_box);
+        super::ask::modal(card, Some(Message::SettingsPanel))
     }
+
+    /// Where projects are, and how the program looks.
+    fn general_page(&self) -> Element<'_, Message> {
+        column![
+            section("Projects", self.projects_setting()),
+            section("Look", column![pick_list(Theme::ALL, Some(self.theme.clone()), Message::Theme).width(Length::Fill), note("Kanagawa Dragon unless you choose another.")].spacing(6).into()),
+        ]
+        .spacing(18)
+        .into()
+    }
+
+    /// How clips are decoded and graded.
+    fn picture_page(&self) -> Element<'_, Message> {
+        column![
+            section(
+                "Decoding",
+                column![
+                    toggler(self.ten_bit).label("10-bit").on_toggle(Message::TenBit),
+                    note("Decodes the OSV and 10-bit videos (a phone's HDR) at all their 10 bits instead of 8: smoother skies and gradients, twice the data to move. Applies from the next seek or clip."),
+                ]
+                .spacing(6)
+                .into()
+            ),
+            section("LUTs", self.lut_library()),
+        ]
+        .spacing(18)
+        .into()
+    }
+
+    /// The timeline, keyframes and the view's numbers.
+    fn editing_page(&self) -> Element<'_, Message> {
+        column![
+            section("Timeline", column![toggler(self.ruler_large).label("Large time ruler").on_toggle(Message::RulerLarge), note("Off: a compact ruler, more room for the lanes.")].spacing(6).into()),
+            section(
+                "Keyframes",
+                column![
+                    toggler(self.auto_key).label("Auto keyframe").on_toggle(Message::AutoKey),
+                    note("On: looking around while paused sets the view keyframe at the playhead, or updates the one there, as K does. Each look-around is one undo step. While playing, looking around stays free."),
+                    note("Off: looking around is free until you press K."),
+                ]
+                .spacing(6)
+                .into()
+            ),
+            section(
+                "View angles",
+                column![
+                    toggler(self.angles_shown).label("Show the view as numbers").on_toggle(Message::ShowAngles),
+                    note("A strip under the transport row with the yaw, pitch, roll, FOV and correction: type one, or drag its name sideways, to set it as dragging the view would; scroll or ↑ ↓ on a field nudges it, Shift for finer steps. Handy for giving clips from a camera mounted the same way the same framing."),
+                ]
+                .spacing(6)
+                .into()
+            ),
+        ]
+        .spacing(18)
+        .into()
+    }
+}
+
+/// The Settings window's groups, in the order they're listed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Group {
+    General,
+    Picture,
+    Editing,
+}
+
+impl Group {
+    pub const ALL: [Group; 3] = [Group::General, Group::Picture, Group::Editing];
+
+    fn name(self) -> &'static str {
+        match self {
+            Group::General => "General",
+            Group::Picture => "Picture",
+            Group::Editing => "Editing",
+        }
+    }
+}
+
+/// A setting's heading and what's under it.
+fn section<'a>(title: &'static str, body: Element<'a, Message>) -> Element<'a, Message> {
+    column![text(title).size(16), body].spacing(8).into()
+}
+
+fn note<'a>(s: &'static str) -> iced::widget::Text<'a> {
+    text(s).size(13).style(text::secondary)
 }
 
 #[cfg(test)]

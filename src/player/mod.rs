@@ -238,6 +238,8 @@ enum Message {
     AudioPanel,
     /// Open or close the Settings panel.
     SettingsPanel,
+    /// A group of the Settings window shown.
+    SettingsGroup(settings_panel::Group),
     AutoKey(bool),
     /// The divider above the transport row is this many pixels below
     /// where it was pressed (the lanes shrink), was let go, or was
@@ -669,7 +671,7 @@ struct App {
     split: f32,
     split_kept: f32,
     /// The Settings panel is open (at the left).
-    settings_open: bool,
+    settings_open: Option<settings_panel::Group>,
     /// The bin, at the far left (`bin.rs`).
     bin: bin::Bin,
     /// 10-bit tracks decode at 10 bits (`source::deep`).
@@ -823,7 +825,7 @@ impl App {
             angle_draft: None,
             modifiers: keyboard::Modifiers::default(),
             scrubbing: None,
-            settings_open: false,
+            settings_open: None,
             bin: bin::Bin { open: saved.bin_pinned, pinned: saved.bin_pinned, tile: saved.bin_tile, side: saved.bin_side, ..Default::default() },
             fullscreen: false,
             volume: saved.volume,
@@ -1004,7 +1006,7 @@ impl App {
         match message {
             m @ (Message::Open { .. } | Message::Picked { .. } | Message::Loaded { .. } | Message::OpenProject { .. } | Message::NewProject { .. } | Message::CloseRequested { .. } | Message::StopAndClose { .. } | Message::Confirmed { .. } | Message::ProjectPicked { .. } | Message::SaveProjectTo { .. } | Message::SaveProject { .. } | Message::LoadingTick { .. } | Message::Thumb { .. }) => self.on_file(m),
             m @ (Message::Export { .. } | Message::ExportTo { .. } | Message::ExportProgress { .. } | Message::ExportCancel { .. } | Message::PickColour { .. } | Message::PickArea { .. } | Message::AreaPicked { .. } | Message::TrackProgress { .. } | Message::TrackCancel { .. } | Message::Tracked { .. } | Message::ExportDone { .. } | Message::Save { .. } | Message::SaveTo { .. } | Message::Saved { .. }) => self.on_jobs(m),
-            m @ (Message::Resolution { .. } | Message::ExportClips { .. } | Message::ExportGraded { .. } | Message::ExportFormat { .. } | Message::ExportLoudness { .. } | Message::Info { .. } | Message::InfoRead { .. } | Message::InfoClose { .. } | Message::Reveal { .. } | Message::CopyPath { .. } | Message::ExportPanel { .. } | Message::AudioPanel { .. } | Message::SettingsPanel { .. } | Message::Shortcuts { .. } | Message::AutoKey { .. } | Message::SplitDrag { .. } | Message::SplitDone { .. } | Message::SplitReset { .. } | Message::TenBit { .. } | Message::AddLut { .. } | Message::LutPicked { .. } | Message::RemoveLut { .. } | Message::DlogMLut { .. } | Message::UiScale { .. } | Message::ShowAngles { .. } | Message::RulerLarge { .. } | Message::ProjectsChoose | Message::ProjectsPicked { .. } | Message::ProjectsFromDailix | Message::BarLabels | Message::Snapping | Message::Fold { .. } | Message::Modifiers { .. } | Message::ViewSize { .. } | Message::Aspect { .. } | Message::Theme { .. } | Message::Mute { .. } | Message::Volume { .. } | Message::Fullscreen { .. }) => self.on_panels(m),
+            m @ (Message::Resolution { .. } | Message::ExportClips { .. } | Message::ExportGraded { .. } | Message::ExportFormat { .. } | Message::ExportLoudness { .. } | Message::Info { .. } | Message::InfoRead { .. } | Message::InfoClose { .. } | Message::Reveal { .. } | Message::CopyPath { .. } | Message::ExportPanel { .. } | Message::AudioPanel { .. } | Message::SettingsPanel { .. } | Message::SettingsGroup(_) | Message::Shortcuts { .. } | Message::AutoKey { .. } | Message::SplitDrag { .. } | Message::SplitDone { .. } | Message::SplitReset { .. } | Message::TenBit { .. } | Message::AddLut { .. } | Message::LutPicked { .. } | Message::RemoveLut { .. } | Message::DlogMLut { .. } | Message::UiScale { .. } | Message::ShowAngles { .. } | Message::RulerLarge { .. } | Message::ProjectsChoose | Message::ProjectsPicked { .. } | Message::ProjectsFromDailix | Message::BarLabels | Message::Snapping | Message::Fold { .. } | Message::Modifiers { .. } | Message::ViewSize { .. } | Message::Aspect { .. } | Message::Theme { .. } | Message::Mute { .. } | Message::Volume { .. } | Message::Fullscreen { .. }) => self.on_panels(m),
             m @ (Message::BinPanel { .. } | Message::BinPin { .. } | Message::BinRefresh { .. } | Message::BinPreview { .. } | Message::BinStop { .. } | Message::BinMeta { .. } | Message::BinFrames { .. } | Message::BinAdd { .. }) => self.on_bin(m),
             Message::BinView(msg) => self.on_bin_view(msg),
             Message::BinPlayer(msg) => self.on_source(msg),
@@ -1048,7 +1050,7 @@ impl App {
 
     /// The window, and a question over it when one is asked (`ask.rs`).
     fn view(&self) -> Element<'_, Message> {
-        stack![self.window_view(), self.ask_layer()].into()
+        stack![self.window_view(), self.settings_layer(), self.ask_layer()].into()
     }
 
     fn window_view(&self) -> Element<'_, Message> {

@@ -1326,7 +1326,11 @@ Dailix's until one is chosen in Omnix; the order below, own videos after.
    «Projects» (Choose…, Use Dailix's; `fsutil::dailix_projects` reads
    Dailix's settings file, whose place both take from
    `fsutil::dailix_settings`); Dailix's «projects» chip opens a folder
-   dialog.
+   dialog. Checked both ways (user, 2026-11-07), who then asked for:
+1b. Settings as a window over the program, in groups, in both (built:
+   Omnix General / Picture / Editing, also from the start screen;
+   Dailix Places / Look, a Settings button and Ctrl+,, every place's
+   chip choosing its folder).
 2. Omnix's start window: the edits opened last, and every project in the
    place with its ready edits (`04_project/*.json`, named by the
    project's `title`); one click opens one.

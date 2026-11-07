@@ -35,6 +35,27 @@ pub fn app_dir(kind: AppDir, app: &str) -> Option<PathBuf> {
     Some(base.join(app))
 }
 
+/// Dailix's name for its folders: Omnix reads its projects place.
+pub const DAILIX: &str = "dailix";
+
+/// Dailix's settings file. Dailix saves it here and Omnix reads it: one
+/// place says where.
+pub fn dailix_settings() -> Option<PathBuf> {
+    Some(app_dir(AppDir::Config, DAILIX)?.join("settings.json"))
+}
+
+/// The projects place in Dailix's settings, as its file's bytes hold it
+/// (Dailix's test checks it reads what Dailix writes).
+pub fn projects_place_in(settings: &[u8]) -> Option<PathBuf> {
+    serde_json::from_slice::<serde_json::Value>(settings).ok()?.get("projects")?.as_str().map(PathBuf::from)
+}
+
+/// Dailix's projects place: Omnix's own until one is chosen in Omnix
+/// (user, 2026-11-07: each program its own, Omnix from Dailix's at first).
+pub fn dailix_projects() -> Option<PathBuf> {
+    projects_place_in(&std::fs::read(dailix_settings()?).ok()?)
+}
+
 /// Omnix's settings folder (settings, LUTs, the cache's place).
 pub(crate) fn config_dir() -> Option<PathBuf> {
     own_dir(AppDir::Config)

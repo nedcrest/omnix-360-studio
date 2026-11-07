@@ -43,6 +43,28 @@ impl App {
         .into()
     }
 
+    /// Where the projects are: Omnix's own folder, or Dailix's.
+    fn projects_setting(&self) -> Element<'_, Message> {
+        let note = |s: String| text(s).size(13).style(text::secondary);
+        let shown = |p: &std::path::PathBuf| text(p.display().to_string()).size(14);
+        let mut col = column![].spacing(6);
+        col = match (&self.projects, &self.dailix_projects) {
+            (Some(own), _) => col.push(shown(own)),
+            (None, Some(dailix)) => col.push(shown(dailix)).push(note("Dailix's, until you choose one here.".into())),
+            (None, None) => col.push(note("None yet: choose one, or set Dailix's.".into())),
+        };
+        let mut buttons = row![button(text("Choose…").size(14)).on_press(Message::ProjectsChoose)].spacing(8);
+        if self.projects.is_some() && self.dailix_projects.is_some() {
+            buttons = buttons.push(button(text("Use Dailix's").size(14)).style(button::secondary).on_press(Message::ProjectsFromDailix));
+        }
+        col.push(buttons).into()
+    }
+
+    /// The projects place Omnix uses: its own, else Dailix's.
+    pub(super) fn projects_place(&self) -> Option<std::path::PathBuf> {
+        self.projects.clone().or_else(|| self.dailix_projects.clone())
+    }
+
     /// The Settings panel, while it's open.
     pub(super) fn settings_panel(&self) -> Option<Element<'_, Message>> {
         if !self.settings_open {
@@ -83,6 +105,9 @@ impl App {
                 note("A strip under the transport row with the yaw, pitch, roll, FOV and correction: type one, or drag its name sideways, to set it as dragging the view would; scroll or ↑ ↓ on a field nudges it, Shift for finer steps. Handy for giving clips from a camera mounted the same way the same framing."),
             ]
             .spacing(6),
+            rule::horizontal(1),
+            text("Projects").size(15),
+            self.projects_setting(),
             rule::horizontal(1),
             text("Timeline").size(15),
             column![

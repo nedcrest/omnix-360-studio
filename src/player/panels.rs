@@ -50,6 +50,8 @@ impl App {
                 self.settings_open = !self.settings_open;
                 if self.settings_open {
                     self.info = None;
+                    // Dailix may have moved its place since the start.
+                    self.dailix_projects = crate::dailix_projects();
                 }
             }
             Message::AutoKey(on) => self.auto_key = on,
@@ -104,6 +106,22 @@ impl App {
             }
             Message::ShowAngles(on) => self.angles_shown = on,
             Message::RulerLarge(on) => self.ruler_large = on,
+            Message::ProjectsChoose => {
+                let start = self.projects_place();
+                return Task::perform(
+                    async move {
+                        let mut d = rfd::AsyncFileDialog::new().set_title("The projects folder");
+                        if let Some(s) = start {
+                            d = d.set_directory(s);
+                        }
+                        d.pick_folder().await.map(|f| f.path().to_owned())
+                    },
+                    Message::ProjectsPicked,
+                );
+            }
+            Message::ProjectsPicked(Some(folder)) => self.projects = Some(folder),
+            Message::ProjectsPicked(None) => {}
+            Message::ProjectsFromDailix => self.projects = None,
             Message::BarLabels => self.bar_labels = !self.bar_labels,
             Message::Snapping => self.snapping = !self.snapping,
             Message::Fold(lane, folded) => self.folds.set(lane, folded),

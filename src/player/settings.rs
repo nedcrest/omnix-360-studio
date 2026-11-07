@@ -72,6 +72,8 @@ pub struct Settings {
     pub fold_sfx2: bool,
     /// The markers' row over the ruler folded to a strip.
     pub fold_marks: bool,
+    /// The projects place, chosen in Omnix; none: Dailix's.
+    pub projects: Option<PathBuf>,
 }
 
 /// The interface's size range and steps (A− / A+ in the top bar), and its
@@ -118,6 +120,7 @@ impl Default for Settings {
             fold_overlay: true,
             fold_sfx2: true,
             fold_marks: false,
+            projects: None,
         }
     }
 }

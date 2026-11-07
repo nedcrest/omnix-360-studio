@@ -483,6 +483,11 @@ enum Message {
     ShowAngles(bool),
     /// The timeline's time ruler large or compact.
     RulerLarge(bool),
+    /// Choose the projects place (a folder dialog); what was chosen;
+    /// back to Dailix's.
+    ProjectsChoose,
+    ProjectsPicked(Option<PathBuf>),
+    ProjectsFromDailix,
     /// The bars' group names shown or hidden.
     BarLabels,
     /// Snapping on the timeline on or off (N).
@@ -705,6 +710,11 @@ struct App {
     duck_db: f64,
     /// The timeline's time ruler large or compact (Settings).
     ruler_large: bool,
+    /// The projects place chosen in Omnix (Settings), and Dailix's, read
+    /// at the start and when Settings opens: Omnix's place when it has
+    /// none of its own.
+    projects: Option<PathBuf>,
+    dailix_projects: Option<PathBuf>,
     /// The bars' groups named above their buttons.
     bar_labels: bool,
     /// Timeline drags snap (N toggles; Shift held lets one go free).
@@ -801,6 +811,8 @@ impl App {
             ui_scale: saved.ui_scale.clamp(*settings::UI_SCALE.start(), *settings::UI_SCALE.end()),
             duck_db: saved.duck_db.clamp(3.0, 30.0),
             ruler_large: saved.ruler_large,
+            projects: saved.projects.clone(),
+            dailix_projects: crate::dailix_projects(),
             bar_labels: saved.bar_labels,
             snapping: saved.snapping,
             snap_line: None,
@@ -869,6 +881,7 @@ impl App {
             fold_overlay: self.folds.overlay,
             fold_sfx2: self.folds.sfx2,
             fold_marks: self.folds.marks,
+            projects: self.projects.clone(),
         }
     }
 
@@ -991,7 +1004,7 @@ impl App {
         match message {
             m @ (Message::Open { .. } | Message::Picked { .. } | Message::Loaded { .. } | Message::OpenProject { .. } | Message::NewProject { .. } | Message::CloseRequested { .. } | Message::StopAndClose { .. } | Message::Confirmed { .. } | Message::ProjectPicked { .. } | Message::SaveProjectTo { .. } | Message::SaveProject { .. } | Message::LoadingTick { .. } | Message::Thumb { .. }) => self.on_file(m),
             m @ (Message::Export { .. } | Message::ExportTo { .. } | Message::ExportProgress { .. } | Message::ExportCancel { .. } | Message::PickColour { .. } | Message::PickArea { .. } | Message::AreaPicked { .. } | Message::TrackProgress { .. } | Message::TrackCancel { .. } | Message::Tracked { .. } | Message::ExportDone { .. } | Message::Save { .. } | Message::SaveTo { .. } | Message::Saved { .. }) => self.on_jobs(m),
-            m @ (Message::Resolution { .. } | Message::ExportClips { .. } | Message::ExportGraded { .. } | Message::ExportFormat { .. } | Message::ExportLoudness { .. } | Message::Info { .. } | Message::InfoRead { .. } | Message::InfoClose { .. } | Message::Reveal { .. } | Message::CopyPath { .. } | Message::ExportPanel { .. } | Message::AudioPanel { .. } | Message::SettingsPanel { .. } | Message::Shortcuts { .. } | Message::AutoKey { .. } | Message::SplitDrag { .. } | Message::SplitDone { .. } | Message::SplitReset { .. } | Message::TenBit { .. } | Message::AddLut { .. } | Message::LutPicked { .. } | Message::RemoveLut { .. } | Message::DlogMLut { .. } | Message::UiScale { .. } | Message::ShowAngles { .. } | Message::RulerLarge { .. } | Message::BarLabels | Message::Snapping | Message::Fold { .. } | Message::Modifiers { .. } | Message::ViewSize { .. } | Message::Aspect { .. } | Message::Theme { .. } | Message::Mute { .. } | Message::Volume { .. } | Message::Fullscreen { .. }) => self.on_panels(m),
+            m @ (Message::Resolution { .. } | Message::ExportClips { .. } | Message::ExportGraded { .. } | Message::ExportFormat { .. } | Message::ExportLoudness { .. } | Message::Info { .. } | Message::InfoRead { .. } | Message::InfoClose { .. } | Message::Reveal { .. } | Message::CopyPath { .. } | Message::ExportPanel { .. } | Message::AudioPanel { .. } | Message::SettingsPanel { .. } | Message::Shortcuts { .. } | Message::AutoKey { .. } | Message::SplitDrag { .. } | Message::SplitDone { .. } | Message::SplitReset { .. } | Message::TenBit { .. } | Message::AddLut { .. } | Message::LutPicked { .. } | Message::RemoveLut { .. } | Message::DlogMLut { .. } | Message::UiScale { .. } | Message::ShowAngles { .. } | Message::RulerLarge { .. } | Message::ProjectsChoose | Message::ProjectsPicked { .. } | Message::ProjectsFromDailix | Message::BarLabels | Message::Snapping | Message::Fold { .. } | Message::Modifiers { .. } | Message::ViewSize { .. } | Message::Aspect { .. } | Message::Theme { .. } | Message::Mute { .. } | Message::Volume { .. } | Message::Fullscreen { .. }) => self.on_panels(m),
             m @ (Message::BinPanel { .. } | Message::BinPin { .. } | Message::BinRefresh { .. } | Message::BinPreview { .. } | Message::BinStop { .. } | Message::BinMeta { .. } | Message::BinFrames { .. } | Message::BinAdd { .. }) => self.on_bin(m),
             Message::BinView(msg) => self.on_bin_view(msg),
             Message::BinPlayer(msg) => self.on_source(msg),

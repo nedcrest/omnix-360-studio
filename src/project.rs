@@ -44,6 +44,50 @@ pub fn set_title(root: &Path, title: &str) -> std::io::Result<()> {
     })
 }
 
+/// What the user wrote about a project (user, 2026-11-07: a description
+/// and tags, to find and tell trips apart): `project.json`'s
+/// `description` and `tags`.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct About {
+    pub description: String,
+    pub tags: Vec<String>,
+}
+
+/// The project's description and tags; empty when none.
+pub fn about(root: &Path) -> About {
+    let p = read(&Layout::new(root)).unwrap_or_default();
+    About {
+        description: p.get("description").and_then(Value::as_str).unwrap_or_default().to_owned(),
+        tags: p.get("tags").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_str).map(str::to_owned).collect()).unwrap_or_default(),
+    }
+}
+
+/// Sets them, keeping every other field; an empty one is taken out.
+pub fn set_about(root: &Path, about: &About) -> std::io::Result<()> {
+    update(&Layout::new(root), |p| {
+        let description = about.description.trim();
+        match description.is_empty() {
+            true => p.remove("description"),
+            false => p.insert("description".into(), description.into()),
+        };
+        match about.tags.is_empty() {
+            true => p.remove("tags"),
+            false => p.insert("tags".into(), about.tags.iter().map(|t| Value::from(t.as_str())).collect()),
+        };
+    })
+}
+
+/// Tags as typed, comma-separated: trimmed, empty ones and repeats left out.
+pub fn parse_tags(typed: &str) -> Vec<String> {
+    let mut tags: Vec<String> = Vec::new();
+    for t in typed.split(',').map(str::trim).filter(|t| !t.is_empty()) {
+        if !tags.iter().any(|x| x.eq_ignore_ascii_case(t)) {
+            tags.push(t.to_owned());
+        }
+    }
+    tags
+}
+
 /// The projects in the place `projects`: its folders that are Dailix
 /// projects, by name. The home view and Omnix's start window both list
 /// them.
@@ -72,6 +116,25 @@ pub fn of_edit(edit: &Path) -> Option<std::path::PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_description_and_tags_are_kept_beside_the_other_fields() {
+        let root = std::env::temp_dir().join(format!("dailix-about-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let l = Layout::new(&root);
+        std::fs::create_dir_all(l.data()).unwrap();
+        set_title(&root, "Sea").unwrap();
+        assert_eq!(about(&root), About::default());
+        let a = About { description: " Scooters and cats ".into(), tags: parse_tags("scooter, Cats, , cats ,sea") };
+        assert_eq!(a.tags, ["scooter", "Cats", "sea"]);
+        set_about(&root, &a).unwrap();
+        assert_eq!(about(&root), About { description: "Scooters and cats".into(), tags: a.tags.clone() });
+        assert_eq!(title(&root), "Sea");
+        set_about(&root, &About::default()).unwrap();
+        let p = read(&l).unwrap();
+        assert!(!p.contains_key("description") && !p.contains_key("tags") && p.contains_key("title"));
+        std::fs::remove_dir_all(&root).unwrap();
+    }
 
     #[test]
     fn the_place_lists_its_projects_and_each_its_edits() {

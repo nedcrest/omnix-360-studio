@@ -51,17 +51,72 @@ places, drifting apart, and rules living in UI handlers without tests.
 - No footage, personal paths (`<media>`, `~`) or film names in
   code, tests or comments: made-up samples (`testmedia`).
 
+## Habits that grew into a refactor
+
+The timeline package (2026-11-06/07, four steps, two days with the
+user's checks) and the bugs found in live checks came from five habits,
+each easy to miss while building fast. Hold to their opposite as you
+write; it costs minutes now instead of days later.
+
+- **One question, one answer.** What's under the pointer is one function
+  returning an enum (`Timeline::hit` → `Hit`); a press, the hover's
+  pointer shape (`Hit::pointer`) and a right-click all read it. The same
+  for any question asked in two places: which panel owns a place, whether
+  a drag may start, what a key does.
+- **The second copy is the moment to share.** Before drawing a block,
+  handle, strip, tag or mark, look for the helper the other lanes use
+  (`coloured_block`, `selected_block`, `trim_handles`, `crossfade`,
+  `name_tag`, `folded_strips`). Writing a second copy of anything over
+  three lines: make the helper now, in the same commit.
+- **A view shows the model; it doesn't restate it.** A view struct holds
+  the model's item (`Block::cut`, `MusicBlock::clip`, `OverlayBlock::item`)
+  and only what the player loads or works out (positions, waveforms,
+  thumbnails, labels). Never a model field copied under a new name. One
+  selection, found once per drawing (`Selection::picked`).
+- **A derived value is a method.** An expression like `start -
+  sound_before` written twice is a method (`Block::sound_span`, `len`):
+  the waveform, fades, edges, line and hit test then can't disagree (the
+  volume line once ran to the picture's edge, not the sound's).
+- **Don't store what follows from something else.** A point stored at a
+  clip's edge stayed behind when the edge moved («Show volume line» put
+  two). Store what the user chose; derive what follows (a line runs flat
+  past its last point to wherever the edge is).
+
+And two of process:
+
+- **Functions stay short.** A handler does one kind of event; a canvas's
+  `update` dispatches to a press, a drag, a release. Past ~80 lines, or a
+  match arm past ~15, split it before adding to it.
+- **Clean as you go, not in a package later.** Touching a function that
+  breaks a rule above: fix that first, in its own commit, then build the
+  feature on it. A finding too big for now goes in `AUDIT.md` at once.
+
+## The window
+
+- **Places shared on screen say who wins and what closes them**, in one
+  place (the left side: Info and Settings over the Text panel; a new
+  selection closes Info).
+- **Sizes relative to the box, tried at both ends.** A thumbnail, a tag
+  or a label fits the block it's in (lane height and block width as
+  limits, its own aspect); never "only when wider than three heights".
+  Try a new piece at the smallest and the largest lane and window.
+- **Checks on the test place**: `<drive>/DAILIX/TESTS` (CONTEXT),
+  every lane filled; add to its edit what a new feature needs to be seen.
+
 ## Before each commit
 
 ```sh
 export PATH=$HOME/.cargo/bin:$PATH PKG_CONFIG_PATH=../omnix-360-studio/.localdeps/root/usr/lib/x86_64-linux-gnu/pkgconfig
-cargo build -q            # no warnings
+cargo build -q            # no warnings; never commit what doesn't build
 cargo test -q             # all pass (GPU tests need the GPU)
 (cd ../dailix && cargo build -q && cargo test -q)   # it links this library
 ```
 
 - One local commit per subtask, its message saying why and what was
   measured; never push.
+- A mass edit (a script, sed): assert how many places it changed, build,
+  read the diff before the commit; the compiler finds what it missed,
+  not what it changed wrongly.
 - A change the user will see: the roadmap card (`roadmap` skill) to
   «чекає перевірки». A new idea: a gap in `EDITOR-GAPS.md` and a card.
 - A finding not fixed now: a line in `docs/omnix/AUDIT.md` (made again

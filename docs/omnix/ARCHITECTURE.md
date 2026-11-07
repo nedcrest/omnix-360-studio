@@ -32,6 +32,10 @@ links Dailix's sheet core.
 - **One place for each fact**: a clock, a role's colour, the app's
   folders, a cut's media, a list of file types. The audit found most of
   the cost in copies that drifted apart, not in dead code.
+- **A view shows the model**: the timeline's blocks hold the cut, clip
+  or item they show; one `Hit` per canvas answers what's under the
+  pointer; one `Picked` says what's selected. The habits behind the
+  2026-11 cleanup, and their opposite: skill `code-rules`.
 - **Upstream's stitching and colour files** are kept as they are; the
   rename (gap 76) ends merging from upstream anyway.
 

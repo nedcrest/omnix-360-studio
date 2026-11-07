@@ -104,6 +104,7 @@ done in part stays here until its last card is done.
 | 82 | Dailix: global projects (a trip, an event) holding video projects; a home of them with notes and tags; opening where it was closed | below |
 | 83 | Dailix finds where people talk in a clip, even in bad sound, and pulls the voice out | below |
 | 84 | A video drawing on several trips (a year in review) | below |
+| 85 | Project cards in a grid, a GIF of the project on hover, basic facts and a description | below |
 
 ## Open gaps
 
@@ -1345,7 +1346,8 @@ Dailix's until one is chosen in Omnix; the order below, own videos after.
 3. Omnix's desktop entry and icon: built (`omnix install`; one installer,
    `omnix::desktop`, for both programs).
 4. «New project» in Omnix opens Dailix, which makes an empty project in
-   the fixed layout (a name, `Layout::create`, `project.json`'s title).
+   the fixed layout: moved to gap 82, step 3 (it needs the trip's video
+   folders). Steps 1-3 checked (user, 2026-11-07).
 5. Later, its own card: adding one's own videos to a project in Dailix
    (copied to `01_footage/<day>/`, a sidecar and a poster each): ingest's
    first step (`dailix/docs/INGEST.md`).
@@ -1391,8 +1393,8 @@ Decided (user, 2026-11-07):
 Steps, each checked by the user:
 1. Home: trip cards; a trip's page with its days and its edits (the
    loose `04_project` ones until 2); description and tags shown and
-   edited on the trip's page. Built (Dailix `e2687c5`), waiting for the
-   check.
+   edited on the trip's page. Built (Dailix `e2687c5`), checked
+   (user, 2026-11-07).
 2. Videos: `videos/<name>/` in the core (`Layout`, list, make one);
    «→ Omnix» and «Empty day/edit» make a video folder; a trip's page and
    Omnix's start browser list trips → videos → edits; the edits made so
@@ -1417,6 +1419,16 @@ A trip's videos take only its own footage (gap 82). A video made of
 several trips would name the other trips' clips (by trip and clip key),
 not copy them; the bin would show those trips' days too. Nothing in gap
 82's layout stands in its way.
+Milestone «Матеріал і бін».
+
+### 85. Project cards in a grid with a GIF on hover — idea, backlog (user, 2026-11-07)
+
+Omnix's start window (recent edits, «Browse projects») and the trips'
+lists show plain rows today; they do their job. Later: cards in a grid,
+each with basic facts and a short description, and a moving preview of
+the project (a GIF-like loop of a few frames) played only while the
+pointer is over the card. Dailix's trip cards (gap 82) are the first
+step; the hover preview could reuse the bin's hover frames (gap 60).
 Milestone «Матеріал і бін».
 
 ## Format rule for all of these

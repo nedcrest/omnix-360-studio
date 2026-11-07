@@ -1336,7 +1336,11 @@ Dailix's until one is chosen in Omnix; the order below, own videos after.
 2. Omnix's start window (user, 2026-11-07): the first run, the start
    page as now; every run after, the 5 edits opened last to open, and a
    browser to toggle open of Dailix's projects: each global project and
-   the video projects inside it (gap 82), with their edits.
+   the video projects inside it (gap 82), with their edits. Built
+   without gap 82's inner folders (each project's `04_project` edits):
+   `dailix_sheet::project::{all, edits, of_edit}`, `settings::remember`.
+   Dailix too (user, 2026-11-07): Home always in its bar, the first run
+   at home, every run after where it was closed (project and clip).
 3. Omnix's desktop entry and icon: built (`omnix install`; one installer,
    `omnix::desktop`, for both programs).
 4. «New project» in Omnix opens Dailix, which makes an empty project in

@@ -102,6 +102,7 @@ done in part stays here until its last card is done.
 | 80 | Omnix starts at a window of recent and found projects (a projects folder set in both programs); «New project» goes to Dailix | below |
 | 81 | Auto-duck under talk in a cut's own sound, not only cleaned voices | below |
 | 82 | Dailix: global projects (a trip, an event) holding video projects; a home of them with notes and tags; opening where it was closed | below |
+| 83 | Dailix finds where people talk in a clip, even in bad sound, and pulls the voice out | below |
 
 ## Open gaps
 
@@ -1380,6 +1381,17 @@ days, its sheet) and its edits lie loose in `04_project`.
 - Omnix's start browser (gap 80 step 2) lists the same: global projects,
   the video projects inside, their edits.
 Milestone «Матеріал і бін».
+
+### 83. Dailix finds where people talk, even in bad sound — idea (user, 2026-11-07)
+
+User: detecting speech in a clip belongs in Dailix, not Omnix (the roles
+split right: Dailix takes the material apart, Omnix edits with it), as
+modules that pull the voice and the talk out of bad sound (wind, road).
+With gap 77 (voice clean-up and loudness in Dailix); it ends gap 81 (the
+duck under a cut's own talk) and feeds the marking.
+Order (user, 2026-11-07), after gap 80: transitions, the source viewer
+(71a), cuts on the music's beat (13), then this.
+Milestone «Розуміння матеріалу».
 
 ## Format rule for all of these
 

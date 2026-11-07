@@ -105,6 +105,7 @@ done in part stays here until its last card is done.
 | 83 | Dailix finds where people talk in a clip, even in bad sound, and pulls the voice out | below |
 | 84 | A video drawing on several trips (a year in review) | below |
 | 85 | Project cards in a grid, a GIF of the project on hover, basic facts and a description | below |
+| 86 | A program of its own: animated cutaways from a prompt and parameters (8-bit game, animated slides) | below |
 
 ## Open gaps
 
@@ -1435,6 +1436,24 @@ the project (a GIF-like loop of a few frames) played only while the
 pointer is over the card. Dailix's trip cards (gap 82) are the first
 step; the hover preview could reuse the bin's hover frames (gap 60).
 Milestone «Матеріал і бін».
+
+### 86. Animated cutaways from a prompt — a program of its own, later (user, 2026-11-07)
+
+User: a separate, fully open-source program: from a prompt and
+parameters it makes an animation for a cutaway. Example: a voice-over
+says "we took the scooter, rode a mountain path, reached the castle, but
+there were 300 steps... so we turned round and went to the nearest
+tavern for ice cream", and the animation tells it in the style of an
+8-bit game, or of slides with animations. Not instead of Omnix and
+Dailix: after the editing side is as complete as it gets, once the user
+edits the clips marked in the contact sheet.
+- First: look at what exists and its licence (code-driven animation
+  tools such as Manim or Motion Canvas; whether any takes a story and a
+  style), so it builds on an open one rather than from nothing.
+- Its output: a video file (with alpha where it helps) that lands in a
+  trip's `06_external` and on Omnix's overlay or main lane as a stinger
+  (gap 25d); the voice-over's words could come from the transcript (29).
+Milestone «Ритм і переходи».
 
 ## Format rule for all of these
 

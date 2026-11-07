@@ -26,6 +26,7 @@
 //! shows and moves the window.
 
 use super::{Message, thumbs};
+use crate::model::selection::Picked;
 use crate::project::{Own, SoundTrack};
 use crate::overlay::Track;
 use crate::view::Ease;
@@ -324,11 +325,8 @@ pub struct Timeline {
     pub blocks: Vec<Block>,
     /// The sound lanes, in `SoundTrack::ALL`'s order.
     pub sounds: Vec<SoundLane>,
-    /// The sound clip selected.
-    pub selected_music: Option<(SoundTrack, usize)>,
-
-    /// A point on a cut's or a sound clip's own volume line, selected.
-    pub selected_point: Option<(Own, usize)>,
+    /// What's selected, by place (one thing at a time).
+    pub picked: Picked,
     /// Where the video ends; `duration` runs on to the music's end if later.
     pub video: f64,
     /// The clips' sound level in the mix (the Audio panel's «Clip sound»).
@@ -339,17 +337,13 @@ pub struct Timeline {
     pub span: f64,
     /// Playhead, in edit time.
     pub position: f64,
-    pub selected: Option<usize>,
     /// The keyframe at the playhead (cut, keyframe), drawn highlighted.
     pub current: Option<(usize, usize)>,
     /// The overlay track's lane and the text track's.
     pub overlays: Vec<OverlayBlock>,
     pub texts: Vec<OverlayBlock>,
-    pub selected_overlay: Option<crate::overlay::ItemRef>,
     /// Moves on when Esc cancels a drag, so the canvases drop theirs.
     pub drag_epoch: u64,
-    /// The selected marker: its cut and clip time.
-    pub selected_mark: Option<(usize, f64)>,
     /// The playhead's last key step, said by it for a moment (gap 55).
     pub step_note: Option<&'static str>,
     /// The rows' heights, from the divider's scale.
@@ -586,10 +580,10 @@ impl Timeline {
     /// The selected cut's edge under `x`: only it has handles, so a press
     /// elsewhere on a cut moves or selects it.
     fn selected_edge(&self, x: f32, b: Rectangle) -> Option<(usize, bool)> {
-        self.edge_hit(x, b).filter(|&(i, _)| Some(i) == self.selected).or_else(|| {
+        self.edge_hit(x, b).filter(|&(i, _)| Some(i) == self.picked.cut()).or_else(|| {
             // At a join the later cut's edge comes first: the selected one
             // may be the cut before.
-            let i = self.selected.filter(|&i| i < self.blocks.len())?;
+            let i = self.picked.cut().filter(|&i| i < self.blocks.len())?;
             let (l, r) = self.block_x(&self.blocks[i], b);
             (x >= l - EDGE && x <= r + EDGE).then(|| self.edge_at(i, x, b)).flatten().map(|e| (i, e))
         })
@@ -839,7 +833,7 @@ impl Timeline {
             if ctrl {
                 return Hit::NewPoint(Own::Clip(which, clip));
             }
-            let edge = self.music_edge_at(lane, clip, p.x, b).filter(|_| self.selected_music == Some((which, clip)));
+            let edge = self.music_edge_at(lane, clip, p.x, b).filter(|_| self.picked.clip() == Some((which, clip)));
             return Hit::Clip { lane, clip, edge };
         }
         if (self.rows.keys_top..self.rows.seek_top).contains(&p.y)
@@ -960,7 +954,7 @@ impl Timeline {
             if r < 0.0 || l > b.width {
                 continue;
             }
-            let selected = Some((*which, i)) == self.selected_music;
+            let selected = Some((*which, i)) == self.picked.clip();
             coloured_block(frame, (l, r), (top, h), colour, selected);
             // The waveform as it's heard: the track's level and line, the
             // clip's own, its fades and crossfades (`mixdown::clip_gain`).
@@ -1017,7 +1011,7 @@ impl Timeline {
         let end = start + len;
         let at = |t: f64| crate::project::volume_at(keys, t);
         let points: Vec<_> = keys.iter().map(|k| if k.t >= start && k.t <= end { (x(k.t), k.volume) } else { (f32::NAN, k.volume) }).collect();
-        let selected = self.selected_point.filter(|p| p.0 == own).map(|p| p.1);
+        let selected = self.picked.point().filter(|p| p.0 == own).map(|p| p.1);
         let (l, r) = (x(start) + GAP / 2.0, x(end) - GAP / 2.0);
         draw_line(frame, b, lane, SOUND_LINE, ((l, at(start)), (r, at(end))), &points, selected);
     }
@@ -1034,7 +1028,7 @@ impl Timeline {
                 continue;
             }
             let block = Path::rounded_rectangle(Point::new(l, top), Size::new((r - l).max(1.0), h), 3.0.into());
-            frame.fill(&block, SOUND_LINE.scale_alpha(if Some(i) == self.selected { 0.35 } else { 0.18 }));
+            frame.fill(&block, SOUND_LINE.scale_alpha(if Some(i) == self.picked.cut() { 0.35 } else { 0.18 }));
             // A sound split from its picture (J, L or short) gets a frame of
             // its own: it no longer ends where the picture does.
             if c.sound_before != 0.0 || c.sound_after != 0.0 {
@@ -1059,7 +1053,7 @@ impl Timeline {
         }
         // The selected cut's sound edges, to drag apart from its picture:
         // yellow where its clip has more sound, red at the file's end.
-        if let Some(c) = self.selected.and_then(|i| self.blocks.get(i)) {
+        if let Some(c) = self.picked.cut().and_then(|i| self.blocks.get(i)) {
             let more = (c.start - c.sound_before > 0.01, c.start + c.len + c.sound_after < c.most - 0.01);
             trim_handles(frame, self.sound_x(c, b), top, h, more);
         }
@@ -1199,7 +1193,8 @@ impl Timeline {
                 (ptr(&m.wave), ptr(&m.even_wave), &m.label, &m.level).hash(&mut h);
             }
         }
-        format!("{:?}{:?}{:?}{:?}{:?}", self.rows, self.selected, self.selected_music, self.selected_point, theme.extended_palette().background.base.color).hash(&mut h);
+        // The sound lanes show a selected cut, clip or point; not an item.
+        format!("{:?}{:?}{:?}{:?}{:?}", self.rows, self.picked.cut(), self.picked.clip(), self.picked.point(), theme.extended_palette().background.base.color).hash(&mut h);
         h.finish()
     }
 
@@ -1287,7 +1282,7 @@ impl Timeline {
     /// The selected cut's sound edge under `x` on the clip sound lane: in
     /// (`true`) or out.
     fn sound_edge_at(&self, x: f32, b: Rectangle) -> Option<(usize, bool)> {
-        let i = self.selected.filter(|&i| i < self.blocks.len())?;
+        let i = self.picked.cut().filter(|&i| i < self.blocks.len())?;
         let (l, r) = self.sound_x(&self.blocks[i], b);
         if x < l - EDGE || x > r + EDGE {
             return None;
@@ -1405,7 +1400,7 @@ impl OverlayLane {
         }
         match self.item_at(p.x, b) {
             None => OverlayHit::Empty,
-            Some(item) => match self.edge_at(item, p.x, b).filter(|_| self.0.selected_overlay == Some((self.1, item))) {
+            Some(item) => match self.edge_at(item, p.x, b).filter(|_| self.0.picked.item() == Some((self.1, item))) {
                 Some(start) => OverlayHit::Edge { item, start },
                 None => OverlayHit::Item(item),
             },
@@ -1563,7 +1558,7 @@ impl canvas::Program<Message> for OverlayLane {
             if r < 0.0 || l > bounds.width {
                 continue;
             }
-            let selected = Some((self.1, i)) == t.selected_overlay;
+            let selected = Some((self.1, i)) == t.picked.item();
             coloured_block(&mut frame, (l, r), (top, h), colour, selected);
             if selected {
                 // A picture or text has no end of its own: footage both ways
@@ -1651,7 +1646,7 @@ impl canvas::Program<Message> for Pictures {
         for (i, c) in self.0.blocks.iter().enumerate() {
             let (l, r) = self.0.block_x(c, bounds);
             let block = Path::rounded_rectangle(Point::new(l, 0.0), Size::new((r - l).max(1.0), self.0.rows.cuts), 4.0.into());
-            frame.fill(&block, if Some(i) == self.0.selected { palette.primary.weak.color } else { palette.background.strong.color });
+            frame.fill(&block, if Some(i) == self.0.picked.cut() { palette.primary.weak.color } else { palette.background.strong.color });
             // Thumbnails side by side, each showing the moment at its middle.
             let (th, inset) = (self.0.rows.cuts - 4.0, 2.0);
             let tw = th * thumbs::SIZE.0 as f32 / thumbs::SIZE.1 as f32;
@@ -2174,7 +2169,7 @@ impl canvas::Program<Message> for Marks {
         draw_rows(&mut frame, theme, self, bounds, self.rows.effects_top, (self.rows.keys > 0.0).then_some("View"));
         for (i, c) in self.blocks.iter().enumerate() {
             let (l, r) = self.block_x(c, bounds);
-            if Some(i) == self.selected {
+            if Some(i) == self.picked.cut() {
                 selected_block(&mut frame, theme, (l, r), (0.0, self.rows.cuts), (c.start > 1e-3, c.start + c.len < c.most - 1e-3));
             }
             // The longest label that fits (about 7 px a character).
@@ -2356,9 +2351,9 @@ mod tests {
         let t = Timeline {
             blocks: vec![block(0.0, 4.0, 0.0), block(3.0, 4.0, 1.0), block(7.0, 3.0, 0.0)],
             sounds,
-            selected_music: None, selected_point: None,
+            picked: Picked::None,
             video: 10.0, clips_db: 0.0, duration: 10.0, start: 0.0, span: 10.0, position: 0.0,
-            selected: None, current: None, overlays: vec![], texts: vec![], selected_overlay: None, drag_epoch: 0, step_note: None, selected_mark: None,
+            current: None, overlays: vec![], texts: vec![], drag_epoch: 0, step_note: None,
             rows: Rows::new(1.0, false, Folds { sfx2: false, ..Folds::default() }),
             listen: Default::default(),
             check_marks: vec![],
@@ -2375,7 +2370,7 @@ mod tests {
         let (mut t, b) = timeline();
         // The last cut (7..10 s) selected, its sound from half a second
         // before its picture (a J-cut) to a second short of its end.
-        t.selected = Some(2);
+        t.picked = Picked::Cut(2);
         (t.blocks[2].sound_before, t.blocks[2].sound_after) = (0.5, -1.0);
         let (l, r) = t.sound_x(&t.blocks[2], b);
         assert!((l - t.x(6.5, b)).abs() < 2.0 && (r - t.x(9.0, b)).abs() < 2.0, "{l} {r}");
@@ -2385,7 +2380,7 @@ mod tests {
         assert_eq!(t.sound_edge_at(t.x(7.5, b), b), None);
         assert_eq!(t.sound_edge_at(t.x(10.0, b), b), None);
         // Nothing for a cut not selected.
-        t.selected = Some(0);
+        t.picked = Picked::Cut(0);
         assert_eq!(t.sound_edge_at(l + 2.0, b), None);
     }
 
@@ -2429,13 +2424,13 @@ mod tests {
             f(&mut u);
             u.sound_key(b, &theme) != key
         };
-        assert!(changed(&|u| u.selected = Some(1)));
+        assert!(changed(&|u| u.picked = Picked::Cut(1)));
         assert!(changed(&|u| u.start = 1.0));
         assert!(changed(&|u| u.clips_db = -3.0));
         assert!(changed(&|u| u.blocks[1].sound_after = 0.5));
         assert!(changed(&|u| u.blocks[0].sound.push(crate::project::VolumeKey { t: 1.0, volume: -6.0 })));
         assert!(changed(&|u| u.sounds[0].track.volume = -6.0));
-        assert!(changed(&|u| u.selected_point = Some((Own::Cut(0), 0))));
+        assert!(changed(&|u| u.picked = Picked::Point(Own::Cut(0), 0)));
         assert_ne!(t.sound_key(Rectangle::new(Point::ORIGIN, Size::new(b.width * 2.0, b.height)), &theme), key, "a wider window");
     }
 
@@ -2547,7 +2542,7 @@ mod tests {
         // selected one's, even when the cut after it lies over the join.
         let mut t2 = timeline().0;
         assert_eq!(t2.selected_edge(x(7.0) + 1.0, b), None, "nothing selected: no handles");
-        t2.selected = Some(1);
+        t2.picked = Picked::Cut(1);
         assert_eq!(t2.selected_edge(x(7.0) - 1.0, b), Some((1, false)));
         assert_eq!(t2.selected_edge(x(7.0) + 1.0, b), Some((1, false)), "the selected cut's out edge, not the next one's in");
         // 12 px in from an end is still the edge; a narrow block is split
@@ -2602,7 +2597,7 @@ mod tests {
         // A cut moves; the selected one's edges trim, Shift on its in edge
         // crossfades (not on the first cut, which has none before it).
         assert_eq!(at(&t, x(1.0), 10.0, false, false), Hit::Cut(0));
-        t.selected = Some(1);
+        t.picked = Picked::Cut(1);
         assert_eq!(at(&t, x(7.0) - 1.0, 10.0, false, false), Hit::CutEdge { cut: 1, start: false, crossfade: false });
         assert_eq!(at(&t, x(3.0) + 1.0, 10.0, false, true), Hit::CutEdge { cut: 1, start: true, crossfade: true });
         assert_eq!(Hit::CutEdge { cut: 1, start: true, crossfade: true }.pointer(), I::ResizingHorizontally);
@@ -2784,7 +2779,7 @@ impl canvas::Program<Message> for Flags {
         let flags = t.flags(bounds);
         let outline = Stroke::default().with_width(1.0).with_color(iced::Color::from_rgba(0.0, 0.0, 0.0, 0.8));
         for (n, &(cut, mt, x, note)) in flags.iter().enumerate() {
-            let chosen = t.selected_mark.is_some_and(|(c, m)| c == cut && (m - mt).abs() < crate::model::ops::cuts::SAME_MARK);
+            let chosen = t.picked.mark().is_some_and(|(c, m)| c == cut && (m - mt).abs() < crate::model::ops::cuts::SAME_MARK);
             frame.fill(&Path::rectangle(Point::new(x - 0.9, 0.0), Size::new(1.8, h)), MARK);
             if t.folds.marks {
                 frame.fill(&Path::rectangle(Point::new(x - 2.5, 0.0), Size::new(5.0, h)), MARK);

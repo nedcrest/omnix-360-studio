@@ -293,8 +293,7 @@ impl App {
         let timeline = timeline::Timeline {
             blocks,
             sounds,
-            selected_music: self.selection.clip(&self.edit),
-            selected_point: self.selection.point(&self.edit),
+            picked: self.selection.picked(&self.edit),
             listen: self.listen,
             check_marks: self.check_marks(),
             ruler: if self.ruler_large { timeline::RULER_LARGE } else { timeline::RULER_COMPACT },
@@ -307,13 +306,10 @@ impl App {
             start: timeline_start,
             span: timeline_span,
             position: self.position(),
-            selected: self.selection.cut(&self.edit),
             current: current.map(|k| (self.current, k)),
             overlays: self.overlay_blocks(crate::overlay::Track::Overlay),
             texts: self.overlay_blocks(crate::overlay::Track::Text),
-            selected_overlay: self.selection.item(&self.edit),
             drag_epoch: self.drag_epoch,
-            selected_mark: self.selection.mark(&self.edit),
             step_note: self.step_note.map(|(n, _)| n),
             rows: timeline::Rows::new(self.split, self.framing, self.folds),
         }

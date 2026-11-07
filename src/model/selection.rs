@@ -115,6 +115,52 @@ impl Selection {
     }
 }
 
+/// The selection as places in the project rather than ids: what a view
+/// that draws by place (the timeline) reads, found once per drawing.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub enum Picked {
+    #[default]
+    None,
+    Cut(usize),
+    Clip(SoundTrack, usize),
+    Point(Own, usize),
+    Item(ItemRef),
+    Mark(usize, f64),
+}
+
+impl Selection {
+    /// Where what it names is in `p`; nothing if it's gone.
+    pub fn picked(self, p: &Project) -> Picked {
+        let found = match self {
+            Selection::None => None,
+            Selection::Cut(_) => self.cut(p).map(Picked::Cut),
+            Selection::Clip(_) => self.clip(p).map(|(w, i)| Picked::Clip(w, i)),
+            Selection::Point(..) => self.point(p).map(|(o, k)| Picked::Point(o, k)),
+            Selection::Item(_) => self.item(p).map(Picked::Item),
+            Selection::Mark(..) => self.mark(p).map(|(i, t)| Picked::Mark(i, t)),
+        };
+        found.unwrap_or_default()
+    }
+}
+
+impl Picked {
+    pub fn cut(self) -> Option<usize> {
+        if let Picked::Cut(i) = self { Some(i) } else { None }
+    }
+    pub fn clip(self) -> Option<(SoundTrack, usize)> {
+        if let Picked::Clip(w, i) = self { Some((w, i)) } else { None }
+    }
+    pub fn point(self) -> Option<(Own, usize)> {
+        if let Picked::Point(o, k) = self { Some((o, k)) } else { None }
+    }
+    pub fn item(self) -> Option<ItemRef> {
+        if let Picked::Item(r) = self { Some(r) } else { None }
+    }
+    pub fn mark(self) -> Option<(usize, f64)> {
+        if let Picked::Mark(i, t) = self { Some((i, t)) } else { None }
+    }
+}
+
 impl Edit {
     /// Deletes what `s` names, as one undo step, through its op; false if
     /// it isn't there.
@@ -154,6 +200,20 @@ mod tests {
 
     fn every(e: &Edit) -> [Selection; 4] {
         [Selection::cut_at(e, 1), Selection::clip_at(e, SoundTrack::Music, 0), Selection::point_at(e, Own::Cut(0), 0), Selection::item_at(e, (Track::Text, 0))]
+    }
+
+    #[test]
+    fn each_kind_is_found_by_its_place_and_gone_when_it_is() {
+        let e = edit();
+        let [cut, clip, point, item] = every(&e);
+        assert_eq!(cut.picked(&e), Picked::Cut(1));
+        assert_eq!(clip.picked(&e), Picked::Clip(SoundTrack::Music, 0));
+        assert_eq!(point.picked(&e), Picked::Point(Own::Cut(0), 0));
+        assert_eq!(item.picked(&e), Picked::Item((Track::Text, 0)));
+        assert_eq!(Selection::mark_at(&e, 0, 2.0).picked(&e), Picked::None, "no marker there");
+        let mut gone = edit();
+        gone.delete(cut);
+        assert_eq!(cut.picked(&gone), Picked::None);
     }
 
     #[test]

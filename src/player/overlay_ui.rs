@@ -102,15 +102,7 @@ impl App {
         self.edit.lane(track).map_or_else(Vec::new, |lane| {
             lane.items
                 .iter()
-                .map(|it| timeline::OverlayBlock {
-                    label: it.name(),
-                    from: it.at,
-                    start: it.start,
-                    len: it.end - it.start,
-                    effects: it.effects.iter().map(|k| k.t).collect(),
-                    motion: it.motion.iter().map(|k| (k.t, k.ease)).collect(),
-                    thumb: self.overlay_thumbs.get(&it.key()).cloned(),
-                })
+                .map(|it| timeline::OverlayBlock { item: it.clone(), label: it.name(), thumb: self.overlay_thumbs.get(&it.key()).cloned() })
                 .collect()
         })
     }

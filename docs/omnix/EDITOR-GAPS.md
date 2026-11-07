@@ -1468,6 +1468,8 @@ edits the clips marked in the contact sheet.
   animation, inside Kdenlive), Synfig, Blender's Grease Pencil, Manim and
   Motion Canvas (code), Pixelorama / LibreSprite (pixel art). None known
   to take a scene description to an 8-bit cartoon end to end, offline.
+- Next (user, 2026-11-07): the user tries ComfyUI first; if it suits,
+  this program isn't needed. Ask how it went before any work here.
 Milestone «Ритм і переходи».
 
 ## Format rule for all of these

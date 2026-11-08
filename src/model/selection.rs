@@ -24,6 +24,9 @@ pub enum Selection {
     Item(Id),
     /// The marker at clip time `.1` on cut `.0`.
     Mark(Id, f64),
+    /// The join before a cut, its transition (user, 2026-11-08: a click on
+    /// a crossfade's X picks it).
+    Join(Id),
 }
 
 impl Selection {
@@ -53,6 +56,18 @@ impl Selection {
     /// The marker at clip time `t` on cut `i` of `p`.
     pub fn mark_at(p: &Project, i: usize, t: f64) -> Self {
         p.cuts.get(i).map_or(Selection::None, |c| Selection::Mark(c.id, t))
+    }
+
+    /// The join before cut `i` of `p` (none before the first).
+    pub fn join_at(p: &Project, i: usize) -> Self {
+        p.cuts.get(i).filter(|_| i > 0).map_or(Selection::None, |c| Selection::Join(c.id))
+    }
+
+    /// The selected join's cut (the one after it) in `p`, while the join
+    /// has an overlap or a look: taken away, it's gone.
+    pub fn join(self, p: &Project) -> Option<usize> {
+        let Selection::Join(id) = self else { return None };
+        p.cut_index(id).filter(|&i| i > 0 && (p.cuts[i].crossfade > 0.0 || p.cuts[i].transition.is_some()))
     }
 
     /// The selected marker's cut (its place in `p`) and clip time.
@@ -110,6 +125,7 @@ impl Selection {
             Selection::Point(..) => self.point(p).is_some(),
             Selection::Item(_) => self.item(p).is_some(),
             Selection::Mark(..) => self.mark(p).is_some(),
+            Selection::Join(_) => self.join(p).is_some(),
         };
         if there { self } else { Selection::None }
     }
@@ -126,6 +142,7 @@ pub enum Picked {
     Point(Own, usize),
     Item(ItemRef),
     Mark(usize, f64),
+    Join(usize),
 }
 
 impl Selection {
@@ -138,6 +155,7 @@ impl Selection {
             Selection::Point(..) => self.point(p).map(|(o, k)| Picked::Point(o, k)),
             Selection::Item(_) => self.item(p).map(Picked::Item),
             Selection::Mark(..) => self.mark(p).map(|(i, t)| Picked::Mark(i, t)),
+            Selection::Join(_) => self.join(p).map(Picked::Join),
         };
         found.unwrap_or_default()
     }
@@ -159,6 +177,9 @@ impl Picked {
     pub fn mark(self) -> Option<(usize, f64)> {
         if let Picked::Mark(i, t) = self { Some((i, t)) } else { None }
     }
+    pub fn join(self) -> Option<usize> {
+        if let Picked::Join(i) = self { Some(i) } else { None }
+    }
 }
 
 impl Edit {
@@ -176,6 +197,13 @@ impl Edit {
             Selection::Point(sound, t) => Op::Sound(SoundOp::DeletePoint { sound, t }),
             Selection::Item(item) => Op::Item(ItemOp::Delete { item }),
             Selection::Mark(cut, t) => Op::Cut(CutOp::Unmark { cut, t }),
+            // A join's transition and its overlap, one undo step.
+            Selection::Join(cut) => {
+                self.begin();
+                let done = self.apply(&Op::Cut(CutOp::Transition { cut, look: None })).is_ok() && self.apply(&Op::Cut(CutOp::Crossfade { cut, seconds: 0.0 })).is_ok();
+                self.commit();
+                return done;
+            }
         };
         self.apply(&op).is_ok()
     }
@@ -192,20 +220,23 @@ mod tests {
         let mut e = Edit::default();
         e.cuts = vec![Cut::new(PathBuf::from("a"), 0.0, 4.0), Cut::new(PathBuf::from("b"), 0.0, 3.0)];
         e.cuts[0].volume = vec![VolumeKey { t: 1.0, volume: -6.0 }];
+        e.cuts[1].crossfade = 0.5;
         e.track_mut(SoundTrack::Music).append_part(PathBuf::from("song"), 0.0, 0.0, 5.0);
         e.lane_mut(Track::Text).items.push(crate::overlay::Item { id: 0, input: PathBuf::new(), text: Some(Default::default()), at: 0.0, start: 0.0, end: 5.0, motion: Vec::new(), effects: Vec::new() });
         e.settle_ids();
         e
     }
 
-    fn every(e: &Edit) -> [Selection; 4] {
-        [Selection::cut_at(e, 1), Selection::clip_at(e, SoundTrack::Music, 0), Selection::point_at(e, Own::Cut(0), 0), Selection::item_at(e, (Track::Text, 0))]
+    fn every(e: &Edit) -> [Selection; 5] {
+        [Selection::cut_at(e, 1), Selection::clip_at(e, SoundTrack::Music, 0), Selection::point_at(e, Own::Cut(0), 0), Selection::item_at(e, (Track::Text, 0)), Selection::join_at(e, 1)]
     }
 
     #[test]
     fn each_kind_is_found_by_its_place_and_gone_when_it_is() {
         let e = edit();
-        let [cut, clip, point, item] = every(&e);
+        let [cut, clip, point, item, join] = every(&e);
+        assert_eq!(join.picked(&e), Picked::Join(1));
+        assert_eq!(Selection::join_at(&e, 0), Selection::None, "none before the first cut");
         assert_eq!(cut.picked(&e), Picked::Cut(1));
         assert_eq!(clip.picked(&e), Picked::Clip(SoundTrack::Music, 0));
         assert_eq!(point.picked(&e), Picked::Point(Own::Cut(0), 0));
@@ -218,7 +249,7 @@ mod tests {
 
     #[test]
     fn each_kind_deletes_as_one_undo_step() {
-        for k in 0..4 {
+        for k in 0..5 {
             let mut e = edit();
             let s = every(&e)[k];
             assert!(e.delete(s), "{s:?}");

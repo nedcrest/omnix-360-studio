@@ -493,6 +493,11 @@ impl Timeline {
         })
     }
 
+    /// The join whose crossfade's X is under `x`: the cut after it.
+    fn join_at(&self, x: f32, b: Rectangle) -> Option<usize> {
+        self.blocks.iter().enumerate().skip(1).find(|(_, c)| c.cut.crossfade > 0.0 && x >= self.x(c.from, b) && x <= self.x(c.from + c.cut.crossfade, b)).map(|(i, _)| i)
+    }
+
     /// The cut edge under `x`: (cut, whether it's the in edge). Later cuts
     /// first: a crossfading cut's in edge lies over the cut before it.
     fn edge_hit(&self, x: f32, b: Rectangle) -> Option<(usize, bool)> {
@@ -801,7 +806,7 @@ impl Timeline {
         if p.y < self.rows.cuts {
             return match self.selected_edge(p.x, b) {
                 Some((cut, start)) => Hit::CutEdge { cut, start, crossfade: start && shift && cut > 0 },
-                None => self.block_at(p.x, b).map_or(Hit::Nothing, Hit::Cut),
+                None => self.join_at(p.x, b).map(Hit::Join).or_else(|| self.block_at(p.x, b).map(Hit::Cut)).unwrap_or(Hit::Nothing),
             };
         }
         if let Some(lane) = self.rows.sound_at_y(p.y) {
@@ -865,6 +870,9 @@ enum Hit {
     CutEdge { cut: usize, start: bool, crossfade: bool },
     /// A cut: moves it.
     Cut(usize),
+    /// A crossfade's X, the join before cut `.0`: selects it, opening the
+    /// Transitions panel on it.
+    Join(usize),
     /// A fade knob on a sound clip.
     ClipFade { lane: usize, clip: usize, in_edge: bool },
     /// A sound clip: at the selected clip's edge (`Some(start)`), a trim;
@@ -882,7 +890,7 @@ impl Hit {
         use mouse::Interaction as I;
         match self {
             Hit::Nothing => I::default(),
-            Hit::Listen(..) | Hit::Fold(..) | Hit::Head | Hit::CutSound(_) | Hit::Playhead => I::Pointer,
+            Hit::Listen(..) | Hit::Fold(..) | Hit::Head | Hit::CutSound(_) | Hit::Playhead | Hit::Join(_) => I::Pointer,
             Hit::Scroll | Hit::Effect { .. } | Hit::Point { .. } | Hit::Cut(_) | Hit::Clip { edge: None, .. } | Hit::Key { .. } => I::Grab,
             Hit::CutFade { .. } | Hit::SoundEdge { .. } | Hit::CutEdge { .. } | Hit::ClipFade { .. } | Hit::Clip { edge: Some(_), .. } => I::ResizingHorizontally,
             Hit::LevelTag(_) => I::ResizingVertically,
@@ -2019,6 +2027,7 @@ impl Timeline {
                 *drag = Drag::Move { cut, x0: p.x, moved: false, to: cut };
                 Message::Select(cut)
             }
+            Hit::Join(cut) => Message::SelectJoin(cut),
             Hit::ClipFade { lane, clip, in_edge } => {
                 let m = &self.sounds[lane].blocks[clip];
                 *drag = Drag::Fade { own: Own::Clip(self.sounds[lane].which, clip), in_edge, x0: p.x, from: if in_edge { m.clip.fade_in } else { m.clip.fade_out }, per_px };
@@ -2187,8 +2196,13 @@ impl canvas::Program<Message> for Marks {
             }
         }
         // Crossfades: an X over each overlap, as on the music lane.
-        for c in self.blocks.iter().filter(|c| c.cut.crossfade > 0.0) {
-            crossfade(&mut frame, (self.x(c.from, bounds), self.x(c.from + c.cut.crossfade, bounds)), (0.0, self.rows.cuts), true);
+        for (i, c) in self.blocks.iter().enumerate().filter(|(_, c)| c.cut.crossfade > 0.0) {
+            let (l, r) = (self.x(c.from, bounds), self.x(c.from + c.cut.crossfade, bounds));
+            crossfade(&mut frame, (l, r), (0.0, self.rows.cuts), true);
+            // The join picked: framed as a picked block is.
+            if self.picked.join() == Some(i) {
+                selection_frame(&mut frame, &block_path((l, r), 0.0, self.rows.cuts), theme);
+            }
         }
         if let Drag::Move { moved: true, to, .. } = drag {
             let t = self.blocks.get(*to).map_or(self.duration, |c| c.from);

@@ -368,6 +368,8 @@ enum Message {
     /// another join (−1 / +1); a look (none: the dissolve); its length by
     /// steps; removed; on every join; the join played.
     TransitionsPanel,
+    /// A crossfade's X clicked on the timeline: the join before cut `.0`.
+    SelectJoin(usize),
     TransitionJoin(i64),
     TransitionLook(Option<crate::transition::Look>),
     TransitionLength(i64),
@@ -698,8 +700,10 @@ struct App {
     settings_open: Option<settings_panel::Group>,
     /// The «New» window, while open.
     new_menu: Option<new_menu::NewMenu>,
-    /// The join the Transitions panel works on: the cut after it.
+    /// The join the Transitions panel works on: the cut after it; and,
+    /// while it's played, where to stop and where to go back to.
     join: Option<crate::project::Id>,
+    join_play: Option<(f64, f64)>,
     /// The bin, at the far left (`bin.rs`).
     bin: bin::Bin,
     /// 10-bit tracks decode at 10 bits (`source::deep`).
@@ -865,6 +869,7 @@ impl App {
             settings_open: None,
             new_menu: None,
             join: None,
+            join_play: None,
             bin: bin::Bin { open: saved.bin_pinned, pinned: saved.bin_pinned, tile: saved.bin_tile, side: saved.bin_side, ..Default::default() },
             fullscreen: false,
             volume: saved.volume,
@@ -972,6 +977,7 @@ impl App {
         self.settle_text();
         self.follow_crossfade();
         self.follow_music();
+        let task = Task::batch([task, self.follow_join_play()]);
         let task = Task::batch([task, self.follow_bin()]);
         // Another panel took the Record panel's place: stop listening.
         let task = if self.side != Some(Side::Record) && self.record.active() { Task::batch([task, self.close_record()]) } else { task };
@@ -1045,7 +1051,7 @@ impl App {
     fn handle(&mut self, message: Message) -> Task<Message> {
         // Each area handles its own messages (`on_*` in its module).
         match message {
-            m @ (Message::TransitionsPanel | Message::TransitionJoin(_) | Message::TransitionLook(_) | Message::TransitionLength(_) | Message::TransitionRemove | Message::TransitionAll | Message::TransitionPreview) => self.on_transitions(m),
+            m @ (Message::TransitionsPanel | Message::SelectJoin(_) | Message::TransitionJoin(_) | Message::TransitionLook(_) | Message::TransitionLength(_) | Message::TransitionRemove | Message::TransitionAll | Message::TransitionPreview) => self.on_transitions(m),
             m @ (Message::NewMenuClose | Message::NewVideoTrip(_) | Message::NewVideoName(_) | Message::NewVideoMake | Message::NewTripInDailix) => self.on_new_menu(m),
             m @ (Message::Open { .. } | Message::Picked { .. } | Message::Loaded { .. } | Message::OpenProject { .. } | Message::NewProject { .. } | Message::NewMenu | Message::CloseRequested { .. } | Message::StopAndClose { .. } | Message::Confirmed { .. } | Message::ProjectPicked { .. } | Message::SaveProjectTo { .. } | Message::SaveProject { .. } | Message::LoadingTick { .. } | Message::Thumb { .. }) => self.on_file(m),
             m @ (Message::Export { .. } | Message::ExportTo { .. } | Message::ExportProgress { .. } | Message::ExportCancel { .. } | Message::PickColour { .. } | Message::PickArea { .. } | Message::AreaPicked { .. } | Message::TrackProgress { .. } | Message::TrackCancel { .. } | Message::Tracked { .. } | Message::ExportDone { .. } | Message::Save { .. } | Message::SaveTo { .. } | Message::Saved { .. }) => self.on_jobs(m),

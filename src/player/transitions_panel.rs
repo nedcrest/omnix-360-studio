@@ -2,7 +2,9 @@
 //! free to watch): docked at the right like the Effects panel. It works on
 //! one join, the one before a cut: its look from the library's groups
 //! (`transition::Look`), its length in 0.25 s steps, the same on every
-//! join, or none; and a look at the join played from just before it.
+//! join, or none; and the join played: from a few frames before it to a
+//! few after, then back to where it started, paused (user, 2026-11-08).
+//! A click on a crossfade's X selects that join and opens it here.
 
 use super::{App, Message, Side, tip};
 use crate::model::ops::{Op, cuts::CutOp};
@@ -12,8 +14,10 @@ use iced::widget::{button, column, container, row, rule, scrollable, text, toolt
 use iced::{Alignment, Element, Length, Task};
 
 const WIDTH: f32 = 300.0;
-/// The look at a join starts this long before it.
-const LEAD: f64 = 1.5;
+/// Playing a join: this many frames before its transition, this many
+/// after (user, 2026-11-08: 10 to 20 before).
+const BEFORE: f64 = 15.0;
+const AFTER: f64 = 10.0;
 
 impl App {
     /// The panel's messages.
@@ -29,11 +33,21 @@ impl App {
                     self.side = Some(Side::Transitions);
                 }
             }
+            // A click on a crossfade's X: that join, here.
+            Message::SelectJoin(i) => {
+                self.selection = crate::model::selection::Selection::join_at(&self.edit, i);
+                self.join = self.edit.cuts.get(i).map(|c| c.id);
+                self.side = Some(Side::Transitions);
+            }
+            // Another join, the playhead taken to it: the panel and the
+            // playhead speak of one join.
             Message::TransitionJoin(step) => {
                 let n = self.edit.cuts.len();
                 if let Some(i) = self.join_index() {
                     let to = (i as i64 + step).clamp(1, n as i64 - 1) as usize;
                     self.join = self.edit.cuts.get(to).map(|c| c.id);
+                    let at = crate::project::offsets(&self.edit.cuts)[to];
+                    return Task::batch([self.update(Message::Scrub(at)), self.update(Message::ScrubDone)]);
                 }
             }
             Message::TransitionLook(look) => {
@@ -70,17 +84,40 @@ impl App {
                 }
                 self.edit.commit();
             }
+            // The join nearest the playhead, played from a few frames
+            // before its transition to a few after, then paused back at the
+            // start (`follow_join_play`).
             Message::TransitionPreview => {
-                let Some(i) = self.join_index() else { return Task::none() };
+                self.join = self.nearest_join_cut();
+                let Some(c) = self.join_cut() else { return Task::none() };
+                let i = self.join_index().unwrap_or(1);
                 let at = crate::project::offsets(&self.edit.cuts)[i];
-                let seek = self.update(Message::Scrub((at - LEAD).max(0.0)));
+                let frame = 1.0 / self.fps();
+                let (start, stop) = ((at - BEFORE * frame).max(0.0), at + c.crossfade + AFTER * frame);
+                let seek = self.update(Message::Scrub(start));
                 let done = self.update(Message::ScrubDone);
                 let play = if self.playing() { Task::none() } else { self.update(Message::Toggle) };
+                self.join_play = Some((stop, start));
                 return Task::batch([seek, done, play]);
             }
             _ => {}
         }
         Task::none()
+    }
+
+    /// While a join plays (`TransitionPreview`): past its end, paused and
+    /// back at its start; stopped another way (paused, a seek), let go.
+    pub(super) fn follow_join_play(&mut self) -> Task<Message> {
+        let Some((stop, start)) = self.join_play else { return Task::none() };
+        if !self.playing() {
+            self.join_play = None;
+            return Task::none();
+        }
+        if self.position() < stop {
+            return Task::none();
+        }
+        self.join_play = None;
+        Task::batch([self.update(Message::Toggle), self.update(Message::Scrub(start)), self.update(Message::ScrubDone)])
     }
 
     /// The cut after the join nearest the playhead (the first has none).
@@ -117,8 +154,6 @@ impl App {
         body = body.push(row![text("Length").size(14).width(Length::Fill), by("−", -1), text(length).size(14), by("+", 1)].spacing(8).align_y(Alignment::Center));
         let chosen = c.transition;
         body = body.push(rule::horizontal(1));
-        let dissolve = button(text("Dissolve").size(13)).padding([4, 10]).style(if chosen.is_none() && c.crossfade > 0.0 { button::primary } else { button::secondary }).on_press(Message::TransitionLook(None));
-        body = body.push(tip(dissolve, text("The plain crossfade"), tooltip::Position::Left));
         for g in Group::ALL {
             let tiles = Look::ALL.iter().filter(|l| l.group() == g).map(|&l| {
                 // Not built yet: shown as a dissolve, and said on its tile.

@@ -191,6 +191,7 @@ impl App {
                     Selection::Point(..) => "Point deleted",
                     Selection::Item(_) => "Overlay deleted",
                     Selection::Mark(..) => "Marker deleted",
+                    Selection::Join(_) => "Transition taken away",
                     Selection::None => return Task::none(),
                 };
                 let at = s.cut(&self.edit);

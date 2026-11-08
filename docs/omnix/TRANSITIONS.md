@@ -83,6 +83,46 @@ insert with a sound, white noise + white-noise screen, film burn, etc.
 - Builds on the overlay track (pictures/video over the main picture) and the
   music/sound mix that already exist upstream.
 
+## The library to build from (research 2026-11-08)
+
+The user (2026-11-08): few banal transitions, interesting ones for the
+templates folder. A web survey by a background agent; licences checked.
+
+**Source and licences.** gl-transitions
+(github.com/gl-transitions/gl-transitions): 206 GLSL transitions, 204 MIT,
+two BSD (`InvertedPageCurl`, `StereoViewer`): fine for MIT/Apache; a WGSL
+and CPU port keeps the file's `// Author:` and `// License:` lines.
+Shadertoy is CC BY-NC-SA by default: ideas only, no code. CapCut,
+Premiere, Resolve: names only. Already common on Linux (Kdenlive,
+Shotcut), so not ours to repeat: plain dissolve, dip to colour, wipes,
+iris, clock, shapes, cube, blinds.
+
+Recommended first (★), the rest for the library later:
+- **Camera moves:** whip pan ★ (`WhipPan`, `WhipTilt`), zoom punch ★
+  (`CrossZoom`, `ZoomInOut`, `DreamyZoom`, `WarpSpeed`), spin blur ★
+  (`WhipSpin`), camera shake (`CameraShake`), tunnel / vortex / swirl,
+  curved motion blur (`TangentMotionBlur`). Whip, zoom and spin share
+  one blur machine (≈24 samples along the move). A match cut needs the
+  frames' motion: far.
+- **Light and film:** light leak ★ procedural (`FilmBurn`; no footage,
+  no licence), overexposure flash ★ (`Overexposure`, `FlashFade`), lens
+  flare sweep (`LensFlare`, `LightStreaks`, `LightRays`), burn-through
+  (`BurnThrough`, `UndulatingBurnOut`), photo develop / snapshot, VHS
+  tracking / TV off.
+- **Flat, per pixel:** luma fade ★ by the picture's own brightness (a
+  filmic default instead of a dissolve), glitch / datamosh ★
+  (`StripDatamoshGlitch`, `GlitchDisplace`, `GlitchMemories`), morph
+  (`Morph`), pixel stretch (`PixelStretch`), ink bleed (`InkBleed`),
+  paper tear (`PaperTear`), defocus / bokeh (`BokehDissolve`,
+  `DefocusBlur`), shatter / glass (`Shatter`, `FacetedGlass`).
+- **360 only** (the sphere's direction in the shader, the CPU twin the
+  same sampling): sphere whip pan ★ (spin the view across the sphere,
+  the cut in the blur: what no flat editor can do), little-planet zoom,
+  sky dive through the nadir or zenith (hides the stick), barrel roll,
+  crystal ball (`Sphere`).
+- **Sound:** a transition's middle snapped onto a beat (gap 13), a swish
+  under each whip or zoom, a glitch or shake driven by loudness.
+
 ## Looks
 
 Our own, built from good examples. 360 footage is a unique source of

@@ -276,6 +276,7 @@ impl App {
             Some(Side::Effects) => row![view, self.effects_panel()].into(),
             Some(Side::Export) => row![view, self.export_panel()].into(),
             Some(Side::Audio) => row![view, self.audio_panel()].into(),
+            Some(Side::Transitions) => row![view, self.transitions_panel()].into(),
             Some(Side::Record) => row![view, self.record_panel()].into(),
             None => view.into(),
         };
@@ -445,6 +446,11 @@ impl App {
                     Some(c) if c.crossfade > 0.0 => "Take away this cut's crossfade (Shift-drag its start edge to change its length)",
                     _ => "Crossfade into this cut from the one before, 1 s (Shift-drag its start edge to change its length)",
                 }),
+                tooltip::Position::Top,
+            ),
+            tip(
+                tint_button(Tint::Cut, TRANSITIONS, (self.edit.cuts.len() > 1).then_some(Message::TransitionsPanel)),
+                text(if self.side == Some(Side::Transitions) { "Close the Transitions panel (T)" } else { "Transitions: the join nearest the playhead, its look and length (T)" }),
                 tooltip::Position::Top,
             ),
             ].spacing(12).align_y(Alignment::Center)),

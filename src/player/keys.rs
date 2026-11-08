@@ -201,6 +201,7 @@ impl App {
                 "e" | "E" if mods.command() => return self.update(Message::ExportPanel),
                 "," if mods.command() => return self.update(Message::SettingsPanel),
                 "c" | "C" => return self.update(Message::Split),
+                "t" | "T" => return self.update(Message::TransitionsPanel),
                 "b" | "B" if !mods.command() && mods.shift() => return self.update(Message::BinView(super::bin_view::BinMsg::Toggle)),
                 "b" | "B" if !mods.command() => return self.update(Message::BinPanel),
                 "q" | "Q" => self.free_look().roll -= step,

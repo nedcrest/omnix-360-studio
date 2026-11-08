@@ -26,6 +26,7 @@ const GROUPS: &[(&str, &[(&str, &str)])] = &[
         "Cuts",
         &[
             ("C", "split at the playhead (a sound clip if one is selected)"),
+            ("T", "transitions: the join nearest the playhead"),
             ("M", "a marker at the playhead"),
             ("Alt+[ / Alt+]", "trim the start / end to the playhead"),
             ("D", "select the cut under the playhead"),

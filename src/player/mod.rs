@@ -17,6 +17,7 @@ mod handles;
 mod info;
 mod settings_panel;
 mod new_menu;
+mod transitions_panel;
 mod meter;
 
 mod playback;
@@ -158,6 +159,7 @@ enum Side {
     Export,
     Audio,
     Record,
+    Transitions,
 }
 
 /// The shape of the view, and so of a saved view: free fills the window.
@@ -362,6 +364,16 @@ enum Message {
     /// The «New» window: opened (after a save asked for, if any), closed;
     /// a video's trip and name chosen, made; a trip asked of Dailix.
     NewMenu,
+    /// The Transitions panel: opened at the join nearest the playhead (T);
+    /// another join (−1 / +1); a look (none: the dissolve); its length by
+    /// steps; removed; on every join; the join played.
+    TransitionsPanel,
+    TransitionJoin(i64),
+    TransitionLook(Option<crate::transition::Look>),
+    TransitionLength(i64),
+    TransitionRemove,
+    TransitionAll,
+    TransitionPreview,
     NewMenuClose,
     NewVideoTrip(PathBuf),
     NewVideoName(String),
@@ -686,6 +698,8 @@ struct App {
     settings_open: Option<settings_panel::Group>,
     /// The «New» window, while open.
     new_menu: Option<new_menu::NewMenu>,
+    /// The join the Transitions panel works on: the cut after it.
+    join: Option<crate::project::Id>,
     /// The bin, at the far left (`bin.rs`).
     bin: bin::Bin,
     /// 10-bit tracks decode at 10 bits (`source::deep`).
@@ -850,6 +864,7 @@ impl App {
             scrubbing: None,
             settings_open: None,
             new_menu: None,
+            join: None,
             bin: bin::Bin { open: saved.bin_pinned, pinned: saved.bin_pinned, tile: saved.bin_tile, side: saved.bin_side, ..Default::default() },
             fullscreen: false,
             volume: saved.volume,
@@ -1030,6 +1045,7 @@ impl App {
     fn handle(&mut self, message: Message) -> Task<Message> {
         // Each area handles its own messages (`on_*` in its module).
         match message {
+            m @ (Message::TransitionsPanel | Message::TransitionJoin(_) | Message::TransitionLook(_) | Message::TransitionLength(_) | Message::TransitionRemove | Message::TransitionAll | Message::TransitionPreview) => self.on_transitions(m),
             m @ (Message::NewMenuClose | Message::NewVideoTrip(_) | Message::NewVideoName(_) | Message::NewVideoMake | Message::NewTripInDailix) => self.on_new_menu(m),
             m @ (Message::Open { .. } | Message::Picked { .. } | Message::Loaded { .. } | Message::OpenProject { .. } | Message::NewProject { .. } | Message::NewMenu | Message::CloseRequested { .. } | Message::StopAndClose { .. } | Message::Confirmed { .. } | Message::ProjectPicked { .. } | Message::SaveProjectTo { .. } | Message::SaveProject { .. } | Message::LoadingTick { .. } | Message::Thumb { .. }) => self.on_file(m),
             m @ (Message::Export { .. } | Message::ExportTo { .. } | Message::ExportProgress { .. } | Message::ExportCancel { .. } | Message::PickColour { .. } | Message::PickArea { .. } | Message::AreaPicked { .. } | Message::TrackProgress { .. } | Message::TrackCancel { .. } | Message::Tracked { .. } | Message::ExportDone { .. } | Message::Save { .. } | Message::SaveTo { .. } | Message::Saved { .. }) => self.on_jobs(m),

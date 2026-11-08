@@ -443,8 +443,13 @@ Split into steps so each can be tried on Kos on its own:
   (`Cut::sound_fades`). The Edges tab (Out, In, each with tiles, length,
   ✕, settings beside); an orange wedge on the timeline.
 - **25c. Templates** (its card merged into the transitions lane's, 25f,
-  2026-11-07)**:** a configured transition saved into the project and
-  picked for any join.
+  2026-11-07)**:** built 2026-11-08 (`a542e86`), waiting for the check.
+  The user chose one library for the program (not per trip or video):
+  `<config>/transitions/<name>.json` beside the LUTs, its folder made by
+  Omnix at its start (never by hand), again on save if it went. A
+  template is a join whole (`template::Template`: overlap, out, in), put
+  on by `CutOp::Template`, all or nothing. The panel's Templates
+  section: put on, save the join under a name, remove (asked).
 - **25d. Stingers («перебивки», video transitions)**, their own yellow
   group: a short clip with its own sound on a cut, insert or cover, from the
   project's `06_external` / `07_sfx`. Needs the overlay lane to take video
@@ -462,7 +467,10 @@ Split into steps so each can be tried on Kos on its own:
   changes; `CutOp::TransitionParam`; a slider's drag one undo step; the
   values a uniform in the shader and arguments on the CPU, the GPU test
   run with values off their defaults.
-- **25f. A Transitions lane** (user, 2026-11-01): "transitions could also
+- **25f. A Transitions lane** (built 2026-11-08, `cace77d`, waiting for
+  the check: under the clip sound, over Effects; zones from
+  `Timeline::zones`; a drawn rectangle by `Project::drawn_zone`; the look
+  chosen last; folds) (user, 2026-11-01): "transitions could also
   be our own collapsible field somewhere above the effects. Why: on the
   transition line you draw a rectangle (over the join of one video and the
   next) and the program fills it with a transition we like: either a video

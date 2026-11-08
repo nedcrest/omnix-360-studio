@@ -420,11 +420,9 @@ Decided (2026-11-08): a transition stays keyed by the cut after its join
 transitions lane (25f) and edge transitions (25b), when a cut can have
 more than one; then a moved cut leaves its transition behind, as other
 editors do.
-Next (user, 2026-11-08): a look's own parameters (a whip's direction and
-blur, a spin's turns and colour split, a flash's strength) in a second
-side panel that opens when a look is chosen, beside the Transitions
-panel; then light leak, luma fade, glitch; the 360 one once there's
-footage.
+Now (user, 2026-11-08): light leak, luma fade and glitch; tabs atop the
+panel for the kinds (overlap as now, edge 25b, stingers 25d). The 360
+one once there's footage. A look's own parameters wait as 25g.
 
 Split into steps so each can be tried on Kos on its own:
 - **25a. Basic transitions and quick placement:** dissolve with a curve,
@@ -440,6 +438,17 @@ Split into steps so each can be tried on Kos on its own:
   project's `06_external` / `07_sfx`. Needs the overlay lane to take video
   (milestone 4's first card) and sound lanes (milestone 1).
 - **25e. 360 looks:** whip pan, little-planet zoom, sphere roll.
+- **25g. A look's own parameters** (user, 2026-11-08; recorded, not
+  started): choosing a look opens a second narrow side panel beside the
+  Transitions panel, its sliders and switches: whip pan, direction
+  (left, right, up, down) and streak length; zoom punch, strength and a
+  drifting centre or not; spin blur, turns (0.5-3), direction, blur,
+  colour split, zoom; flash, strength and colour (white, warm). «Reset»;
+  «Every join» copies them too. Stored per join, only what the user
+  changed (`"transition_params": {"turns": 2}`), reset when the look
+  changes; `CutOp::TransitionParam`; a slider's drag one undo step; the
+  values a uniform in the shader and arguments on the CPU, the GPU test
+  run with values off their defaults.
 - **25f. A Transitions lane** (user, 2026-11-01): "transitions could also
   be our own collapsible field somewhere above the effects. Why: on the
   transition line you draw a rectangle (over the join of one video and the

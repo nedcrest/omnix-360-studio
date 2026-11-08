@@ -88,30 +88,35 @@ pub fn parse_tags(typed: &str) -> Vec<String> {
     tags
 }
 
-/// A trip's folder name from its name as people say it and its month
-/// (`YYYY-MM`): `2026-11_motopokatushky-lystopad`, as the trips made so far
-/// are named (user, 2026-11-08). Ukrainian letters spelled in Latin ones;
-/// anything else a dash.
-pub fn trip_folder(month: &str, title: &str) -> String {
-    let mut slug = String::new();
-    for c in title.to_lowercase().chars() {
+/// A name as people say it as a folder's: Ukrainian letters spelled in
+/// Latin ones, lower case, anything else a dash, 40 letters at most;
+/// empty when nothing is left.
+pub fn slug(name: &str) -> String {
+    let mut out = String::new();
+    for c in name.to_lowercase().chars() {
         let latin = match c {
             'а' => "a", 'б' => "b", 'в' => "v", 'г' => "h", 'ґ' => "g", 'д' => "d", 'е' => "e", 'є' => "ie", 'ж' => "zh", 'з' => "z",
             'и' => "y", 'і' => "i", 'ї' => "i", 'й' => "i", 'к' => "k", 'л' => "l", 'м' => "m", 'н' => "n", 'о' => "o", 'п' => "p",
             'р' => "r", 'с' => "s", 'т' => "t", 'у' => "u", 'ф' => "f", 'х' => "kh", 'ц' => "ts", 'ч' => "ch", 'ш' => "sh", 'щ' => "shch",
             'ь' | '\'' | '’' => "", 'ю' => "iu", 'я' => "ia",
             c if c.is_ascii_alphanumeric() => {
-                slug.push(c);
+                out.push(c);
                 continue;
             }
             _ => "-",
         };
-        slug.push_str(latin);
+        out.push_str(latin);
     }
-    let slug: Vec<&str> = slug.split('-').filter(|p| !p.is_empty()).collect();
-    let slug = slug.join("-");
-    let slug: String = slug.chars().take(40).collect::<String>().trim_end_matches('-').to_owned();
-    format!("{month}_{}", if slug.is_empty() { "trip" } else { &slug })
+    let joined = out.split('-').filter(|p| !p.is_empty()).collect::<Vec<_>>().join("-");
+    joined.chars().take(40).collect::<String>().trim_end_matches('-').to_owned()
+}
+
+/// A trip's folder name from its name as people say it and its month
+/// (`YYYY-MM`): `2026-11_motopokatushky-lystopad`, as the trips made so far
+/// are named (user, 2026-11-08).
+pub fn trip_folder(month: &str, title: &str) -> String {
+    let s = slug(title);
+    format!("{month}_{}", if s.is_empty() { "trip" } else { &s })
 }
 
 /// The month (`YYYY-MM`, UTC) of a time in seconds since 1970: a new
@@ -332,6 +337,7 @@ mod tests {
         assert_eq!(trip_folder("2026-11", "Мотопокатушки, листопад!"), "2026-11_motopokatushky-lystopad");
         assert_eq!(trip_folder("2026-08", "Кос'2026 — Греція"), "2026-08_kos2026-hretsiia");
         assert_eq!(trip_folder("2026-08", "  …  "), "2026-08_trip");
+        assert_eq!(slug("Шортс: павичі"), "shorts-pavychi");
         assert_eq!((month_of(0), month_of(1_793_836_800), month_of(951_782_400)), ("1970-01".to_owned(), "2026-11".to_owned(), "2000-02".to_owned()));
         let place = std::env::temp_dir().join(format!("dailix-new-trip-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&place);

@@ -527,10 +527,10 @@ impl Pipeline {
                 u.gains[lens * BINS + b] = [g[0], g[1], g[2], 0.0];
             }
         }
-        for (v, cells) in u.field.iter_mut().zip(shown.fix.field.shift.chunks_exact(4)) {
+        for (v, cells) in u.field.iter_mut().zip(shown.fix.field.shift.as_chunks::<4>().0) {
             v.copy_from_slice(cells);
         }
-        for (v, bins) in u.cut.iter_mut().zip(shown.fix.field.cut.chunks_exact(4)) {
+        for (v, bins) in u.cut.iter_mut().zip(shown.fix.field.cut.as_chunks::<4>().0) {
             v.copy_from_slice(bins);
         }
         queue.write_buffer(&l.uniforms, 0, bytemuck::bytes_of(&u));

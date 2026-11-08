@@ -1338,8 +1338,7 @@ mod tests {
 
     #[test]
     fn what_is_gone_is_left_out_and_said() {
-        let mut p = Project::default();
-        p.cuts = vec![Cut::new("a.mp4".into(), 0.0, 4.0), Cut { audio: Some("voice.flac".into()), ..Cut::new("b.mp4".into(), 0.0, 3.0) }, Cut { audio: Some("voice.flac".into()), ..Cut::new("b.mp4".into(), 3.0, 5.0) }];
+        let mut p = Project { cuts: vec![Cut::new("a.mp4".into(), 0.0, 4.0), Cut { audio: Some("voice.flac".into()), ..Cut::new("b.mp4".into(), 0.0, 3.0) }, Cut { audio: Some("voice.flac".into()), ..Cut::new("b.mp4".into(), 3.0, 5.0) }], ..Default::default() };
         p.music.append_part("song.wav".into(), 0.0, 0.0, 10.0);
         p.sfx.append_part("bang.wav".into(), 0.0, 0.0, 1.0);
         let item = |input: &str, text| crate::overlay::Item { id: 0, input: input.into(), text, at: 0.0, start: 0.0, end: 5.0, motion: Vec::new(), effects: Vec::new() };
@@ -1356,8 +1355,7 @@ mod tests {
 
     #[test]
     fn everything_gets_an_id_once_and_a_split_half_a_new_one() {
-        let mut p = Project::default();
-        p.cuts = vec![Cut::new("a.mp4".into(), 0.0, 4.0), Cut { id: 7, ..Cut::new("b.mp4".into(), 0.0, 3.0) }];
+        let mut p = Project { cuts: vec![Cut::new("a.mp4".into(), 0.0, 4.0), Cut { id: 7, ..Cut::new("b.mp4".into(), 0.0, 3.0) }], ..Default::default() };
         p.music.append_part("song.wav".into(), 0.0, 0.0, 10.0);
         p.text.push(crate::overlay::Lane::default());
         p.text[0].items.push(crate::overlay::Item { id: 0, input: PathBuf::new(), text: Some(Default::default()), at: 0.0, start: 0.0, end: 5.0, motion: Vec::new(), effects: Vec::new() });
@@ -1692,8 +1690,7 @@ mod tests {
     #[test]
     fn a_third_clip_never_lands_in_an_overlap() {
         // A 0..10 and B 8..18 crossfade over 8..10.
-        let mut m = Music::default();
-        m.clips = vec![song(0.0, 10.0), song(8.0, 10.0), song(30.0, 4.0)];
+        let m = Music { clips: vec![song(0.0, 10.0), song(8.0, 10.0), song(30.0, 4.0)], ..Default::default() };
         // C dragged so it would cover the crossfade, even partly: no.
         assert!(!m.fits(2, 7.0, 4.0, true));
         assert!(!m.fits(2, 9.0, 2.0, true));
@@ -1720,8 +1717,7 @@ mod tests {
 
     #[test]
     fn a_sound_with_no_room_goes_after_the_last() {
-        let mut m = Music::default();
-        m.clips = vec![song(0.0, 5.0), song(5.0, 5.0), song(0.0, 20.0)];
+        let m = Music { clips: vec![song(0.0, 5.0), song(5.0, 5.0), song(0.0, 20.0)], ..Default::default() };
         // The 20 s clip fits nowhere between the two: after the last.
         assert_eq!(m.place(2, 3.0), 10.0);
     }

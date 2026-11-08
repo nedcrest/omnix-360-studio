@@ -246,11 +246,10 @@ impl App {
             && p.now() >= change
             && self.partner.as_ref().is_none_or(|(i, _)| *i != next)
             && let Some((i, input, at, mut primed)) = self.preroll.take()
+            && next_cut.is_some_and(|n| (i, &input, at) == (next, &n.input, n.start))
         {
-            if next_cut.is_some_and(|n| (i, &input, at) == (next, &n.input, n.start)) {
-                primed.go();
-                self.partner = Some((next, Clip { playback: primed, shown: None }));
-            }
+            primed.go();
+            self.partner = Some((next, Clip { playback: primed, shown: None }));
         }
         // At a cut's out point (or the clip's end), play on into the next cut.
         if p.now() < cut.end && !p.ended {
@@ -536,7 +535,7 @@ impl App {
                 // In an overlap, the selected cut's time, if it's one of the two.
                 let selected = self.selection.cut(&self.edit).filter(|&i| i < self.edit.cuts.len()).and_then(|i| {
                     let (from, c) = (self.edit.offset(i), &self.edit.cuts[i]);
-                    (t >= from && t < from + c.len()).then(|| (i, c.start + t - from))
+                    (t >= from && t < from + c.len()).then_some((i, c.start + t - from))
                 });
                 if let Some((i, t)) = selected.or_else(|| self.edit.locate(t)) {
                     self.scrub_to(i, t);

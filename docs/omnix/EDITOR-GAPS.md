@@ -1410,7 +1410,14 @@ Steps, each checked by the user:
    `05_export` gone from the layout (`dailix tidy-edits`, run on Kos and
    the test). The two Kdenlive working copies in footage-agent's old Kos
    folder went to the trash too (user's word, 2026-11-08).
-3. «New project» (gap 80 step 4) on top of it.
+3. «New project» (gap 80 step 4): built (Dailix `868e3bb`, `bf2452f`;
+   Omnix `2300550`, `eac86b4`), waiting for the check. Decided (user,
+   2026-11-08): a trip's folder is its month and its name in Latin
+   (`2026-11_motopokatushky-lystopad`, editable); Omnix's «New…» offers a
+   video in a trip, a new trip in Dailix (opens on its form), or an edit
+   without a trip; adding one's own videos stays its own card, after the
+   editing work. Dailix: «+ New trip» on Home, Ctrl+N, `dailix new-trip`.
+   One way to find and start the other program: `omnix::sibling`.
 Milestone «Матеріал і бін».
 
 ### 83. Dailix finds where people talk, even in bad sound — idea (user, 2026-11-07)

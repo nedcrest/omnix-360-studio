@@ -1401,10 +1401,16 @@ Steps, each checked by the user:
    loose `04_project` ones until 2); description and tags shown and
    edited on the trip's page. Built (Dailix `e2687c5`), checked
    (user, 2026-11-07).
-2. Videos: `videos/<name>/` in the core (`Layout`, list, make one);
-   «→ Omnix» and «Empty day/edit» make a video folder; a trip's page and
-   Omnix's start browser list trips → videos → edits; the edits made so
-   far in `04_project` listed as they are.
+2. Videos: built (Omnix `530ee81`, Dailix `a9a94f1`), waiting for the
+   check. Decided (user, 2026-11-08): a new video is named for its day or
+   `all-days` (`-2` when taken); one `edit.json` per video (a variant
+   later as «duplicate the video»); exports default to its `export/`;
+   the old `04_project` tidied: one copy of each Omnix edit moved into a
+   video, copies and empty ones to the trash, `04_project` and
+   `05_export` gone from the layout (`dailix tidy-edits`, run on Kos and
+   the test). Two Kdenlive working copies lie in footage-agent's old Kos
+   folder (`<drive>/VIDEO/2026-08-21_kos/04_project/`), outside
+   Dailix: left until the user says.
 3. «New project» (gap 80 step 4) on top of it.
 Milestone «Матеріал і бін».
 

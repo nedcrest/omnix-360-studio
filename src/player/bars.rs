@@ -169,7 +169,7 @@ impl App {
         ]
         // How a 360 clip is steadied and drawn: only while framing one; an
         // ordinary video or a picture has neither.
-        .push((self.framing && osv.is_some()).then(|| separator()))
+        .push((self.framing && osv.is_some()).then(separator))
         .push(osv.zip(sources).filter(|_| self.framing).map(|(media, (sources, source))| {
             let pickers = row![
                 labelled("Stabilisation", pick_list(&Mode::ALL[..], Some(media.stab.mode()), Message::Stab)),
@@ -278,7 +278,7 @@ impl App {
             Some(Side::Audio) => row![view, self.audio_panel()].into(),
             Some(Side::Transitions) => row![view, self.knobs_panel(), self.transitions_panel()].into(),
             Some(Side::Record) => row![view, self.record_panel()].into(),
-            None => view.into(),
+            None => view,
         };
         // A text item's words and look, at the left while it's selected.
         // The Info and Settings panels win the left side over the Text panel
@@ -339,7 +339,7 @@ impl App {
             })
             .into_iter()
             .collect();
-        let timeline = timeline::Timeline {
+        timeline::Timeline {
             blocks,
             sounds,
             picked: self.selection.picked(&self.edit),
@@ -362,8 +362,7 @@ impl App {
             step_note: self.step_note.map(|(n, _)| n),
             rows: timeline::Rows::new(self.split, self.framing, self.folds),
         }
-        .view();
-        timeline
+        .view()
     }
 
     /// The transport row: what acts on the timeline. Groups: play | add at

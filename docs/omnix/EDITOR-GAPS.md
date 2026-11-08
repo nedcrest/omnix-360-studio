@@ -443,7 +443,7 @@ Split into steps so each can be tried on Kos on its own:
   (`Cut::sound_fades`). The Edges tab (Out, In, each with tiles, length,
   ✕, settings beside); an orange wedge on the timeline.
 - **25c. Templates** (its card merged into the transitions lane's, 25f,
-  2026-11-07)**:** built 2026-11-08 (`a542e86`), waiting for the check.
+  2026-11-07)**:** built 2026-11-08 (`a542e86`), checked 2026-11-09.
   The user chose one library for the program (not per trip or video):
   `<config>/transitions/<name>.json` beside the LUTs, its folder made by
   Omnix at its start (never by hand), again on save if it went. A
@@ -470,8 +470,8 @@ Split into steps so each can be tried on Kos on its own:
   changes; `CutOp::TransitionParam`; a slider's drag one undo step; the
   values a uniform in the shader and arguments on the CPU, the GPU test
   run with values off their defaults.
-- **25f. A Transitions lane** (built 2026-11-08, `cace77d`, waiting for
-  the check: under the clip sound, over Effects; zones from
+- **25f. A Transitions lane** (built 2026-11-08, `cace77d`, checked
+  2026-11-09: under the clip sound, over Effects; zones from
   `Timeline::zones`; a drawn rectangle by `Project::drawn_zone`; the look
   chosen last; folds) (user, 2026-11-01): "transitions could also
   be our own collapsible field somewhere above the effects. Why: on the

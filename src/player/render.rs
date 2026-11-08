@@ -132,7 +132,7 @@ impl Gpu {
         let rgb = if self.deep {
             let mut rgb = vec![0; w * h * 6];
             rgb.par_chunks_mut(w * 6).zip(data.par_chunks(target.row)).for_each(|(out, row)| {
-                for (o, px) in out.chunks_exact_mut(6).zip(row.chunks_exact(8)) {
+                for (o, px) in out.as_chunks_mut::<6>().0.iter_mut().zip(row.as_chunks::<8>().0) {
                     for c in 0..3 {
                         let v = half(u16::from_le_bytes([px[2 * c], px[2 * c + 1]]));
                         o[2 * c..2 * c + 2].copy_from_slice(&((v.clamp(0.0, 1.0) * 65535.0).round() as u16).to_le_bytes());
@@ -143,7 +143,7 @@ impl Gpu {
         } else {
             let mut rgb = vec![0; w * h * 3];
             rgb.par_chunks_mut(w * 3).zip(data.par_chunks(target.row)).for_each(|(out, row)| {
-                for (o, px) in out.chunks_exact_mut(3).zip(row.chunks_exact(4)) {
+                for (o, px) in out.as_chunks_mut::<3>().0.iter_mut().zip(row.as_chunks::<4>().0) {
                     o.copy_from_slice(&px[..3]);
                 }
             });

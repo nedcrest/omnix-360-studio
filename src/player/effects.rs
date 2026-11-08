@@ -553,7 +553,6 @@ impl App {
             Target::Cut(_) => None,
         });
         let motion_key = overlay.and_then(|(i, t)| self.motion_key_at(i, t));
-        let on_cut = matches!(target, Some((Target::Cut(_), _)));
         let enabled = target.is_some();
         let mut sliders = column![].spacing(6);
         // An overlay's place first: where it is is what's set most.
@@ -591,6 +590,21 @@ impl App {
             },
             None => "No cut".to_owned(),
         };
+        let (keys, tools) = self.effect_tools(target, key, motion_key, overlay);
+        let close = tip(button(text("✕").size(14)).padding([0, 6]).style(button::text).on_press(m(EffectMsg::Toggle)), text("Close (G)"), tooltip::Position::Bottom);
+        let mut body = column![row![text("Effects").size(18).width(Length::Fill), close].align_y(Alignment::Center), text(cut_name).size(13)].spacing(10).padding(12);
+        if let Some((Target::Cut(i), _)) = target {
+            body = body.push(self.lut_controls(i, &grade));
+        }
+        let body = body.extend([column![sliders, keys, tools, rule::horizontal(1), self.edit_and_correction()].spacing(10).into()]);
+        container(scrollable(body)).width(WIDTH).height(Length::Fill).into()
+    }
+
+    /// The effect keyframe's buttons and ease, and the cut's tools (white
+    /// balance, to all cuts, reset).
+    fn effect_tools(&self, target: Option<(Target, f64)>, key: Option<usize>, motion_key: Option<usize>, overlay: Option<(crate::overlay::ItemRef, f64)>) -> (Element<'_, Message>, Element<'_, Message>) {
+        let m = |e: EffectMsg| Message::Effect(e);
+        let (on_cut, enabled) = (matches!(target, Some((Target::Cut(_), _))), target.is_some());
         let any_key = key.or(motion_key);
         let ease = match (key, motion_key, target) {
             (Some(k), _, Some((tg, _))) => Some(self.effects_of(tg)[k].ease),
@@ -624,6 +638,11 @@ impl App {
         ]
         .spacing(6)
         .align_y(Alignment::Center);
+        (keys.into(), tools.into())
+    }
+
+    /// The edit's fades, and the rolling-shutter correction.
+    fn edit_and_correction(&self) -> Element<'_, Message> {
         let fades = &self.edit.fades;
         let fade = |name: &'static str, v: f64, f: fn(f64) -> EffectMsg, hint: &'static str| {
             tip(
@@ -636,16 +655,7 @@ impl App {
                 tooltip::Position::Left,
             )
         };
-        let close = tip(button(text("✕").size(14)).padding([0, 6]).style(button::text).on_press(m(EffectMsg::Toggle)), text("Close (G)"), tooltip::Position::Bottom);
-        let mut body = column![row![text("Effects").size(18).width(Length::Fill), close].align_y(Alignment::Center), text(cut_name).size(13)].spacing(10).padding(12);
-        if let Some((Target::Cut(i), _)) = target {
-            body = body.push(self.lut_controls(i, &grade));
-        }
-        let body = body.extend([column![
-            sliders,
-            keys,
-            tools,
-            rule::horizontal(1),
+        column![
             text("Edit").size(16),
             fade("Fade in", fades.fade_in, EffectMsg::FadeIn, "From black at the start of the edit, the sound with it"),
             fade("Fade out", fades.fade_out, EffectMsg::FadeOut, "To black at the end of the edit, the sound with it"),
@@ -658,8 +668,7 @@ impl App {
             ),
         ]
         .spacing(10)
-        .into()]);
-        container(scrollable(body)).width(WIDTH).height(Length::Fill).into()
+        .into()
     }
 }
 

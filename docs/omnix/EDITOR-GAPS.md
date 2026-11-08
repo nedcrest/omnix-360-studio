@@ -1508,29 +1508,37 @@ whenever a better grouping shows. `ROADMAP.md` shows the same as cards (field
    Dailix (82), «New project» through Dailix (80 → 82); the source viewer
    beside the edit (71a); ratings from Dailix, LUTs, E/W in the bin (2);
    ingest in Dailix (74 with 34; one's own videos first).
-4. **Розуміння матеріалу** (Dailix takes the material apart, Omnix edits
-   with it): 83 where people talk, with 77's clean voice → 29 speech
-   transcription → 30 who is in the frame (names from Immich).
-   Feeds subtitles, text editing, bin search, and later AI auto-edit.
-5. **B-roll і групи**: video on the overlay lane (cheap cutaway) → 4B
+4. **Ритм і переходи**: 25a basic transitions with quick placement →
+   25g a look's settings → 25b edge transitions → 25c templates → 25f
+   the lane (all built 2026-11-08) → 25d stingers → 25e 360 looks (with
+   footage); 13 beats later (the user, 2026-11-09: re-cutting can be done
+   in Dailix, not the most needed now).
+5. **Ефекти, колір і розумний звук** (user, 2026-11-09: next after
+   transitions; "effects, colour, animation, texts, pictures, object
+   tracking, understanding speech, better sound through Dailix's analysis
+   and suggestions from different models, so text/music auto-ducking
+   works not only on the voice-over but on the original videos"): what
+   was «Колір і текст» (69 scopes → 14 levels → 68 curves and hue → 71b
+   effects beside the original (after 39) → 15 bars → 26 glow/blur → 6
+   vignette shapes → 16 subtitles → text-based editing; 70 text and
+   overlay groups; 43 the palette), 87 style looks and animation presets
+   for text and pictures, 37 object tracking, 83 where people talk with
+   77's clean voice and level, 81 auto-duck under talk in a cut's own
+   sound, 29 speech transcription. Its order to be agreed when it starts.
+6. **Розуміння матеріалу**: 30 who is in the frame (names from Immich);
+   speech (83, 29) moved into 5.
+7. **B-roll і групи**: video on the overlay lane (cheap cutaway) → 4B
    group/ungroup + connected clips + 8 multi-select, one format change,
-   designed as one.
-6. **Кадрування** (gap 53, user 2026-11-02): framing grown up from gap
+   designed as one. The source viewer (71a) waits after it.
+8. **Кадрування** (gap 53, user 2026-11-02): framing grown up from gap
    10's switch: research the best practices first (Insta360 Studio, DJI
    Studio, GoPro, Auto/Smart Reframe), then faces and people (53a, with
-   Dailix's 30), framing aids; object tracking (37) and angles as a
-   multicam (49, now 73e) have cards of their own. After B-roll and groups, as angles change the
-   format beside groups; reordered freely.
-7. **Мультикамерність** (gap 73, user 2026-11-04): 73a the multicam
+   Dailix's 30), framing aids; object tracking (37) moved into 5, angles
+   as a multicam (49, now 73e) a card of its own.
+9. **Мультикамерність** (gap 73, user 2026-11-04): 73a the multicam
    clip (a file naming its angles, synced by time, then sound) → 73b in
    the bin → 73c cuts of it → 73d the module → 73e 360 angles the same
    way (gap 49 / 53c).
-8. **Ритм і переходи**: 13 beats → 25a basic transitions with quick
-   placement → 25d stingers («перебивки») → 25c templates → 25b edge
-   transitions → 25e 360 looks. Stingers come early because the user
-   already has stinger clips (film burn, white noise).
-9. **Колір і текст**: 69 scopes → 14 levels → 68 curves and hue → 71b effects beside the original (after 39) → 15 bars → 26 glow/blur → 6 vignette shapes →
-   16 subtitles (needs 29) → text-based editing (needs 29).
 10. **Швидкість і автоматизація** (gap 31): constant speed per cut with
    its sound following (atempo), measured for drift → speed ramps →
    automation lanes per value (the user's FL Studio idea). Large and

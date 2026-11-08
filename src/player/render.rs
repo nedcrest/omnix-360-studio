@@ -409,7 +409,7 @@ mod tests {
         let (fa, fb) = (draw_flat(&mut gpu, a(), crate::hdr::Hdr::None, (w, h)), draw_flat(&mut gpu, b(), crate::hdr::Hdr::None, (w, h)));
         // Each built look at its defaults, then with every knob at its far
         // end (a choice's last), through the middle only.
-        let built: Vec<Option<Look>> = std::iter::once(None).chain(Look::ALL.into_iter().filter(|&l| Look::code(Some(l)) != 0).map(Some)).collect();
+        let built: Vec<Option<Look>> = std::iter::once(None).chain(Look::OVERLAP.into_iter().filter(|&l| Look::code(Some(l)) != 0).map(Some)).collect();
         let far = built.iter().flatten().map(|&l| {
             let mut s = transition::Spec::of(Some(l));
             for (v, k) in s.values.iter_mut().zip(l.knobs()) {

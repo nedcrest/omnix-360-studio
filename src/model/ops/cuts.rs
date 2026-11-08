@@ -52,6 +52,12 @@ pub enum CutOp {
     /// One of its look's own settings (`Look::knobs`, by key) to `value`;
     /// none: back to the default.
     TransitionKnob { cut: Id, key: String, value: Option<f32> },
+    /// The look on its start (`In`) or end (`Out`) alone (`Cut::edge_in`,
+    /// `edge_out`), `seconds` long (on the transitions' steps, within the
+    /// cut); none: taken off. Its settings stay while the look does.
+    Edge { cut: Id, end: End, look: Option<crate::transition::Look>, seconds: f64 },
+    /// One of an edge look's own settings, as `TransitionKnob`.
+    EdgeKnob { cut: Id, end: End, key: String, value: Option<f32> },
     Stabilize { cut: Id, mode: Option<Mode> },
     Lut { cut: Id, lut: Option<String> },
     Delete { cut: Id },
@@ -125,6 +131,9 @@ pub(super) fn apply(p: &mut Project, op: &CutOp) -> Result<Outcome, OpError> {
             if i == 0 {
                 return Err(OpError::Invalid(format!("cut #{cut} is the first: no join before it")));
             }
+            if look.is_some_and(|l| l.is_edge()) {
+                return Err(OpError::Invalid(format!("{} is an edge look: Edge puts it on a cut's start or end", look.unwrap().name())));
+            }
             // The settings were the old look's.
             if p.cuts[i].transition != look {
                 p.cuts[i].transition_params.clear();
@@ -135,21 +144,33 @@ pub(super) fn apply(p: &mut Project, op: &CutOp) -> Result<Outcome, OpError> {
         CutOp::TransitionKnob { cut, key, value } => {
             let i = find(p, *cut)?;
             let look = p.cuts[i].transition.ok_or_else(|| OpError::Invalid(format!("cut #{cut}'s join has no look to set")))?;
-            let knob = look.knob(key).ok_or_else(|| OpError::NotFound(format!("setting {key:?} of {}", look.name())))?;
-            let params = &mut p.cuts[i].transition_params;
-            match value {
-                Some(v) if !(knob.least..=knob.most).contains(v) => {
-                    return Err(OpError::OutOfRange { what: knob.name, value: *v as f64, least: knob.least as f64, most: knob.most as f64 });
-                }
-                // Only what differs from the default is kept.
-                Some(v) if knob.settle(*v) != knob.default => {
-                    params.insert(knob.key.to_owned(), knob.settle(*v));
-                }
-                _ => {
-                    params.remove(knob.key);
-                }
+            let said_ = set_knob(look, &mut p.cuts[i].transition_params, key, *value)?;
+            said(format!("cut #{cut}: {said_}"))
+        }
+        &CutOp::Edge { cut, end, look, seconds } => {
+            let i = find(p, cut)?;
+            let c = &mut p.cuts[i];
+            let edge = if end == End::In { &mut c.edge_in } else { &mut c.edge_out };
+            let Some(look) = look else {
+                *edge = None;
+                return said(format!("cut #{cut}: no look on its {}", if end == End::In { "start" } else { "end" }));
+            };
+            if !look.is_edge() {
+                return Err(OpError::Invalid(format!("{} goes across a join (Transition), not on an edge", look.name())));
             }
-            said(format!("cut #{cut}: {} {}", knob.name, params.get(knob.key).copied().unwrap_or(knob.default)))
+            let seconds = crate::transition::stepped(seconds).min(c.end - c.start);
+            // The settings were the old look's.
+            let params = edge.take().filter(|e| e.look == look).map(|e| e.params).unwrap_or_default();
+            *edge = Some(crate::project::Edge { look, seconds, params });
+            said(format!("cut #{cut}: {} {seconds:.2} s on its {}", look.name(), if end == End::In { "start" } else { "end" }))
+        }
+        CutOp::EdgeKnob { cut, end, key, value } => {
+            let i = find(p, *cut)?;
+            let c = &mut p.cuts[i];
+            let edge = if *end == End::In { &mut c.edge_in } else { &mut c.edge_out };
+            let edge = edge.as_mut().ok_or_else(|| OpError::Invalid(format!("cut #{cut} has no look on that edge")))?;
+            let said_ = set_knob(edge.look, &mut edge.params, key, *value)?;
+            said(format!("cut #{cut}: {said_}"))
         }
         &CutOp::Crossfade { cut, seconds } => {
             let i = find(p, cut)?;
@@ -239,6 +260,24 @@ fn find(p: &Project, id: Id) -> Result<usize, OpError> {
 
 fn position(i: usize, of: usize) -> String {
     format!("{} of {of}", i + 1)
+}
+
+/// One of `look`'s settings in `params` to `value` (none: the default);
+/// only what differs from the default is kept. What it says it did.
+fn set_knob(look: crate::transition::Look, params: &mut std::collections::BTreeMap<String, f32>, key: &str, value: Option<f32>) -> Result<String, OpError> {
+    let knob = look.knob(key).ok_or_else(|| OpError::NotFound(format!("setting {key:?} of {}", look.name())))?;
+    match value {
+        Some(v) if !(knob.least..=knob.most).contains(&v) => {
+            return Err(OpError::OutOfRange { what: knob.name, value: v as f64, least: knob.least as f64, most: knob.most as f64 });
+        }
+        Some(v) if knob.settle(v) != knob.default => {
+            params.insert(knob.key.to_owned(), knob.settle(v));
+        }
+        _ => {
+            params.remove(knob.key);
+        }
+    }
+    Ok(format!("{} {}", knob.name, params.get(knob.key).copied().unwrap_or(knob.default)))
 }
 
 #[cfg(test)]
@@ -351,6 +390,18 @@ mod tests {
         assert_eq!(e.cuts[1].transition_spec().values[..2], [0.0, 1.5]);
         e.apply(&Op::Cut(CutOp::Transition { cut: b, look: Some(crate::transition::Look::Flash) })).unwrap();
         assert!(e.cuts[1].transition_params.is_empty(), "another look starts at its defaults");
+        let edge = |end, look, seconds| Op::Cut(CutOp::Edge { cut: b, end, look, seconds });
+        assert!(e.apply(&edge(End::Out, Some(crate::transition::Look::Flash), 1.0)).is_err(), "an overlap look isn't an edge's");
+        assert!(e.apply(&Op::Cut(CutOp::Transition { cut: b, look: Some(crate::transition::Look::EdgeFade) })).is_err(), "nor the other way");
+        e.apply(&edge(End::Out, Some(crate::transition::Look::EdgeZoom), 0.6)).unwrap();
+        e.apply(&Op::Cut(CutOp::EdgeKnob { cut: b, end: End::Out, key: "strength".into(), value: Some(0.8) })).unwrap();
+        e.apply(&edge(End::Out, Some(crate::transition::Look::EdgeZoom), 9.0)).unwrap();
+        let out = e.cuts[1].edge_out.clone().unwrap();
+        assert_eq!((out.seconds, out.params.len()), (3.0, 1), "within the cut, the settings kept: {out:?}");
+        e.apply(&edge(End::Out, Some(crate::transition::Look::EdgeBlur), 0.5)).unwrap();
+        assert!(e.cuts[1].edge_out.as_ref().unwrap().params.is_empty(), "another look starts at its defaults");
+        e.apply(&edge(End::Out, None, 0.0)).unwrap();
+        assert!(e.cuts[1].edge_out.is_none());
         e.apply(&Op::Cut(CutOp::Crossfade { cut: b, seconds: 10.0 })).unwrap();
         assert!(e.cuts[1].crossfade < 3.0 && e.cuts[1].crossfade > 0.0, "within the shorter cut: {}", e.cuts[1].crossfade);
         e.apply(&Op::Cut(CutOp::Stabilize { cut: a, mode: Some(Mode::Level) })).unwrap();

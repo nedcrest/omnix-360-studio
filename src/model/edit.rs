@@ -236,16 +236,21 @@ impl Project {
         if t < c.start + MIN_CUT || t > c.end - MIN_CUT {
             return false;
         }
-        // Each half keeps its sound fade and its sound past the picture at
-        // its own outer end only.
+        // Each half keeps its sound fade, its sound past the picture and
+        // its edge look at its own outer end only; the join before is the
+        // first half's.
         let mut second = c.clone();
         second.start = t;
         second.crossfade = 0.0;
+        second.transition = None;
+        second.transition_params.clear();
         second.sound_fade_in = 0.0;
         second.sound_before = 0.0;
+        second.edge_in = None;
         self.cuts[i].end = t;
         self.cuts[i].sound_fade_out = 0.0;
         self.cuts[i].sound_after = 0.0;
+        self.cuts[i].edge_out = None;
         // A sound stopping short of the picture may leave a half too little.
         self.cuts[i].settle_sound(f64::INFINITY);
         second.settle_sound(f64::INFINITY);
@@ -544,13 +549,18 @@ mod tests {
     }
 
     #[test]
-    fn a_split_keeps_each_sound_fade_at_its_outer_end() {
+    fn a_split_keeps_each_sound_fade_and_edge_at_its_outer_end() {
+        use crate::transition::Look;
         let mut e = edit();
         e.cuts[0].sound_fade_in = 0.5;
         e.cuts[0].sound_fade_out = 1.0;
+        let edge = |look| Some(crate::project::Edge { look, seconds: 0.5, params: Default::default() });
+        (e.cuts[0].edge_in, e.cuts[0].edge_out, e.cuts[0].transition) = (edge(Look::EdgeBlur), edge(Look::EdgeFade), Some(Look::Flash));
         assert!(e.split(0, 12.0));
         assert_eq!((e.cuts[0].sound_fade_in, e.cuts[0].sound_fade_out), (0.5, 0.0));
         assert_eq!((e.cuts[1].sound_fade_in, e.cuts[1].sound_fade_out), (0.0, 1.0));
+        assert_eq!((e.cuts[0].edge_in.is_some(), e.cuts[0].edge_out.is_some(), e.cuts[1].edge_in.is_some(), e.cuts[1].edge_out.is_some()), (true, false, false, true));
+        assert_eq!((e.cuts[0].transition, e.cuts[1].transition), (Some(Look::Flash), None), "the join before is the first half's");
     }
 
     #[test]

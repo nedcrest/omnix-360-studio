@@ -85,8 +85,8 @@ impl<'a> Sound<'a> {
             gain: c.sound_db(),
             filter: c.sound_filter(),
             crossfade,
-            fade_in: if c.sound_before > 0.0 { 0.0 } else { c.sound_fade_in },
-            fade_out: if c.sound_after > 0.0 { 0.0 } else { c.sound_fade_out },
+            fade_in: c.sound_fades().0,
+            fade_out: c.sound_fades().1,
             head: (-c.sound_before).max(0.0),
             tail: (-c.sound_after).max(0.0),
         }

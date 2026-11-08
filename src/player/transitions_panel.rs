@@ -210,8 +210,8 @@ impl App {
         body = body.push(row![text("Length").size(14).width(Length::Fill), by("−", -1), text(length).size(14), by("+", 1)].spacing(8).align_y(Alignment::Center));
         let chosen = c.transition;
         body = body.push(rule::horizontal(1));
-        for g in Group::ALL {
-            let tiles = Look::ALL.iter().filter(|l| l.group() == g).map(|&l| {
+        for g in Group::OVERLAP {
+            let tiles = Look::OVERLAP.iter().filter(|l| l.group() == g).map(|&l| {
                 // Not built yet: shown as a dissolve, and said on its tile.
                 let label = if Look::code(Some(l)) == 0 { format!("{} · soon", l.name()) } else { l.name().to_owned() };
                 let tile = button(text(label).size(13)).padding([6, 10]).style(if chosen == Some(l) { button::primary } else { button::secondary }).on_press(Message::TransitionLook(Some(l)));

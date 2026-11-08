@@ -17,6 +17,12 @@ pub enum Look {
     LumaFade,
     Glitch,
     SphereWhip,
+    /// Edge looks (gap 25b): on one cut's start or end alone, no overlap.
+    EdgeFade,
+    EdgeBlur,
+    EdgeZoom,
+    EdgeGlitch,
+    EdgeFlash,
 }
 
 /// The library's groups, in the order the panel shows them.
@@ -26,10 +32,12 @@ pub enum Group {
     Light,
     Flat,
     Sphere,
+    Edge,
 }
 
 impl Group {
-    pub const ALL: [Group; 4] = [Group::Camera, Group::Light, Group::Flat, Group::Sphere];
+    /// The overlap's groups (the Edges tab has its looks in one).
+    pub const OVERLAP: [Group; 4] = [Group::Camera, Group::Light, Group::Flat, Group::Sphere];
 
     pub fn name(self) -> &'static str {
         match self {
@@ -37,12 +45,20 @@ impl Group {
             Group::Light => "Light and film",
             Group::Flat => "Picture",
             Group::Sphere => "360",
+            Group::Edge => "Edges",
         }
     }
 }
 
 impl Look {
-    pub const ALL: [Look; 8] = [Look::WhipPan, Look::ZoomPunch, Look::SpinBlur, Look::Flash, Look::LightLeak, Look::LumaFade, Look::Glitch, Look::SphereWhip];
+    /// The looks across a join's overlap.
+    pub const OVERLAP: [Look; 8] = [Look::WhipPan, Look::ZoomPunch, Look::SpinBlur, Look::Flash, Look::LightLeak, Look::LumaFade, Look::Glitch, Look::SphereWhip];
+    /// The looks on a cut's edge (`Cut::edge_in`, `edge_out`).
+    pub const EDGES: [Look; 5] = [Look::EdgeFade, Look::EdgeBlur, Look::EdgeZoom, Look::EdgeGlitch, Look::EdgeFlash];
+
+    pub fn is_edge(self) -> bool {
+        self.group() == Group::Edge
+    }
 
     pub fn name(self) -> &'static str {
         match self {
@@ -54,6 +70,11 @@ impl Look {
             Look::LumaFade => "Luma fade",
             Look::Glitch => "Glitch",
             Look::SphereWhip => "Sphere whip",
+            Look::EdgeFade => "Fade",
+            Look::EdgeBlur => "Blur",
+            Look::EdgeZoom => "Zoom",
+            Look::EdgeGlitch => "Glitch",
+            Look::EdgeFlash => "Flash",
         }
     }
 
@@ -68,6 +89,11 @@ impl Look {
             Look::LumaFade => "The next shows first through the bright parts",
             Look::Glitch => "Torn strips and shifted colours",
             Look::SphereWhip => "The view spins round the sphere into the next 360 clip",
+            Look::EdgeFade => "To black or white (from it at a start); to black, the sound fades too",
+            Look::EdgeBlur => "Out of focus, or into it at a start",
+            Look::EdgeZoom => "A push in or a pull out with a blur along it",
+            Look::EdgeGlitch => "Torn strips and shifted colours growing to the end, or settling at a start",
+            Look::EdgeFlash => "Blown out to light, or out of it at a start",
         }
     }
 
@@ -77,6 +103,7 @@ impl Look {
             Look::Flash | Look::LightLeak => Group::Light,
             Look::LumaFade | Look::Glitch => Group::Flat,
             Look::SphereWhip => Group::Sphere,
+            Look::EdgeFade | Look::EdgeBlur | Look::EdgeZoom | Look::EdgeGlitch | Look::EdgeFlash => Group::Edge,
         }
     }
 }
@@ -133,6 +160,10 @@ impl Look {
         const LEAK: [Knob; 1] = [slider("strength", "Strength", 0.0, 2.0, 1.0, 0.1)];
         const LUMA: [Knob; 2] = [slider("softness", "Softness", 0.05, 1.0, 0.25, 0.05), choice("order", "First", &["Bright parts", "Dark parts"])];
         const GLITCH: [Knob; 2] = [slider("strength", "Strength", 0.0, 2.0, 1.0, 0.1), slider("strips", "Strips", 8.0, 80.0, 36.0, 1.0)];
+        const FADE: [Knob; 1] = [choice("colour", "Colour", &["Black", "White"])];
+        const BLUR: [Knob; 1] = [slider("strength", "Strength", 0.2, 2.0, 1.0, 0.1)];
+        const PUSH: [Knob; 2] = [choice("direction", "Direction", &["In", "Out"]), slider("strength", "Strength", 0.1, 1.0, 0.3, 0.05)];
+        const BLOW: [Knob; 1] = [slider("strength", "Strength", 0.2, 1.5, 0.8, 0.05)];
         match self {
             Look::WhipPan => &WHIP,
             Look::ZoomPunch => &ZOOM,
@@ -142,6 +173,11 @@ impl Look {
             Look::LumaFade => &LUMA,
             Look::Glitch => &GLITCH,
             Look::SphereWhip => &[],
+            Look::EdgeFade => &FADE,
+            Look::EdgeBlur => &BLUR,
+            Look::EdgeZoom => &PUSH,
+            Look::EdgeGlitch => &GLITCH,
+            Look::EdgeFlash => &BLOW,
         }
     }
 
@@ -203,6 +239,11 @@ impl Look {
             Some(Look::LightLeak) => 5,
             Some(Look::LumaFade) => 6,
             Some(Look::Glitch) => 7,
+            Some(Look::EdgeFade) => 8,
+            Some(Look::EdgeBlur) => 9,
+            Some(Look::EdgeZoom) => 10,
+            Some(Look::EdgeGlitch) => 11,
+            Some(Look::EdgeFlash) => 12,
             _ => 0,
         }
     }
@@ -212,7 +253,10 @@ impl Look {
 /// the way through, from the outgoing picture (`from`) and the incoming
 /// (`to`), each read at any point (clamped to its edges); `aspect` the
 /// view's width over its height, `pixel` seeding the jitter that hides a
-/// blur's sample steps. The shader's `transition` (`transition.wgsl`) is
+/// blur's sample steps. An edge look (`Look::is_edge`) has one picture,
+/// `from`, and `p` is how much of it: 0 the picture as it is, 1 all the
+/// way (black, out of focus); a cut's start runs it backwards. The
+/// shader's `transition` (`transition.wgsl`) is
 /// this, line for line. The looks are ports of gl-transitions (MIT):
 /// WhipPan and WhipSpin by gre, CrossZoom by rectalogic, Overexposure by
 /// Ben Zhang, their parameters the knobs (`Look::knobs`, `spec.values`); light leak after FilmBurn by
@@ -312,6 +356,17 @@ pub fn colour(spec: &Spec, p: f32, uv: [f32; 2], aspect: f32, pixel: [u32; 2], f
             mix(a, b, w * w * (3.0 - 2.0 * w))
         }
         7 => glitch(v, p, uv, pixel, from, to),
+        8 => {
+            let c = if v[0] < 0.5 { 0.0 } else { 1.0 };
+            mix(from(uv), [c; 3], p)
+        }
+        9 => edge_blur(v, p, uv, aspect, pixel, from),
+        10 => edge_zoom(v, p, uv, pixel, from),
+        11 => tear(v[1], p.sqrt() * v[0], 0.0, (p * 24.0).floor() as u32, uv, pixel, from, from),
+        12 => {
+            let lift = p * v[0];
+            from(uv).map(|c| c * (1.0 + 2.0 * lift) + lift * lift)
+        }
         _ => mix(from(uv), to(uv), p),
     }
 }
@@ -341,16 +396,53 @@ fn light_leak(v: &Values, p: f32, uv: [f32; 2], aspect: f32, from: &dyn Fn([f32;
 /// the tear changes 24 times through.
 fn glitch(v: &Values, p: f32, uv: [f32; 2], pixel: [u32; 2], from: &dyn Fn([f32; 2]) -> [f32; 3], to: &dyn Fn([f32; 2]) -> [f32; 3]) -> [f32; 3] {
     let burst = (std::f32::consts::PI * p).sin().max(0.0).sqrt() * v[0];
-    let (frame, row) = ((p * 24.0).floor() as u32, (uv[1] * v[1]).floor() as u32);
+    tear(v[1], burst, smoothstep(0.3, 0.7, p), (p * 24.0).floor() as u32, uv, pixel, from, to)
+}
+
+/// The glitch's tearing, `burst` strong, over `strips` rows; `w` of the way
+/// from `from` to `to`, a torn strip the other way round; `frame` picks
+/// the tear (the glitch and its edge look both).
+#[allow(clippy::too_many_arguments)]
+fn tear(strips: f32, burst: f32, w: f32, frame: u32, uv: [f32; 2], pixel: [u32; 2], from: &dyn Fn([f32; 2]) -> [f32; 3], to: &dyn Fn([f32; 2]) -> [f32; 3]) -> [f32; 3] {
+    let row = (uv[1] * strips).floor() as u32;
     let torn = hash([row, frame], 7) < 0.35 * burst;
     let shift = if torn { (hash([row, frame], 8) - 0.5) * 0.25 * burst } else { 0.0 };
-    let w = smoothstep(0.3, 0.7, p);
     let w = if torn && hash([row, frame], 9) < 0.5 { 1.0 - w } else { w };
     let split = if torn { 0.025 } else { 0.004 } * burst;
     let at = |dx: f32| [(uv[0] + shift + dx).clamp(0.0, 1.0), uv[1]];
     let grain = (hash(pixel, 10) - 0.5) * 0.12 * burst;
     let (r, g, b) = (at(split), at(0.0), at(-split));
     [mix(from(r), to(r), w)[0] + grain, mix(from(g), to(g), w)[1] + grain, mix(from(b), to(b), w)[2] + grain]
+}
+
+/// The edge blur: a disc of samples (a golden-angle spiral, turned per
+/// pixel) as wide as `p` and the strength make it.
+fn edge_blur(v: &Values, p: f32, uv: [f32; 2], aspect: f32, pixel: [u32; 2], from: &dyn Fn([f32; 2]) -> [f32; 3]) -> [f32; 3] {
+    let radius = p * 0.04 * v[0];
+    let turn = hash(pixel, 11) * std::f32::consts::TAU;
+    let mut sum = [0.0f32; 3];
+    for i in 0..SAMPLES {
+        let r = radius * ((i as f32 + 0.5) / SAMPLES as f32).sqrt();
+        let a = i as f32 * 2.399_963 + turn;
+        let c = from([(uv[0] + a.cos() * r / aspect).clamp(0.0, 1.0), (uv[1] + a.sin() * r).clamp(0.0, 1.0)]);
+        sum = [0, 1, 2].map(|k| sum[k] + c[k]);
+    }
+    sum.map(|c| c / SAMPLES as f32)
+}
+
+/// The edge zoom: pushed in (or pulled out, the frame mirrored past its
+/// edges) by up to the strength, blurred along the move.
+fn edge_zoom(v: &Values, p: f32, uv: [f32; 2], pixel: [u32; 2], from: &dyn Fn([f32; 2]) -> [f32; 3]) -> [f32; 3] {
+    let jitter = hash(pixel, 12);
+    let mut sum = [0.0f32; 3];
+    for i in 0..SAMPLES {
+        let s = (i as f32 + jitter) / SAMPLES as f32;
+        let k = 1.0 + v[1] * p * (1.0 - 0.3 * s);
+        let f = if v[0] < 0.5 { 1.0 / k } else { k };
+        let c = from([mirror(0.5 + (uv[0] - 0.5) * f), mirror(0.5 + (uv[1] - 0.5) * f)]);
+        sum = [0, 1, 2].map(|k| sum[k] + c[k]);
+    }
+    sum.map(|c| c / SAMPLES as f32)
 }
 
 /// The whip's move: left, right, up, down (`Look::knobs`' order).
@@ -451,14 +543,38 @@ mod tests {
 
     #[test]
     fn every_look_is_in_a_group_and_lengths_go_by_steps() {
-        assert!(Group::ALL.iter().all(|g| Look::ALL.iter().any(|l| l.group() == *g)));
+        assert!(Group::OVERLAP.iter().all(|g| Look::OVERLAP.iter().any(|l| l.group() == *g)));
+        assert!(Look::OVERLAP.iter().all(|l| !l.is_edge()) && Look::EDGES.iter().all(|l| l.is_edge()));
         assert_eq!((stepped(0.6), stepped(0.0), stepped(1.13)), (0.5, 0.25, 1.25));
         assert_eq!(serde_json::to_string(&Look::WhipPan).unwrap(), "\"whip_pan\"");
     }
 
     #[test]
+    fn an_edge_starts_as_the_picture_and_ends_changed() {
+        let a = |uv: [f32; 2]| [uv[0] * uv[0], 0.4, 0.5 + 0.5 * (uv[1] * 40.0).sin()];
+        for look in Look::EDGES {
+            let ends = look.knobs().iter().enumerate().map(|(i, k)| (i, k.most));
+            for (i, value) in std::iter::once((MOST_KNOBS, 0.0)).chain(ends) {
+                let mut s = Spec::of(Some(look));
+                if i < MOST_KNOBS {
+                    s.values[i] = value;
+                }
+                let (mut still, mut moved) = (0.0f32, 0.0f32);
+                for n in 0..64u32 {
+                    let at = [0.1 + 0.1 * (n % 8) as f32, 0.1 + 0.1 * (n / 8) as f32];
+                    let diff = |p: f32| colour(&s, p, at, 16.0 / 9.0, [n, 3 * n], &a, &a).iter().zip(a(at)).map(|(g, w)| (g - w).abs()).sum::<f32>();
+                    still = still.max(diff(0.0));
+                    moved += diff(1.0) / 64.0;
+                }
+                assert!(still < 1e-4, "{s:?} at 0 is off by {still}");
+                assert!(moved > 0.01, "{s:?} at 1 is near the picture: {moved}");
+            }
+        }
+    }
+
+    #[test]
     fn knobs_fit_the_shader_and_fill_by_default() {
-        assert!(Look::ALL.iter().all(|l| l.knobs().len() <= MOST_KNOBS && l.knobs().iter().all(|k| k.least <= k.default && k.default <= k.most)));
+        assert!(Look::OVERLAP.iter().chain(&Look::EDGES).all(|l| l.knobs().len() <= MOST_KNOBS && l.knobs().iter().all(|k| k.least <= k.default && k.default <= k.most)));
         let mut set = std::collections::BTreeMap::new();
         set.insert("turns".to_owned(), 2.1);
         let v = values(Some(Look::SpinBlur), &set);
@@ -471,7 +587,7 @@ mod tests {
         let (a, b) = (|_: [f32; 2]| [0.2, 0.4, 0.6], |_: [f32; 2]| [0.9, 0.1, 0.5]);
         // Every look, at its defaults and with each knob at either end.
         let mut specs = vec![Spec::default()];
-        for look in Look::ALL {
+        for look in Look::OVERLAP {
             specs.push(Spec::of(Some(look)));
             for (i, k) in look.knobs().iter().enumerate() {
                 for end in [k.least, k.most] {

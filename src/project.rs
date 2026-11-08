@@ -524,6 +524,29 @@ pub fn gain(db: f64) -> f64 {
     if db <= OFF_DB { 0.0 } else { 10f64.powf(db / 20.0) }
 }
 
+/// A look on a cut's start or end alone, with no overlap (gap 25b): how
+/// long, and its settings the user moved (`Look::knobs`). Each half of a
+/// join belongs to its own cut and goes where the cut goes.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Edge {
+    pub look: crate::transition::Look,
+    pub seconds: f64,
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub params: std::collections::BTreeMap<String, f32>,
+}
+
+impl Edge {
+    pub fn spec(&self) -> crate::transition::Spec {
+        crate::transition::Spec { look: Some(self.look), values: crate::transition::values(Some(self.look), &self.params) }
+    }
+
+    /// A fade to (or from) black: the sound fades with it (user, 2026-11-08).
+    pub fn blacks(&self) -> bool {
+        self.look == crate::transition::Look::EdgeFade && self.spec().values[0] < 0.5
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Cut {
@@ -571,6 +594,12 @@ pub struct Cut {
     /// the rest play at their defaults. Cleared when the look changes.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub transition_params: std::collections::BTreeMap<String, f32>,
+    /// The look on its start, from its in point (`Edge`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub edge_in: Option<Edge>,
+    /// The look on its end, up to its out point.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub edge_out: Option<Edge>,
     /// Its colour effects' keyframes, clip time, apart from the camera's.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub effects: Vec<crate::grade::EffectKey>,
@@ -653,6 +682,8 @@ impl Cut {
             crossfade: 0.0,
             transition: None,
             transition_params: Default::default(),
+            edge_in: None,
+            edge_out: None,
             effects: Vec::new(),
             marks: Vec::new(),
             lut: None,
@@ -709,9 +740,27 @@ impl Cut {
         if t < from || t > to {
             return 0.0;
         }
-        let fade_in = if self.sound_before > 0.0 { 0.0 } else { self.sound_fade_in };
-        let fade_out = if self.sound_after > 0.0 { 0.0 } else { self.sound_fade_out };
+        let (fade_in, fade_out) = self.sound_fades();
         fade_ramp(t - from, to - t, fade_in, fade_out)
+    }
+
+    /// Its sound's fades at its picture's ends, seconds: its own, as long
+    /// as an edge fading to black where that's longer; none at an end
+    /// whose sound runs past the picture (that fade is the sound beyond's).
+    pub fn sound_fades(&self) -> (f64, f64) {
+        let black = |e: &Option<Edge>| e.as_ref().filter(|e| e.blacks()).map_or(0.0, |e| e.seconds);
+        let fade_in = if self.sound_before > 0.0 { 0.0 } else { self.sound_fade_in.max(black(&self.edge_in)) };
+        let fade_out = if self.sound_after > 0.0 { 0.0 } else { self.sound_fade_out.max(black(&self.edge_out)) };
+        (fade_in, fade_out)
+    }
+
+    /// The edge look at clip time `t` and how much of it (0..1,
+    /// `transition::colour`'s `p`): growing to the out point, ebbing from
+    /// the in point; where the two meet on a short cut, the stronger.
+    pub fn edge_at(&self, t: f64) -> Option<(crate::transition::Spec, f32)> {
+        let out = self.edge_out.as_ref().map(|e| (e, (t - (self.end - e.seconds)) / e.seconds));
+        let start = self.edge_in.as_ref().map(|e| (e, 1.0 - (t - self.start) / e.seconds));
+        [start, out].into_iter().flatten().map(|(e, q)| (e, q.clamp(0.0, 1.0))).filter(|&(_, q)| q > 0.0).max_by(|a, b| a.1.total_cmp(&b.1)).map(|(e, q)| (e.spec(), q as f32))
     }
 
     /// Where its sound starts and ends, clip time.
@@ -1335,6 +1384,20 @@ pub fn held(aim: Aim<'_>, own: bool, t: f64) -> impl Fn(&crate::view::Follow, f6
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_edge_grows_to_the_out_point_and_ebbs_from_the_in_point_and_black_takes_the_sound() {
+        use crate::transition::Look;
+        let edge = |look, seconds| Some(Edge { look, seconds, params: Default::default() });
+        let mut c = Cut::new("a.mp4".into(), 10.0, 14.0);
+        (c.edge_in, c.edge_out) = (edge(Look::EdgeBlur, 1.0), edge(Look::EdgeFade, 2.0));
+        let q = |t| c.edge_at(t).map(|(s, q)| (s.look.unwrap(), q));
+        assert_eq!((q(10.0), q(10.5), q(11.5), q(13.0), q(14.0)), (Some((Look::EdgeBlur, 1.0)), Some((Look::EdgeBlur, 0.5)), None, Some((Look::EdgeFade, 0.5)), Some((Look::EdgeFade, 1.0))));
+        c.sound_fade_out = 0.5;
+        assert_eq!(c.sound_fades(), (0.0, 2.0), "the blur keeps the sound, the black takes it");
+        c.edge_out.as_mut().unwrap().params.insert("colour".into(), 1.0);
+        assert_eq!(c.sound_fades(), (0.0, 0.5), "a fade to white leaves it");
+    }
 
     #[test]
     fn what_is_gone_is_left_out_and_said() {

@@ -106,6 +106,7 @@ done in part stays here until its last card is done.
 | 84 | A video drawing on several trips (a year in review) | below |
 | 85 | Project cards in a grid, a GIF of the project on hover, basic facts and a description | below |
 | 86 | A program of its own: animated cutaways from a prompt and parameters (8-bit game, animated slides) | below |
+| 87 | Style looks (old film, VHS, neo-cyberpunk) for a video, an overlay picture or text; animation presets for text and pictures | below |
 
 ## Open gaps
 
@@ -1444,6 +1445,34 @@ edits the clips marked in the contact sheet.
 - Next (user, 2026-11-07): the user tries ComfyUI first; if it suits,
   this program isn't needed. Ask how it went before any work here.
 Milestone «Ритм і переходи».
+
+### 87. Style looks and animation presets — rough idea (user, 2026-11-09)
+
+The user: "effects (video, an overlay picture, text) like old film, some
+neo-cyberpunk; rather for certain one-off short videos, but could be
+interesting. Different animations for text. Animations and different
+kinds of overlays for pictures. Just a rough idea."
+
+Checked 2026-11-09, not there yet: Effects (colour, keyframed), LUTs and
+the overlay and text lanes' own motion keys are hand-set values; there
+is no ready look to put on, and no animation preset. Gap 86 (animated
+cutaways, a program of its own) is another thing: it makes new footage.
+
+- **Style looks**, put on a cut, an overlay item or a text item, keyframed
+  in strength like an effect: old film (grain, scratches, gate weave,
+  flicker, vignette), VHS (colour bleed, tracking lines, noise),
+  neo-cyberpunk (neon grade, chromatic split, scanlines, glitch), maybe
+  more (8 mm, CRT, duotone). Built as the transitions are: one function
+  on the CPU and its WGSL twin, a GPU test; their knobs as `Look::knobs`
+  have. The glitch's tearing (`transition::tear`) is a start.
+- **Text animation presets**: in and out (type-on, fade by letters,
+  slide, pop, wobble), as named sets of the text item's motion keys, so
+  they stay editable; perhaps per-letter later.
+- **Picture overlay presets**: animations (pop in, float, shake, spin,
+  Ken Burns) and kinds of overlay (a sticker with a border and shadow,
+  a polaroid, picture-in-picture with a frame).
+- A preset is a template as transitions have (gap 25c): one library for
+  the program.
 
 ## Format rule for all of these
 

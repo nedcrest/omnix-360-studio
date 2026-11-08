@@ -3,7 +3,8 @@
 Gap 43 (user, 2026-11-01): "analyse best practices for editing software,
 look at colour schemes, theoretically add the ability to change the UI's
 colour palette". Research done 2026-11-01. Nothing built yet; the proposal
-at the end is ready to become a card.
+at the end is the card «Палітра "Omnix Neutral" і кольори доріжок»
+(milestone «Ефекти, колір і розумний звук»).
 
 ## What editing apps do
 
@@ -104,7 +105,7 @@ lane colours down in the timeline, away from the picture.
 | SFX / Voice | fixed pink `SFX_COLOUR` / blue `VOICE_COLOUR` | — |
 | Clip sound lane and a clip's own volume line | both cyan (`SOUND_LINE`) | the line sits on its own colour: low contrast |
 | Text lane / Clip sound | teal / cyan | close hues |
-| Overlay lane / over-full-scale bars | both orange (`OVER_COLOUR`) | one colour, two meanings |
+| Overlay lane / over-full-scale bars / transitions (zones on their lane, edge wedges; `TRANSITION`, 2026-11-08) | all orange (`OVER_COLOUR`, `TRANSITION`) | one colour, three meanings; transitions orange by `TRANSITIONS.md`'s choice |
 | Effects marks | purple `EFFECT_MARK` | — |
 
 Colours are constants scattered through `timeline.rs` and the panels; iced's

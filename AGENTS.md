@@ -30,11 +30,12 @@ Everything that draws a picture exists twice: a GPU version (the player, and GPU
 | `hdr.rs` `to_sdr` | `hdr_to_sdr` |
 | `lut.rs` `Lut::blend` | `apply_lut` |
 | `overlay.rs` `composite` | `player/overlay.wgsl` |
-| `main.rs` `encode` (frame times, attitude, readout steps, last-frame padding) | `player/render.rs` `encode` |
+| `pipeline.rs` `encode` (frame times, attitude, readout steps, last-frame padding) | `player/render.rs` `encode` |
+| `transition.rs` `colour` (a join's look, an edge look; `blend` in the export's `dissolve.rs`) | `player/transition.wgsl` |
 
 How to check:
 
-- The tests `gpu_hdr_matches_the_cpu`, `gpu_lut_matches_the_cpu`, `gpu_overlays_match_the_cpu`, `deep_render_keeps_ten_bits` and `dither_keeps_a_smooth_ramp` (in `player/render.rs`) render on the GPU and compare. Add one like them when you add something drawn.
+- The tests `gpu_hdr_matches_the_cpu`, `gpu_lut_matches_the_cpu`, `gpu_overlays_match_the_cpu`, `gpu_transitions_match_the_cpu`, `deep_render_keeps_ten_bits` and `dither_keeps_a_smooth_ramp` (in `player/render.rs`) render on the GPU and compare. Add one like them when you add something drawn.
 - Export the same clip or project both ways and compare:
 
   ```sh
@@ -96,11 +97,12 @@ Useful checks:
 One crate, `omnix`: a library (`lib.rs`) and a thin binary (`main.rs`). Dailix (`../dailix`) uses the library, and the library uses Dailix's sheet core (`dailix_sheet`).
 
 - **The core** (`src/model/`): the project being edited and every change to it as an operation (`model/ops/`: cuts, clips, items, keys, sound), checked, one undo step each (`model/edit.rs`), what's selected (`selection.rs`). No iced, no ffmpeg. The player, the CLI (`omnix apply`, `describe`, `ops-schema`) and tests all change a project only through it (`docs/omnix/OPS-API.md`, `CORE-API.md`).
-- **The file format**: `project.rs` (cuts, sound tracks, `drop_missing`), `overlay.rs`, `text.rs`, `grade.rs`, `view.rs` (views, keyframes, `Camera`).
+- **The file format**: `project.rs` (cuts, sound tracks, a cut's edge looks, `drop_missing`), `overlay.rs`, `text.rs`, `grade.rs`, `view.rs` (views, keyframes, `Camera`).
+- **Transitions**: `transition.rs` (the looks, their knobs, `colour` and `blend`, the CPU twin of `player/transition.wgsl`), `template.rs` (the program's library of transition templates, `<config>/transitions/`).
 - **360**: `stitch.rs` (the CPU stitcher, ground truth), `ring.rs`, `exposure.rs`, `align.rs`, `stab.rs`, `imu.rs`, `dji.rs`, `sky.rs`, `track.rs`; colour `grade.rs`, `lut.rs`, `hdr.rs`.
-- **Media**: `ffmpeg/` (every ffmpeg/ffprobe call: decoding, the encoder, `jpeg_frame`, `mono`; `ffmpeg/mix.rs` the export's sound graph), `cache.rs` (the clip cache), `waveform.rs` (a sound's waveform), `fsutil.rs` (safe file replacement, settings and cache folders).
+- **Media**: `ffmpeg/` (every ffmpeg/ffprobe call: decoding, the encoder, `jpeg_frame`, `mono`; `ffmpeg/mix.rs` the export's sound graph), `cache.rs` (the clip cache), `waveform.rs` (a sound's waveform), `fsutil.rs` (safe file replacement, settings and cache folders, Dailix's projects place).
 - **Export and the CLI**: `cli.rs` (the subcommands), `pipeline.rs` (`Pipeline`, CPU `encode`, `grade_frame`), `export.rs`, `dissolve.rs`, `preview.rs` and `sheet.rs` (contact sheets), `check.rs`, `analyse.rs`, `apply.rs`, `blank.rs`, `capture.rs`.
 - **Sound rules**: `mixdown.rs` (how loud a sound is at a moment), `loudness.rs` (measuring, filters, normalize), `lufs.rs` (our BS.1770 meter), `duck.rs`, `mixcheck.rs` and `mixmeasure.rs` (the mix check).
-- **Dailix**: `notes.rs` (a project's contact sheet through `dailix_sheet`), `from_sheet.rs` (an edit from its marking).
-- **The player** (`src/player/`): the iced app. `mod.rs` holds `App` and dispatches each area's messages to an `on_*` handler in its own file (`transport`, `cuts`, `tracks`, `effects`, `framing`, `bin`, `sound_ui`, ...). GPU drawing `gpu.rs` and the shaders, GPU export `render.rs`; decoding `media.rs`, `source.rs`, `playback.rs`, `scrub.rs`; sound `audio.rs`, `music.rs`; the timeline `timeline.rs`; `viewer.rs` is the player as a library for Dailix.
+- **Dailix**: `notes.rs` (a project's contact sheet through `dailix_sheet`), `from_sheet.rs` (an edit from its marking, saved in a trip's `videos/<name>/`), `sibling.rs` (finding and starting the other program), `desktop.rs` (the desktop entry and icon both install, `omnix install`).
+- **The player** (`src/player/`): the iced app. `mod.rs` holds `App` and dispatches each area's messages to an `on_*` handler in its own file (`transport`, `cuts`, `tracks`, `effects`, `framing`, `bin`, `sound_ui`, ...). GPU drawing `gpu.rs` and the shaders (a join or an edge look drawn into pictures, then mixed by `transition.wgsl`), GPU export `render.rs`; the Transitions panel `transitions_panel.rs` with its Edges tab `transition_edges.rs` and templates `transition_templates.rs`; the start window and «New…» `bars.rs`, `new_menu.rs`; Settings `settings_panel.rs`; decoding `media.rs`, `source.rs`, `playback.rs`, `scrub.rs`; sound `audio.rs`, `music.rs`; the timeline `timeline.rs`; `viewer.rs` is the player as a library for Dailix.
 - `packaging/`: release builds. `docs/`: the user guide; `docs/omnix/`: the fork's plans and context.

@@ -211,20 +211,22 @@ still lacks is listed in the last row and in «Later» below.
 | 1b | `src/model/` with `edit.rs`, `selection.rs`; a test that the core imports no player, ffmpeg or iced | **Done** `23aff2d` |
 | 1c | Transactions: `Edit::begin`/`commit`/`changing` replace `begin_drag` and the `dragging` flag; no empty steps | **Done** `30b0959` |
 | 2a | `Op`, `SoundRef`, `Outcome`, `OpError`, `Edit::apply`/`batch`, `check`; sound ops; `omnix apply`/`describe`; first unit and CLI tests | **Done** `2e22ce9` |
-| 2b | The player's sound menu, level tags, fades and duck on ops | **Done** `5955b28`, waiting for the user's check |
+| 2b | The player's sound menu, level tags, fades and duck on ops | **Done** `5955b28` |
 | 2c | Normalize as measure + apply, by id (`CORE-API` step 6; Even1; the CLI's `--track`); points as ops (add, K, move, delete, continue; named by time); the duck's speech found again if the edit changed meanwhile | **Done** `0bcb553`, `2d259da`, `5b5dc65`, and the duck's check |
 | 3 | Cuts (`CutOp`: add, trim, move, split, crossfade, stabilisation, LUT, delete) and sound clips (`ClipOp`: add with the SFX 2 rule, move, trim, split, other SFX lane, delete); the edit's cut rules moved from `Edit` to `Project`; `Outcome::made`; the player's handlers and `Edit::delete` on them; an export test driven by an ops script | **Done** `bb87844`, `755603c`, `c7d38cd`, `9dfba52`, and the test |
 | 4 | Overlays and text (`ItemOp`: add pictures, add text, move, trim, set text whole, delete); the player's handlers and Del on them | **Done**, the two commits after `79f53bd` |
 | 5 | Keyframes: `model::curve` (`Key`, `key_at`; CORE-API step 8), `KeyOp` for effect, motion and view keys (view keys get where the stick and tracks point as data, `Aims`); the effects panel, K, Auto keyframe, diamond and mark drags, colour-track keys on them; `Edit::checkpoint` gone from the code | **Done** `36c216f`, `cc2eb5a`, and the two after |
 | 6 | `proptest` on random op sequences (found a trim panic and inexact floats in JSON, both fixed); `omnix ops-schema` (`schemars`, doc comments as descriptions); `apply` without `-o` is the preview; `describe` the query | **Done** `cd89a11`, `74e2cca`, `e0b5b5c` |
-| — | Left as direct writes inside a begin/commit, no op yet: the edit's fades, the clip-sound and track levels (Audio panel), the aspect (kept by the app), a project's load clean-up. Small; ops when the AI needs them | |
+| 7 | Transitions (gap 25, 2026-11-08): `CutOp::Transition` (a join's look, on the cut after it), `TransitionKnob` (its settings), `Edge`/`EdgeKnob` (a look on a cut's start or end), `Template` (a join whole from a saved template, all or nothing); overlap and edge looks refuse each other's op | **Done** |
+| — | The edit's fades and the clip-sound and track levels became ops (`SoundOp::EditFade`, `TrackLevel`). Left as direct writes inside a begin/commit: the aspect (kept by the app), a project's load clean-up | |
 
 What differs from the sketch above, as built: the `Editor` is the
 existing `Edit` (in `src/model/edit.rs`) with transactions and `apply`
-added, not a new type; `Op` is tagged `"area"` and each area's enum
-`"op"`, so a sound op in a file reads `{"area": "sound", "op": "level",
-"sound": {"clip": 4}, "db": -8}`; `Outcome` has only `summary` until a
-caller needs the ids it changed.
+added, not a new type; the areas are `Cut`, `Clip` (sound clips),
+`Item`, `Key` and `Sound`, no `Project` or `Delete` (each area deletes its
+own); `Op` is tagged `"area"` and each area's enum `"op"`, so a sound op
+in a file reads `{"area": "sound", "op": "level", "sound": {"clip": 4},
+"db": -8}`; `Outcome` has a `summary` and the id an op `made`.
 
 ## Later: a review of the core (2026-11-02, the user asked after pack 2)
 

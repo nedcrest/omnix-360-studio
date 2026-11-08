@@ -3,8 +3,10 @@
 The user asked (2026-10-23) for maximum ease and accessibility in the timeline:
 "look at best practices of good timeline UIs — simple mobile apps and
 Windows/Mac — and let's try them in Omnix". This is the research and the plan.
-Nothing here is built yet. Each item that gets built moves to `EDITOR-GAPS.md`
-or straight to a `ROADMAP.md` card.
+Built and checked since: packs 1-3 (targets and frame, click routes,
+snapping) and 7 (with the sound lanes); the rest wait as `ROADMAP.md`
+cards (skimmer, action bar, typed time, overview strip). Each item that
+gets built moves to `EDITOR-GAPS-DONE.md`.
 
 Sources: three research passes, 2026-10-23. The first covered mobile apps
 (CapCut, iMovie iOS, LumaFusion, VN, InShot, DJI LightCut/Studio, Google
@@ -167,16 +169,16 @@ need no project format change, and are each checked by the user before the
 next starts. The two modes (gap 10) come before any pack that adds
 clashing keys (skimmer's S, J/K/L, ↑/↓).
 
-1. **Targets and frame.** 24 px hit zones, thick selection frame (gap 7),
+1. ~~**Targets and frame.**~~ Done. 24 px hit zones, thick selection frame (gap 7),
    handles only on the selected clip, live number while dragging.
-2. **Click routes.** Trim to playhead, move left/right, ↶ ↷ buttons, the
+2. ~~**Click routes.**~~ Done. Trim to playhead, move left/right, ↶ ↷ buttons, the
    undo toast after a delete, Escape cancels a drag.
-3. **Snapping.** Snapping for cuts, overlays and the playhead with a visible
+3. ~~**Snapping.**~~ Done. Snapping for cuts, overlays and the playhead with a visible
    line; N toggles it.
 4. **Skimmer** on the timeline and in the bin (one shared piece).
 5. **Action bar** that follows the selection.
 6. **Time you can type into**. (The UI scale setting is done: 115% by default, A−/A+ in the top bar, `59b0b9b`.)
-7. With sound lanes (gap 3): fade corners, auto-duck, lanes by role.
+7. ~~With sound lanes (gap 3)~~ Done: fade corners, auto-duck, lanes by role.
 8. Later: overview strip, attached clips (4B), beat markers, text-based
    editing, centred playhead as an option.
 

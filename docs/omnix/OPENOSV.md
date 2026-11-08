@@ -88,9 +88,10 @@ stitch numbers as ideas to measure here, not results.
 
 ## Where this goes
 
-Milestone 7, «Якість 360», gaps 17–24 in `EDITOR-GAPS.md`. Most of it needs
+Milestone 11, «Якість 360», gaps 17–24 in `EDITOR-GAPS.md`. Most of it needs
 360 footage. We have one public sample (`omnix-samples/dji/…0003_D.OSV`), and
-the user's camera comes around 2027-02, so these come after milestones 1–6.
+the user's camera comes around 2027-02, so these come after the milestones
+before it in `ROADMAP.md`.
 The exceptions are 17 (easing, useful for every keyframe now) and 18
 (bundled LUT, small).
 

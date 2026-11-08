@@ -7,7 +7,7 @@ the code changes; the history is in git (the first refactor, gap 35,
 
 ## The shape today
 
-~33 000 lines of Rust in one crate, `omnix`: a library and a
+~36 000 lines of Rust in one crate, `omnix`: a library and a
 six-line binary. Dailix (`../dailix`) links the library; the library
 links Dailix's sheet core.
 
@@ -15,11 +15,13 @@ links Dailix's sheet core.
 |---|---|---|
 | The core | `src/model/` | The project being edited (`Edit`: a `Project` with undo) and every change to it as a checked operation (`ops/`: cuts, clips, items, keys, sound), what's selected (one `Selection`). No iced, no ffmpeg. The player, `omnix apply`/`describe`/`ops-schema` and the tests all go through it. |
 | The file format | `project.rs`, `overlay.rs`, `text.rs`, `grade.rs`, `view.rs` | Public JSON, backward compatible. |
+| Transitions | `transition.rs` (+ `player/transition.wgsl`), `template.rs`, `dissolve.rs` | The looks as one CPU function and its shader twin, their knobs; templates' library; the export's joins and edge looks. |
 | 360 and colour (upstream) | `stitch.rs`, `stab.rs`, `align.rs`, `exposure.rs`, `ring.rs`, `imu.rs`, `lut.rs`, `hdr.rs`, ... | The CPU reference; the shaders mirror it (AGENTS.md's pairs). |
 | Media | `ffmpeg/`, `cache.rs`, `fsutil.rs` | ffmpeg as a separate program; the clip cache; safe writes and the app's folders. |
+| Beside the editor | `desktop.rs`, `sibling.rs`, `from_sheet.rs` | The desktop entry (`omnix install`), finding and starting Dailix, an edit made from Dailix's marking. |
 | Export and CLI | `cli.rs`, `pipeline.rs`, `export.rs`, `preview.rs`, `check.rs`, `analyse.rs` | The subcommands and the CPU render. |
 | Sound rules | `mixdown.rs`, `loudness.rs`, `lufs.rs`, `duck.rs`, `mixcheck.rs`, `mixmeasure.rs` | Levels, loudness, the mix check: shared by player, export and CLI. |
-| The player | `src/player/` | iced app: `App` and a thin dispatcher in `mod.rs`, an `on_*` handler per area in its own file; GPU drawing and export (`gpu.rs`, `render.rs`, shaders); decoding; the timeline (`timeline.rs`); `viewer.rs`, the player as a library for Dailix. |
+| The player | `src/player/` | iced app: `App` and a thin dispatcher in `mod.rs`, an `on_*` handler per area in its own file; GPU drawing and export (`gpu.rs`, `render.rs`, shaders); decoding; the timeline (`timeline.rs`); the side panels (`transitions_panel.rs` with `transition_edges.rs` and `transition_templates.rs`, effects, audio, export, settings); `viewer.rs`, the player as a library for Dailix. |
 
 ## Rules it keeps
 

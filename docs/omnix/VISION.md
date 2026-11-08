@@ -65,44 +65,35 @@ From rOsmo360 (upstream) we already have:
 - text and picture overlays;
 - GPU export, plus DNxHR for Resolve.
 
-Added in the fork:
-- the bin;
-- insert at the playhead or the nearest join;
-- cleaned voice in place of a clip's sound;
-- the footage-agent bridge;
+Added in the fork (to 2026-11-09):
+- an operations core (`OPS-API.md`): every change an op, so a script or
+  an AI edits as the player does;
+- sound lanes, per-clip loudness, auto-duck, J/L cuts, the mix check;
+- the bin, insert at the playhead or the nearest join, markers;
+- transitions: a library of non-banal looks across a join, edge looks,
+  their settings, templates, a transitions lane;
+- Dailix, the contact sheet and trips (`../dailix`), sharing Omnix's
+  library; the start window, «New…» and the projects place in both;
 - the live roadmap page.
 
 Detail: `CONTEXT.md`.
 
 ## Where it goes
 
-The order of work is nine milestones, kept current in `ROADMAP.md` (cards)
-and `EDITOR-GAPS.md` (detail):
-
-1. **Звук для Косу.** Sound lanes, per-clip loudness, auto-duck under speech,
-   and a true-peak limit.
-2. **Зручний таймлайн.** Two modes, big targets, click routes, snapping,
-   skimmer, markers.
-3. **Матеріал і бін.** Preview in Omnix's viewer, grid, ratings from the
-   contact sheet, new project with folders.
-4. **Розуміння матеріалу.** Speech transcription and who is in the frame,
-   with local models in footage-agent.
-5. **B-roll і групи.** Video on the overlay lane, group/ungroup, connected
-   clips, multi-select.
-6. **Ритм і переходи.** Cuts on the beat, transitions and stingers.
-7. **Колір і текст.** Levels, cinematic bars, glow, vignette shapes,
-   subtitles, text-based editing.
-8. **Якість 360.** Ideas from OpenOSV: easing presets, a bundled D-Log M
-   LUT, lens protectors, a better seam beside the stick, Osmo 360 II.
-9. **ШІ-монтаж.** An AI edits from the contact sheet's brief by written
-   rules (`AUTO-EDIT.md`). It is the user's main wish, but comes last on
-   purpose: first Omnix has to do everything an edit needs.
+The order of work is the milestones in `ROADMAP.md` (cards, in order) and
+`EDITOR-GAPS.md` «Milestones» (detail). Done or mostly: sound for Kos,
+the timeline's ease, material and the bin, transitions. Next (user,
+2026-11-09): **Ефекти, колір і розумний звук**: effects and colour,
+style looks and animation for text and pictures, object tracking,
+speech found and transcribed in Dailix, a cleaner voice, auto-duck in
+the original videos too. Then who is in the frame, B-roll and groups,
+framing, multicam, speed and automation, 360 quality, export, the AI
+edit (`AUTO-EDIT.md`; the user's main wish, last on purpose: first
+Omnix has to do everything an edit needs), other platforms.
 
 Further out, no milestone yet:
 - speaker-follow (direction of arrival plus active speaker);
-- click/text tracking ("follow the dog");
 - visual search over footage;
-- an AI rough cut that writes the project JSON;
 - optional cloud models through a user-supplied key;
 - bridges: flat clips (exists), OpenTimelineIO, Kdenlive.
 
@@ -114,7 +105,7 @@ Further out, no milestone yet:
 | UI | iced 0.14 | upstream's; one window, custom canvas timeline |
 | GPU | wgpu through iced's re-export | stitch, grade and overlays in shaders, mirrored on the CPU |
 | Decode / encode | ffmpeg CLI (CUDA, Vulkan, VA-API, software) | a separate process keeps licences simple |
-| Material and AI | footage-agent, Python | ingest, analysis, voice cleaning, Whisper; the model ecosystem lives there |
+| Material | Dailix (Rust, `../dailix`) | the contact sheet, trips and their videos, ingest and analysis to come (speech, voice); footage-agent (Python) the older pipeline, its models (voice cleaning, Whisper) to move over |
 
 The machine is an RTX 3060 12 GB on X11 and KDE. CUDA decodes both 3840²
 lenses at about 4× real time. Osmo 360 II's 8K50 is unverified.
@@ -124,4 +115,4 @@ lenses at about 4× real time. Osmo 360 II's 8K50 is unverified.
 - Does telemetry-parser read the Osmo 360 II calibration?
 - Is 8K50 HEVC 10-bit real time on the 3060, or are proxies required?
 - How does a project hold links between items (groups, connected clips)
-  while staying backward compatible? This is milestone 4's design question.
+  while staying backward compatible? This is the B-roll milestone's design question.

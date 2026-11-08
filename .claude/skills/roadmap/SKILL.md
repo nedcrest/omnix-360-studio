@@ -1,6 +1,6 @@
 ---
 name: roadmap
-description: Keep docs/omnix/ROADMAP.md current — the file the user's live roadmap page draws. Use whenever work on Omnix or footage-agent starts, finishes, waits for the user's test, or the user throws in a new idea.
+description: Keep docs/omnix/ROADMAP.md current — the file the user's live roadmap page draws. Use whenever work on Omnix or Dailix starts, finishes, waits for the user's test, or the user throws in a new idea.
 ---
 
 # Keeping the roadmap current
@@ -40,7 +40,7 @@ nothing be lost after a forced compact.
 
 ### Card title, Ukrainian, plain words
 - статус: робимо | чекає перевірки             ← only in Зараз
-- де: Omnix, footage-agent                     ← comma-separated
+- де: Omnix, Dailix                            ← comma-separated
 - віха: Зручний таймлайн                       ← milestone: groups cards; the page shows its progress
 - з: YYYY-MM-DD                                ← started (Зараз)
 - коли: YYYY-MM-DD                             ← finished (Зроблено)

@@ -4,8 +4,9 @@ Gap 41 (user, 2026-11-01): "a check, written into a separate file, of
 the possibilities to unify and separate out the core / functionality /
 API, which makes further building simpler and divides the architecture
 nicely". The second pass after `ARCHITECTURE.md`'s refactor (gap 35),
-read at `d34a6b9` (84 tests). This page is the plan; each step below
-becomes a commit, and `ARCHITECTURE.md`'s progress table follows them.
+read at `d34a6b9` (84 tests). This page was the plan; each step below
+became a commit. Worked off by 2026-11-07 but step 7's last moves (gap
+41's card); what's kept as it is: `ARCHITECTURE.md`.
 
 Upstream's files stay untouched so they still merge: `view.rs`,
 `grade.rs`, `text.rs`, `check.rs` are as upstream; `overlay.rs` only has
@@ -169,26 +170,20 @@ One commit each, behaviour unchanged unless the step says so. Tests
 | 4 | **Done 2026-11-01** (`61b6a5a`), checked by the user (2026-11-01); then the track's line removed altogether at their ask (gap 33i, `c34ae65`): points are only ever on an own line, `PointAdd/Select/Move(Own, …)`, `Drag::Point`, one `selected_point`, one Del, one K | M | medium: drags, Ctrl+click, K |
 | 5 | **Done 2026-11-02** (`7fc2c31`), now `model/selection.rs`: `Selection`, `still_valid`, `Edit::delete`; four `App` fields became one. No `after_move`: a moved cut is selected outright | M | medium: ten files; removes a known source of bugs |
 | 6 | **Done 2026-11-02** (as OPS-API step 2c): normalize measured then applied by `SoundOp::Normalized`; lower and restore are ops; the CLI gains `--track` | S | low |
-| 7 | Moves: `edit.rs` → `model/` (**done**, `23aff2d`), `config_dir` → `fsutil` (**done** 2026-11-05, `fsutil::app_dir`), `Waveform` → media, `gpu`/`render`/shaders → `src/gpu/`, `Cut::sound_file` → media | M | low logic risk |
+| 7 | Moves: `edit.rs` → `model/` (**done**, `23aff2d`), `config_dir` → `fsutil` (**done** 2026-11-05, `fsutil::app_dir`), `Waveform` → media, `Cut::sound_file` → media (open); `gpu`/`render`/shaders → `src/gpu/` looked at and kept (`ARCHITECTURE.md`) | M | low logic risk |
 | 8 | **Done 2026-11-02** (`36c216f`, as OPS-API step 5): `model::curve` (`Key`, `key_at`, `find`) for effect and motion keys; volume points stay `project::volume_key_at` (no ease, dB lines) until the automation lanes | M | low |
 | 9 | **Done 2026-11-02**: `OPS-API.md`, all its steps | M | medium |
-| 10 | Timeline `LaneView` | L | high: drawing and the mouse everywhere; last, after 4 and 5 |
+| 10 | **Done 2026-11-07** as the timeline package (the audit's last item): one `Hit` per canvas, shared drawing helpers, one `Picked`, blocks holding the cut, clip or item they show, `Marks::update` split | L | high: drawing and the mouse everywhere; last, after 4 and 5 |
 
 ## Small things found
 
-- Doc comments left on the wrong item: `tracks.rs` (an orphan «Runs `f`
-  on its own thread…» above `probe_sound`), `timeline.rs` (doubled lines
-  from before `Own`), `mod.rs` (`selected_sound` still says «(cut,
-  point)»).
-- Thin wrappers: `tracks.rs`'s `cut_wave_file` (one line of
-  `sound_file`), `music::gain` (a cast).
+- Fixed since: the orphan doc comments, the thin wrappers
+  (`cut_wave_file`, `music::gain`), `ARCHITECTURE.md`'s old sizes.
 - `#[allow(clippy::too_many_arguments)]` on `draw_own_line`: it wants a
   small struct.
-- `Message` has about 137 variants and `handle` names each one; nested
-  enums per area (as `Sound`, `Record`, `Effect` already are) would make
-  the dispatch one line per area.
-- `ARCHITECTURE.md`'s «shape today» table and CLAUDE.md's Layout still
-  name `ffmpeg.rs` and `main.rs` by their old sizes and «the music lane».
+- `Message` has grown to about 195 variants and `handle` names each one;
+  nested enums per area (as `Sound`, `Record`, `Effect`, `Template`
+  already are) would make the dispatch one line per area.
 - No over-engineering found. The risk is the opposite: the same thing
   written again.
 - `OwnSound` (seven `&mut` fields) looks heavy but is right: the JSON

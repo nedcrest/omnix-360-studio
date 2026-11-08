@@ -13,9 +13,11 @@ export PKG_CONFIG_PATH=$PWD/.localdeps/root/usr/lib/x86_64-linux-gnu/pkgconfig
 ~/.cargo/bin/cargo test --release -- --include-ignored # with the microphone
 ```
 
-- Every module is private (`lib.rs` exports `cli` only), so unit tests
-  live in `#[cfg(test)] mod tests` inside `src/`. A `tests/` folder can
-  only drive the binary (`env!("CARGO_BIN_EXE_rosmo360")`).
+- Most modules are private (`lib.rs` exports `cli`, `transition`,
+  `from_sheet`, `desktop`, `sibling`, the viewer and a few folder
+  helpers for Dailix), so unit tests live in `#[cfg(test)] mod tests`
+  inside `src/`. `tests/cli.rs` drives the binary
+  (`env!("CARGO_BIN_EXE_omnix")`).
 - No coverage tool installed (no `llvm-cov`, no `tarpaulin`); the counts
   below are by hand.
 - Media for tests is made at run time with `ffmpeg -f lavfi` (`testsrc2`,
@@ -27,24 +29,29 @@ export PKG_CONFIG_PATH=$PWD/.localdeps/root/usr/lib/x86_64-linux-gnu/pkgconfig
   picture and sound both 3.500 s. `check` on it: ~3 s, 0 findings.
   Ordinary videos go through `Pipeline::load_flat`, no OSV needed.
 
-## What has tests (count of `#[test]`, 2026-11-01)
+## What has tests (count of `#[test]`, 2026-11-09)
+
+200 in the library (199 run, the live microphone's ignored) and 10 end
+to end in `tests/cli.rs`.
 
 | File | Tests |
 |---|---|
-| `project.rs` | 17 |
-| `player/edit.rs` | 9 |
+| `project.rs` | 30 |
+| `model/edit.rs` | 15 |
+| `player/timeline.rs` | 13 |
 | `view.rs` | 8 |
-| `grade.rs`, `player/render.rs` (GPU vs CPU) | 5 each |
-| `capture.rs` (1 ignored), `overlay.rs` | 4 each |
-| `ffmpeg/mix.rs`, `player/bin.rs` | 3 each |
-| `cache.rs`, `lut.rs`, `sky.rs`, `text.rs`, `track.rs`, `player/effects.rs`, `player/music.rs` | 2 each |
-| `check.rs` (only the clock), `loudness.rs`, `dji.rs`, `hdr.rs`, `stab.rs`, `stitch.rs`, `player/{transport, sound_ui, handles, info, mod, record_ui, settings_panel}.rs` | 1 each |
+| `model/ops/sound.rs`, `ffmpeg/mix.rs`, `duck.rs` | 7 each |
+| `player/render.rs` (GPU vs CPU, transitions among them) | 6 |
+| `model/ops/cuts.rs`, `grade.rs` | 5 each |
+| `transition.rs`, `overlay.rs`, `model/selection.rs`, `model/ops/keys.rs`, `capture.rs` (1 ignored) | 4 each |
+| `player/{sound_ui, keys, cuts, bin_view}.rs`, `notes.rs`, `lufs.rs`, `ffmpeg/mod.rs` | 3 each |
+| `template.rs`, `dissolve.rs`, `fsutil.rs`, `cache.rs`, `lut.rs`, `loudness.rs`, `mixdown.rs`, `mixcheck.rs`, `model/ops/{props, clips}.rs`, `player/{marks, effects, bin}.rs`, `sky.rs`, `text.rs`, `track.rs` | 2 each |
+| the rest with tests | 1 each |
 
-**None:** `player/timeline.rs` (1600 lines), `ffmpeg/mod.rs`,
-`player/gpu.rs`, `cli.rs`, `player/playback.rs`, `align.rs`,
-`player/jobs.rs`, `pipeline.rs`, `player/bars.rs`, `player/file.rs`,
-`player/framing.rs`, `export.rs`, `dissolve.rs`, `fsutil.rs`, and the
-smaller player modules.
+**None:** `player/gpu.rs`, `cli.rs` (end to end only), `player/playback.rs`,
+`align.rs`, `player/jobs.rs`, `pipeline.rs`, `player/bars.rs`,
+`player/file.rs`, `player/framing.rs`, `export.rs` (end to end only), and
+the smaller player modules.
 
 ## Riskiest untested logic
 

@@ -8,8 +8,13 @@ sequence and edit it automatically. Or is that crooked and unrealistic?"
 
 **Status: designed, deliberately not started.** The user, 2026-10-23:
 "I wouldn't do AI functions yet: Omnix doesn't have its full working
-functionality." It is milestone 9, the last. Speech transcription and faces,
-which it will use, are milestone 4 (gaps 29, 30).
+functionality." It is milestone 13 «ШІ-монтаж», last but the other
+platforms. Speech transcription, which it will use, is in milestone 5
+«Ефекти, колір і розумний звук» (gaps 83, 29); faces in 6 (gap 30).
+Since this was written the contact sheet moved from footage-agent to
+Dailix (`../dailix`, its sheet core `dailix_sheet`, which Omnix links),
+and a project changes through ops (`OPS-API.md`): read «footage-agent»
+below as Dailix, and the snippet as `omnix apply`.
 
 ## Is it realistic?
 
@@ -34,8 +39,9 @@ Most pieces exist already:
   - `reveal`;
   - `reaction`.
 - **The output format is public and checked.** The project JSON loads with
-  `deny_unknown_fields`, and footage-agent's `export/omnix.py` already
-  writes it correctly from marks, with the chosen cleaned voices.
+  `deny_unknown_fields`, and Dailix's «→ Omnix» (`from_sheet.rs`) already
+  makes it from marks; an agent can change one through `omnix apply`
+  (checked ops, `omnix ops-schema` their schema) instead of writing JSON.
 - **There are tools for an AI editor.** Upstream built `check` (likely
   mistakes, a line each), `preview` (a contact sheet of a project, a row per
   cut, with the music waveform), `scan` and `info` for "claudeVideoEdit", an
@@ -46,7 +52,8 @@ Most pieces exist already:
 
 ### 1. The brief (footage-agent writes it)
 
-`04_project/brief-<day>.json`, written beside «→ Omnix». It is everything an
+`brief-<day>.json` in the trip's video folder (`videos/<name>/`, gap 82),
+written beside «→ Omnix». It is everything an
 editor needs, in one file, and nothing it has to dig for:
 
 - **The day:** its story note, target length, aspect, style words, music
@@ -111,8 +118,8 @@ exists today:
 - **To add in Omnix:**
   - `omnix schema` (the project's JSON Schema, so an agent can validate
     before saving);
-  - `omnix describe proj.json` (a short text summary per cut: edit time,
-    clip, in/out, note, sound, effects; cheaper for an AI than the image);
+  - ~~`omnix describe proj.json`~~ built (OPS-API step 6): a short text
+    summary per cut, cheaper for an AI than the image;
   - the player reloading the project when its file changes, so the user
     watches the AI's version appear.
 - **To add in footage-agent:** a small tested Python library (the
@@ -161,5 +168,5 @@ It grows with the other milestones:
   rules get better from the user's comments, so record each correction as a
   rule in the skill.
 - **Talk cut mid-word** until transcripts or silence detection exist (28e).
-- **The format drifting** between Omnix and footage-agent. One schema
-  (28c), and `export/omnix.py`'s tests run against it.
+- **The format drifting** between Omnix and Dailix. Less now that Dailix
+  links Omnix's library and makes edits through it; one schema (28c).

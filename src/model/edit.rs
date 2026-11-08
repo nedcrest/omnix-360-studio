@@ -10,7 +10,17 @@
 //! dissolving in over it.
 
 use crate::overlay::{Item, ItemRef, Lane, Track};
+use crate::model::ops::End;
 use crate::project::{Cut, Project};
+
+/// A transition drawn on the lane (`Project::drawn_zone`): the join it
+/// belongs to (the cut after it), and an overlap or an edge look on the
+/// cut before (`Out`) or after (`In`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Zone {
+    Overlap { join: usize, seconds: f64 },
+    Edge { join: usize, end: End, seconds: f64 },
+}
 
 /// The shortest a split or trim may leave a cut, in seconds.
 pub const MIN_CUT: f64 = 0.2;
@@ -289,6 +299,28 @@ impl Project {
         crate::project::settle_crossfades(&mut self.cuts);
     }
 
+    /// What a rectangle drawn on the transitions lane from edit time `a` to
+    /// `b` makes (gap 25f): across a join's middle, its overlap as long as
+    /// the rectangle; on one side, an edge look on the end of that cut
+    /// nearer the rectangle, from the cut's edge to the rectangle's far
+    /// side. Lengths on the transitions' steps. None on an end with no join
+    /// (the edit's own fades are there) or off the cuts.
+    pub fn drawn_zone(&self, a: f64, b: f64) -> Option<Zone> {
+        let (a, b) = (a.min(b), a.max(b));
+        let offsets = crate::project::offsets(&self.cuts);
+        let mid = |i: usize| offsets[i] + self.cuts[i].crossfade / 2.0;
+        let centre = (a + b) / 2.0;
+        let across = (1..self.cuts.len()).filter(|&i| a < mid(i) && mid(i) < b).min_by(|&i, &j| (mid(i) - centre).abs().total_cmp(&(mid(j) - centre).abs()));
+        if let Some(i) = across {
+            return Some(Zone::Overlap { join: i, seconds: crate::transition::stepped(b - a) });
+        }
+        let k = (0..self.cuts.len()).find(|&k| centre >= offsets[k] && centre < offsets[k] + self.cuts[k].len())?;
+        let (from, to) = (offsets[k], offsets[k] + self.cuts[k].len());
+        let (end, seconds, join) = if centre - from < to - centre { (End::In, b - from, k) } else { (End::Out, to - a, k + 1) };
+        let seconds = crate::transition::stepped(seconds).min(self.cuts[k].len());
+        (join >= 1 && join < self.cuts.len()).then_some(Zone::Edge { join, end, seconds })
+    }
+
     /// The join of two cuts nearest edit time `t`, as the position a cut
     /// put there gets: 0 before the first cut, `cuts.len()` after the last.
     pub fn nearest_join(&self, t: f64) -> usize {
@@ -541,6 +573,18 @@ mod tests {
                 assert!(seen.iter().all(|&s| s), "a permutation, from {from} to {to}");
             }
         }
+    }
+
+    #[test]
+    fn a_rectangle_on_the_lane_makes_an_overlap_across_a_join_and_an_edge_beside_it() {
+        // a 0..4, b 4..7, c 7..13: joins at 4 and 7.
+        let e = Edit { project: Project { cuts: vec![cut("a", 0.0, 4.0), cut("b", 0.0, 3.0), cut("c", 0.0, 6.0)], ..Default::default() }, ..Default::default() };
+        assert_eq!(e.drawn_zone(3.6, 4.4), Some(Zone::Overlap { join: 1, seconds: 0.75 }));
+        assert_eq!(e.drawn_zone(7.2, 6.6), Some(Zone::Overlap { join: 2, seconds: 0.5 }), "either way round");
+        assert_eq!(e.drawn_zone(2.5, 3.2), Some(Zone::Edge { join: 1, end: End::Out, seconds: 1.5 }), "a's end, from the rectangle's start");
+        assert_eq!(e.drawn_zone(4.3, 4.9), Some(Zone::Edge { join: 1, end: End::In, seconds: 1.0 }), "b's start, to the rectangle's end");
+        assert_eq!(e.drawn_zone(8.0, 8.4), Some(Zone::Edge { join: 2, end: End::In, seconds: 1.5 }));
+        assert_eq!((e.drawn_zone(0.5, 1.0), e.drawn_zone(12.0, 12.5)), (None, None), "the edit's own ends have no join");
     }
 
     #[test]

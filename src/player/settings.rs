@@ -72,6 +72,8 @@ pub struct Settings {
     pub fold_sfx2: bool,
     /// The markers' row over the ruler folded to a strip.
     pub fold_marks: bool,
+    /// The transitions lane folded to a thin row.
+    pub fold_transitions: bool,
     /// The projects place, chosen in Omnix; none: Dailix's.
     pub projects: Option<PathBuf>,
     /// The edits opened or saved last, the latest first (`RECENT` at most).
@@ -134,6 +136,7 @@ impl Default for Settings {
             fold_overlay: true,
             fold_sfx2: true,
             fold_marks: false,
+            fold_transitions: false,
             projects: None,
             recent: Vec::new(),
             browse: false,

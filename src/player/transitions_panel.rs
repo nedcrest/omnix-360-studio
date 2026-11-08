@@ -86,6 +86,7 @@ impl App {
                 }
             }
             Message::TransitionLook(look) => {
+                self.last_overlap = look.unwrap_or(self.last_overlap);
                 let Some(cut) = self.join else { return Task::none() };
                 self.edit.begin();
                 self.op(Op::Cut(CutOp::Transition { cut, look }));

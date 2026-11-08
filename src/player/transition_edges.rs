@@ -3,7 +3,7 @@
 //! after it (In), no overlap; each half belongs to its own cut
 //! (`Cut::edge_out`, `edge_in`) and goes where the cut goes.
 
-use super::transitions_panel::{length_row, tiles};
+use super::transitions_panel::{Kind, length_row, tiles};
 use super::{App, Message};
 use crate::model::ops::{End, Op, cuts::CutOp};
 use crate::project::{Cut, Edge};
@@ -17,6 +17,7 @@ impl App {
     pub(super) fn on_edges(&mut self, message: Message) {
         match message {
             Message::EdgeLook(end, look) => {
+                self.last_edge = look.unwrap_or(self.last_edge);
                 let Some(cut) = self.edge_cut(end) else { return };
                 let seconds = edge_of(cut, end).map_or(transition::DEFAULT, |e| e.seconds);
                 let cut = cut.id;
@@ -30,7 +31,58 @@ impl App {
                 self.op(Op::Cut(CutOp::Edge { cut, end, look, seconds }));
             }
             Message::EdgeSide(end) => self.edge_side = end,
+            Message::TransitionZone(join, side) => self.open_zone(join, side),
+            Message::TransitionDraw(a, b) => self.draw_zone(a, b),
+            // Its inner edge dragged: one undo step with the drag
+            // (`ScrubDone` closes it).
+            Message::EdgeSeconds(i, end, seconds) => {
+                let Some(c) = self.edit.cuts.get(i) else { return };
+                let Some(look) = edge_of(c, end).map(|e| e.look) else { return };
+                let cut = c.id;
+                self.edit.begin();
+                self.op(Op::Cut(CutOp::Edge { cut, end, look: Some(look), seconds }));
+            }
             _ => {}
+        }
+    }
+
+    /// The panel on the join before cut `join`, at its overlap (`side`
+    /// none; the join picked) or at that edge.
+    fn open_zone(&mut self, join: usize, side: Option<End>) {
+        self.join = self.edit.cuts.get(join).map(|c| c.id);
+        self.side = Some(super::Side::Transitions);
+        match side {
+            None => {
+                self.transitions_tab = Kind::Overlap;
+                self.selection = crate::model::selection::Selection::join_at(&self.edit, join);
+            }
+            Some(end) => (self.transitions_tab, self.edge_side) = (Kind::Edges, end),
+        }
+    }
+
+    /// A rectangle drawn on the lane from edit time `a` to `b`: the zone
+    /// it makes (`Project::drawn_zone`) with the look chosen last, or its
+    /// own look kept if it had one, then opened in the panel.
+    fn draw_zone(&mut self, a: f64, b: f64) {
+        use crate::model::edit::Zone;
+        let Some(zone) = self.edit.drawn_zone(a, b) else { return };
+        self.edit.begin();
+        match zone {
+            Zone::Overlap { join, seconds } => {
+                let c = &self.edit.cuts[join];
+                let (cut, look) = (c.id, c.transition.unwrap_or(self.last_overlap));
+                self.op(Op::Cut(CutOp::Crossfade { cut, seconds }));
+                self.op(Op::Cut(CutOp::Transition { cut, look: Some(look) }));
+                self.edit.commit();
+                self.open_zone(join, None);
+            }
+            Zone::Edge { join, end, seconds } => {
+                let c = &self.edit.cuts[if end == End::Out { join - 1 } else { join }];
+                let (cut, look) = (c.id, edge_of(c, end).map_or(self.last_edge, |e| e.look));
+                self.op(Op::Cut(CutOp::Edge { cut, end, look: Some(look), seconds }));
+                self.edit.commit();
+                self.open_zone(join, Some(end));
+            }
         }
     }
 

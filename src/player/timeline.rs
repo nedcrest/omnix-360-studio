@@ -26,6 +26,7 @@
 //! shows and moves the window.
 
 use super::{Message, thumbs};
+use crate::model::ops::End;
 use crate::model::selection::Picked;
 use crate::project::{Own, SoundTrack};
 use crate::overlay::Track;
@@ -58,6 +59,9 @@ const GAP: f32 = 2.0;
 /// Under a track, a row of its effect keyframes and one of its view (a
 /// cut's) or motion (an overlay's) keyframes.
 const EFFECTS: f32 = 16.0;
+/// The transitions lane's height (gap 25f), open and folded.
+const TRANS: f32 = 24.0;
+const TRANS_FOLDED: f32 = 16.0;
 const KEYS: f32 = 20.0;
 /// The gap between the picture's lanes and the sound's, with the sound
 /// group's name in it: the eye finds where one group ends (gap 50d).
@@ -81,6 +85,10 @@ pub struct Rows {
     cuts: f32,
     /// The clip sound lane's height; it starts where the cuts end.
     clip_sound: f32,
+    /// The transitions lane: where it starts (under the clip sound) and how
+    /// high it is.
+    trans_top: f32,
+    trans: f32,
     effects_top: f32,
     /// The View key row's height: 0 while editing.
     keys: f32,
@@ -104,14 +112,16 @@ impl Rows {
         let scale = scale.clamp(*SCALES.start(), *SCALES.end());
         let (cuts, music) = ((CUTS * scale).round(), (MUSIC * scale).round());
         let clip_sound = (CLIP_SOUND * scale).round();
-        let effects_top = cuts + clip_sound;
+        let trans_top = cuts + clip_sound;
+        let trans = if folds.transitions { TRANS_FOLDED } else { TRANS };
+        let effects_top = trans_top + trans;
         let keys = if framing { KEYS } else { 0.0 };
         let seek_top = effects_top + EFFECTS + keys;
         let sounds_top = seek_top + SEEK;
         let folded = SoundTrack::ALL.map(|w| w == SoundTrack::Sfx2 && folds.sfx2);
         let lanes: f32 = folded.iter().map(|&f| if f { FOLDED } else { music }).sum();
         let height = sounds_top + lanes + SCROLL;
-        Rows { cuts, clip_sound, effects_top, keys_top: effects_top + EFFECTS, keys, seek_top, music, sounds_top, folded, height, overlay: (OVERLAY * scale).round() }
+        Rows { cuts, clip_sound, trans_top, trans, effects_top, keys_top: effects_top + EFFECTS, keys, seek_top, music, sounds_top, folded, height, overlay: (OVERLAY * scale).round() }
     }
 
     /// Where sound lane `i` starts.
@@ -146,7 +156,12 @@ impl Rows {
 
     /// Whether `y` is on the clip sound lane.
     fn on_clip_sound(self, y: f32) -> bool {
-        (self.cuts..self.effects_top).contains(&y)
+        (self.cuts..self.trans_top).contains(&y)
+    }
+
+    /// Whether `y` is on the transitions lane.
+    fn on_transitions(self, y: f32) -> bool {
+        (self.trans_top..self.effects_top).contains(&y)
     }
 }
 
@@ -410,6 +425,11 @@ pub enum Drag {
     /// Dragging cut `cut`'s sound's start (`start`) or end on the clip
     /// sound lane, at clip time `from` when pressed: a J- or L-cut.
     SoundEdge { cut: usize, start: bool, x0: f32, from: f64, per_px: f64 },
+    /// Drawing a transition on its lane from `x0` to `x1` (gap 25f).
+    Zone { x0: f32, x1: f32 },
+    /// Dragging the inner edge of cut `cut`'s edge look on `end`: `from`
+    /// seconds when pressed at `x0`.
+    EdgeLength { cut: usize, end: End, x0: f32, from: f64, per_px: f64 },
 }
 
 #[derive(Default)]
@@ -770,6 +790,9 @@ impl Timeline {
         if p.x < HEAD {
             return if self.head_menu(p).is_some() { Hit::Head } else { Hit::Nothing };
         }
+        if self.rows.on_transitions(p.y) {
+            return self.zone_hit(p.x, b);
+        }
         if let Some((cut, key, t)) = self.effect_at(p, b) {
             return Hit::Effect { cut, key, t };
         }
@@ -882,6 +905,12 @@ enum Hit {
     Key { cut: usize, key: usize },
     /// Anywhere else under the cuts: the playhead goes there.
     Playhead,
+    /// On the transitions lane (gap 25f): a zone (its join, the cut after
+    /// it; `side` none the overlap, else that edge), its length's edge, or
+    /// empty lane to draw a new one on.
+    Zone { join: usize, side: Option<End> },
+    ZoneEdge { cut: usize, side: Option<End> },
+    ZoneDraw,
 }
 
 impl Hit {
@@ -890,9 +919,10 @@ impl Hit {
         use mouse::Interaction as I;
         match self {
             Hit::Nothing => I::default(),
-            Hit::Listen(..) | Hit::Fold(..) | Hit::Head | Hit::CutSound(_) | Hit::Playhead | Hit::Join(_) => I::Pointer,
+            Hit::Listen(..) | Hit::Fold(..) | Hit::Head | Hit::CutSound(_) | Hit::Playhead | Hit::Join(_) | Hit::Zone { .. } => I::Pointer,
+            Hit::ZoneDraw => I::Crosshair,
             Hit::Scroll | Hit::Effect { .. } | Hit::Point { .. } | Hit::Cut(_) | Hit::Clip { edge: None, .. } | Hit::Key { .. } => I::Grab,
-            Hit::CutFade { .. } | Hit::SoundEdge { .. } | Hit::CutEdge { .. } | Hit::ClipFade { .. } | Hit::Clip { edge: Some(_), .. } => I::ResizingHorizontally,
+            Hit::CutFade { .. } | Hit::SoundEdge { .. } | Hit::CutEdge { .. } | Hit::ClipFade { .. } | Hit::Clip { edge: Some(_), .. } | Hit::ZoneEdge { .. } => I::ResizingHorizontally,
             Hit::LevelTag(_) => I::ResizingVertically,
             Hit::NewPoint(_) => I::Crosshair,
         }
@@ -1118,11 +1148,13 @@ impl Timeline {
         let video = theme.extended_palette().primary.base.color;
         head_cell(frame, 0.0, self.rows.cuts, video);
         head_cell(frame, self.rows.cuts, self.rows.clip_sound, SOUND_LINE);
+        head_cell(frame, self.rows.trans_top, self.rows.trans, TRANSITION);
         head_cell(frame, self.rows.effects_top, self.rows.seek_top - self.rows.effects_top, iced::Color::TRANSPARENT);
         for li in 0..self.sounds.len() {
             head_cell(frame, self.rows.sound_top(li), self.rows.lane_h(li), lane_colour(crate::mixcheck::Lane::Track(self.sounds[li].which), theme));
         }
         lane_tag(frame, "Video", video, self.rows.cuts / 2.0);
+        lane_tag(frame, &self.trans_tag(), TRANSITION, self.rows.trans_top + self.rows.trans / 2.0);
         let (top, h) = (self.rows.cuts + 1.0, self.rows.clip_sound - 2.0);
         lane_tag(frame, "Clip sound", SOUND_LINE, tag_mid(top, h));
         draw_listen(frame, "Clip sound", tag_mid(top, h), &self.listen, super::listen::CLIP_SOUND);
@@ -1200,6 +1232,12 @@ impl Timeline {
     /// The fold toggle under `p`: a folded lane anywhere (but its solo and
     /// mute), an open one on its name tag.
     fn fold_at(&self, p: Point) -> Option<(FoldLane, bool)> {
+        // The transitions lane: folded, anywhere opens it; open, its name.
+        if self.rows.on_transitions(p.y) {
+            let folded = self.folds.transitions;
+            let mid = self.rows.trans_top + self.rows.trans / 2.0;
+            return (folded || (p.x < HEAD && fold_tag(&self.trans_tag(), mid).contains(p))).then_some((FoldLane::Transitions, !folded));
+        }
         let li = self.rows.sound_at_y(p.y)?;
         if self.sounds[li].which != SoundTrack::Sfx2 {
             return None;
@@ -1758,6 +1796,79 @@ fn crossfade(frame: &mut Frame, (l, r): (f32, f32), (top, h): (f32, f32), cross:
     }
 }
 
+impl Timeline {
+    /// The transitions lane's zones, left to right edges in pixels: each
+    /// join's overlap and the edge looks on either side of a join (`side`
+    /// as `Hit::Zone`), with the cut it's on.
+    fn zones(&self, b: Rectangle) -> Vec<(usize, usize, Option<End>, f32, f32)> {
+        let n = self.blocks.len();
+        let mut zones = Vec::new();
+        for (i, c) in self.blocks.iter().enumerate() {
+            let (from, end) = (c.from, c.from + c.len());
+            if i > 0 && c.cut.crossfade > 0.0 {
+                zones.push((i, i, None, self.x(from, b), self.x(from + c.cut.crossfade, b)));
+            }
+            if let Some(e) = c.cut.edge_in.as_ref().filter(|_| i > 0) {
+                zones.push((i, i, Some(End::In), self.x(from, b), self.x(from + e.seconds.min(c.len()), b)));
+            }
+            if let Some(e) = c.cut.edge_out.as_ref().filter(|_| i + 1 < n) {
+                zones.push((i + 1, i, Some(End::Out), self.x(end - e.seconds.min(c.len()), b), self.x(end, b)));
+            }
+        }
+        zones
+    }
+
+    /// What a press at `x` on the transitions lane meets: the edge that
+    /// sets a zone's length (an overlap's start, an edge look's inner
+    /// side), the zone, or empty lane.
+    fn zone_hit(&self, x: f32, b: Rectangle) -> Hit {
+        let zones = self.zones(b);
+        let grip = |at: f32| (x - at).abs() <= 5.0;
+        for &(_, cut, side, l, r) in &zones {
+            if grip(if side == Some(End::In) { r } else { l }) {
+                return Hit::ZoneEdge { cut, side };
+            }
+        }
+        zones.iter().find(|z| x >= z.3 && x <= z.4).map_or(Hit::ZoneDraw, |&(join, _, side, ..)| Hit::Zone { join, side })
+    }
+
+    /// The lane's name: «▾ Transitions» open, «▸ Transitions (3)» folded.
+    fn trans_tag(&self) -> String {
+        if self.folds.transitions { format!("▸ Transitions ({})", self.zones(Rectangle::default()).len()) } else { "▾ Transitions".to_owned() }
+    }
+
+    /// The zones on the lane, the join picked framed, and a rectangle
+    /// being drawn.
+    fn draw_zones(&self, frame: &mut Frame, theme: &Theme, b: Rectangle, drag: &Drag) {
+        let (top, h) = (self.rows.trans_top + 2.0, self.rows.trans - 4.0);
+        for (join, cut, side, l, r) in self.zones(b) {
+            let shape = Path::rectangle(Point::new(l, top), Size::new(r - l, h));
+            frame.fill(&shape, TRANSITION.scale_alpha(if side.is_none() { 0.55 } else { 0.3 }));
+            frame.stroke(&shape, Stroke::default().with_width(1.0).with_color(TRANSITION));
+            if side.is_none() && self.picked.join() == Some(join) {
+                selection_frame(frame, &block_path((l, r), top, h), theme);
+            }
+            // Its look's name, where it fits and the lane's open.
+            let c = &self.blocks[cut].cut;
+            let look = match side {
+                None => c.transition.map_or("Dissolve", |l| l.name()),
+                Some(End::In) => c.edge_in.as_ref().map_or("", |e| e.look.name()),
+                Some(End::Out) => c.edge_out.as_ref().map_or("", |e| e.look.name()),
+            };
+            if !self.folds.transitions && r - l > look.chars().count() as f32 * 6.0 + 8.0 {
+                frame.fill_text(Text { content: look.to_owned(), position: Point::new(l + 4.0, top + h / 2.0), color: iced::Color::WHITE, size: 11.0.into(), align_y: Vertical::Center, ..Default::default() });
+            }
+        }
+        if let Drag::Zone { x0, x1 } = *drag {
+            let shape = Path::rectangle(Point::new(x0.min(x1), top), Size::new((x1 - x0).abs(), h));
+            frame.stroke(&shape, Stroke::default().with_width(1.5).with_color(TRANSITION));
+        }
+    }
+}
+
+/// Transitions' colour (`TRANSITIONS.md`: their zones orange).
+const TRANSITION: iced::Color = iced::Color::from_rgb(1.0, 0.6, 0.15);
+
 /// An edge look (gap 25b) from the cut's edge at `edge` to `inner`: a
 /// wedge as high as the lane at the edge, none inside, as a fade reads.
 fn edge_wedge(frame: &mut Frame, edge: f32, inner: f32, h: f32) {
@@ -1767,7 +1878,7 @@ fn edge_wedge(frame: &mut Frame, edge: f32, inner: f32, h: f32) {
         p.line_to(Point::new(inner, h));
         p.close();
     });
-    frame.fill(&wedge, iced::Color::from_rgba(1.0, 0.6, 0.15, 0.4));
+    frame.fill(&wedge, TRANSITION.scale_alpha(0.4));
     let slope = Path::line(Point::new(edge, 0.0), Point::new(inner, h));
     frame.stroke(&slope, Stroke::default().with_width(1.5).with_color(iced::Color::from_rgba(1.0, 0.7, 0.3, 0.9)));
 }
@@ -2042,6 +2153,21 @@ impl Timeline {
                 Message::Select(cut)
             }
             Hit::Join(cut) => Message::SelectJoin(cut),
+            Hit::Zone { join, side } => Message::TransitionZone(join, side),
+            Hit::ZoneEdge { cut, side: None } => {
+                *drag = Drag::Crossfade { cut, x0: p.x, from: self.blocks[cut].cut.crossfade, per_px };
+                Message::TransitionZone(cut, None)
+            }
+            Hit::ZoneEdge { cut, side: Some(end) } => {
+                let c = &self.blocks[cut].cut;
+                let from = if end == End::In { c.edge_in.as_ref() } else { c.edge_out.as_ref() }.map_or(0.0, |e| e.seconds);
+                *drag = Drag::EdgeLength { cut, end, x0: p.x, from, per_px };
+                Message::TransitionZone(if end == End::Out { cut + 1 } else { cut }, Some(end))
+            }
+            Hit::ZoneDraw => {
+                *drag = Drag::Zone { x0: p.x, x1: p.x };
+                return Some(canvas::Action::request_redraw().and_capture());
+            }
             Hit::ClipFade { lane, clip, in_edge } => {
                 let m = &self.sounds[lane].blocks[clip];
                 *drag = Drag::Fade { own: Own::Clip(self.sounds[lane].which, clip), in_edge, x0: p.x, from: if in_edge { m.clip.fade_in } else { m.clip.fade_out }, per_px };
@@ -2119,6 +2245,15 @@ impl Timeline {
                 snapped(to, |by| Message::MusicMove(self.sounds[lane].which, clip, at + by, overlap))
             }
             Drag::Crossfade { cut, x0, from, per_px } => Message::Crossfade(*cut, *from + (*x0 - x) as f64 * *per_px),
+            Drag::Zone { x1, .. } => {
+                *x1 = x;
+                return Some(canvas::Action::request_redraw().and_capture());
+            }
+            // Inward lengthens: rightwards on a start, leftwards on an end.
+            Drag::EdgeLength { cut, end, x0, from, per_px } => {
+                let dx = (x - *x0) as f64 * *per_px;
+                Message::EdgeSeconds(*cut, *end, *from + if *end == End::In { dx } else { -dx })
+            }
             Drag::Fade { own, in_edge, x0, from, per_px } => {
                 // Rightwards lengthens a fade in, leftwards a fade out.
                 let dx = (x - *x0) as f64 * *per_px;
@@ -2156,7 +2291,9 @@ fn release(drag: Drag) -> Option<canvas::Action<Message>> {
         Drag::None => None,
         Drag::Move { cut, moved: true, to, .. } => Some(canvas::Action::publish(Message::MoveCut(cut, to)).and_capture()),
         Drag::Move { .. } | Drag::Scroll { .. } => Some(canvas::Action::request_redraw().and_capture()),
-        Drag::Playhead | Drag::Key { .. } | Drag::Effect { .. } | Drag::Trim { .. } | Drag::MusicMove { .. } | Drag::MusicTrim { .. } | Drag::Fade { .. } | Drag::Point { .. } | Drag::Level { .. } | Drag::Crossfade { .. } | Drag::SoundEdge { .. } => {
+        // The drawn zone is let go in `Marks::update`, which knows the times.
+        Drag::Zone { .. } => Some(canvas::Action::request_redraw().and_capture()),
+        Drag::Playhead | Drag::Key { .. } | Drag::Effect { .. } | Drag::Trim { .. } | Drag::MusicMove { .. } | Drag::MusicTrim { .. } | Drag::Fade { .. } | Drag::Point { .. } | Drag::Level { .. } | Drag::Crossfade { .. } | Drag::SoundEdge { .. } | Drag::EdgeLength { .. } => {
             Some(canvas::Action::publish(Message::ScrubDone).and_capture())
         }
     }
@@ -2183,7 +2320,12 @@ impl canvas::Program<Message> for Marks {
             Mouse(mouse::Event::ButtonPressed(mouse::Button::Right)) => self.right_press(bounds, cursor),
             Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => self.press(state, bounds, cursor),
             Mouse(mouse::Event::CursorMoved { position }) => self.drag_to(state, *position, bounds),
-            Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => release(std::mem::take(&mut state.drag)),
+            Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => match std::mem::take(&mut state.drag) {
+                // A rectangle drawn on the transitions lane: a few pixels
+                // at least, or it was a click.
+                Drag::Zone { x0, x1 } if (x1 - x0).abs() > 4.0 => Some(canvas::Action::publish(Message::TransitionDraw(self.t(x0, bounds), self.t(x1, bounds))).and_capture()),
+                drag => release(drag),
+            },
             _ => None,
         }
     }
@@ -2193,6 +2335,7 @@ impl canvas::Program<Message> for Marks {
         let palette = theme.extended_palette();
         let mut frame = Frame::new(renderer, bounds.size());
         draw_rows(&mut frame, theme, self, bounds, self.rows.effects_top, (self.rows.keys > 0.0).then_some("View"));
+        self.draw_zones(&mut frame, theme, bounds, drag);
         for (i, c) in self.blocks.iter().enumerate() {
             let (l, r) = self.block_x(c, bounds);
             if Some(i) == self.picked.cut() {
@@ -2549,6 +2692,20 @@ mod tests {
     }
 
     #[test]
+    fn the_transitions_lane_finds_a_zone_its_length_edge_or_room_to_draw() {
+        let (mut t, b) = timeline();
+        // The overlap of cuts 0 and 1 is 3..4 s; an in edge on cut 2, 7..8 s.
+        t.blocks[2].cut.edge_in = Some(crate::project::Edge { look: crate::transition::Look::EdgeBlur, seconds: 1.0, params: Default::default() });
+        let y = t.rows.trans_top + t.rows.trans / 2.0;
+        let hit = |s: f64| t.hit(Point::new(t.x(s, b), y), b, false, false);
+        assert!(matches!(hit(3.5), Hit::Zone { join: 1, side: None }));
+        assert!(matches!(hit(3.0), Hit::ZoneEdge { cut: 1, side: None }), "the overlap's start sets its length");
+        assert!(matches!(hit(7.5), Hit::Zone { join: 2, side: Some(End::In) }));
+        assert!(matches!(hit(8.0), Hit::ZoneEdge { cut: 2, side: Some(End::In) }), "an in's inner side");
+        assert!(matches!(hit(5.5), Hit::ZoneDraw));
+    }
+
+    #[test]
     fn the_rows_stack_top_to_bottom_at_every_scale() {
         for scale in [0.5, 0.75, 1.0, 2.0, 3.0, 5.0] {
             for framing in [false, true] {
@@ -2561,7 +2718,8 @@ mod tests {
                 }
                 assert_eq!(r.sound_at_y(r.sounds_top - 1.0), None);
                 assert_eq!(r.sound_at_y(r.height - SCROLL + 1.0), None, "the scrollbar isn't a lane");
-                assert!(r.on_clip_sound(r.cuts + 1.0) && !r.on_clip_sound(r.effects_top));
+                assert!(r.on_clip_sound(r.cuts + 1.0) && !r.on_clip_sound(r.trans_top));
+                assert!(r.on_transitions(r.trans_top) && !r.on_transitions(r.effects_top) && r.trans_top < r.effects_top);
             }
         }
         // Scaled outside its range, it holds at the ends.
@@ -3013,6 +3171,8 @@ pub enum FoldLane {
     Sfx2,
     /// The markers' row over the ruler.
     Marks,
+    /// The transitions lane over the effects row (gap 25f).
+    Transitions,
 }
 
 /// Which of them are folded.
@@ -3022,11 +3182,12 @@ pub struct Folds {
     pub overlay: bool,
     pub sfx2: bool,
     pub marks: bool,
+    pub transitions: bool,
 }
 
 impl Default for Folds {
     fn default() -> Self {
-        Folds { text: true, overlay: true, sfx2: true, marks: false }
+        Folds { text: true, overlay: true, sfx2: true, marks: false, transitions: false }
     }
 }
 
@@ -3037,6 +3198,7 @@ impl Folds {
             FoldLane::Overlay => &mut self.overlay,
             FoldLane::Sfx2 => &mut self.sfx2,
             FoldLane::Marks => &mut self.marks,
+            FoldLane::Transitions => &mut self.transitions,
         } = folded;
     }
 }

@@ -394,6 +394,13 @@ enum Message {
     EdgeLook(crate::model::ops::End, Option<crate::transition::Look>),
     EdgeLength(crate::model::ops::End, i64),
     EdgeSide(crate::model::ops::End),
+    /// The transitions lane (gap 25f): a zone clicked (the join, the cut
+    /// after it; none the overlap, else that edge); a rectangle drawn from
+    /// one edit time to another; cut `.0`'s edge look on `.1` dragged to
+    /// `.2` seconds.
+    TransitionZone(usize, Option<crate::model::ops::End>),
+    TransitionDraw(f64, f64),
+    EdgeSeconds(usize, crate::model::ops::End, f64),
     /// Transition templates: put on the join, saved, removed.
     Template(transition_templates::TemplateMsg),
     NewMenuClose,
@@ -731,6 +738,10 @@ struct App {
     /// being typed to save the join under.
     templates: Vec<String>,
     template_name: String,
+    /// The looks chosen last, for the overlap and an edge: what a zone
+    /// drawn on the lane gets.
+    last_overlap: crate::transition::Look,
+    last_edge: crate::transition::Look,
     /// The bin, at the far left (`bin.rs`).
     bin: bin::Bin,
     /// 10-bit tracks decode at 10 bits (`source::deep`).
@@ -886,7 +897,7 @@ impl App {
             bar_labels: saved.bar_labels,
             snapping: saved.snapping,
             snap_line: None,
-            folds: timeline::Folds { text: saved.fold_text, overlay: saved.fold_overlay, sfx2: saved.fold_sfx2, marks: saved.fold_marks },
+            folds: timeline::Folds { text: saved.fold_text, overlay: saved.fold_overlay, sfx2: saved.fold_sfx2, marks: saved.fold_marks, transitions: saved.fold_transitions },
             ducking: false,
             listen: Default::default(),
             check: Default::default(),
@@ -901,6 +912,8 @@ impl App {
             edge_side: crate::model::ops::End::Out,
             templates: crate::template::names(),
             template_name: String::new(),
+            last_overlap: crate::transition::Look::WhipPan,
+            last_edge: crate::transition::Look::EdgeFade,
             bin: bin::Bin { open: saved.bin_pinned, pinned: saved.bin_pinned, tile: saved.bin_tile, side: saved.bin_side, ..Default::default() },
             fullscreen: false,
             volume: saved.volume,
@@ -958,6 +971,7 @@ impl App {
             fold_overlay: self.folds.overlay,
             fold_sfx2: self.folds.sfx2,
             fold_marks: self.folds.marks,
+            fold_transitions: self.folds.transitions,
             projects: self.projects.clone(),
             recent: self.recent.clone(),
             browse: self.browse,
@@ -1090,7 +1104,7 @@ impl App {
                 Task::none()
             }
             Message::Template(m) => self.on_template(m),
-            m @ (Message::EdgeLook(..) | Message::EdgeLength(..) | Message::EdgeSide(_)) => {
+            m @ (Message::EdgeLook(..) | Message::EdgeLength(..) | Message::EdgeSide(_) | Message::TransitionZone(..) | Message::TransitionDraw(..) | Message::EdgeSeconds(..)) => {
                 self.on_edges(m);
                 Task::none()
             }

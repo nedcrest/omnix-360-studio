@@ -135,8 +135,7 @@ impl App {
                     let (cut, before) = (self.edit.cuts[from].id, self.edit.cuts.get(to).map(|c| c.id));
                     if self.op(Op::Cut(CutOp::Move { cut, before })).is_some() {
                         // The selection names the cut by id: it follows by itself.
-                        let at = |i: usize| crate::project::Project::moved_index(from, to, i);
-                        self.current = at(self.current);
+                        self.current = crate::project::Project::moved_index(from, to, self.current);
                         self.selection = Selection::Cut(cut);
                     }
                 }

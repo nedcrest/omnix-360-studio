@@ -348,7 +348,7 @@ mod tests {
         assert!(e.apply(&knob("streak", Some(5.0))).is_err() && e.apply(&knob("turns", Some(1.0))).is_err(), "out of range; not the whip's");
         e.apply(&knob("direction", Some(0.0))).unwrap();
         assert_eq!(e.cuts[1].transition_params.len(), 1, "the default isn't kept");
-        assert_eq!(e.cuts[1].transition_values()[..2], [0.0, 1.5]);
+        assert_eq!(e.cuts[1].transition_spec().values[..2], [0.0, 1.5]);
         e.apply(&Op::Cut(CutOp::Transition { cut: b, look: Some(crate::transition::Look::Flash) })).unwrap();
         assert!(e.cuts[1].transition_params.is_empty(), "another look starts at its defaults");
         e.apply(&Op::Cut(CutOp::Crossfade { cut: b, seconds: 10.0 })).unwrap();

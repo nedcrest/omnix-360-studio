@@ -764,9 +764,9 @@ impl Cut {
         self.end - self.start
     }
 
-    /// Its join's look's settings, as the player and the export play them.
-    pub fn transition_values(&self) -> crate::transition::Values {
-        crate::transition::values(self.transition, &self.transition_params)
+    /// Its join's transition, as the player and the export draw it.
+    pub fn transition_spec(&self) -> crate::transition::Spec {
+        crate::transition::Spec { look: self.transition, values: crate::transition::values(self.transition, &self.transition_params) }
     }
 }
 

@@ -388,9 +388,9 @@ impl App {
         let look = if self.edit.cuts.get(*i).is_some_and(|c| c.flat) == self.look_flat { self.look } else { self.other_look };
         let camera = if self.follow { keyed().unwrap_or_else(|| look.camera()) } else { look.camera() };
         let camera = Camera { grade: self.grade(*i, t), lut: self.edit.cuts.get(*i).and_then(|c| c.lut_applied), ..camera };
-        // The join's look is the incoming cut's (`Cut::transition`).
-        let look = crate::transition::Look::code(self.edit.cuts.get(*i).and_then(|c| c.transition));
-        Some(gpu::Incoming { rig: p.media.rig.clone(), shown, camera, rig_from_view: p.rig_from_view(self.rolling_shutter), mix: self.crossfade_shares()?.1 as f32, look })
+        // The join's transition is the incoming cut's (`Cut::transition`).
+        let transition = self.edit.cuts.get(*i).map(|c| c.transition_spec()).unwrap_or_default();
+        Some(gpu::Incoming { rig: p.media.rig.clone(), shown, camera, rig_from_view: p.rig_from_view(self.rolling_shutter), mix: self.crossfade_shares()?.1 as f32, transition })
     }
 
     /// The playing cut, and the playhead's clip time. That is where a seek

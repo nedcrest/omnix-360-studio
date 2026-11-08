@@ -150,6 +150,25 @@ impl Look {
     }
 }
 
+/// A join's transition as the player and the export draw it: the look
+/// and its knobs' values (`Cut::transition_spec`).
+#[derive(Clone, Copy, Debug, PartialEq, Default)]
+pub struct Spec {
+    pub look: Option<Look>,
+    pub values: Values,
+}
+
+impl Spec {
+    /// `look` at its defaults.
+    pub fn of(look: Option<Look>) -> Spec {
+        Spec { look, values: values(look, &Default::default()) }
+    }
+
+    pub fn code(&self) -> u32 {
+        Look::code(self.look)
+    }
+}
+
 /// The values `look` plays with: those `set`, the rest by default.
 pub fn values(look: Option<Look>, set: &std::collections::BTreeMap<String, f32>) -> Values {
     let mut v = [0.0; MOST_KNOBS];
@@ -196,21 +215,23 @@ impl Look {
 /// blur's sample steps. The shader's `transition` (`transition.wgsl`) is
 /// this, line for line. The looks are ports of gl-transitions (MIT):
 /// WhipPan and WhipSpin by gre, CrossZoom by rectalogic, Overexposure by
-/// Ben Zhang, at their default parameters; light leak after FilmBurn by
+/// Ben Zhang, their parameters the knobs (`Look::knobs`, `spec.values`); light leak after FilmBurn by
 /// Anastasia Dunbar and glitch after StripDatamoshGlitch by bread and
 /// GlitchMemories by Gunnar Roth, their sine noise put on `hash` (a sine's
 /// last digits differ between GPU and CPU); luma fade is ours.
-pub fn colour(code: u32, p: f32, uv: [f32; 2], aspect: f32, pixel: [u32; 2], from: &dyn Fn([f32; 2]) -> [f32; 3], to: &dyn Fn([f32; 2]) -> [f32; 3]) -> [f32; 3] {
+pub fn colour(spec: &Spec, p: f32, uv: [f32; 2], aspect: f32, pixel: [u32; 2], from: &dyn Fn([f32; 2]) -> [f32; 3], to: &dyn Fn([f32; 2]) -> [f32; 3]) -> [f32; 3] {
     let clamp01 = |q: [f32; 2]| [q[0].clamp(0.0, 1.0), q[1].clamp(0.0, 1.0)];
-    match code {
-        // Whip pan: both pictures slide left, streaked along the move; the
-        // incoming arrives from the right. Slow, whip, slow.
+    let v = &spec.values;
+    match spec.code() {
+        // Whip pan: both pictures slide the knob's way (left by default),
+        // streaked along the move; the incoming arrives from the other
+        // side. Slow, whip, slow.
         1 => {
-            let d = [-1.0f32, 0.0];
+            let d = whip_direction(v[0]);
             let h = 1.0 - (2.0 * p - 1.0).abs();
             let e = 0.5 * h * (0.1 + 0.9 * h * h);
             let pos = if p < 0.5 { e } else { 1.0 - e };
-            let len = 0.4 * h * (0.1 + 2.7 * h * h) / 2.8;
+            let len = 0.4 * h * (0.1 + 2.7 * h * h) / 2.8 * v[1];
             let q = [uv[0] - d[0] * pos, uv[1] - d[1] * pos];
             let jitter = hash(pixel, 1);
             let mut sum = [0.0f32; 3];
@@ -225,8 +246,8 @@ pub fn colour(code: u32, p: f32, uv: [f32; 2], aspect: f32, pixel: [u32; 2], fro
         // Zoom punch: a crossfade through a strong zoom blur, its centre
         // drifting across the middle.
         2 => {
-            let strength = 0.4;
-            let centre = [0.25 + 0.5 * p, 0.5];
+            let strength = v[0];
+            let centre = if v[1] < 0.5 { [0.25 + 0.5 * p, 0.5] } else { [0.5, 0.5] };
             let dissolve = expo_in_out(p);
             let s = strength / 2.0 * (1.0 - (2.0 * std::f32::consts::PI * p).cos());
             let to_centre = [centre[0] - uv[0], centre[1] - uv[1]];
@@ -246,7 +267,7 @@ pub fn colour(code: u32, p: f32, uv: [f32; 2], aspect: f32, pixel: [u32; 2], fro
         // takes over mid-spin and slows to rest; a little zoom, the
         // channels splitting with the speed.
         3 => {
-            let (turns, blur, chroma, zoom) = (1.0f32, 0.5f32, 0.6f32, 0.25f32);
+            let (turns, way, blur, chroma, zoom) = (v[0], 1.0 - 2.0 * v[1], v[2], v[3], v[4]);
             let h = 1.0 - (2.0 * p - 1.0).abs();
             let shutter = blur * 0.1 * h;
             let scale = 1.0 + zoom * h * h * h;
@@ -256,7 +277,7 @@ pub fn colour(code: u32, p: f32, uv: [f32; 2], aspect: f32, pixel: [u32; 2], fro
             for i in 0..SAMPLES {
                 let s = (i as f32 + jitter) / SAMPLES as f32 - 0.5;
                 let t = (p + s * shutter).clamp(0.0, 1.0);
-                let half = std::f32::consts::PI * turns;
+                let half = std::f32::consts::PI * turns * way;
                 let a = if t < 0.5 { half * (2.0 * t).powi(3) } else { -half * (2.0 - 2.0 * t).powi(3) };
                 let (c, sn) = (a.cos(), a.sin());
                 let r = [(c * q[0] + sn * q[1]) / scale, (-sn * q[0] + c * q[1]) / scale];
@@ -270,32 +291,36 @@ pub fn colour(code: u32, p: f32, uv: [f32; 2], aspect: f32, pixel: [u32; 2], fro
             }
             [0, 1, 2].map(|k| sum[k] / weight[k].max(1e-5))
         }
-        // Flash: both pictures pushed past white at the middle.
+        // Flash: both pictures pushed past white at the middle, or past a
+        // warm white.
         4 => {
-            let lift = (std::f32::consts::PI * p).sin() * 0.6;
+            let lift = (std::f32::consts::PI * p).sin() * v[0];
+            let tint = mix([1.0, 1.0, 1.0], [1.0, 0.8, 0.55], v[1]);
             let (a, b) = (from(uv), to(uv));
-            [0, 1, 2].map(|k| a[k] * (1.0 - p + lift) + b[k] * (p + lift))
+            [0, 1, 2].map(|k| a[k] * (1.0 - p) + b[k] * p + (a[k] + b[k]) * lift * tint[k])
         }
-        5 => light_leak(p, uv, aspect, from, to),
+        5 => light_leak(v, p, uv, aspect, from, to),
         6 => {
-            // The incoming shows first where the outgoing is bright: each
-            // pixel turns when the edge, sweeping down the brightness,
-            // passes its own.
+            // The incoming shows first where the outgoing is bright (or
+            // dark): each pixel turns when the edge, sweeping down the
+            // brightness, passes its own.
             let (a, b) = (from(uv), to(uv));
-            let soft = 0.25;
+            let soft = v[0];
             let luma = 0.2126 * a[0] + 0.7152 * a[1] + 0.0722 * a[2];
+            let luma = if v[1] < 0.5 { luma } else { 1.0 - luma };
             let w = ((p * (1.0 + soft) - (1.0 - luma)) / soft).clamp(0.0, 1.0);
             mix(a, b, w * w * (3.0 - 2.0 * w))
         }
-        7 => glitch(p, uv, pixel, from, to),
+        7 => glitch(v, p, uv, pixel, from, to),
         _ => mix(from(uv), to(uv), p),
     }
 }
 
 /// Light leak: the pictures switch fast at the middle under warm glows
 /// that drift across and fade with it.
-fn light_leak(p: f32, uv: [f32; 2], aspect: f32, from: &dyn Fn([f32; 2]) -> [f32; 3], to: &dyn Fn([f32; 2]) -> [f32; 3]) -> [f32; 3] {
+fn light_leak(v: &Values, p: f32, uv: [f32; 2], aspect: f32, from: &dyn Fn([f32; 2]) -> [f32; 3], to: &dyn Fn([f32; 2]) -> [f32; 3]) -> [f32; 3] {
     let glow = (std::f32::consts::PI * p).sin().max(0.0);
+    let strength = v[0];
     let base = mix(from(uv), to(uv), sigmoid(p, 10.0));
     let mut f = 0.0;
     for i in 0..6u32 {
@@ -308,15 +333,15 @@ fn light_leak(p: f32, uv: [f32; 2], aspect: f32, from: &dyn Fn([f32; 2]) -> [f32
     }
     let f = f / 2.2;
     let warm = [f, (f * 0.7).powf(2.0 - glow), (f * 0.6).powf(1.3)];
-    [0, 1, 2].map(|k| base[k] + warm[k] * glow)
+    [0, 1, 2].map(|k| base[k] + warm[k] * glow * strength)
 }
 
 /// Glitch: strips of rows torn sideways, some showing the other picture,
 /// their colours split (the rest's a little), a grain over it, all strongest at the middle;
 /// the tear changes 24 times through.
-fn glitch(p: f32, uv: [f32; 2], pixel: [u32; 2], from: &dyn Fn([f32; 2]) -> [f32; 3], to: &dyn Fn([f32; 2]) -> [f32; 3]) -> [f32; 3] {
-    let burst = (std::f32::consts::PI * p).sin().max(0.0).sqrt();
-    let (frame, row) = ((p * 24.0).floor() as u32, (uv[1] * 36.0).floor() as u32);
+fn glitch(v: &Values, p: f32, uv: [f32; 2], pixel: [u32; 2], from: &dyn Fn([f32; 2]) -> [f32; 3], to: &dyn Fn([f32; 2]) -> [f32; 3]) -> [f32; 3] {
+    let burst = (std::f32::consts::PI * p).sin().max(0.0).sqrt() * v[0];
+    let (frame, row) = ((p * 24.0).floor() as u32, (uv[1] * v[1]).floor() as u32);
     let torn = hash([row, frame], 7) < 0.35 * burst;
     let shift = if torn { (hash([row, frame], 8) - 0.5) * 0.25 * burst } else { 0.0 };
     let w = smoothstep(0.3, 0.7, p);
@@ -326,6 +351,16 @@ fn glitch(p: f32, uv: [f32; 2], pixel: [u32; 2], from: &dyn Fn([f32; 2]) -> [f32
     let grain = (hash(pixel, 10) - 0.5) * 0.12 * burst;
     let (r, g, b) = (at(split), at(0.0), at(-split));
     [mix(from(r), to(r), w)[0] + grain, mix(from(g), to(g), w)[1] + grain, mix(from(b), to(b), w)[2] + grain]
+}
+
+/// The whip's move: left, right, up, down (`Look::knobs`' order).
+fn whip_direction(i: f32) -> [f32; 2] {
+    match i as u32 {
+        1 => [1.0, 0.0],
+        2 => [0.0, -1.0],
+        3 => [0.0, 1.0],
+        _ => [-1.0, 0.0],
+    }
 }
 
 /// FilmBurn's ease: steep through the middle, `a` how steep.
@@ -373,9 +408,9 @@ pub fn hash(pixel: [u32; 2], salt: u32) -> f32 {
 /// The transition between two finished frames of one size, as the export
 /// writes it: each pixel by `colour`, the pictures read bilinearly as the
 /// GPU's sampler reads them.
-pub fn blend(look: Option<Look>, p: f32, a: &crate::stitch::Frame, b: &crate::stitch::Frame) -> crate::stitch::Frame {
+pub fn blend(spec: &Spec, p: f32, a: &crate::stitch::Frame, b: &crate::stitch::Frame) -> crate::stitch::Frame {
     let (w, h, deep) = (a.width, a.height, a.deep);
-    let (code, aspect) = (Look::code(look), w as f32 / h as f32);
+    let aspect = w as f32 / h as f32;
     let scale = if deep { 65_535.0 } else { 255.0 };
     let get = |f: &crate::stitch::Frame, x: usize, y: usize, c: usize| -> f32 {
         let i = (y * w + x) * 3 + c;
@@ -397,7 +432,7 @@ pub fn blend(look: Option<Look>, p: f32, a: &crate::stitch::Frame, b: &crate::st
     for y in 0..h {
         for x in 0..w {
             let uv = [(x as f32 + 0.5) / w as f32, (y as f32 + 0.5) / h as f32];
-            for v in colour(code, p, uv, aspect, [x as u32, y as u32], &from, &to) {
+            for v in colour(spec, p, uv, aspect, [x as u32, y as u32], &from, &to) {
                 let v = (v.clamp(0.0, 1.0) * scale).round();
                 if deep {
                     rgb.extend((v as u16).to_le_bytes());
@@ -434,16 +469,28 @@ mod tests {
     #[test]
     fn each_look_starts_on_the_outgoing_and_ends_on_the_incoming() {
         let (a, b) = (|_: [f32; 2]| [0.2, 0.4, 0.6], |_: [f32; 2]| [0.9, 0.1, 0.5]);
-        for code in 0..=7 {
+        // Every look, at its defaults and with each knob at either end.
+        let mut specs = vec![Spec::default()];
+        for look in Look::ALL {
+            specs.push(Spec::of(Some(look)));
+            for (i, k) in look.knobs().iter().enumerate() {
+                for end in [k.least, k.most] {
+                    let mut s = Spec::of(Some(look));
+                    s.values[i] = end;
+                    specs.push(s);
+                }
+            }
+        }
+        for s in specs {
             for (p, want) in [(0.0, [0.2, 0.4, 0.6]), (1.0, [0.9, 0.1, 0.5])] {
-                let got = colour(code, p, [0.3, 0.7], 16.0 / 9.0, [5, 9], &a, &b);
-                assert!(got.iter().zip(want).all(|(g, w)| (g - w).abs() < 1e-3), "look {code} at {p}: {got:?}");
+                let got = colour(&s, p, [0.3, 0.7], 16.0 / 9.0, [5, 9], &a, &b);
+                assert!(got.iter().zip(want).all(|(g, w)| (g - w).abs() < 1e-3), "{s:?} at {p}: {got:?}");
             }
         }
         // A flat picture stays flat through a blur's middle; the flash
         // goes past white.
-        let mid = colour(1, 0.5, [0.5, 0.5], 1.0, [3, 3], &a, &a);
+        let mid = colour(&Spec::of(Some(Look::WhipPan)), 0.5, [0.5, 0.5], 1.0, [3, 3], &a, &a);
         assert!(mid.iter().zip([0.2, 0.4, 0.6]).all(|(g, w)| (g - w).abs() < 1e-3), "{mid:?}");
-        assert!(colour(4, 0.5, [0.5, 0.5], 1.0, [0, 0], &a, &b)[0] > 0.9);
+        assert!(colour(&Spec::of(Some(Look::Flash)), 0.5, [0.5, 0.5], 1.0, [0, 0], &a, &b)[0] > 0.9);
     }
 }

@@ -26,7 +26,7 @@ pub struct Dissolve<'a> {
     head: usize,
     tail: usize,
     /// The look of the join into the cut being written.
-    look: Option<crate::transition::Look>,
+    look: crate::transition::Spec,
     held: Option<BufReader<File>>,
     holding: Option<BufWriter<File>>,
     /// The two files, swapped at each cut: one read, one written.
@@ -42,13 +42,13 @@ impl<'a> Dissolve<'a> {
         hasher.write_u128(std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_nanos()));
         let key = hasher.finish();
         let file = |k| std::env::temp_dir().join(format!("omnix-dissolve-{}-{key:016x}-{k}.rgb", std::process::id()));
-        Dissolve { out, n: 0, frames: 0, head: 0, tail: 0, look: None, held: None, holding: None, files: [file(0), file(1)] }
+        Dissolve { out, n: 0, frames: 0, head: 0, tail: 0, look: Default::default(), held: None, holding: None, files: [file(0), file(1)] }
     }
 
     /// Starts the next cut of `frames` frames, whose first `head` cross the
     /// last cut's held tail by `look` and whose last `tail` cross the next
     /// cut.
-    pub fn cut(&mut self, frames: usize, head: usize, tail: usize, look: Option<crate::transition::Look>) -> Result<()> {
+    pub fn cut(&mut self, frames: usize, head: usize, tail: usize, look: crate::transition::Spec) -> Result<()> {
         self.look = look;
         self.held = None;
         if let Some(mut w) = self.holding.take() {
@@ -86,7 +86,7 @@ impl FrameSink for Dissolve<'_> {
             // By frame centres: the first frame already a little in.
             let p = (n as f32 + 0.5) / self.head as f32;
             let before = Frame { width: frame.width, height: frame.height, rgb: before, deep: frame.deep };
-            return self.out.write(&crate::transition::blend(self.look, p, &before, frame));
+            return self.out.write(&crate::transition::blend(&self.look, p, &before, frame));
         }
         self.out.write(frame)
     }
@@ -131,11 +131,11 @@ mod tests {
         let files = {
             let mut d = Dissolve::new(&mut out);
             let files = d.files.clone();
-            d.cut(10, 0, 4, None).unwrap();
+            d.cut(10, 0, 4, Default::default()).unwrap();
             for _ in 0..10 {
                 d.write(&a).unwrap();
             }
-            d.cut(10, 4, 0, None).unwrap();
+            d.cut(10, 4, 0, Default::default()).unwrap();
             for _ in 0..10 {
                 d.write(&b).unwrap();
             }

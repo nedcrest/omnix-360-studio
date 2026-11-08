@@ -367,7 +367,7 @@ mod tests {
 
 /// Two ordinary videos' frames drawn as a join: `a` going, `b` coming,
     /// mixed by the transition's pass (`look`'s code) `p` of the way through.
-    fn draw_join(gpu: &mut Gpu, a: Frame, b: Frame, look: u32, p: f32, (w, h): (usize, usize)) -> stitch::Frame {
+    fn draw_join(gpu: &mut Gpu, a: Frame, b: Frame, spec: &crate::transition::Spec, p: f32, (w, h): (usize, usize)) -> stitch::Frame {
         let camera = crate::view::View::home(crate::view::Projection::Perspective).camera();
         let (sa, sb) = (Shown::new(a, SeamFix::default()), Shown::new(b, SeamFix::default()));
         let (ra, rb) = (Rig::flat(0, crate::hdr::Hdr::None), Rig::flat(0, crate::hdr::Hdr::None));
@@ -375,7 +375,7 @@ mod tests {
         gpu.targets = vec![gpu.make_target(w, h)];
         let size = [w as f32, h as f32];
         gpu.stitcher.prepare_frame(&gpu.device, &gpu.queue, &ra, &sa, &camera, &[stitch::IDENTITY], size, [0.0, 0.0]);
-        gpu.stitcher.prepare_incoming(&gpu.device, &gpu.queue, &rb, &sb, &camera, &[stitch::IDENTITY], size, [0.0, 0.0], look, p);
+        gpu.stitcher.prepare_incoming(&gpu.device, &gpu.queue, &rb, &sb, &camera, &[stitch::IDENTITY], size, [0.0, 0.0], spec, p);
         gpu.stitcher.prepare_overlays(&gpu.device, &gpu.queue, &[], size, [0.0, 0.0], size);
         let target = &gpu.targets[0];
         let mut encoder = gpu.device.create_command_encoder(&Default::default());
@@ -407,17 +407,29 @@ mod tests {
         let a = || p010(w, h, |x| if (x / 4) % 2 == 0 { 250 } else { 800 }, 512, 512);
         let b = || p010(w, h, |x| if (x / 6) % 2 == 0 { 900 } else { 350 }, 600, 440);
         let (fa, fb) = (draw_flat(&mut gpu, a(), crate::hdr::Hdr::None, (w, h)), draw_flat(&mut gpu, b(), crate::hdr::Hdr::None, (w, h)));
-        for look in std::iter::once(None).chain(Look::ALL.into_iter().filter(|&l| Look::code(Some(l)) != 0).map(Some)) {
-            for p in [0.2, 0.5, 0.8] {
-                let got = draw_join(&mut gpu, a(), b(), Look::code(look), p, (w, h));
-                let want = transition::blend(look, p, &fa, &fb);
+        // Each built look at its defaults, then with every knob at its far
+        // end (a choice's last), through the middle only.
+        let built: Vec<Option<Look>> = std::iter::once(None).chain(Look::ALL.into_iter().filter(|&l| Look::code(Some(l)) != 0).map(Some)).collect();
+        let far = built.iter().flatten().map(|&l| {
+            let mut s = transition::Spec::of(Some(l));
+            for (v, k) in s.values.iter_mut().zip(l.knobs()) {
+                *v = k.most;
+            }
+            (s, vec![0.5])
+        });
+        let cases: Vec<(transition::Spec, Vec<f32>)> = built.iter().map(|&l| (transition::Spec::of(l), vec![0.2, 0.5, 0.8])).chain(far).collect();
+        for (spec, ps) in cases {
+            let look = spec.look;
+            for p in ps {
+                let got = draw_join(&mut gpu, a(), b(), &spec, p, (w, h));
+                let want = transition::blend(&spec, p, &fa, &fb);
                 let diffs: Vec<i32> = got.rgb.iter().zip(&want.rgb).map(|(&g, &c)| (g as i32 - c as i32).abs()).collect();
                 let off = diffs.iter().filter(|&&d| d > 3).count();
-                eprintln!("{look:?} at {p}: most {}, {off} of {} off by more than 3", diffs.iter().max().unwrap(), diffs.len());
+                eprintln!("{spec:?} at {p}: most {}, {off} of {} off by more than 3", diffs.iter().max().unwrap(), diffs.len());
                 assert!(off * 100 <= diffs.len(), "{look:?} at {p}: {off} samples off");
                 // And a look is its own, not the dissolve again.
-                if look.is_some() && p == 0.5 {
-                    let plain = transition::blend(None, p, &fa, &fb);
+                if look.is_some() && p == 0.5 && spec == transition::Spec::of(look) {
+                    let plain = transition::blend(&transition::Spec::default(), p, &fa, &fb);
                     let apart = want.rgb.iter().zip(&plain.rgb).filter(|(x, y)| x.abs_diff(**y) > 8).count();
                     assert!(apart * 10 > want.rgb.len(), "{look:?} looks like a dissolve");
                 }

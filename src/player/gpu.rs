@@ -222,7 +222,7 @@ pub struct Primitive {
 }
 
 /// The cut crossfading in: its own picture and framing, how far in it is
-/// (0..1), and its transition's look (`Look::code`).
+/// (0..1), and its transition (`Cut::transition_spec`).
 #[derive(Clone)]
 pub struct Incoming {
     pub rig: Arc<Rig>,
@@ -230,7 +230,7 @@ pub struct Incoming {
     pub camera: Camera,
     pub rig_from_view: Vec<M3>,
     pub mix: f32,
-    pub look: u32,
+    pub transition: crate::transition::Spec,
 }
 
 impl std::fmt::Debug for Primitive {
@@ -459,14 +459,15 @@ impl Pipeline {
 
     /// Gets a join ready after `prepare_frame` (prepared at the corner,
     /// `[0, 0]`): the incoming cut as the second layer, both drawn into
-    /// pictures of the view's `size`, mixed by `look` (`Look::code`) `p` of
+    /// pictures of the view's `size`, mixed by `spec` `p` of
     /// the way through into the view at `origin`.
     #[allow(clippy::too_many_arguments)]
-    pub fn prepare_incoming(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, rig: &Rig, shown: &Shown, camera: &Camera, rig_from_view: &[M3], size: [f32; 2], origin: [f32; 2], look: u32, p: f32) {
+    pub fn prepare_incoming(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, rig: &Rig, shown: &Shown, camera: &Camera, rig_from_view: &[M3], size: [f32; 2], origin: [f32; 2], spec: &crate::transition::Spec, p: f32) {
         self.prepare_layer(1, device, queue, rig, shown, camera, rig_from_view, size, [0.0, 0.0]);
         let (w, h) = (size[0].round().max(1.0) as u32, size[1].round().max(1.0) as u32);
         self.transition.ready(device, &self.sampler, self.format, w, h);
-        let u = [[look as f32, p, size[0] / size[1].max(1.0), if self.srgb { 1.0 } else { 0.0 }], [size[0], size[1], origin[0], origin[1]]];
+        let v = spec.values;
+        let u = [[spec.code() as f32, p, size[0] / size[1].max(1.0), if self.srgb { 1.0 } else { 0.0 }], [size[0], size[1], origin[0], origin[1]], [v[0], v[1], v[2], v[3]], [v[4], v[5], v[6], v[7]]];
         queue.write_buffer(&self.transition.uniforms, 0, bytemuck::cast_slice(&u));
         self.crossing = true;
     }
@@ -664,7 +665,7 @@ impl shader::Primitive for Primitive {
         let corner = if self.incoming.is_some() { [0.0, 0.0] } else { origin };
         p.prepare_frame(device, queue, &self.rig, &self.shown, &self.camera, &self.rig_from_view, size, corner);
         if let Some(i) = &self.incoming {
-            p.prepare_incoming(device, queue, &i.rig, &i.shown, &i.camera, &i.rig_from_view, size, origin, i.look, i.mix);
+            p.prepare_incoming(device, queue, &i.rig, &i.shown, &i.camera, &i.rig_from_view, size, origin, &i.transition, i.mix);
         }
         let target = viewport.physical_size();
         p.prepare_overlays(device, queue, &self.overlays, size, origin, [target.width as f32, target.height as f32]);
@@ -770,7 +771,7 @@ impl Transition {
             multiview: None,
             cache: None,
         });
-        let uniforms = device.create_buffer(&wgpu::BufferDescriptor { label: Some("transition"), size: 32, usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST, mapped_at_creation: false });
+        let uniforms = device.create_buffer(&wgpu::BufferDescriptor { label: Some("transition"), size: 64, usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST, mapped_at_creation: false });
         Transition { pipeline, layout, uniforms, pictures: None }
     }
 

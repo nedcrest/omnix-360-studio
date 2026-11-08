@@ -2,7 +2,7 @@
 // into a picture of its own, mixed here into the view. `transition.rs`'s
 // `colour` is this on the CPU, line for line (the export's twin). The looks
 // are ports of gl-transitions (MIT): WhipPan and WhipSpin by gre, CrossZoom
-// by rectalogic, Overexposure by Ben Zhang, at their default parameters;
+// by rectalogic, Overexposure by Ben Zhang, their parameters the knobs (`Look::knobs`);
 // light leak after FilmBurn by Anastasia Dunbar, glitch after
 // StripDatamoshGlitch by bread and GlitchMemories by Gunnar Roth, their
 // sine noise put on `hash`; luma fade is ours.
@@ -13,6 +13,9 @@ struct T {
     look: vec4f,
     // The view's size and its top-left corner in the target, pixels.
     view: vec4f,
+    // The look's knobs (`transition::Values`), in `Look::knobs` order.
+    ka: vec4f,
+    kb: vec4f,
 }
 
 @group(0) @binding(0) var<uniform> t: T;
@@ -80,6 +83,16 @@ fn mirror(v: f32) -> f32 {
     return select(m, 2.0 - m, m > 1.0);
 }
 
+// The whip's move: left, right, up, down (`Look::knobs`' order).
+fn whip_direction(i: f32) -> vec2f {
+    switch u32(i) {
+        case 1u: { return vec2f(1.0, 0.0); }
+        case 2u: { return vec2f(0.0, -1.0); }
+        case 3u: { return vec2f(0.0, 1.0); }
+        default: { return vec2f(-1.0, 0.0); }
+    }
+}
+
 fn sigmoid(x: f32, a: f32) -> f32 {
     if x > 0.5 {
         return 1.0 - pow(2.0 - 2.0 * x, a) / 2.0;
@@ -101,13 +114,13 @@ fn light_leak(p: f32, uv: vec2f, aspect: f32) -> vec3f {
     }
     let g = f / 2.2;
     let warm = vec3f(g, pow(g * 0.7, 2.0 - glow), pow(g * 0.6, 1.3));
-    return base + warm * glow;
+    return base + warm * glow * t.ka.x;
 }
 
 fn glitch(p: f32, uv: vec2f, pixel: vec2u) -> vec3f {
-    let burst = sqrt(max(sin(PI * p), 0.0));
+    let burst = sqrt(max(sin(PI * p), 0.0)) * t.ka.x;
     let frame = u32(floor(p * 24.0));
-    let row = u32(floor(uv.y * 36.0));
+    let row = u32(floor(uv.y * t.ka.y));
     let torn = hash(vec2u(row, frame), 7u) < 0.35 * burst;
     var shift = 0.0;
     if torn {
@@ -128,11 +141,11 @@ fn glitch(p: f32, uv: vec2f, pixel: vec2u) -> vec3f {
 fn transition(code: u32, p: f32, uv: vec2f, aspect: f32, pixel: vec2u) -> vec3f {
     switch code {
         case 1u: {
-            let d = vec2f(-1.0, 0.0);
+            let d = whip_direction(t.ka.x);
             let h = 1.0 - abs(2.0 * p - 1.0);
             let e = 0.5 * h * (0.1 + 0.9 * h * h);
             let pos = select(1.0 - e, e, p < 0.5);
-            let len = 0.4 * h * (0.1 + 2.7 * h * h) / 2.8;
+            let len = 0.4 * h * (0.1 + 2.7 * h * h) / 2.8 * t.ka.y;
             let q = uv - d * pos;
             let jitter = hash(pixel, 1u);
             var sum = vec3f(0.0);
@@ -148,9 +161,12 @@ fn transition(code: u32, p: f32, uv: vec2f, aspect: f32, pixel: vec2u) -> vec3f 
             return sum / f32(SAMPLES);
         }
         case 2u: {
-            let centre = vec2f(0.25 + 0.5 * p, 0.5);
+            var centre = vec2f(0.5, 0.5);
+            if t.ka.y < 0.5 {
+                centre = vec2f(0.25 + 0.5 * p, 0.5);
+            }
             let dissolve = expo_in_out(p);
-            let s = 0.4 / 2.0 * (1.0 - cos(2.0 * PI * p));
+            let s = t.ka.x / 2.0 * (1.0 - cos(2.0 * PI * p));
             let to_centre = centre - uv;
             let offset = hash(pixel, 2u);
             var sum = vec3f(0.0);
@@ -166,8 +182,8 @@ fn transition(code: u32, p: f32, uv: vec2f, aspect: f32, pixel: vec2u) -> vec3f 
         }
         case 3u: {
             let h = 1.0 - abs(2.0 * p - 1.0);
-            let shutter = 0.5 * 0.1 * h;
-            let scale = 1.0 + 0.25 * h * h * h;
+            let shutter = t.ka.z * 0.1 * h;
+            let scale = 1.0 + t.kb.x * h * h * h;
             let q = vec2f((uv.x - 0.5) * aspect, uv.y - 0.5);
             let jitter = hash(pixel, 3u);
             var sum = vec3f(0.0);
@@ -175,7 +191,7 @@ fn transition(code: u32, p: f32, uv: vec2f, aspect: f32, pixel: vec2u) -> vec3f 
             for (var i = 0u; i < SAMPLES; i++) {
                 let s = (f32(i) + jitter) / f32(SAMPLES) - 0.5;
                 let tt = clamp(p + s * shutter, 0.0, 1.0);
-                let half = PI;
+                let half = PI * t.ka.x * (1.0 - 2.0 * t.ka.y);
                 var a = -half * pow(2.0 - 2.0 * tt, 3.0);
                 if tt < 0.5 {
                     a = half * pow(2.0 * tt, 3.0);
@@ -188,23 +204,29 @@ fn transition(code: u32, p: f32, uv: vec2f, aspect: f32, pixel: vec2u) -> vec3f 
                 if tt < 0.5 {
                     col = from_c(suv);
                 }
-                let w = max(vec3f(1.0 - 4.0 * 0.6 * s, 1.0, 1.0 + 4.0 * 0.6 * s), vec3f(0.0));
+                let w = max(vec3f(1.0 - 4.0 * t.ka.w * s, 1.0, 1.0 + 4.0 * t.ka.w * s), vec3f(0.0));
                 sum += col * w;
                 weight += w;
             }
             return sum / max(weight, vec3f(1e-5));
         }
         case 4u: {
-            let lift = sin(PI * p) * 0.6;
-            return from_c(uv) * (1.0 - p + lift) + to_c(uv) * (p + lift);
+            let lift = sin(PI * p) * t.ka.x;
+            let tint = mix(vec3f(1.0), vec3f(1.0, 0.8, 0.55), t.ka.y);
+            let a = from_c(uv);
+            let b = to_c(uv);
+            return a * (1.0 - p) + b * p + (a + b) * lift * tint;
         }
         case 5u: {
             return light_leak(p, uv, aspect);
         }
         case 6u: {
             let a = from_c(uv);
-            let soft = 0.25;
-            let luma = dot(a, vec3f(0.2126, 0.7152, 0.0722));
+            let soft = t.ka.x;
+            var luma = dot(a, vec3f(0.2126, 0.7152, 0.0722));
+            if t.ka.y >= 0.5 {
+                luma = 1.0 - luma;
+            }
             let w = clamp((p * (1.0 + soft) - (1.0 - luma)) / soft, 0.0, 1.0);
             return mix(a, to_c(uv), w * w * (3.0 - 2.0 * w));
         }

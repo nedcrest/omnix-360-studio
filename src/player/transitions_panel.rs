@@ -18,6 +18,14 @@ const WIDTH: f32 = 300.0;
 /// after (user, 2026-11-08: 10 to 20 before).
 const BEFORE: f64 = 15.0;
 const AFTER: f64 = 10.0;
+/// The kinds, as tabs atop the panel (user, 2026-11-08; `TRANSITIONS.md`
+/// «Two kinds» and stingers): the overlap is built, the others wait (gaps
+/// 25b, 25d) and say so on hover.
+const KINDS: [(&str, &str, bool); 3] = [
+    ("Overlap", "Both cuts seen at once through the join", true),
+    ("Edges", "Soon: an out on one cut and an in on the next, no overlap", false),
+    ("Stingers", "Soon: a short clip with its own sound over the join", false),
+];
 
 impl App {
     /// The panel's messages.
@@ -153,7 +161,12 @@ impl App {
 
     pub(super) fn transitions_panel(&self) -> Element<'_, Message> {
         let note = |s: String| text(s).size(13).style(text::secondary);
-        let mut body = column![text("Transitions").size(18)].spacing(12);
+        // One built so far: it's the open tab, the others greyed.
+        let kinds = KINDS.map(|(name, about, built)| {
+            let tab = container(text(name).size(13).center().style(if built { text::default } else { text::secondary })).width(Length::Fill).padding([4, 6]);
+            tip(if built { tab.style(container::primary) } else { tab }, text(about), tooltip::Position::Bottom)
+        });
+        let mut body = column![text("Transitions").size(18), iced::widget::row(kinds).spacing(4)].spacing(12);
         let (Some(i), Some(c)) = (self.join_index(), self.join_cut()) else {
             body = body.push(note("No join: an edit of two cuts or more has one between each.".into()));
             return container(scrollable(body.padding(12))).width(WIDTH).height(Length::Fill).into();

@@ -27,6 +27,9 @@ pub struct Dissolve<'a> {
     tail: usize,
     /// The look of the join into the cut being written.
     look: crate::transition::Spec,
+    /// Its edge look on each frame (`Cut::edge_at`), outside its overlaps
+    /// as the player draws it.
+    edges: Vec<Option<(crate::transition::Spec, f32)>>,
     held: Option<BufReader<File>>,
     holding: Option<BufWriter<File>>,
     /// The two files, swapped at each cut: one read, one written.
@@ -42,14 +45,14 @@ impl<'a> Dissolve<'a> {
         hasher.write_u128(std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_nanos()));
         let key = hasher.finish();
         let file = |k| std::env::temp_dir().join(format!("omnix-dissolve-{}-{key:016x}-{k}.rgb", std::process::id()));
-        Dissolve { out, n: 0, frames: 0, head: 0, tail: 0, look: Default::default(), held: None, holding: None, files: [file(0), file(1)] }
+        Dissolve { out, n: 0, frames: 0, head: 0, tail: 0, look: Default::default(), edges: Vec::new(), held: None, holding: None, files: [file(0), file(1)] }
     }
 
     /// Starts the next cut of `frames` frames, whose first `head` cross the
     /// last cut's held tail by `look` and whose last `tail` cross the next
-    /// cut.
-    pub fn cut(&mut self, frames: usize, head: usize, tail: usize, look: crate::transition::Spec) -> Result<()> {
-        self.look = look;
+    /// cut; `edges` its frames' edge looks.
+    pub fn cut(&mut self, frames: usize, head: usize, tail: usize, look: crate::transition::Spec, edges: Vec<Option<(crate::transition::Spec, f32)>>) -> Result<()> {
+        (self.look, self.edges) = (look, edges);
         self.held = None;
         if let Some(mut w) = self.holding.take() {
             w.flush()?;
@@ -73,6 +76,14 @@ impl FrameSink for Dissolve<'_> {
     fn write(&mut self, frame: &Frame) -> Result<()> {
         let n = self.n;
         self.n += 1;
+        let edged;
+        let frame = match self.edges.get(n).copied().flatten() {
+            Some((spec, q)) if n >= self.head && n + self.tail < self.frames => {
+                edged = crate::transition::blend(&spec, q, frame, frame);
+                &edged
+            }
+            _ => frame,
+        };
         if n + self.tail >= self.frames
             && let Some(w) = &mut self.holding
         {
@@ -131,11 +142,11 @@ mod tests {
         let files = {
             let mut d = Dissolve::new(&mut out);
             let files = d.files.clone();
-            d.cut(10, 0, 4, Default::default()).unwrap();
+            d.cut(10, 0, 4, Default::default(), Vec::new()).unwrap();
             for _ in 0..10 {
                 d.write(&a).unwrap();
             }
-            d.cut(10, 4, 0, Default::default()).unwrap();
+            d.cut(10, 4, 0, Default::default(), Vec::new()).unwrap();
             for _ in 0..10 {
                 d.write(&b).unwrap();
             }

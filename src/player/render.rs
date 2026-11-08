@@ -367,15 +367,18 @@ mod tests {
 
 /// Two ordinary videos' frames drawn as a join: `a` going, `b` coming,
     /// mixed by the transition's pass (`look`'s code) `p` of the way through.
-    fn draw_join(gpu: &mut Gpu, a: Frame, b: Frame, spec: &crate::transition::Spec, p: f32, (w, h): (usize, usize)) -> stitch::Frame {
+    /// `a` and `b` drawn as a join, or `a` alone under an edge look (no `b`).
+    fn draw_join(gpu: &mut Gpu, a: Frame, b: Option<Frame>, spec: &crate::transition::Spec, p: f32, (w, h): (usize, usize)) -> stitch::Frame {
         let camera = crate::view::View::home(crate::view::Projection::Perspective).camera();
-        let (sa, sb) = (Shown::new(a, SeamFix::default()), Shown::new(b, SeamFix::default()));
         let (ra, rb) = (Rig::flat(0, crate::hdr::Hdr::None), Rig::flat(0, crate::hdr::Hdr::None));
         gpu.size = (0, 0);
         gpu.targets = vec![gpu.make_target(w, h)];
         let size = [w as f32, h as f32];
-        gpu.stitcher.prepare_frame(&gpu.device, &gpu.queue, &ra, &sa, &camera, &[stitch::IDENTITY], size, [0.0, 0.0]);
-        gpu.stitcher.prepare_incoming(&gpu.device, &gpu.queue, &rb, &sb, &camera, &[stitch::IDENTITY], size, [0.0, 0.0], spec, p);
+        gpu.stitcher.prepare_frame(&gpu.device, &gpu.queue, &ra, &Shown::new(a, SeamFix::default()), &camera, &[stitch::IDENTITY], size, [0.0, 0.0]);
+        match b {
+            Some(b) => gpu.stitcher.prepare_incoming(&gpu.device, &gpu.queue, &rb, &Shown::new(b, SeamFix::default()), &camera, &[stitch::IDENTITY], size, [0.0, 0.0], spec, p),
+            None => gpu.stitcher.prepare_edge(&gpu.device, &gpu.queue, size, [0.0, 0.0], spec, p),
+        }
         gpu.stitcher.prepare_overlays(&gpu.device, &gpu.queue, &[], size, [0.0, 0.0], size);
         let target = &gpu.targets[0];
         let mut encoder = gpu.device.create_command_encoder(&Default::default());
@@ -397,7 +400,7 @@ mod tests {
 
     /// A join drawn by the player's transition pass is what the export's
     /// `transition::blend` makes of the two cuts drawn alone: every look,
-    /// at the start, the middle and near the end.
+    /// at the start, the middle and near the end; an edge look of one.
     #[test]
     fn gpu_transitions_match_the_cpu() {
         use crate::transition::{self, Look};
@@ -418,17 +421,25 @@ mod tests {
             (s, vec![0.5])
         });
         let cases: Vec<(transition::Spec, Vec<f32>)> = built.iter().map(|&l| (transition::Spec::of(l), vec![0.2, 0.5, 0.8])).chain(far).collect();
-        for (spec, ps) in cases {
-            let look = spec.look;
+        // The edge looks on `a` alone, the same way.
+        let edges = Look::EDGES.into_iter().flat_map(|l| {
+            let mut far = transition::Spec::of(Some(l));
+            for (v, k) in far.values.iter_mut().zip(l.knobs()) {
+                *v = k.most;
+            }
+            [(transition::Spec::of(Some(l)), vec![0.3, 0.7, 1.0]), (far, vec![0.7])]
+        });
+        for (spec, ps) in cases.into_iter().chain(edges) {
+            let (look, edge) = (spec.look, spec.look.is_some_and(Look::is_edge));
             for p in ps {
-                let got = draw_join(&mut gpu, a(), b(), &spec, p, (w, h));
-                let want = transition::blend(&spec, p, &fa, &fb);
+                let got = draw_join(&mut gpu, a(), (!edge).then(b), &spec, p, (w, h));
+                let want = transition::blend(&spec, p, &fa, if edge { &fa } else { &fb });
                 let diffs: Vec<i32> = got.rgb.iter().zip(&want.rgb).map(|(&g, &c)| (g as i32 - c as i32).abs()).collect();
                 let off = diffs.iter().filter(|&&d| d > 3).count();
                 eprintln!("{spec:?} at {p}: most {}, {off} of {} off by more than 3", diffs.iter().max().unwrap(), diffs.len());
                 assert!(off * 100 <= diffs.len(), "{look:?} at {p}: {off} samples off");
                 // And a look is its own, not the dissolve again.
-                if look.is_some() && p == 0.5 && spec == transition::Spec::of(look) {
+                if look.is_some() && !edge && p == 0.5 && spec == transition::Spec::of(look) {
                     let plain = transition::blend(&transition::Spec::default(), p, &fa, &fb);
                     let apart = want.rgb.iter().zip(&plain.rgb).filter(|(x, y)| x.abs_diff(**y) > 8).count();
                     assert!(apart * 10 > want.rgb.len(), "{look:?} looks like a dissolve");

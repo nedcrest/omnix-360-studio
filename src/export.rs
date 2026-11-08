@@ -219,7 +219,10 @@ pub(crate) fn export(project: &project::Project, opts: &StitchOpts, out: &Export
         for (n, &(i, start, frames)) in cuts.clone().zip(&plan[cuts.clone()]) {
             let tail = if n + 1 < cuts.end { overlap[n + 1] } else { 0 };
             let head = if n > cuts.start { overlap[n] } else { 0 };
-            sink.cut(frames, head, tail, project.cuts[n].transition_spec())?;
+            // Edge looks in the whole edit, as its fades (a file per cut is
+            // for another editor).
+            let edges = if matches!(out.target, Target::One(_)) { (0..frames).map(|k| project.cuts[n].edge_at(start + k as f64 / fps)).collect() } else { Vec::new() };
+            sink.cut(frames, head, tail, project.cuts[n].transition_spec(), edges)?;
             let size = out.size;
             let mut tick = |n: usize| progress(done + n, total);
             // Framed by its keyframes and graded by its effects (in the whole

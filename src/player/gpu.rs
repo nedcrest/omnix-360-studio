@@ -217,6 +217,8 @@ pub struct Primitive {
     pub rig_from_view: Vec<M3>,
     /// Through a crossfade: the next cut, drawn over this one.
     pub incoming: Option<Incoming>,
+    /// Otherwise an edge look on the cut (`Cut::edge_at`): it, and how much.
+    pub edge: Option<(crate::transition::Spec, f32)>,
     /// The overlays showing, lowest first.
     pub overlays: Vec<OverlayDraw>,
 }
@@ -252,9 +254,10 @@ pub struct Pipeline {
     format: wgpu::TextureFormat,
     /// The cut shown, and the one crossfading in.
     layers: [Layer; 2],
-    /// The transition's pass, and whether a join is being drawn now.
+    /// The transition's pass, and how many layers it mixes now: 2 through
+    /// a join, 1 on an edge look (gap 25b), 0 none (the cut drawn straight).
     transition: Transition,
-    crossing: bool,
+    mixing: usize,
     overlay: wgpu::RenderPipeline,
     overlay_layout: wgpu::BindGroupLayout,
     /// Kept between frames; the first `overlays` are drawn.
@@ -404,7 +407,7 @@ impl Pipeline {
         });
         let (overlay, overlay_layout) = overlay_pipeline(device, format);
         let transition = Transition::new(device, format);
-        Pipeline { pipeline, layout, sampler, srgb: format.is_srgb(), format, layers, transition, crossing: false, overlay, overlay_layout, overlay_slots: Vec::new(), overlays: 0, dither: None }
+        Pipeline { pipeline, layout, sampler, srgb: format.is_srgb(), format, layers, transition, mixing: 0, overlay, overlay_layout, overlay_slots: Vec::new(), overlays: 0, dither: None }
     }
 
     /// Gets `overlays` ready to draw over the view (`size` pixels at
@@ -452,7 +455,7 @@ impl Pipeline {
     /// uploaded only when they change.
     #[allow(clippy::too_many_arguments)]
     pub fn prepare_frame(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, rig: &Rig, shown: &Shown, camera: &Camera, rig_from_view: &[M3], size: [f32; 2], origin: [f32; 2]) {
-        self.crossing = false;
+        self.mixing = 0;
         self.overlays = 0;
         self.prepare_layer(0, device, queue, rig, shown, camera, rig_from_view, size, origin);
     }
@@ -464,12 +467,25 @@ impl Pipeline {
     #[allow(clippy::too_many_arguments)]
     pub fn prepare_incoming(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, rig: &Rig, shown: &Shown, camera: &Camera, rig_from_view: &[M3], size: [f32; 2], origin: [f32; 2], spec: &crate::transition::Spec, p: f32) {
         self.prepare_layer(1, device, queue, rig, shown, camera, rig_from_view, size, [0.0, 0.0]);
+        self.prepare_mix(device, queue, size, origin, spec, p, 2);
+    }
+
+    /// Gets an edge look ready after `prepare_frame` (at the corner): the
+    /// cut drawn into a picture, `spec` `p` of the way over it, into the
+    /// view at `origin`.
+    #[allow(clippy::too_many_arguments)]
+    pub fn prepare_edge(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, size: [f32; 2], origin: [f32; 2], spec: &crate::transition::Spec, p: f32) {
+        self.prepare_mix(device, queue, size, origin, spec, p, 1);
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn prepare_mix(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, size: [f32; 2], origin: [f32; 2], spec: &crate::transition::Spec, p: f32, layers: usize) {
         let (w, h) = (size[0].round().max(1.0) as u32, size[1].round().max(1.0) as u32);
         self.transition.ready(device, &self.sampler, self.format, w, h);
         let v = spec.values;
         let u = [[spec.code() as f32, p, size[0] / size[1].max(1.0), if self.srgb { 1.0 } else { 0.0 }], [size[0], size[1], origin[0], origin[1]], [v[0], v[1], v[2], v[3]], [v[4], v[5], v[6], v[7]]];
         queue.write_buffer(&self.transition.uniforms, 0, bytemuck::cast_slice(&u));
-        self.crossing = true;
+        self.mixing = layers;
     }
 
     /// Gets layer `layer` ready (see `prepare_frame`).
@@ -538,9 +554,9 @@ impl Pipeline {
 
     /// Draws the prepared frame into `target`, within `clip`.
     pub fn draw(&self, encoder: &mut wgpu::CommandEncoder, target: &wgpu::TextureView, clip: &Rectangle<u32>) {
-        // A join: each cut into its picture first.
-        if let (Some(pics), true) = (&self.transition.pictures, self.crossing) {
-            for (layer, pic) in self.layers.iter().zip([&pics.from, &pics.to]) {
+        // A join or an edge look: each cut into its picture first.
+        if let Some(pics) = &self.transition.pictures {
+            for (layer, pic) in self.layers.iter().zip([&pics.from, &pics.to]).take(self.mixing) {
                 let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                     label: Some("transition picture"),
                     color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -572,7 +588,7 @@ impl Pipeline {
         });
         pass.set_scissor_rect(clip.x, clip.y, clip.width, clip.height);
         match &self.transition.pictures {
-            Some(pics) if self.crossing => {
+            Some(pics) if self.mixing > 0 => {
                 pass.set_pipeline(&self.transition.pipeline);
                 pass.set_bind_group(0, &pics.bind_group, &[]);
             }
@@ -662,10 +678,12 @@ impl shader::Primitive for Primitive {
         let (size, origin) = ([px.width, px.height], [px.x, px.y]);
         // Through a join both cuts are drawn into pictures of their own, at
         // their corner; the transition's pass puts them in the view.
-        let corner = if self.incoming.is_some() { [0.0, 0.0] } else { origin };
+        let corner = if self.incoming.is_some() || self.edge.is_some() { [0.0, 0.0] } else { origin };
         p.prepare_frame(device, queue, &self.rig, &self.shown, &self.camera, &self.rig_from_view, size, corner);
         if let Some(i) = &self.incoming {
             p.prepare_incoming(device, queue, &i.rig, &i.shown, &i.camera, &i.rig_from_view, size, origin, &i.transition, i.mix);
+        } else if let Some((spec, q)) = &self.edge {
+            p.prepare_edge(device, queue, size, origin, spec, *q);
         }
         let target = viewport.physical_size();
         p.prepare_overlays(device, queue, &self.overlays, size, origin, [target.width as f32, target.height as f32]);

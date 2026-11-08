@@ -284,6 +284,7 @@ impl App {
             fov_deg: self.shown_view().fov,
             picking: self.picking.is_some(),
             incoming: self.partner_layer(),
+            edge: self.clip_now().and_then(|(cut, t)| cut.edge_at(t)),
             overlays: self.overlay_draws(),
         })
     }

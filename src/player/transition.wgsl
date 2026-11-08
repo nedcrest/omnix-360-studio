@@ -119,14 +119,18 @@ fn light_leak(p: f32, uv: vec2f, aspect: f32) -> vec3f {
 
 fn glitch(p: f32, uv: vec2f, pixel: vec2u) -> vec3f {
     let burst = sqrt(max(sin(PI * p), 0.0)) * t.ka.x;
-    let frame = u32(floor(p * 24.0));
-    let row = u32(floor(uv.y * t.ka.y));
+    return tear(t.ka.y, burst, smoothstep(0.3, 0.7, p), u32(floor(p * 24.0)), uv, pixel, false);
+}
+
+// `transition::tear`; `one`: an edge look's, both sides its one picture.
+fn tear(strips: f32, burst: f32, w0: f32, frame: u32, uv: vec2f, pixel: vec2u, one: bool) -> vec3f {
+    let row = u32(floor(uv.y * strips));
     let torn = hash(vec2u(row, frame), 7u) < 0.35 * burst;
     var shift = 0.0;
     if torn {
         shift = (hash(vec2u(row, frame), 8u) - 0.5) * 0.25 * burst;
     }
-    var w = smoothstep(0.3, 0.7, p);
+    var w = w0;
     if torn && hash(vec2u(row, frame), 9u) < 0.5 {
         w = 1.0 - w;
     }
@@ -135,7 +139,44 @@ fn glitch(p: f32, uv: vec2f, pixel: vec2u) -> vec3f {
     let r = vec2f(clamp(uv.x + shift + split, 0.0, 1.0), uv.y);
     let g = vec2f(clamp(uv.x + shift, 0.0, 1.0), uv.y);
     let b = vec2f(clamp(uv.x + shift - split, 0.0, 1.0), uv.y);
-    return vec3f(mix(from_c(r), to_c(r), w).r, mix(from_c(g), to_c(g), w).g, mix(from_c(b), to_c(b), w).b) + grain;
+    return vec3f(mix(from_c(r), two(r, one), w).r, mix(from_c(g), two(g, one), w).g, mix(from_c(b), two(b, one), w).b) + grain;
+}
+
+// The incoming picture, or for an edge look its one picture again.
+fn two(uv: vec2f, one: bool) -> vec3f {
+    if one {
+        return from_c(uv);
+    }
+    return to_c(uv);
+}
+
+// `transition::edge_blur`.
+fn edge_blur(p: f32, uv: vec2f, aspect: f32, pixel: vec2u) -> vec3f {
+    let radius = p * 0.04 * t.ka.x;
+    let turn = hash(pixel, 11u) * 6.2831855;
+    var sum = vec3f(0.0);
+    for (var i = 0u; i < SAMPLES; i++) {
+        let r = radius * sqrt((f32(i) + 0.5) / f32(SAMPLES));
+        let a = f32(i) * 2.399963 + turn;
+        sum += from_c(clamp(vec2f(uv.x + cos(a) * r / aspect, uv.y + sin(a) * r), vec2f(0.0), vec2f(1.0)));
+    }
+    return sum / f32(SAMPLES);
+}
+
+// `transition::edge_zoom`.
+fn edge_zoom(p: f32, uv: vec2f, pixel: vec2u) -> vec3f {
+    let jitter = hash(pixel, 12u);
+    var sum = vec3f(0.0);
+    for (var i = 0u; i < SAMPLES; i++) {
+        let s = (f32(i) + jitter) / f32(SAMPLES);
+        let k = 1.0 + t.ka.y * p * (1.0 - 0.3 * s);
+        var f = k;
+        if t.ka.x < 0.5 {
+            f = 1.0 / k;
+        }
+        sum += from_c(vec2f(mirror(0.5 + (uv.x - 0.5) * f), mirror(0.5 + (uv.y - 0.5) * f)));
+    }
+    return sum / f32(SAMPLES);
 }
 
 fn transition(code: u32, p: f32, uv: vec2f, aspect: f32, pixel: vec2u) -> vec3f {
@@ -232,6 +273,22 @@ fn transition(code: u32, p: f32, uv: vec2f, aspect: f32, pixel: vec2u) -> vec3f 
         }
         case 7u: {
             return glitch(p, uv, pixel);
+        }
+        case 8u: {
+            return mix(from_c(uv), vec3f(select(0.0, 1.0, t.ka.x >= 0.5)), p);
+        }
+        case 9u: {
+            return edge_blur(p, uv, aspect, pixel);
+        }
+        case 10u: {
+            return edge_zoom(p, uv, pixel);
+        }
+        case 11u: {
+            return tear(t.ka.y, sqrt(p) * t.ka.x, 0.0, u32(floor(p * 24.0)), uv, pixel, true);
+        }
+        case 12u: {
+            let lift = p * t.ka.x;
+            return from_c(uv) * (1.0 + 2.0 * lift) + lift * lift;
         }
         default: {
             return mix(from_c(uv), to_c(uv), p);

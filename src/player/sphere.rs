@@ -18,6 +18,8 @@ pub(super) struct Sphere {
     /// Through a crossfade, the next cut drawn over: its rig, frame,
     /// framing, readout views and how far in it is (0..1).
     pub(super) incoming: Option<gpu::Incoming>,
+    /// Otherwise the cut's edge look now, and how much of it.
+    pub(super) edge: Option<(crate::transition::Spec, f32)>,
     pub(super) overlays: Vec<gpu::OverlayDraw>,
 }
 
@@ -117,6 +119,7 @@ impl shader::Program<Message> for Sphere {
             camera: self.camera,
             rig_from_view: self.rig_from_view.clone(),
             incoming: self.incoming.clone(),
+            edge: self.edge,
             overlays: self.overlays.clone(),
         }
     }

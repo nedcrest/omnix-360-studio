@@ -103,6 +103,9 @@ impl Look {
             Some(Look::ZoomPunch) => 2,
             Some(Look::SpinBlur) => 3,
             Some(Look::Flash) => 4,
+            Some(Look::LightLeak) => 5,
+            Some(Look::LumaFade) => 6,
+            Some(Look::Glitch) => 7,
             _ => 0,
         }
     }
@@ -115,7 +118,10 @@ impl Look {
 /// blur's sample steps. The shader's `transition` (`transition.wgsl`) is
 /// this, line for line. The looks are ports of gl-transitions (MIT):
 /// WhipPan and WhipSpin by gre, CrossZoom by rectalogic, Overexposure by
-/// Ben Zhang, at their default parameters.
+/// Ben Zhang, at their default parameters; light leak after FilmBurn by
+/// Anastasia Dunbar and glitch after StripDatamoshGlitch by bread and
+/// GlitchMemories by Gunnar Roth, their sine noise put on `hash` (a sine's
+/// last digits differ between GPU and CPU); luma fade is ours.
 pub fn colour(code: u32, p: f32, uv: [f32; 2], aspect: f32, pixel: [u32; 2], from: &dyn Fn([f32; 2]) -> [f32; 3], to: &dyn Fn([f32; 2]) -> [f32; 3]) -> [f32; 3] {
     let clamp01 = |q: [f32; 2]| [q[0].clamp(0.0, 1.0), q[1].clamp(0.0, 1.0)];
     match code {
@@ -192,8 +198,66 @@ pub fn colour(code: u32, p: f32, uv: [f32; 2], aspect: f32, pixel: [u32; 2], fro
             let (a, b) = (from(uv), to(uv));
             [0, 1, 2].map(|k| a[k] * (1.0 - p + lift) + b[k] * (p + lift))
         }
+        5 => light_leak(p, uv, aspect, from, to),
+        6 => {
+            // The incoming shows first where the outgoing is bright: each
+            // pixel turns when the edge, sweeping down the brightness,
+            // passes its own.
+            let (a, b) = (from(uv), to(uv));
+            let soft = 0.25;
+            let luma = 0.2126 * a[0] + 0.7152 * a[1] + 0.0722 * a[2];
+            let w = ((p * (1.0 + soft) - (1.0 - luma)) / soft).clamp(0.0, 1.0);
+            mix(a, b, w * w * (3.0 - 2.0 * w))
+        }
+        7 => glitch(p, uv, pixel, from, to),
         _ => mix(from(uv), to(uv), p),
     }
+}
+
+/// Light leak: the pictures switch fast at the middle under warm glows
+/// that drift across and fade with it.
+fn light_leak(p: f32, uv: [f32; 2], aspect: f32, from: &dyn Fn([f32; 2]) -> [f32; 3], to: &dyn Fn([f32; 2]) -> [f32; 3]) -> [f32; 3] {
+    let glow = (std::f32::consts::PI * p).sin().max(0.0);
+    let base = mix(from(uv), to(uv), sigmoid(p, 10.0));
+    let mut f = 0.0;
+    for i in 0..6u32 {
+        let r = [0, 1, 2, 3].map(|k| hash([i, k], 5));
+        let centre = [r[0] * 1.4 - 0.2 + (r[1] - 0.5) * p, r[2]];
+        let radius = 0.15 + 0.35 * r[3];
+        let d = [(uv[0] - centre[0]) * aspect, uv[1] - centre[1]];
+        f += (-(d[0] * d[0] + d[1] * d[1]) / (radius * radius)).exp();
+        f += 0.06 * (1.0 + (uv[0] * 6.0 * r[1] + p * 8.0 + r[2] * 6.0).sin() * (uv[1] * 6.0 * r[3] + p * 6.0 + r[0] * 6.0).sin());
+    }
+    let f = f / 2.2;
+    let warm = [f, (f * 0.7).powf(2.0 - glow), (f * 0.6).powf(1.3)];
+    [0, 1, 2].map(|k| base[k] + warm[k] * glow)
+}
+
+/// Glitch: strips of rows torn sideways, some showing the other picture,
+/// their colours split (the rest's a little), a grain over it, all strongest at the middle;
+/// the tear changes 24 times through.
+fn glitch(p: f32, uv: [f32; 2], pixel: [u32; 2], from: &dyn Fn([f32; 2]) -> [f32; 3], to: &dyn Fn([f32; 2]) -> [f32; 3]) -> [f32; 3] {
+    let burst = (std::f32::consts::PI * p).sin().max(0.0).sqrt();
+    let (frame, row) = ((p * 24.0).floor() as u32, (uv[1] * 36.0).floor() as u32);
+    let torn = hash([row, frame], 7) < 0.35 * burst;
+    let shift = if torn { (hash([row, frame], 8) - 0.5) * 0.25 * burst } else { 0.0 };
+    let w = smoothstep(0.3, 0.7, p);
+    let w = if torn && hash([row, frame], 9) < 0.5 { 1.0 - w } else { w };
+    let split = if torn { 0.025 } else { 0.004 } * burst;
+    let at = |dx: f32| [(uv[0] + shift + dx).clamp(0.0, 1.0), uv[1]];
+    let grain = (hash(pixel, 10) - 0.5) * 0.12 * burst;
+    let (r, g, b) = (at(split), at(0.0), at(-split));
+    [mix(from(r), to(r), w)[0] + grain, mix(from(g), to(g), w)[1] + grain, mix(from(b), to(b), w)[2] + grain]
+}
+
+/// FilmBurn's ease: steep through the middle, `a` how steep.
+fn sigmoid(x: f32, a: f32) -> f32 {
+    if x > 0.5 { 1.0 - (2.0 - 2.0 * x).powf(a) / 2.0 } else { (2.0 * x).powf(a) / 2.0 }
+}
+
+fn smoothstep(e0: f32, e1: f32, x: f32) -> f32 {
+    let t = ((x - e0) / (e1 - e0)).clamp(0.0, 1.0);
+    t * t * (3.0 - 2.0 * t)
 }
 
 /// gl-transitions' exponential ease in and out over 0..1.
@@ -282,7 +346,7 @@ mod tests {
     #[test]
     fn each_look_starts_on_the_outgoing_and_ends_on_the_incoming() {
         let (a, b) = (|_: [f32; 2]| [0.2, 0.4, 0.6], |_: [f32; 2]| [0.9, 0.1, 0.5]);
-        for code in 0..=4 {
+        for code in 0..=7 {
             for (p, want) in [(0.0, [0.2, 0.4, 0.6]), (1.0, [0.9, 0.1, 0.5])] {
                 let got = colour(code, p, [0.3, 0.7], 16.0 / 9.0, [5, 9], &a, &b);
                 assert!(got.iter().zip(want).all(|(g, w)| (g - w).abs() < 1e-3), "look {code} at {p}: {got:?}");

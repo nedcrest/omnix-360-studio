@@ -407,7 +407,7 @@ mod tests {
         let a = || p010(w, h, |x| if (x / 4) % 2 == 0 { 250 } else { 800 }, 512, 512);
         let b = || p010(w, h, |x| if (x / 6) % 2 == 0 { 900 } else { 350 }, 600, 440);
         let (fa, fb) = (draw_flat(&mut gpu, a(), crate::hdr::Hdr::None, (w, h)), draw_flat(&mut gpu, b(), crate::hdr::Hdr::None, (w, h)));
-        for look in [None, Some(Look::WhipPan), Some(Look::ZoomPunch), Some(Look::SpinBlur), Some(Look::Flash)] {
+        for look in std::iter::once(None).chain(Look::ALL.into_iter().filter(|&l| Look::code(Some(l)) != 0).map(Some)) {
             for p in [0.2, 0.5, 0.8] {
                 let got = draw_join(&mut gpu, a(), b(), Look::code(look), p, (w, h));
                 let want = transition::blend(look, p, &fa, &fb);

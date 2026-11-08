@@ -2,7 +2,10 @@
 // into a picture of its own, mixed here into the view. `transition.rs`'s
 // `colour` is this on the CPU, line for line (the export's twin). The looks
 // are ports of gl-transitions (MIT): WhipPan and WhipSpin by gre, CrossZoom
-// by rectalogic, Overexposure by Ben Zhang, at their default parameters.
+// by rectalogic, Overexposure by Ben Zhang, at their default parameters;
+// light leak after FilmBurn by Anastasia Dunbar, glitch after
+// StripDatamoshGlitch by bread and GlitchMemories by Gunnar Roth, their
+// sine noise put on `hash`; luma fade is ours.
 
 struct T {
     // The look (`Look::code`), how far through, the view's width over its
@@ -77,6 +80,51 @@ fn mirror(v: f32) -> f32 {
     return select(m, 2.0 - m, m > 1.0);
 }
 
+fn sigmoid(x: f32, a: f32) -> f32 {
+    if x > 0.5 {
+        return 1.0 - pow(2.0 - 2.0 * x, a) / 2.0;
+    }
+    return pow(2.0 * x, a) / 2.0;
+}
+
+fn light_leak(p: f32, uv: vec2f, aspect: f32) -> vec3f {
+    let glow = max(sin(PI * p), 0.0);
+    let base = mix(from_c(uv), to_c(uv), sigmoid(p, 10.0));
+    var f = 0.0;
+    for (var i = 0u; i < 6u; i++) {
+        let r = vec4f(hash(vec2u(i, 0u), 5u), hash(vec2u(i, 1u), 5u), hash(vec2u(i, 2u), 5u), hash(vec2u(i, 3u), 5u));
+        let centre = vec2f(r.x * 1.4 - 0.2 + (r.y - 0.5) * p, r.z);
+        let radius = 0.15 + 0.35 * r.w;
+        let d = vec2f((uv.x - centre.x) * aspect, uv.y - centre.y);
+        f += exp(-dot(d, d) / (radius * radius));
+        f += 0.06 * (1.0 + sin(uv.x * 6.0 * r.y + p * 8.0 + r.z * 6.0) * sin(uv.y * 6.0 * r.w + p * 6.0 + r.x * 6.0));
+    }
+    let g = f / 2.2;
+    let warm = vec3f(g, pow(g * 0.7, 2.0 - glow), pow(g * 0.6, 1.3));
+    return base + warm * glow;
+}
+
+fn glitch(p: f32, uv: vec2f, pixel: vec2u) -> vec3f {
+    let burst = sqrt(max(sin(PI * p), 0.0));
+    let frame = u32(floor(p * 24.0));
+    let row = u32(floor(uv.y * 36.0));
+    let torn = hash(vec2u(row, frame), 7u) < 0.35 * burst;
+    var shift = 0.0;
+    if torn {
+        shift = (hash(vec2u(row, frame), 8u) - 0.5) * 0.25 * burst;
+    }
+    var w = smoothstep(0.3, 0.7, p);
+    if torn && hash(vec2u(row, frame), 9u) < 0.5 {
+        w = 1.0 - w;
+    }
+    let split = select(0.004, 0.025, torn) * burst;
+    let grain = (hash(pixel, 10u) - 0.5) * 0.12 * burst;
+    let r = vec2f(clamp(uv.x + shift + split, 0.0, 1.0), uv.y);
+    let g = vec2f(clamp(uv.x + shift, 0.0, 1.0), uv.y);
+    let b = vec2f(clamp(uv.x + shift - split, 0.0, 1.0), uv.y);
+    return vec3f(mix(from_c(r), to_c(r), w).r, mix(from_c(g), to_c(g), w).g, mix(from_c(b), to_c(b), w).b) + grain;
+}
+
 fn transition(code: u32, p: f32, uv: vec2f, aspect: f32, pixel: vec2u) -> vec3f {
     switch code {
         case 1u: {
@@ -149,6 +197,19 @@ fn transition(code: u32, p: f32, uv: vec2f, aspect: f32, pixel: vec2u) -> vec3f 
         case 4u: {
             let lift = sin(PI * p) * 0.6;
             return from_c(uv) * (1.0 - p + lift) + to_c(uv) * (p + lift);
+        }
+        case 5u: {
+            return light_leak(p, uv, aspect);
+        }
+        case 6u: {
+            let a = from_c(uv);
+            let soft = 0.25;
+            let luma = dot(a, vec3f(0.2126, 0.7152, 0.0722));
+            let w = clamp((p * (1.0 + soft) - (1.0 - luma)) / soft, 0.0, 1.0);
+            return mix(a, to_c(uv), w * w * (3.0 - 2.0 * w));
+        }
+        case 7u: {
+            return glitch(p, uv, pixel);
         }
         default: {
             return mix(from_c(uv), to_c(uv), p);

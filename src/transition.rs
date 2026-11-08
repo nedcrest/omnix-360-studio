@@ -81,6 +81,84 @@ impl Look {
     }
 }
 
+/// One of a look's own settings (gap 25g): a slider, or a choice among
+/// `choices` held as its index. A join stores only those the user moved
+/// (`Cut::transition_params`, by `key`); the rest are `default`.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Knob {
+    pub key: &'static str,
+    pub name: &'static str,
+    pub least: f32,
+    pub most: f32,
+    pub default: f32,
+    pub step: f32,
+    pub choices: &'static [&'static str],
+}
+
+const fn slider(key: &'static str, name: &'static str, least: f32, most: f32, default: f32, step: f32) -> Knob {
+    Knob { key, name, least, most, default, step, choices: &[] }
+}
+
+const fn choice(key: &'static str, name: &'static str, choices: &'static [&'static str]) -> Knob {
+    Knob { key, name, least: 0.0, most: (choices.len() - 1) as f32, default: 0.0, step: 1.0, choices }
+}
+
+/// The most knobs a look has: the shader's two `vec4f`s.
+pub const MOST_KNOBS: usize = 8;
+
+/// A look's knob values in its `knobs` order, as the shader takes them.
+pub type Values = [f32; MOST_KNOBS];
+
+impl Knob {
+    /// `v` within the range, on the steps.
+    pub fn settle(&self, v: f32) -> f32 {
+        (((v - self.least) / self.step).round() * self.step + self.least).clamp(self.least, self.most)
+    }
+}
+
+impl Look {
+    /// Its own settings; the defaults are gl-transitions' (the look as
+    /// first built).
+    pub fn knobs(self) -> &'static [Knob] {
+        const WHIP: [Knob; 2] = [choice("direction", "Direction", &["Left", "Right", "Up", "Down"]), slider("streak", "Streak", 0.0, 2.0, 1.0, 0.1)];
+        const ZOOM: [Knob; 2] = [slider("strength", "Strength", 0.1, 1.0, 0.4, 0.05), choice("centre", "Centre", &["Drifting", "Still"])];
+        const SPIN: [Knob; 5] = [
+            slider("turns", "Turns", 0.5, 3.0, 1.0, 0.25),
+            choice("direction", "Direction", &["Clockwise", "Anticlockwise"]),
+            slider("blur", "Blur", 0.0, 1.0, 0.5, 0.05),
+            slider("split", "Colour split", 0.0, 1.0, 0.6, 0.05),
+            slider("zoom", "Zoom", 0.0, 1.0, 0.25, 0.05),
+        ];
+        const FLASH: [Knob; 2] = [slider("strength", "Strength", 0.2, 1.5, 0.6, 0.05), choice("colour", "Colour", &["White", "Warm"])];
+        const LEAK: [Knob; 1] = [slider("strength", "Strength", 0.0, 2.0, 1.0, 0.1)];
+        const LUMA: [Knob; 2] = [slider("softness", "Softness", 0.05, 1.0, 0.25, 0.05), choice("order", "First", &["Bright parts", "Dark parts"])];
+        const GLITCH: [Knob; 2] = [slider("strength", "Strength", 0.0, 2.0, 1.0, 0.1), slider("strips", "Strips", 8.0, 80.0, 36.0, 1.0)];
+        match self {
+            Look::WhipPan => &WHIP,
+            Look::ZoomPunch => &ZOOM,
+            Look::SpinBlur => &SPIN,
+            Look::Flash => &FLASH,
+            Look::LightLeak => &LEAK,
+            Look::LumaFade => &LUMA,
+            Look::Glitch => &GLITCH,
+            Look::SphereWhip => &[],
+        }
+    }
+
+    pub fn knob(self, key: &str) -> Option<&'static Knob> {
+        self.knobs().iter().find(|k| k.key == key)
+    }
+}
+
+/// The values `look` plays with: those `set`, the rest by default.
+pub fn values(look: Option<Look>, set: &std::collections::BTreeMap<String, f32>) -> Values {
+    let mut v = [0.0; MOST_KNOBS];
+    for (slot, k) in v.iter_mut().zip(look.map_or(&[][..], Look::knobs)) {
+        *slot = set.get(k.key).map_or(k.default, |&x| k.settle(x));
+    }
+    v
+}
+
 /// A transition's length steps (TRANSITIONS.md), and its length when one
 /// is put on a join with none.
 pub const STEP: f64 = 0.25;
@@ -341,6 +419,16 @@ mod tests {
         assert!(Group::ALL.iter().all(|g| Look::ALL.iter().any(|l| l.group() == *g)));
         assert_eq!((stepped(0.6), stepped(0.0), stepped(1.13)), (0.5, 0.25, 1.25));
         assert_eq!(serde_json::to_string(&Look::WhipPan).unwrap(), "\"whip_pan\"");
+    }
+
+    #[test]
+    fn knobs_fit_the_shader_and_fill_by_default() {
+        assert!(Look::ALL.iter().all(|l| l.knobs().len() <= MOST_KNOBS && l.knobs().iter().all(|k| k.least <= k.default && k.default <= k.most)));
+        let mut set = std::collections::BTreeMap::new();
+        set.insert("turns".to_owned(), 2.1);
+        let v = values(Some(Look::SpinBlur), &set);
+        assert_eq!(&v[..5], &[2.0, 0.0, 0.5, 0.6, 0.25], "on its steps, the rest by default");
+        assert_eq!(values(None, &set), [0.0; MOST_KNOBS]);
     }
 
     #[test]

@@ -49,6 +49,9 @@ pub enum CutOp {
     /// How its crossfade looks (`transition::Look`); none: a dissolve.
     /// The first cut has no join before it.
     Transition { cut: Id, look: Option<crate::transition::Look> },
+    /// One of its look's own settings (`Look::knobs`, by key) to `value`;
+    /// none: back to the default.
+    TransitionKnob { cut: Id, key: String, value: Option<f32> },
     Stabilize { cut: Id, mode: Option<Mode> },
     Lut { cut: Id, lut: Option<String> },
     Delete { cut: Id },
@@ -122,8 +125,31 @@ pub(super) fn apply(p: &mut Project, op: &CutOp) -> Result<Outcome, OpError> {
             if i == 0 {
                 return Err(OpError::Invalid(format!("cut #{cut} is the first: no join before it")));
             }
+            // The settings were the old look's.
+            if p.cuts[i].transition != look {
+                p.cuts[i].transition_params.clear();
+            }
             p.cuts[i].transition = look;
             said(format!("cut #{cut}: transition {}", look.map_or("dissolve", |l| l.name())))
+        }
+        CutOp::TransitionKnob { cut, key, value } => {
+            let i = find(p, *cut)?;
+            let look = p.cuts[i].transition.ok_or_else(|| OpError::Invalid(format!("cut #{cut}'s join has no look to set")))?;
+            let knob = look.knob(key).ok_or_else(|| OpError::NotFound(format!("setting {key:?} of {}", look.name())))?;
+            let params = &mut p.cuts[i].transition_params;
+            match value {
+                Some(v) if !(knob.least..=knob.most).contains(v) => {
+                    return Err(OpError::OutOfRange { what: knob.name, value: *v as f64, least: knob.least as f64, most: knob.most as f64 });
+                }
+                // Only what differs from the default is kept.
+                Some(v) if knob.settle(*v) != knob.default => {
+                    params.insert(knob.key.to_owned(), knob.settle(*v));
+                }
+                _ => {
+                    params.remove(knob.key);
+                }
+            }
+            said(format!("cut #{cut}: {} {}", knob.name, params.get(knob.key).copied().unwrap_or(knob.default)))
         }
         &CutOp::Crossfade { cut, seconds } => {
             let i = find(p, cut)?;
@@ -316,6 +342,15 @@ mod tests {
         e.apply(&Op::Cut(CutOp::Transition { cut: b, look: Some(crate::transition::Look::WhipPan) })).unwrap();
         assert_eq!(e.cuts[1].transition, Some(crate::transition::Look::WhipPan));
         assert!(e.apply(&Op::Cut(CutOp::Transition { cut: a, look: Some(crate::transition::Look::Flash) })).is_err(), "the first cut has no join before it");
+        let knob = |key: &str, value| Op::Cut(CutOp::TransitionKnob { cut: b, key: key.to_owned(), value });
+        e.apply(&knob("streak", Some(1.5))).unwrap();
+        e.apply(&knob("direction", Some(1.0))).unwrap();
+        assert!(e.apply(&knob("streak", Some(5.0))).is_err() && e.apply(&knob("turns", Some(1.0))).is_err(), "out of range; not the whip's");
+        e.apply(&knob("direction", Some(0.0))).unwrap();
+        assert_eq!(e.cuts[1].transition_params.len(), 1, "the default isn't kept");
+        assert_eq!(e.cuts[1].transition_values()[..2], [0.0, 1.5]);
+        e.apply(&Op::Cut(CutOp::Transition { cut: b, look: Some(crate::transition::Look::Flash) })).unwrap();
+        assert!(e.cuts[1].transition_params.is_empty(), "another look starts at its defaults");
         e.apply(&Op::Cut(CutOp::Crossfade { cut: b, seconds: 10.0 })).unwrap();
         assert!(e.cuts[1].crossfade < 3.0 && e.cuts[1].crossfade > 0.0, "within the shorter cut: {}", e.cuts[1].crossfade);
         e.apply(&Op::Cut(CutOp::Stabilize { cut: a, mode: Some(Mode::Level) })).unwrap();

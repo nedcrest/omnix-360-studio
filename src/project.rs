@@ -567,6 +567,10 @@ pub struct Cut {
     /// How that crossfade looks (`transition::Look`); none: a dissolve.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub transition: Option<crate::transition::Look>,
+    /// That look's own settings the user moved (`Look::knobs`, by key);
+    /// the rest play at their defaults. Cleared when the look changes.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub transition_params: std::collections::BTreeMap<String, f32>,
     /// Its colour effects' keyframes, clip time, apart from the camera's.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub effects: Vec<crate::grade::EffectKey>,
@@ -648,6 +652,7 @@ impl Cut {
             volume: Vec::new(),
             crossfade: 0.0,
             transition: None,
+            transition_params: Default::default(),
             effects: Vec::new(),
             marks: Vec::new(),
             lut: None,
@@ -757,6 +762,11 @@ impl Cut {
 
     pub fn len(&self) -> f64 {
         self.end - self.start
+    }
+
+    /// Its join's look's settings, as the player and the export play them.
+    pub fn transition_values(&self) -> crate::transition::Values {
+        crate::transition::values(self.transition, &self.transition_params)
     }
 }
 

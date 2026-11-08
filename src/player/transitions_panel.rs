@@ -10,10 +10,12 @@ use super::{App, Message, Side, tip};
 use crate::model::ops::{Op, cuts::CutOp};
 use crate::project::Id;
 use crate::transition::{self, Group, Look};
-use iced::widget::{button, column, container, row, rule, scrollable, text, tooltip};
+use iced::widget::{button, column, container, row, rule, scrollable, slider, text, tooltip};
 use iced::{Alignment, Element, Length, Task};
 
 const WIDTH: f32 = 300.0;
+/// The settings panel beside it.
+const KNOBS_WIDTH: f32 = 220.0;
 /// Playing a join: this many frames before its transition, this many
 /// after (user, 2026-11-08: 10 to 20 before).
 const BEFORE: f64 = 15.0;
@@ -80,15 +82,39 @@ impl App {
                 self.op(Op::Cut(CutOp::Crossfade { cut, seconds: 0.0 }));
                 self.edit.commit();
             }
-            // Every join as this one: one undo step.
+            // Every join as this one, its settings too: one undo step.
             Message::TransitionAll => {
                 let Some(c) = self.join_cut() else { return Task::none() };
-                let (look, seconds) = (c.transition, c.crossfade);
+                let (look, seconds, params) = (c.transition, c.crossfade, c.transition_params.clone());
                 let cuts: Vec<Id> = self.edit.cuts.iter().skip(1).map(|c| c.id).collect();
                 self.edit.begin();
                 for cut in cuts {
                     self.op(Op::Cut(CutOp::Transition { cut, look }));
                     self.op(Op::Cut(CutOp::Crossfade { cut, seconds }));
+                    for key in look.iter().flat_map(|l| l.knobs()).map(|k| k.key) {
+                        self.op(Op::Cut(CutOp::TransitionKnob { cut, key: key.to_owned(), value: params.get(key).copied() }));
+                    }
+                }
+                self.edit.commit();
+            }
+            // A slider's drag is one undo step (`TransitionKnobDone`); a
+            // choice, done at once.
+            Message::TransitionKnob(key, value) => {
+                let Some(cut) = self.join else { return Task::none() };
+                let choice = self.join_cut().and_then(|c| c.transition?.knob(key)).is_some_and(|k| !k.choices.is_empty());
+                self.edit.begin();
+                self.op(Op::Cut(CutOp::TransitionKnob { cut, key: key.to_owned(), value: Some(value) }));
+                if choice {
+                    self.edit.commit();
+                }
+            }
+            Message::TransitionKnobDone => self.edit.commit(),
+            Message::TransitionKnobsReset => {
+                let Some(c) = self.join_cut() else { return Task::none() };
+                let (cut, keys): (Id, Vec<String>) = (c.id, c.transition_params.keys().cloned().collect());
+                self.edit.begin();
+                for key in keys {
+                    self.op(Op::Cut(CutOp::TransitionKnob { cut, key, value: None }));
                 }
                 self.edit.commit();
             }
@@ -198,7 +224,7 @@ impl App {
         body = body.push(column![
             button(text("▶ Play the join")).width(Length::Fill).on_press(Message::TransitionPreview),
             row![
-                tip(button(text("On every join").size(13)).style(button::secondary).on_press(Message::TransitionAll), text("This look and length on every join of the edit (one undo)"), tooltip::Position::Top),
+                tip(button(text("On every join").size(13)).style(button::secondary).on_press(Message::TransitionAll), text("This look, its settings and length on every join of the edit (one undo)"), tooltip::Position::Top),
                 button(text("Remove").size(13)).style(button::secondary).on_press(Message::TransitionRemove),
             ]
             .spacing(8),
@@ -206,4 +232,36 @@ impl App {
         .spacing(8));
         container(scrollable(body.padding(12))).width(WIDTH).height(Length::Fill).into()
     }
+
+    /// Beside the panel while the join's look has settings of its own
+    /// (user, 2026-11-08): a slider each, or a choice's buttons; «Reset»
+    /// puts them all back.
+    pub(super) fn knobs_panel(&self) -> Element<'_, Message> {
+        let Some((c, look)) = self.join_cut().and_then(|c| Some((c, c.transition?))).filter(|(_, l)| !l.knobs().is_empty()) else {
+            return iced::widget::space().into();
+        };
+        let values = c.transition_spec().values;
+        let mut body = column![text(look.name()).size(16)].spacing(14);
+        for (k, &v) in look.knobs().iter().zip(&values) {
+            body = body.push(knob(k, v));
+        }
+        let reset = button(text("Reset").size(13)).style(button::secondary).on_press_maybe((!c.transition_params.is_empty()).then_some(Message::TransitionKnobsReset));
+        body = body.push(tip(reset, text("Every setting back to the look's own"), tooltip::Position::Top));
+        container(scrollable(body.padding(12))).width(KNOBS_WIDTH).height(Length::Fill).into()
+    }
+}
+
+/// One setting: its choices as buttons, or a slider with its value.
+fn knob(k: &'static transition::Knob, v: f32) -> Element<'static, Message> {
+    let name = text(k.name).size(13);
+    if !k.choices.is_empty() {
+        let options = k.choices.iter().enumerate().map(|(i, &label)| {
+            let on = v.round() as usize == i;
+            button(text(label).size(12)).padding([3, 8]).style(if on { button::primary } else { button::secondary }).on_press(Message::TransitionKnob(k.key, i as f32)).into()
+        });
+        return column![name, iced::widget::row(options).spacing(4).wrap().vertical_spacing(4)].spacing(6).into();
+    }
+    let shown = if k.step >= 1.0 { format!("{v:.0}") } else { format!("{v:.2}") };
+    let set = move |v| Message::TransitionKnob(k.key, v);
+    column![row![name.width(Length::Fill), text(shown).size(13)], slider(k.least..=k.most, v, set).step(k.step).on_release(Message::TransitionKnobDone)].spacing(4).into()
 }

@@ -376,6 +376,11 @@ enum Message {
     TransitionRemove,
     TransitionAll,
     TransitionPreview,
+    /// The look's own settings (`Look::knobs`): one moved (a slider's drag
+    /// one undo step, ended by `TransitionKnobDone`); all back to default.
+    TransitionKnob(&'static str, f32),
+    TransitionKnobDone,
+    TransitionKnobsReset,
     NewMenuClose,
     NewVideoTrip(PathBuf),
     NewVideoName(String),
@@ -1053,7 +1058,7 @@ impl App {
     fn handle(&mut self, message: Message) -> Task<Message> {
         // Each area handles its own messages (`on_*` in its module).
         match message {
-            m @ (Message::TransitionsPanel | Message::SelectJoin(_) | Message::TransitionJoin(_) | Message::TransitionLook(_) | Message::TransitionLength(_) | Message::TransitionRemove | Message::TransitionAll | Message::TransitionPreview) => self.on_transitions(m),
+            m @ (Message::TransitionsPanel | Message::SelectJoin(_) | Message::TransitionJoin(_) | Message::TransitionLook(_) | Message::TransitionLength(_) | Message::TransitionRemove | Message::TransitionAll | Message::TransitionPreview | Message::TransitionKnob(..) | Message::TransitionKnobDone | Message::TransitionKnobsReset) => self.on_transitions(m),
             m @ (Message::NewMenuClose | Message::NewVideoTrip(_) | Message::NewVideoName(_) | Message::NewVideoMake | Message::NewTripInDailix) => self.on_new_menu(m),
             m @ (Message::Open | Message::Picked { .. } | Message::Loaded { .. } | Message::OpenProject | Message::NewProject | Message::NewMenu | Message::CloseRequested | Message::StopAndClose { .. } | Message::Confirmed { .. } | Message::ProjectPicked { .. } | Message::SaveProjectTo { .. } | Message::SaveProject { .. } | Message::LoadingTick | Message::Thumb { .. }) => self.on_file(m),
             m @ (Message::Export | Message::ExportTo { .. } | Message::ExportProgress { .. } | Message::ExportCancel | Message::PickColour | Message::PickArea { .. } | Message::AreaPicked { .. } | Message::TrackProgress { .. } | Message::TrackCancel | Message::Tracked { .. } | Message::ExportDone { .. } | Message::Save { .. } | Message::SaveTo { .. } | Message::Saved { .. }) => self.on_jobs(m),

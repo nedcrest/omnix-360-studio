@@ -276,7 +276,7 @@ impl App {
             Some(Side::Effects) => row![view, self.effects_panel()].into(),
             Some(Side::Export) => row![view, self.export_panel()].into(),
             Some(Side::Audio) => row![view, self.audio_panel()].into(),
-            Some(Side::Transitions) => row![view, self.transitions_panel()].into(),
+            Some(Side::Transitions) => row![view, self.knobs_panel(), self.transitions_panel()].into(),
             Some(Side::Record) => row![view, self.record_panel()].into(),
             None => view.into(),
         };

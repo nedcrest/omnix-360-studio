@@ -1758,6 +1758,20 @@ fn crossfade(frame: &mut Frame, (l, r): (f32, f32), (top, h): (f32, f32), cross:
     }
 }
 
+/// An edge look (gap 25b) from the cut's edge at `edge` to `inner`: a
+/// wedge as high as the lane at the edge, none inside, as a fade reads.
+fn edge_wedge(frame: &mut Frame, edge: f32, inner: f32, h: f32) {
+    let wedge = Path::new(|p| {
+        p.move_to(Point::new(edge, 0.0));
+        p.line_to(Point::new(edge, h));
+        p.line_to(Point::new(inner, h));
+        p.close();
+    });
+    frame.fill(&wedge, iced::Color::from_rgba(1.0, 0.6, 0.15, 0.4));
+    let slope = Path::line(Point::new(edge, 0.0), Point::new(inner, h));
+    frame.stroke(&slope, Stroke::default().with_width(1.5).with_color(iced::Color::from_rgba(1.0, 0.7, 0.3, 0.9)));
+}
+
 /// An effect keyframe: a small square at (`x`, `mid`).
 fn effect_mark(frame: &mut Frame, x: f32, mid: f32) {
     let mark = Path::rectangle(Point::new(x - 3.5, mid - 3.5), Size::new(7.0, 7.0));
@@ -2193,6 +2207,16 @@ impl canvas::Program<Message> for Marks {
         for c in &self.blocks {
             for t in c.cut.effects.iter().map(|k| k.t).filter(|&t| t >= c.cut.start && t <= c.cut.start + c.len()) {
                 effect_mark(&mut frame, self.x(c.from + t - c.cut.start, bounds), self.rows.effects_top + EFFECTS / 2.0);
+            }
+        }
+        // Edge looks: an orange wedge, deepest at the cut's edge.
+        for c in &self.blocks {
+            let end = c.from + c.len();
+            if let Some(e) = &c.cut.edge_in {
+                edge_wedge(&mut frame, self.x(c.from, bounds), self.x(c.from + e.seconds.min(c.len()), bounds), self.rows.cuts);
+            }
+            if let Some(e) = &c.cut.edge_out {
+                edge_wedge(&mut frame, self.x(end, bounds), self.x(end - e.seconds.min(c.len()), bounds), self.rows.cuts);
             }
         }
         // Crossfades: an X over each overlap, as on the music lane.

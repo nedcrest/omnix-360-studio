@@ -58,6 +58,10 @@ pub enum CutOp {
     Edge { cut: Id, end: End, look: Option<crate::transition::Look>, seconds: f64 },
     /// One of an edge look's own settings, as `TransitionKnob`.
     EdgeKnob { cut: Id, end: End, key: String, value: Option<f32> },
+    /// The join before it as `template` has it (`template::Template`): the
+    /// overlap, the out on the cut before, the in on this one; what the
+    /// template leaves out is taken off.
+    Template { cut: Id, template: crate::template::Template },
     Stabilize { cut: Id, mode: Option<Mode> },
     Lut { cut: Id, lut: Option<String> },
     Delete { cut: Id },
@@ -163,6 +167,29 @@ pub(super) fn apply(p: &mut Project, op: &CutOp) -> Result<Outcome, OpError> {
             let params = edge.take().filter(|e| e.look == look).map(|e| e.params).unwrap_or_default();
             *edge = Some(crate::project::Edge { look, seconds, params });
             said(format!("cut #{cut}: {} {seconds:.2} s on its {}", look.name(), if end == End::In { "start" } else { "end" }))
+        }
+        CutOp::Template { cut, template } => {
+            let i = find(p, *cut)?;
+            if i == 0 {
+                return Err(OpError::Invalid(format!("cut #{cut} is the first: no join before it")));
+            }
+            let before = p.cuts[i - 1].id;
+            let overlap = template.overlap.as_ref();
+            apply(p, &CutOp::Transition { cut: *cut, look: None })?;
+            apply(p, &CutOp::Transition { cut: *cut, look: overlap.and_then(|o| o.look) })?;
+            apply(p, &CutOp::Crossfade { cut: *cut, seconds: overlap.map_or(0.0, |o| o.seconds) })?;
+            for (key, &value) in overlap.iter().flat_map(|o| &o.params) {
+                apply(p, &CutOp::TransitionKnob { cut: *cut, key: key.clone(), value: Some(value) })?;
+            }
+            for (on, end, edge) in [(before, End::Out, &template.edge_out), (*cut, End::In, &template.edge_in)] {
+                apply(p, &CutOp::Edge { cut: on, end, look: None, seconds: 0.0 })?;
+                let Some(e) = edge else { continue };
+                apply(p, &CutOp::Edge { cut: on, end, look: Some(e.look), seconds: e.seconds })?;
+                for (key, &value) in &e.params {
+                    apply(p, &CutOp::EdgeKnob { cut: on, end, key: key.clone(), value: Some(value) })?;
+                }
+            }
+            said(format!("the join before cut #{cut} set from a template"))
         }
         CutOp::EdgeKnob { cut, end, key, value } => {
             let i = find(p, *cut)?;
@@ -368,6 +395,29 @@ mod tests {
         // A split's halves both carry them; each shows its own stretch's.
         e.apply(&Op::Cut(CutOp::Split { cut: a, t: 2.0 })).unwrap();
         assert_eq!((e.cuts[0].marks.len(), e.cuts[1].marks.len()), (1, 1));
+        check(&e).unwrap();
+    }
+
+    #[test]
+    fn a_template_sets_a_join_whole_and_reads_back_the_same() {
+        use crate::transition::Look;
+        let mut e = Edit::default();
+        let ids: Vec<Id> = (0..4).map(|n| e.apply(&add(&n.to_string(), 4.0, Place::End)).unwrap().made.unwrap()).collect();
+        // The join before cut 1, set up by hand.
+        e.apply(&Op::Cut(CutOp::Transition { cut: ids[1], look: Some(Look::SpinBlur) })).unwrap();
+        e.apply(&Op::Cut(CutOp::Crossfade { cut: ids[1], seconds: 0.75 })).unwrap();
+        e.apply(&Op::Cut(CutOp::TransitionKnob { cut: ids[1], key: "turns".into(), value: Some(2.0) })).unwrap();
+        e.apply(&Op::Cut(CutOp::Edge { cut: ids[0], end: End::Out, look: Some(Look::EdgeFade), seconds: 0.5 })).unwrap();
+        let template = crate::template::Template::of_join(&e.cuts, 1);
+        // The join before cut 3 had its own: what the template leaves out goes.
+        e.apply(&Op::Cut(CutOp::Edge { cut: ids[3], end: End::In, look: Some(Look::EdgeBlur), seconds: 1.0 })).unwrap();
+        e.apply(&Op::Cut(CutOp::Template { cut: ids[3], template: template.clone() })).unwrap();
+        assert_eq!(crate::template::Template::of_join(&e.cuts, 3), template);
+        assert!(e.cuts[3].edge_in.is_none());
+        let wrong = crate::template::Template { overlap: Some(crate::template::Overlap { look: Some(Look::EdgeFade), seconds: 0.5, params: Default::default() }), ..Default::default() };
+        let before = e.cuts.clone();
+        assert!(e.apply(&Op::Cut(CutOp::Template { cut: ids[2], template: wrong })).is_err());
+        assert_eq!(e.cuts, before, "refused whole");
         check(&e).unwrap();
     }
 

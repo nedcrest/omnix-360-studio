@@ -19,6 +19,7 @@ mod settings_panel;
 mod new_menu;
 mod transitions_panel;
 mod transition_edges;
+mod transition_templates;
 mod meter;
 
 mod playback;
@@ -85,6 +86,11 @@ pub fn run(inputs: Vec<PathBuf>, launch: Launch) -> Result<()> {
     // Finding the system's fonts takes a moment: done ahead, the font list
     // opens at once.
     std::thread::spawn(crate::text::families);
+    // The transition templates' library is there from the first start,
+    // never made by hand (user, 2026-11-08).
+    if let Err(e) = crate::template::make_library() {
+        eprintln!("transition templates: {e:#}");
+    }
     let settings = settings::Settings::load();
     // The interface's size grows the window with it, or the bars' ends
     // would be cut off as they were at 1280 px.
@@ -388,6 +394,8 @@ enum Message {
     EdgeLook(crate::model::ops::End, Option<crate::transition::Look>),
     EdgeLength(crate::model::ops::End, i64),
     EdgeSide(crate::model::ops::End),
+    /// Transition templates: put on the join, saved, removed.
+    Template(transition_templates::TemplateMsg),
     NewMenuClose,
     NewVideoTrip(PathBuf),
     NewVideoName(String),
@@ -719,6 +727,10 @@ struct App {
     /// The panel's open tab, and the edge whose settings show on Edges.
     transitions_tab: transitions_panel::Kind,
     edge_side: crate::model::ops::End,
+    /// The transition templates' names (`template::names`), and the name
+    /// being typed to save the join under.
+    templates: Vec<String>,
+    template_name: String,
     /// The bin, at the far left (`bin.rs`).
     bin: bin::Bin,
     /// 10-bit tracks decode at 10 bits (`source::deep`).
@@ -887,6 +899,8 @@ impl App {
             join_play: None,
             transitions_tab: Default::default(),
             edge_side: crate::model::ops::End::Out,
+            templates: crate::template::names(),
+            template_name: String::new(),
             bin: bin::Bin { open: saved.bin_pinned, pinned: saved.bin_pinned, tile: saved.bin_tile, side: saved.bin_side, ..Default::default() },
             fullscreen: false,
             volume: saved.volume,
@@ -1075,6 +1089,7 @@ impl App {
                 self.on_knobs(m);
                 Task::none()
             }
+            Message::Template(m) => self.on_template(m),
             m @ (Message::EdgeLook(..) | Message::EdgeLength(..) | Message::EdgeSide(_)) => {
                 self.on_edges(m);
                 Task::none()

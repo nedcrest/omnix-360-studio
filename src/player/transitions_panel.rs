@@ -251,7 +251,7 @@ impl App {
                     Kind::Overlap => self.overlap_body(i),
                     Kind::Edges => self.edges_body(i),
                 });
-                body = body.push(rule::horizontal(1)).push(self.join_footer());
+                body = body.push(rule::horizontal(1)).push(self.templates_section()).push(rule::horizontal(1)).push(self.join_footer());
             }
         }
         container(scrollable(body.padding(12))).width(WIDTH).height(Length::Fill).into()
@@ -338,6 +338,11 @@ pub(super) fn tiles<'a>(looks: impl Iterator<Item = (Look, Message)>, chosen: Op
         let tile = button(text(label).size(13)).padding([6, 10]).style(if chosen == Some(l) { button::primary } else { button::secondary }).on_press(pressed);
         tip(tile, text(l.about()), tooltip::Position::Left)
     });
+    tiles_of(tiles)
+}
+
+/// Tiles in rows, wrapping.
+pub(super) fn tiles_of<'a>(tiles: impl Iterator<Item = Element<'a, Message>>) -> Element<'a, Message> {
     iced::widget::row(tiles).spacing(6).wrap().vertical_spacing(6).into()
 }
 

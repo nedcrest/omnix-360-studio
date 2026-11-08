@@ -527,7 +527,7 @@ pub fn gain(db: f64) -> f64 {
 /// A look on a cut's start or end alone, with no overlap (gap 25b): how
 /// long, and its settings the user moved (`Look::knobs`). Each half of a
 /// join belongs to its own cut and goes where the cut goes.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Edge {
     pub look: crate::transition::Look,

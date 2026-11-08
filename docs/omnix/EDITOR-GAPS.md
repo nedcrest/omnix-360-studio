@@ -99,9 +99,9 @@ done in part stays here until its last card is done.
 | 77 | Dailix: voice clean-up and loudness for camera and phone sound | below |
 | 78 | A vertical video in a wide edit: its sides filled from itself, not black | below |
 | 79 | Omnix's own face: the footer's credit and the start picture | [done](EDITOR-GAPS-DONE.md) |
-| 80 | Omnix starts at a window of recent and found projects (a projects folder set in both programs); «New project» goes to Dailix | below |
+| 80 | Omnix starts at a window of recent and found projects (a projects folder set in both programs); «New project» goes to Dailix | [done](EDITOR-GAPS-DONE.md) |
 | 81 | Auto-duck under talk in a cut's own sound, not only cleaned voices | below |
-| 82 | Dailix: global projects (a trip, an event) holding video projects; a home of them with notes and tags; opening where it was closed | below |
+| 82 | Dailix: global projects (a trip, an event) holding video projects; a home of them with notes and tags; opening where it was closed | [done](EDITOR-GAPS-DONE.md) |
 | 83 | Dailix finds where people talk in a clip, even in bad sound, and pulls the voice out | below |
 | 84 | A video drawing on several trips (a year in review) | below |
 | 85 | Project cards in a grid, a GIF of the project on hover, basic facts and a description | below |
@@ -1320,45 +1320,6 @@ on by default for a clip whose shape isn't the edit's, the same in the
 player (GPU) and in the export (ffmpeg `split`, `scale`, `boxblur`,
 `overlay`), tested to match. Milestone «Кадрування».
 
-### 80. Omnix starts at its recent and found projects; a new one is made in Dailix — building (user, 2026-11-05, 2026-11-06, 2026-11-07)
-
-For the release: Omnix opens at the projects opened last and those found
-in the projects place; «New project» goes to Dailix, where a project is
-made in the one fixed layout (`dailix_sheet::Layout`: `01_footage/<day>/`,
-`04_project` for edits, ...). The point (user): "a fixed structure of
-projects, so I never wonder where that video is". Both are standalone, so
-each has its projects folder chosen in its window; then Omnix runs from a
-desktop icon without opening Dailix first.
-
-Decided (user, 2026-11-07): Omnix keeps a projects place of its own,
-Dailix's until one is chosen in Omnix; the order below, own videos after.
-1. The projects place in both windows — built: Omnix's Settings
-   «Projects» (Choose…, Use Dailix's; `fsutil::dailix_projects` reads
-   Dailix's settings file, whose place both take from
-   `fsutil::dailix_settings`); Dailix's «projects» chip opens a folder
-   dialog. Checked both ways (user, 2026-11-07), who then asked for:
-1b. Settings as a window over the program, in groups, in both (built:
-   Omnix General / Picture / Editing, also from the start screen;
-   Dailix Places / Look, a Settings button and Ctrl+,, every place's
-   chip choosing its folder).
-2. Omnix's start window (user, 2026-11-07): the first run, the start
-   page as now; every run after, the 5 edits opened last to open, and a
-   browser to toggle open of Dailix's projects: each global project and
-   the video projects inside it (gap 82), with their edits. Built
-   without gap 82's inner folders (each project's `04_project` edits):
-   `dailix_sheet::project::{all, edits, of_edit}`, `settings::remember`.
-   Dailix too (user, 2026-11-07): Home always in its bar, the first run
-   at home, every run after where it was closed (project and clip).
-3. Omnix's desktop entry and icon: built (`omnix install`; one installer,
-   `omnix::desktop`, for both programs).
-4. «New project» in Omnix opens Dailix, which makes an empty project in
-   the fixed layout: moved to gap 82, step 3 (it needs the trip's video
-   folders). Steps 1-3 checked (user, 2026-11-07).
-5. Later, its own card: adding one's own videos to a project in Dailix
-   (copied to `01_footage/<day>/`, a sidecar and a poster each): ingest's
-   first step (`dailix/docs/INGEST.md`).
-Milestone «Матеріал і бін».
-
 ### 81. Auto-duck under talk in a cut's own sound — waits for gaps 77 and 83 (user, 2026-11-06); no card of its own: «Dailix: де в кадрі говорять» closes it
 
 Found while checking: music over a Kos cut where people talk; «Auto-duck»
@@ -1375,50 +1336,6 @@ duck finds nothing. Ways (the user to choose):
 - c. Wait for gap 77: cleaned voices from Dailix, the duck as it is.
 Chosen (user, 2026-11-06): c. Nothing changes in Omnix; gap 77 closes
 this one. Milestone «Звук для Косу».
-
-### 82. Dailix: global projects holding video projects; their home — building (user, 2026-11-07)
-
-User: the Dailix place holds global projects (a trip, an event, a hike, a
-motorbike ride); inside one, a folder per video made from it, so several
-videos from one trip each sit in a logical folder of their own.
-
-Decided (user, 2026-11-07):
-- The global project is the trip as today's Dailix project: all its
-  footage by days, its marking. Its videos are folders inside it:
-  `videos/<name>/` holding the video's edit (`edit.json`) and its
-  `export/`; they all take the trip's footage.
-- The projects place is the global Dailix folder (`DAILIX/`), for both
-  programs; the test project moved there (`DAILIX/2026-08_test`, the
-  `TESTS` place gone).
-- Dailix's Home is a page of its own: a card per trip (its poster, name,
-  dates, days and clips, a description and tags from `project.json`). A
-  card opens the trip's page: its days (the cards of today's home) and
-  its videos.
-- Dailix opens where it was closed (Home, a trip, a day's clip).
-
-Steps, each checked by the user:
-1. Home: trip cards; a trip's page with its days and its edits (the
-   loose `04_project` ones until 2); description and tags shown and
-   edited on the trip's page. Built (Dailix `e2687c5`), checked
-   (user, 2026-11-07).
-2. Videos: built (Omnix `530ee81`, Dailix `a9a94f1`), checked (user,
-   2026-11-08). Decided (user, 2026-11-08): a new video is named for its day or
-   `all-days` (`-2` when taken); one `edit.json` per video (a variant
-   later as «duplicate the video»); exports default to its `export/`;
-   the old `04_project` tidied: one copy of each Omnix edit moved into a
-   video, copies and empty ones to the trash, `04_project` and
-   `05_export` gone from the layout (`dailix tidy-edits`, run on Kos and
-   the test). The two Kdenlive working copies in footage-agent's old Kos
-   folder went to the trash too (user's word, 2026-11-08).
-3. «New project» (gap 80 step 4): built (Dailix `868e3bb`, `bf2452f`;
-   Omnix `2300550`, `eac86b4`), waiting for the check. Decided (user,
-   2026-11-08): a trip's folder is its month and its name in Latin
-   (`2026-11_motopokatushky-lystopad`, editable); Omnix's «New…» offers a
-   video in a trip, a new trip in Dailix (opens on its form), or an edit
-   without a trip; adding one's own videos stays its own card, after the
-   editing work. Dailix: «+ New trip» on Home, Ctrl+N, `dailix new-trip`.
-   One way to find and start the other program: `omnix::sibling`.
-Milestone «Матеріал і бін».
 
 ### 83. Dailix finds where people talk, even in bad sound — idea (user, 2026-11-07)
 

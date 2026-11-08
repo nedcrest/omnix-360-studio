@@ -143,6 +143,10 @@ pub fn new_trip(projects: &Path, folder: &str, title: &str, about: &About) -> st
     let l = Layout::new(&root);
     l.create()?;
     update(&l, |_| {})?;
+    // An empty marking: a trip is read with one (its days come later).
+    if !l.sheet().exists() {
+        std::fs::write(l.sheet(), "{}")?;
+    }
     set_title(&root, title)?;
     set_about(&root, about)?;
     Ok(root)
@@ -346,6 +350,7 @@ mod tests {
         let b = new_trip(&place, "2026-11_moto", "Moto again", &About::default()).unwrap();
         assert_eq!((a.clone(), b.clone()), (place.join("2026-11_moto"), place.join("2026-11_moto-2")));
         assert!(Layout::new(&a).is_project() && Layout::new(&a).videos().is_dir() && Layout::new(&a).footage().is_dir());
+        assert!(crate::Doc::parse(&std::fs::read_to_string(Layout::new(&a).sheet()).unwrap()).is_ok(), "an empty marking, readable");
         assert_eq!((title(&a), self::about(&a)), ("Moto".to_owned(), about));
         assert_eq!(all(&place), [a, b]);
         std::fs::remove_dir_all(&place).unwrap();

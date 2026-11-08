@@ -46,6 +46,7 @@ pub mod cli;
 mod analyse;
 mod export;
 pub mod desktop;
+pub mod sibling;
 mod fsutil;
 mod pipeline;
 mod preview;

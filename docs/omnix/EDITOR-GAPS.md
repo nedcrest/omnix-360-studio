@@ -433,8 +433,8 @@ Split into steps so each can be tried on Kos on its own:
   `TRANSITIONS.md` → "Quick ways": T at the playhead, between two selected
   clips, or on every join. Builds on the existing crossfade.
 - **25b. Edge transitions** (out on one cut, in on the next, no overlap).
-  Built 2026-11-08 (`b75e5dd`, `eeb8293`, `cf975fd`, `4d3d9ce`), waiting
-  for the check: `Cut::edge_in`/`edge_out` (`Edge`: look, seconds, moved
+  Built 2026-11-08 (`b75e5dd`, `eeb8293`, `cf975fd`, `4d3d9ce`), checked
+  2026-11-08: `Cut::edge_in`/`edge_out` (`Edge`: look, seconds, moved
   settings), `CutOp::Edge`/`EdgeKnob`; looks fade (black or white),
   blur, zoom, glitch, flash, drawn by the transition pass on one picture
   (`Cut::edge_at`) and by the export's `Dissolve` alike, never through a

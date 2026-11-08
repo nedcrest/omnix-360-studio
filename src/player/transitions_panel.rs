@@ -121,12 +121,14 @@ impl App {
         body = body.push(tip(dissolve, text("The plain crossfade"), tooltip::Position::Left));
         for g in Group::ALL {
             let tiles = Look::ALL.iter().filter(|l| l.group() == g).map(|&l| {
-                let tile = button(text(l.name()).size(13)).padding([6, 10]).style(if chosen == Some(l) { button::primary } else { button::secondary }).on_press(Message::TransitionLook(Some(l)));
+                // Not built yet: shown as a dissolve, and said on its tile.
+                let label = if Look::code(Some(l)) == 0 { format!("{} · soon", l.name()) } else { l.name().to_owned() };
+                let tile = button(text(label).size(13)).padding([6, 10]).style(if chosen == Some(l) { button::primary } else { button::secondary }).on_press(Message::TransitionLook(Some(l)));
                 tip(tile, text(l.about()), tooltip::Position::Left)
             });
             body = body.push(column![text(g.name()).size(14), iced::widget::row(tiles).spacing(6).wrap().vertical_spacing(6)].spacing(6));
         }
-        body = body.push(note("Only the dissolve shows yet; the others are kept with the edit and show as they're built.".into()));
+        body = body.push(note("Those marked «soon» play as a dissolve until they're built; the choice is kept with the edit.".into()));
         body = body.push(rule::horizontal(1));
         body = body.push(column![
             button(text("▶ Play the join")).width(Length::Fill).on_press(Message::TransitionPreview),

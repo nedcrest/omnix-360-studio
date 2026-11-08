@@ -1,6 +1,7 @@
 //! Crossfades between cuts in an export: frames written one cut after
-//! another, the last frames of a cut held back and blended into the first
-//! of the next.
+//! another, the last frames of a cut held back and mixed into the first of
+//! the next by the join's transition (`transition::blend`, the player's
+//! pass on the CPU).
 //!
 //! Each cut is rendered on its own (its own decoder and framing), so the two
 //! cuts of a crossfade are never rendered side by side. The outgoing cut's
@@ -24,6 +25,8 @@ pub struct Dissolve<'a> {
     frames: usize,
     head: usize,
     tail: usize,
+    /// The look of the join into the cut being written.
+    look: Option<crate::transition::Look>,
     held: Option<BufReader<File>>,
     holding: Option<BufWriter<File>>,
     /// The two files, swapped at each cut: one read, one written.
@@ -39,12 +42,14 @@ impl<'a> Dissolve<'a> {
         hasher.write_u128(std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_nanos()));
         let key = hasher.finish();
         let file = |k| std::env::temp_dir().join(format!("omnix-dissolve-{}-{key:016x}-{k}.rgb", std::process::id()));
-        Dissolve { out, n: 0, frames: 0, head: 0, tail: 0, held: None, holding: None, files: [file(0), file(1)] }
+        Dissolve { out, n: 0, frames: 0, head: 0, tail: 0, look: None, held: None, holding: None, files: [file(0), file(1)] }
     }
 
     /// Starts the next cut of `frames` frames, whose first `head` cross the
-    /// last cut's held tail and whose last `tail` cross the next cut.
-    pub fn cut(&mut self, frames: usize, head: usize, tail: usize) -> Result<()> {
+    /// last cut's held tail by `look` and whose last `tail` cross the next
+    /// cut.
+    pub fn cut(&mut self, frames: usize, head: usize, tail: usize, look: Option<crate::transition::Look>) -> Result<()> {
+        self.look = look;
         self.held = None;
         if let Some(mut w) = self.holding.take() {
             w.flush()?;
@@ -78,16 +83,10 @@ impl FrameSink for Dissolve<'_> {
         {
             let mut before = vec![0; frame.rgb.len()];
             r.read_exact(&mut before).context("reading the crossfade's held frames")?;
-            // Linear, by frame centres: the first frame already a little in.
-            let a = (n as f32 + 0.5) / self.head as f32;
-            let mix = |b: f32, c: f32| b + (c - b) * a;
-            let rgb = if frame.deep {
-                let sample = |s: &[u8]| u16::from_le_bytes([s[0], s[1]]) as f32;
-                before.chunks_exact(2).zip(frame.rgb.chunks_exact(2)).flat_map(|(b, c)| (mix(sample(b), sample(c)).round() as u16).to_le_bytes()).collect()
-            } else {
-                before.iter().zip(&frame.rgb).map(|(&b, &c)| mix(b as f32, c as f32).round() as u8).collect()
-            };
-            return self.out.write(&Frame { width: frame.width, height: frame.height, rgb, deep: frame.deep });
+            // By frame centres: the first frame already a little in.
+            let p = (n as f32 + 0.5) / self.head as f32;
+            let before = Frame { width: frame.width, height: frame.height, rgb: before, deep: frame.deep };
+            return self.out.write(&crate::transition::blend(self.look, p, &before, frame));
         }
         self.out.write(frame)
     }
@@ -132,11 +131,11 @@ mod tests {
         let files = {
             let mut d = Dissolve::new(&mut out);
             let files = d.files.clone();
-            d.cut(10, 0, 4).unwrap();
+            d.cut(10, 0, 4, None).unwrap();
             for _ in 0..10 {
                 d.write(&a).unwrap();
             }
-            d.cut(10, 4, 0).unwrap();
+            d.cut(10, 4, 0, None).unwrap();
             for _ in 0..10 {
                 d.write(&b).unwrap();
             }

@@ -365,6 +365,66 @@ mod tests {
         gpu.finish().unwrap().unwrap()
     }
 
+/// Two ordinary videos' frames drawn as a join: `a` going, `b` coming,
+    /// mixed by the transition's pass (`look`'s code) `p` of the way through.
+    fn draw_join(gpu: &mut Gpu, a: Frame, b: Frame, look: u32, p: f32, (w, h): (usize, usize)) -> stitch::Frame {
+        let camera = crate::view::View::home(crate::view::Projection::Perspective).camera();
+        let (sa, sb) = (Shown::new(a, SeamFix::default()), Shown::new(b, SeamFix::default()));
+        let (ra, rb) = (Rig::flat(0, crate::hdr::Hdr::None), Rig::flat(0, crate::hdr::Hdr::None));
+        gpu.size = (0, 0);
+        gpu.targets = vec![gpu.make_target(w, h)];
+        let size = [w as f32, h as f32];
+        gpu.stitcher.prepare_frame(&gpu.device, &gpu.queue, &ra, &sa, &camera, &[stitch::IDENTITY], size, [0.0, 0.0]);
+        gpu.stitcher.prepare_incoming(&gpu.device, &gpu.queue, &rb, &sb, &camera, &[stitch::IDENTITY], size, [0.0, 0.0], look, p);
+        gpu.stitcher.prepare_overlays(&gpu.device, &gpu.queue, &[], size, [0.0, 0.0], size);
+        let target = &gpu.targets[0];
+        let mut encoder = gpu.device.create_command_encoder(&Default::default());
+        gpu.stitcher.draw(&mut encoder, &target.view, &Rectangle { x: 0, y: 0, width: w as u32, height: h as u32 });
+        encoder.copy_texture_to_buffer(
+            wgpu::TexelCopyTextureInfo { texture: &target.texture, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
+            wgpu::TexelCopyBufferInfo { buffer: &target.readback, layout: wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(target.row as u32), rows_per_image: Some(h as u32) } },
+            wgpu::Extent3d { width: w as u32, height: h as u32, depth_or_array_layers: 1 },
+        );
+        gpu.queue.submit([encoder.finish()]);
+        let (tx, rx) = channel();
+        target.readback.slice(..).map_async(wgpu::MapMode::Read, move |r| {
+            let _ = tx.send(r);
+        });
+        gpu.pending.push_back((0, rx));
+        gpu.size = (w, h);
+        gpu.finish().unwrap().unwrap()
+    }
+
+    /// A join drawn by the player's transition pass is what the export's
+    /// `transition::blend` makes of the two cuts drawn alone: every look,
+    /// at the start, the middle and near the end.
+    #[test]
+    fn gpu_transitions_match_the_cpu() {
+        use crate::transition::{self, Look};
+        let Ok(mut gpu) = Gpu::new(false) else { return };
+        let (w, h) = (64, 32);
+        // Stripes: a blur shows on them, as on footage.
+        let a = || p010(w, h, |x| if (x / 4) % 2 == 0 { 250 } else { 800 }, 512, 512);
+        let b = || p010(w, h, |x| if (x / 6) % 2 == 0 { 900 } else { 350 }, 600, 440);
+        let (fa, fb) = (draw_flat(&mut gpu, a(), crate::hdr::Hdr::None, (w, h)), draw_flat(&mut gpu, b(), crate::hdr::Hdr::None, (w, h)));
+        for look in [None, Some(Look::WhipPan), Some(Look::ZoomPunch), Some(Look::SpinBlur), Some(Look::Flash)] {
+            for p in [0.2, 0.5, 0.8] {
+                let got = draw_join(&mut gpu, a(), b(), Look::code(look), p, (w, h));
+                let want = transition::blend(look, p, &fa, &fb);
+                let diffs: Vec<i32> = got.rgb.iter().zip(&want.rgb).map(|(&g, &c)| (g as i32 - c as i32).abs()).collect();
+                let off = diffs.iter().filter(|&&d| d > 3).count();
+                eprintln!("{look:?} at {p}: most {}, {off} of {} off by more than 3", diffs.iter().max().unwrap(), diffs.len());
+                assert!(off * 100 <= diffs.len(), "{look:?} at {p}: {off} samples off");
+                // And a look is its own, not the dissolve again.
+                if look.is_some() && p == 0.5 {
+                    let plain = transition::blend(None, p, &fa, &fb);
+                    let apart = want.rgb.iter().zip(&plain.rgb).filter(|(x, y)| x.abs_diff(**y) > 8).count();
+                    assert!(apart * 10 > want.rgb.len(), "{look:?} looks like a dissolve");
+                }
+            }
+        }
+    }
+
     /// The shader brings a 10-bit HLG picture to SDR as `hdr::to_sdr` does.
     #[test]
     fn gpu_hdr_matches_the_cpu() {

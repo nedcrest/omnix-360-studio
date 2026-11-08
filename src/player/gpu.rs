@@ -2,9 +2,11 @@
 //! the widget's rectangle, sharing iced's wgpu device. `Pipeline` doesn't
 //! need iced: `render.rs` drives it on a device of its own for export.
 //!
-//! Through a crossfade between cuts the pipeline draws a second layer, the
-//! incoming cut, over the first with a blend constant: each layer keeps its
-//! own uniforms and pictures, so neither re-uploads while both play.
+//! Through a crossfade between cuts both cuts are drawn, each into a
+//! picture of its own (a layer each, keeping its own uniforms and
+//! pictures, so neither re-uploads while both play), and the transition's
+//! pass (`transition.wgsl`, its CPU twin `transition::colour`) mixes them
+//! into the view: its look sees both whole pictures, as the export's does.
 //!
 //! The overlays then go on top, each a turned quad of its picture
 //! (`overlay.wgsl`), blended premultiplied.
@@ -219,14 +221,16 @@ pub struct Primitive {
     pub overlays: Vec<OverlayDraw>,
 }
 
-/// The cut crossfading in: its own picture and framing, and how far in it
-/// is (0..1).
+/// The cut crossfading in: its own picture and framing, how far in it is
+/// (0..1), and its transition's look (`Look::code`).
+#[derive(Clone)]
 pub struct Incoming {
     pub rig: Arc<Rig>,
     pub shown: Arc<Shown>,
     pub camera: Camera,
     pub rig_from_view: Vec<M3>,
     pub mix: f32,
+    pub look: u32,
 }
 
 impl std::fmt::Debug for Primitive {
@@ -242,15 +246,15 @@ struct Plane {
 
 pub struct Pipeline {
     pipeline: wgpu::RenderPipeline,
-    /// The same, blending over what's drawn by the pass's blend constant.
-    blend: wgpu::RenderPipeline,
     layout: wgpu::BindGroupLayout,
     sampler: wgpu::Sampler,
     srgb: bool,
-    /// The cut shown, and the one crossfading in over it.
+    format: wgpu::TextureFormat,
+    /// The cut shown, and the one crossfading in.
     layers: [Layer; 2],
-    /// How far the second layer is in, if it's drawn.
-    mix: Option<f32>,
+    /// The transition's pass, and whether a join is being drawn now.
+    transition: Transition,
+    crossing: bool,
     overlay: wgpu::RenderPipeline,
     overlay_layout: wgpu::BindGroupLayout,
     /// Kept between frames; the first `overlays` are drawn.
@@ -377,9 +381,6 @@ impl Pipeline {
             })
         };
         let pipeline = make(None);
-        // new × k + old × (1 − k), k the blend constant.
-        let over = wgpu::BlendComponent { src_factor: wgpu::BlendFactor::Constant, dst_factor: wgpu::BlendFactor::OneMinusConstant, operation: wgpu::BlendOperation::Add };
-        let blend = make(Some(wgpu::BlendState { color: over, alpha: over }));
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             mag_filter: wgpu::FilterMode::Linear,
             min_filter: wgpu::FilterMode::Linear,
@@ -402,7 +403,8 @@ impl Pipeline {
             Layer { uniforms, slots, deep, masks, lut, lut_id: None, bind_group, lens_u: [LensU::zeroed(); 2], rig_id: 0, shown_id: 0 }
         });
         let (overlay, overlay_layout) = overlay_pipeline(device, format);
-        Pipeline { pipeline, blend, layout, sampler, srgb: format.is_srgb(), layers, mix: None, overlay, overlay_layout, overlay_slots: Vec::new(), overlays: 0, dither: None }
+        let transition = Transition::new(device, format);
+        Pipeline { pipeline, layout, sampler, srgb: format.is_srgb(), format, layers, transition, crossing: false, overlay, overlay_layout, overlay_slots: Vec::new(), overlays: 0, dither: None }
     }
 
     /// Gets `overlays` ready to draw over the view (`size` pixels at
@@ -450,9 +452,23 @@ impl Pipeline {
     /// uploaded only when they change.
     #[allow(clippy::too_many_arguments)]
     pub fn prepare_frame(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, rig: &Rig, shown: &Shown, camera: &Camera, rig_from_view: &[M3], size: [f32; 2], origin: [f32; 2]) {
-        self.mix = None;
+        self.crossing = false;
         self.overlays = 0;
         self.prepare_layer(0, device, queue, rig, shown, camera, rig_from_view, size, origin);
+    }
+
+    /// Gets a join ready after `prepare_frame` (prepared at the corner,
+    /// `[0, 0]`): the incoming cut as the second layer, both drawn into
+    /// pictures of the view's `size`, mixed by `look` (`Look::code`) `p` of
+    /// the way through into the view at `origin`.
+    #[allow(clippy::too_many_arguments)]
+    pub fn prepare_incoming(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, rig: &Rig, shown: &Shown, camera: &Camera, rig_from_view: &[M3], size: [f32; 2], origin: [f32; 2], look: u32, p: f32) {
+        self.prepare_layer(1, device, queue, rig, shown, camera, rig_from_view, size, [0.0, 0.0]);
+        let (w, h) = (size[0].round().max(1.0) as u32, size[1].round().max(1.0) as u32);
+        self.transition.ready(device, &self.sampler, self.format, w, h);
+        let u = [[look as f32, p, size[0] / size[1].max(1.0), if self.srgb { 1.0 } else { 0.0 }], [size[0], size[1], origin[0], origin[1]]];
+        queue.write_buffer(&self.transition.uniforms, 0, bytemuck::cast_slice(&u));
+        self.crossing = true;
     }
 
     /// Gets layer `layer` ready (see `prepare_frame`).
@@ -521,6 +537,26 @@ impl Pipeline {
 
     /// Draws the prepared frame into `target`, within `clip`.
     pub fn draw(&self, encoder: &mut wgpu::CommandEncoder, target: &wgpu::TextureView, clip: &Rectangle<u32>) {
+        // A join: each cut into its picture first.
+        if let (Some(pics), true) = (&self.transition.pictures, self.crossing) {
+            for (layer, pic) in self.layers.iter().zip([&pics.from, &pics.to]) {
+                let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("transition picture"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &pic.view,
+                        depth_slice: None,
+                        resolve_target: None,
+                        ops: wgpu::Operations { load: wgpu::LoadOp::Clear(wgpu::Color::BLACK), store: wgpu::StoreOp::Store },
+                    })],
+                    depth_stencil_attachment: None,
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                });
+                pass.set_pipeline(&self.pipeline);
+                pass.set_bind_group(0, &layer.bind_group, &[]);
+                pass.draw(0..3, 0..1);
+            }
+        }
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("stitch"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -534,16 +570,17 @@ impl Pipeline {
             occlusion_query_set: None,
         });
         pass.set_scissor_rect(clip.x, clip.y, clip.width, clip.height);
-        pass.set_pipeline(&self.pipeline);
-        pass.set_bind_group(0, &self.layers[0].bind_group, &[]);
-        pass.draw(0..3, 0..1);
-        if let Some(k) = self.mix {
-            let k = k as f64;
-            pass.set_pipeline(&self.blend);
-            pass.set_blend_constant(wgpu::Color { r: k, g: k, b: k, a: k });
-            pass.set_bind_group(0, &self.layers[1].bind_group, &[]);
-            pass.draw(0..3, 0..1);
+        match &self.transition.pictures {
+            Some(pics) if self.crossing => {
+                pass.set_pipeline(&self.transition.pipeline);
+                pass.set_bind_group(0, &pics.bind_group, &[]);
+            }
+            _ => {
+                pass.set_pipeline(&self.pipeline);
+                pass.set_bind_group(0, &self.layers[0].bind_group, &[]);
+            }
         }
+        pass.draw(0..3, 0..1);
         if self.overlays > 0 {
             pass.set_pipeline(&self.overlay);
             for slot in &self.overlay_slots[..self.overlays] {
@@ -622,10 +659,12 @@ impl shader::Primitive for Primitive {
     fn prepare(&self, p: &mut Pipeline, device: &wgpu::Device, queue: &wgpu::Queue, bounds: &Rectangle, viewport: &Viewport) {
         let px = *bounds * viewport.scale_factor();
         let (size, origin) = ([px.width, px.height], [px.x, px.y]);
-        p.prepare_frame(device, queue, &self.rig, &self.shown, &self.camera, &self.rig_from_view, size, origin);
+        // Through a join both cuts are drawn into pictures of their own, at
+        // their corner; the transition's pass puts them in the view.
+        let corner = if self.incoming.is_some() { [0.0, 0.0] } else { origin };
+        p.prepare_frame(device, queue, &self.rig, &self.shown, &self.camera, &self.rig_from_view, size, corner);
         if let Some(i) = &self.incoming {
-            p.prepare_layer(1, device, queue, &i.rig, &i.shown, &i.camera, &i.rig_from_view, size, origin);
-            p.mix = Some(i.mix);
+            p.prepare_incoming(device, queue, &i.rig, &i.shown, &i.camera, &i.rig_from_view, size, origin, i.look, i.mix);
         }
         let target = viewport.physical_size();
         p.prepare_overlays(device, queue, &self.overlays, size, origin, [target.width as f32, target.height as f32]);
@@ -685,6 +724,90 @@ fn write(queue: &wgpu::Queue, texture: &wgpu::Texture, data: &[u8], w: u32, h: u
 
 /// The overlays' pipeline: `overlay.wgsl` over a triangle strip, blended
 /// premultiplied over what's drawn.
+/// The transition's pass: its pipeline, its uniforms (`transition.wgsl`'s
+/// `T`), and the two pictures it reads, made for the view's size.
+struct Transition {
+    pipeline: wgpu::RenderPipeline,
+    layout: wgpu::BindGroupLayout,
+    uniforms: wgpu::Buffer,
+    pictures: Option<Pictures>,
+}
+
+struct Pictures {
+    size: (u32, u32),
+    from: Plane,
+    to: Plane,
+    bind_group: wgpu::BindGroup,
+}
+
+impl Transition {
+    fn new(device: &wgpu::Device, format: wgpu::TextureFormat) -> Transition {
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor { label: Some("transition"), source: wgpu::ShaderSource::Wgsl(include_str!("transition.wgsl").into()) });
+        let texture = |binding| wgpu::BindGroupLayoutEntry {
+            binding,
+            visibility: wgpu::ShaderStages::FRAGMENT,
+            ty: wgpu::BindingType::Texture { sample_type: wgpu::TextureSampleType::Float { filterable: true }, view_dimension: wgpu::TextureViewDimension::D2, multisampled: false },
+            count: None,
+        };
+        let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("transition"),
+            entries: &[
+                wgpu::BindGroupLayoutEntry { binding: 0, visibility: wgpu::ShaderStages::FRAGMENT, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Uniform, has_dynamic_offset: false, min_binding_size: None }, count: None },
+                wgpu::BindGroupLayoutEntry { binding: 1, visibility: wgpu::ShaderStages::FRAGMENT, ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering), count: None },
+                texture(2),
+                texture(3),
+            ],
+        });
+        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor { label: None, bind_group_layouts: &[&layout], push_constant_ranges: &[] });
+        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("transition"),
+            layout: Some(&pipeline_layout),
+            vertex: wgpu::VertexState { module: &shader, entry_point: Some("tvs"), compilation_options: Default::default(), buffers: &[] },
+            primitive: wgpu::PrimitiveState::default(),
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState::default(),
+            fragment: Some(wgpu::FragmentState { module: &shader, entry_point: Some("tfs"), compilation_options: Default::default(), targets: &[Some(wgpu::ColorTargetState { format, blend: None, write_mask: wgpu::ColorWrites::ALL })] }),
+            multiview: None,
+            cache: None,
+        });
+        let uniforms = device.create_buffer(&wgpu::BufferDescriptor { label: Some("transition"), size: 32, usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST, mapped_at_creation: false });
+        Transition { pipeline, layout, uniforms, pictures: None }
+    }
+
+    /// The two pictures at `w` × `h`, made again only when the size changes.
+    fn ready(&mut self, device: &wgpu::Device, sampler: &wgpu::Sampler, format: wgpu::TextureFormat, w: u32, h: u32) {
+        if self.pictures.as_ref().is_some_and(|p| p.size == (w, h)) {
+            return;
+        }
+        let picture = || {
+            let texture = device.create_texture(&wgpu::TextureDescriptor {
+                label: Some("transition picture"),
+                size: wgpu::Extent3d { width: w, height: h, depth_or_array_layers: 1 },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
+                view_formats: &[],
+            });
+            let view = texture.create_view(&Default::default());
+            Plane { texture, view }
+        };
+        let (from, to) = (picture(), picture());
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("transition"),
+            layout: &self.layout,
+            entries: &[
+                wgpu::BindGroupEntry { binding: 0, resource: self.uniforms.as_entire_binding() },
+                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(sampler) },
+                wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::TextureView(&from.view) },
+                wgpu::BindGroupEntry { binding: 3, resource: wgpu::BindingResource::TextureView(&to.view) },
+            ],
+        });
+        self.pictures = Some(Pictures { size: (w, h), from, to, bind_group });
+    }
+}
+
 fn overlay_pipeline(device: &wgpu::Device, format: wgpu::TextureFormat) -> (wgpu::RenderPipeline, wgpu::BindGroupLayout) {
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("overlay"),

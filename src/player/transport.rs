@@ -370,7 +370,7 @@ impl App {
     }
 
     /// The other cut of a crossfade, as the view draws it over the current one.
-    pub(super) fn partner_layer(&self) -> Option<(Arc<Rig>, Arc<Shown>, Camera, Vec<M3>, f32)> {
+    pub(super) fn partner_layer(&self) -> Option<gpu::Incoming> {
         // Paused with the playing cut selected, it's shown on its own, to
         // frame it.
         if self.selection.cut(&self.edit) == Some(self.current) && self.clip.as_ref().is_some_and(|c| !c.playback.playing) {
@@ -388,7 +388,9 @@ impl App {
         let look = if self.edit.cuts.get(*i).is_some_and(|c| c.flat) == self.look_flat { self.look } else { self.other_look };
         let camera = if self.follow { keyed().unwrap_or_else(|| look.camera()) } else { look.camera() };
         let camera = Camera { grade: self.grade(*i, t), lut: self.edit.cuts.get(*i).and_then(|c| c.lut_applied), ..camera };
-        Some((p.media.rig.clone(), shown, camera, p.rig_from_view(self.rolling_shutter), self.crossfade_shares()?.1 as f32))
+        // The join's look is the incoming cut's (`Cut::transition`).
+        let look = crate::transition::Look::code(self.edit.cuts.get(*i).and_then(|c| c.transition));
+        Some(gpu::Incoming { rig: p.media.rig.clone(), shown, camera, rig_from_view: p.rig_from_view(self.rolling_shutter), mix: self.crossfade_shares()?.1 as f32, look })
     }
 
     /// The playing cut, and the playhead's clip time. That is where a seek

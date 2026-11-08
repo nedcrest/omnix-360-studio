@@ -17,7 +17,7 @@ pub(super) struct Sphere {
     pub(super) picking: bool,
     /// Through a crossfade, the next cut drawn over: its rig, frame,
     /// framing, readout views and how far in it is (0..1).
-    pub(super) incoming: Option<(Arc<Rig>, Arc<Shown>, Camera, Vec<M3>, f32)>,
+    pub(super) incoming: Option<gpu::Incoming>,
     pub(super) overlays: Vec<gpu::OverlayDraw>,
 }
 
@@ -116,7 +116,7 @@ impl shader::Program<Message> for Sphere {
             shown: self.shown.clone(),
             camera: self.camera,
             rig_from_view: self.rig_from_view.clone(),
-            incoming: self.incoming.clone().map(|(rig, shown, camera, rig_from_view, mix)| gpu::Incoming { rig, shown, camera, rig_from_view, mix }),
+            incoming: self.incoming.clone(),
             overlays: self.overlays.clone(),
         }
     }

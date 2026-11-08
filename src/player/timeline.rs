@@ -2436,7 +2436,7 @@ mod tests {
         // The next cut's sound starting half a second early, at 6.5 s, and
         // a marker on the first cut at 1.5 s.
         t.blocks[2].cut.sound_before = 0.5;
-        t.blocks[0].cut.marks = vec![crate::project::Mark { t: 1.5, note: String::new(), ..Default::default() }];
+        t.blocks[0].cut.marks = vec![crate::project::Mark { t: 1.5, note: String::new() }];
         assert_eq!(by(t.snap(&[6.47], per_px, any)), Some(0.03));
         assert_eq!(by(t.snap(&[1.45], per_px, any)), Some(0.05));
         // Its own edges aren't targets: the Voice clip (2..6) dragged by
@@ -2595,8 +2595,8 @@ mod tests {
         assert_eq!(edge_of(100.0, 130.0, 125.0), Some(false));
         // Markers: in their cut's stretch only, in edit order.
         let mut t3 = timeline().0;
-        t3.blocks[2].cut.marks = vec![crate::project::Mark { t: 1.0, note: "late".into(), ..Default::default() }];
-        t3.blocks[0].cut.marks = vec![crate::project::Mark { t: 2.0, note: String::new(), ..Default::default() }, crate::project::Mark { t: 5.0, note: "past its out".into(), ..Default::default() }];
+        t3.blocks[2].cut.marks = vec![crate::project::Mark { t: 1.0, note: "late".into() }];
+        t3.blocks[0].cut.marks = vec![crate::project::Mark { t: 2.0, note: String::new() }, crate::project::Mark { t: 5.0, note: "past its out".into() }];
         let f = t3.flags(b);
         assert_eq!(f.iter().map(|f| (f.0, f.1)).collect::<Vec<_>>(), [(0, 2.0), (2, 1.0)]);
         assert!((f[1].2 - x(8.0)).abs() < 0.01, "cut 2 starts at 7 s: its 1 s is 8 s");

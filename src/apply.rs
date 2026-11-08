@@ -74,8 +74,8 @@ pub fn describe(project: &Path) -> Result<()> {
     Ok(())
 }
 
-/// A cut's transitions as `describe` says them: the join before it (its
-/// overlap and look) and its edge looks, each with the settings moved.
+/// A cut's looks as `describe` says them: the join before it (its overlap
+/// and look), its edge looks and its style, each with the settings moved.
 fn transition_lines(c: &crate::project::Cut) -> Vec<String> {
     use std::collections::BTreeMap;
     let set = |params: &BTreeMap<String, f32>| if params.is_empty() { String::new() } else { format!("  {}", params.iter().map(|(k, v)| format!("{k} {v}")).collect::<Vec<_>>().join(", ")) };
@@ -89,6 +89,9 @@ fn transition_lines(c: &crate::project::Cut) -> Vec<String> {
             lines.push(format!("{side}: {} {:.2} s{}", key_of(e.look), e.seconds, set(&e.params)));
         }
     }
+    if let Some(s) = &c.style {
+        lines.push(format!("style: {}{}", key_of(s.look), set(&s.params)));
+    }
     lines
 }
 
@@ -97,17 +100,21 @@ fn key_of(look: crate::transition::Look) -> String {
     serde_json::to_string(&look).expect("a look is JSON").trim_matches('"').to_owned()
 }
 
-/// The transitions an agent can set, for `omnix transitions`: every look
-/// by its key, with its settings (key, range, default, choices), then the
-/// templates' library and its names; or, given one, that template as the
-/// JSON a `template` op takes.
-pub fn transitions(template: Option<&str>) -> Result<String> {
+/// The looks an agent can set, for `omnix looks`: every one by its key,
+/// overlap, edge and style, with its settings (key, range, default,
+/// choices), then the transition templates' library and its names; or,
+/// given one, that template as the JSON a `template` op takes.
+pub fn looks(template: Option<&str>) -> Result<String> {
     use crate::transition::Look;
     if let Some(name) = template {
         return Ok(serde_json::to_string_pretty(&crate::template::load(name)?)?);
     }
     let mut out = String::new();
-    for (kind, looks) in [("overlap (op `transition`, settings `transition_knob`)", &Look::OVERLAP[..]), ("edge (op `edge`, settings `edge_knob`)", &Look::EDGES[..])] {
+    for (kind, looks) in [
+        ("overlap (op `transition`, settings `transition_knob`)", &Look::OVERLAP[..]),
+        ("edge (op `edge`, settings `edge_knob`)", &Look::EDGES[..]),
+        ("style (op `style`, settings `style_knob`)", &Look::STYLES[..]),
+    ] {
         out += &format!("{kind}:\n");
         for &l in looks {
             let built = if Look::code(Some(l)) == 0 { "  (not built yet: plays as a dissolve)" } else { "" };
@@ -135,8 +142,10 @@ mod tests {
         c.transition_params.insert("streak".into(), 1.5);
         c.edge_out = Some(Edge { look: Look::EdgeFade, seconds: 1.0, params: Default::default() });
         assert_eq!(super::transition_lines(&c), ["join before: whip_pan over 0.50 s  streak 1.5", "out: edge_fade 1.00 s"]);
-        let list = super::transitions(None).unwrap();
-        for word in ["whip_pan", "streak = 1", "edge_zoom", "0 In, 1 Out", "sphere_whip", "not built yet", "templates in"] {
+        c.style = Some(crate::project::Style { look: Look::Vhs, params: Default::default() });
+        assert_eq!(super::transition_lines(&c).last().unwrap(), "style: vhs");
+        let list = super::looks(None).unwrap();
+        for word in ["whip_pan", "streak = 1", "edge_zoom", "0 In, 1 Out", "sphere_whip", "not built yet", "old_film", "grain = 0.5", "templates in"] {
             assert!(list.contains(word), "{word} missing:\n{list}");
         }
     }

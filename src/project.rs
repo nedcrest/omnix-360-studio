@@ -547,6 +547,22 @@ impl Edge {
     }
 }
 
+/// A style look over a cut's whole picture (gap 87: old film, VHS, glow…)
+/// and its settings the user moved (`Look::knobs`).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Style {
+    pub look: crate::transition::Look,
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub params: std::collections::BTreeMap<String, f32>,
+}
+
+impl Style {
+    pub fn spec(&self) -> crate::transition::Spec {
+        crate::transition::Spec { look: Some(self.look), values: crate::transition::values(Some(self.look), &self.params) }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Cut {
@@ -600,6 +616,9 @@ pub struct Cut {
     /// The look on its end, up to its out point.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub edge_out: Option<Edge>,
+    /// A style look over its whole picture, after its grade.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub style: Option<Style>,
     /// Its colour effects' keyframes, clip time, apart from the camera's.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub effects: Vec<crate::grade::EffectKey>,
@@ -684,6 +703,7 @@ impl Cut {
             transition_params: Default::default(),
             edge_in: None,
             edge_out: None,
+            style: None,
             effects: Vec::new(),
             marks: Vec::new(),
             lut: None,

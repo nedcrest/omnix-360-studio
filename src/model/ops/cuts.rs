@@ -62,6 +62,11 @@ pub enum CutOp {
     /// overlap, the out on the cut before, the in on this one; what the
     /// template leaves out is taken off.
     Template { cut: Id, template: crate::template::Template },
+    /// A style look over its whole picture (`Cut::style`: old film, VHS,
+    /// glow…); none: off. Its settings stay while the look does.
+    Style { cut: Id, look: Option<crate::transition::Look> },
+    /// One of its style's own settings, as `TransitionKnob`.
+    StyleKnob { cut: Id, key: String, value: Option<f32> },
     Stabilize { cut: Id, mode: Option<Mode> },
     Lut { cut: Id, lut: Option<String> },
     Delete { cut: Id },
@@ -190,6 +195,23 @@ pub(super) fn apply(p: &mut Project, op: &CutOp) -> Result<Outcome, OpError> {
                 }
             }
             said(format!("the join before cut #{cut} set from a template"))
+        }
+        &CutOp::Style { cut, look } => {
+            let i = find(p, cut)?;
+            if let Some(l) = look.filter(|l| l.group() != crate::transition::Group::Style) {
+                return Err(OpError::Invalid(format!("{} isn't a style look", l.name())));
+            }
+            let c = &mut p.cuts[i];
+            // The settings were the old look's.
+            let params = c.style.take().filter(|s| Some(s.look) == look).map(|s| s.params).unwrap_or_default();
+            c.style = look.map(|look| crate::project::Style { look, params });
+            said(format!("cut #{cut}: style {}", look.map_or("none", |l| l.name())))
+        }
+        CutOp::StyleKnob { cut, key, value } => {
+            let i = find(p, *cut)?;
+            let style = p.cuts[i].style.as_mut().ok_or_else(|| OpError::Invalid(format!("cut #{cut} has no style to set")))?;
+            let said_ = set_knob(style.look, &mut style.params, key, *value)?;
+            said(format!("cut #{cut}: {said_}"))
         }
         CutOp::EdgeKnob { cut, end, key, value } => {
             let i = find(p, *cut)?;
@@ -452,6 +474,16 @@ mod tests {
         assert!(e.cuts[1].edge_out.as_ref().unwrap().params.is_empty(), "another look starts at its defaults");
         e.apply(&edge(End::Out, None, 0.0)).unwrap();
         assert!(e.cuts[1].edge_out.is_none());
+        let style = |look| Op::Cut(CutOp::Style { cut: a, look });
+        assert!(e.apply(&style(Some(crate::transition::Look::EdgeFade))).is_err(), "an edge look isn't a style");
+        e.apply(&style(Some(crate::transition::Look::OldFilm))).unwrap();
+        e.apply(&Op::Cut(CutOp::StyleKnob { cut: a, key: "grain".into(), value: Some(0.9) })).unwrap();
+        e.apply(&style(Some(crate::transition::Look::OldFilm))).unwrap();
+        assert_eq!(e.cuts[0].style.as_ref().unwrap().params.len(), 1, "the same look keeps its settings");
+        e.apply(&style(Some(crate::transition::Look::Glow))).unwrap();
+        assert!(e.cuts[0].style.as_ref().unwrap().params.is_empty(), "another starts at its defaults");
+        e.apply(&style(None)).unwrap();
+        assert!(e.cuts[0].style.is_none());
         e.apply(&Op::Cut(CutOp::Crossfade { cut: b, seconds: 10.0 })).unwrap();
         assert!(e.cuts[1].crossfade < 3.0 && e.cuts[1].crossfade > 0.0, "within the shorter cut: {}", e.cuts[1].crossfade);
         e.apply(&Op::Cut(CutOp::Stabilize { cut: a, mode: Some(Mode::Level) })).unwrap();

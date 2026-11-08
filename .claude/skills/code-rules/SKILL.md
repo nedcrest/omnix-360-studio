@@ -24,7 +24,7 @@ places, drifting apart, and rules living in UI handlers without tests.
   from a handler: the CLI and an agent couldn't do it, and nothing checks it.
   And an agent must see and find it: `omnix describe` says the new value
   where it's set, and names, keys and ranges an op takes are listed by a
-  command (`ops-schema` gives the shape only; e.g. `omnix transitions`
+  command (`ops-schema` gives the shape only; e.g. `omnix looks`
   lists the looks' settings). Transitions shipped without both at first
   (2026-11-09).
 - **A rule goes in a module with tests; the window only carries it out.**

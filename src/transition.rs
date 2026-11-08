@@ -23,6 +23,12 @@ pub enum Look {
     EdgeZoom,
     EdgeGlitch,
     EdgeFlash,
+    /// Style looks (gap 87): over a cut's whole picture (`Cut::style`).
+    OldFilm,
+    Vhs,
+    Cyberpunk,
+    Glow,
+    SoftFocus,
 }
 
 /// The library's groups, in the order the panel shows them.
@@ -33,6 +39,7 @@ pub enum Group {
     Flat,
     Sphere,
     Edge,
+    Style,
 }
 
 impl Group {
@@ -46,6 +53,7 @@ impl Group {
             Group::Flat => "Picture",
             Group::Sphere => "360",
             Group::Edge => "Edges",
+            Group::Style => "Style",
         }
     }
 }
@@ -55,6 +63,8 @@ impl Look {
     pub const OVERLAP: [Look; 8] = [Look::WhipPan, Look::ZoomPunch, Look::SpinBlur, Look::Flash, Look::LightLeak, Look::LumaFade, Look::Glitch, Look::SphereWhip];
     /// The looks on a cut's edge (`Cut::edge_in`, `edge_out`).
     pub const EDGES: [Look; 5] = [Look::EdgeFade, Look::EdgeBlur, Look::EdgeZoom, Look::EdgeGlitch, Look::EdgeFlash];
+    /// The looks over a cut's picture (`Cut::style`).
+    pub const STYLES: [Look; 5] = [Look::OldFilm, Look::Vhs, Look::Cyberpunk, Look::Glow, Look::SoftFocus];
 
     pub fn is_edge(self) -> bool {
         self.group() == Group::Edge
@@ -75,6 +85,11 @@ impl Look {
             Look::EdgeZoom => "Zoom",
             Look::EdgeGlitch => "Glitch",
             Look::EdgeFlash => "Flash",
+            Look::OldFilm => "Old film",
+            Look::Vhs => "VHS",
+            Look::Cyberpunk => "Cyberpunk",
+            Look::Glow => "Glow",
+            Look::SoftFocus => "Soft focus",
         }
     }
 
@@ -94,6 +109,11 @@ impl Look {
             Look::EdgeZoom => "A push in or a pull out with a blur along it",
             Look::EdgeGlitch => "Torn strips and shifted colours growing to the end, or settling at a start",
             Look::EdgeFlash => "Blown out to light, or out of it at a start",
+            Look::OldFilm => "Grain, scratches, flicker, a weaving gate and faded sepia",
+            Look::Vhs => "Bled colour, a rolling tracking band, scanlines and tape noise",
+            Look::Cyberpunk => "Teal shadows, magenta highlights, split colours, scanlines, now and then a tear",
+            Look::Glow => "The bright parts glow over their surroundings",
+            Look::SoftFocus => "A dreamy softness, the highlights blooming",
         }
     }
 
@@ -104,6 +124,7 @@ impl Look {
             Look::LumaFade | Look::Glitch => Group::Flat,
             Look::SphereWhip => Group::Sphere,
             Look::EdgeFade | Look::EdgeBlur | Look::EdgeZoom | Look::EdgeGlitch | Look::EdgeFlash => Group::Edge,
+            Look::OldFilm | Look::Vhs | Look::Cyberpunk | Look::Glow | Look::SoftFocus => Group::Style,
         }
     }
 }
@@ -164,6 +185,29 @@ impl Look {
         const BLUR: [Knob; 1] = [slider("strength", "Strength", 0.2, 2.0, 1.0, 0.1)];
         const PUSH: [Knob; 2] = [choice("direction", "Direction", &["In", "Out"]), slider("strength", "Strength", 0.1, 1.0, 0.3, 0.05)];
         const BLOW: [Knob; 1] = [slider("strength", "Strength", 0.2, 1.5, 0.8, 0.05)];
+        const FILM: [Knob; 6] = [
+            slider("amount", "Amount", 0.0, 1.0, 0.8, 0.05),
+            slider("grain", "Grain", 0.0, 1.0, 0.5, 0.05),
+            slider("scratches", "Scratches and dust", 0.0, 1.0, 0.4, 0.05),
+            slider("flicker", "Flicker", 0.0, 1.0, 0.4, 0.05),
+            slider("fade", "Sepia", 0.0, 1.0, 0.6, 0.05),
+            slider("weave", "Gate weave", 0.0, 1.0, 0.3, 0.05),
+        ];
+        const TAPE: [Knob; 4] = [
+            slider("amount", "Amount", 0.0, 1.0, 0.8, 0.05),
+            slider("bleed", "Colour bleed", 0.0, 1.0, 0.6, 0.05),
+            slider("tracking", "Tracking", 0.0, 1.0, 0.5, 0.05),
+            slider("noise", "Noise", 0.0, 1.0, 0.4, 0.05),
+        ];
+        const NEON: [Knob; 5] = [
+            slider("amount", "Amount", 0.0, 1.0, 0.8, 0.05),
+            slider("neon", "Neon colour", 0.0, 1.0, 0.7, 0.05),
+            slider("split", "Colour split", 0.0, 1.0, 0.5, 0.05),
+            slider("scanlines", "Scanlines", 0.0, 1.0, 0.4, 0.05),
+            slider("glitch", "Glitch", 0.0, 1.0, 0.2, 0.05),
+        ];
+        const GLOW: [Knob; 3] = [slider("strength", "Strength", 0.0, 2.0, 0.6, 0.05), slider("radius", "Radius", 0.0, 1.0, 0.4, 0.05), slider("threshold", "Threshold", 0.0, 1.0, 0.6, 0.05)];
+        const SOFT: [Knob; 2] = [slider("amount", "Amount", 0.0, 1.0, 0.5, 0.05), slider("radius", "Radius", 0.0, 1.0, 0.4, 0.05)];
         match self {
             Look::WhipPan => &WHIP,
             Look::ZoomPunch => &ZOOM,
@@ -178,6 +222,11 @@ impl Look {
             Look::EdgeZoom => &PUSH,
             Look::EdgeGlitch => &GLITCH,
             Look::EdgeFlash => &BLOW,
+            Look::OldFilm => &FILM,
+            Look::Vhs => &TAPE,
+            Look::Cyberpunk => &NEON,
+            Look::Glow => &GLOW,
+            Look::SoftFocus => &SOFT,
         }
     }
 
@@ -244,6 +293,11 @@ impl Look {
             Some(Look::EdgeZoom) => 10,
             Some(Look::EdgeGlitch) => 11,
             Some(Look::EdgeFlash) => 12,
+            Some(Look::OldFilm) => 20,
+            Some(Look::Vhs) => 21,
+            Some(Look::Cyberpunk) => 22,
+            Some(Look::Glow) => 23,
+            Some(Look::SoftFocus) => 24,
             _ => 0,
         }
     }
@@ -253,7 +307,8 @@ impl Look {
 /// the way through, from the outgoing picture (`from`) and the incoming
 /// (`to`), each read at any point (clamped to its edges); `aspect` the
 /// view's width over its height, `pixel` seeding the jitter that hides a
-/// blur's sample steps. An edge look (`Look::is_edge`) has one picture,
+/// blur's sample steps. A style (`Group::Style`) has one picture and `p`
+/// is the clip's time. An edge look (`Look::is_edge`) has one picture,
 /// `from`, and `p` is how much of it: 0 the picture as it is, 1 all the
 /// way (black, out of focus); a cut's start runs it backwards. The
 /// shader's `transition` (`transition.wgsl`) is
@@ -350,9 +405,8 @@ pub fn colour(spec: &Spec, p: f32, uv: [f32; 2], aspect: f32, pixel: [u32; 2], f
             // brightness, passes its own.
             let (a, b) = (from(uv), to(uv));
             let soft = v[0];
-            let luma = 0.2126 * a[0] + 0.7152 * a[1] + 0.0722 * a[2];
-            let luma = if v[1] < 0.5 { luma } else { 1.0 - luma };
-            let w = ((p * (1.0 + soft) - (1.0 - luma)) / soft).clamp(0.0, 1.0);
+            let bright = if v[1] < 0.5 { luma(a) } else { 1.0 - luma(a) };
+            let w = ((p * (1.0 + soft) - (1.0 - bright)) / soft).clamp(0.0, 1.0);
             mix(a, b, w * w * (3.0 - 2.0 * w))
         }
         7 => glitch(v, p, uv, pixel, from, to),
@@ -367,6 +421,12 @@ pub fn colour(spec: &Spec, p: f32, uv: [f32; 2], aspect: f32, pixel: [u32; 2], f
             let lift = p * v[0];
             from(uv).map(|c| c * (1.0 + 2.0 * lift) + lift * lift)
         }
+        // Styles: `p` is the clip's time, seconds (`style.rs`).
+        20 => crate::style::old_film(v, p, uv, pixel, from),
+        21 => crate::style::vhs(v, p, uv, pixel, from),
+        22 => crate::style::cyberpunk(v, p, uv, pixel, from),
+        23 => crate::style::glow(v, uv, aspect, pixel, from),
+        24 => crate::style::soft_focus(v, uv, aspect, pixel, from),
         _ => mix(from(uv), to(uv), p),
     }
 }
@@ -403,7 +463,7 @@ fn glitch(v: &Values, p: f32, uv: [f32; 2], pixel: [u32; 2], from: &dyn Fn([f32;
 /// from `from` to `to`, a torn strip the other way round; `frame` picks
 /// the tear (the glitch and its edge look both).
 #[allow(clippy::too_many_arguments)]
-fn tear(strips: f32, burst: f32, w: f32, frame: u32, uv: [f32; 2], pixel: [u32; 2], from: &dyn Fn([f32; 2]) -> [f32; 3], to: &dyn Fn([f32; 2]) -> [f32; 3]) -> [f32; 3] {
+pub(crate) fn tear(strips: f32, burst: f32, w: f32, frame: u32, uv: [f32; 2], pixel: [u32; 2], from: &dyn Fn([f32; 2]) -> [f32; 3], to: &dyn Fn([f32; 2]) -> [f32; 3]) -> [f32; 3] {
     let row = (uv[1] * strips).floor() as u32;
     let torn = hash([row, frame], 7) < 0.35 * burst;
     let shift = if torn { (hash([row, frame], 8) - 0.5) * 0.25 * burst } else { 0.0 };
@@ -418,16 +478,27 @@ fn tear(strips: f32, burst: f32, w: f32, frame: u32, uv: [f32; 2], pixel: [u32; 
 /// The edge blur: a disc of samples (a golden-angle spiral, turned per
 /// pixel) as wide as `p` and the strength make it.
 fn edge_blur(v: &Values, p: f32, uv: [f32; 2], aspect: f32, pixel: [u32; 2], from: &dyn Fn([f32; 2]) -> [f32; 3]) -> [f32; 3] {
-    let radius = p * 0.04 * v[0];
-    let turn = hash(pixel, 11) * std::f32::consts::TAU;
+    disc(p * 0.04 * v[0], 11, uv, aspect, pixel, from)
+}
+
+/// The mean of `pic` over a disc `radius` high round `uv`: a golden-angle
+/// spiral of `SAMPLES`, turned per pixel (by `salt`) so its steps don't
+/// show. The edge blur's and the styles' blur.
+pub(crate) fn disc(radius: f32, salt: u32, uv: [f32; 2], aspect: f32, pixel: [u32; 2], pic: &dyn Fn([f32; 2]) -> [f32; 3]) -> [f32; 3] {
+    let turn = hash(pixel, salt) * std::f32::consts::TAU;
     let mut sum = [0.0f32; 3];
     for i in 0..SAMPLES {
         let r = radius * ((i as f32 + 0.5) / SAMPLES as f32).sqrt();
         let a = i as f32 * 2.399_963 + turn;
-        let c = from([(uv[0] + a.cos() * r / aspect).clamp(0.0, 1.0), (uv[1] + a.sin() * r).clamp(0.0, 1.0)]);
+        let c = pic([(uv[0] + a.cos() * r / aspect).clamp(0.0, 1.0), (uv[1] + a.sin() * r).clamp(0.0, 1.0)]);
         sum = [0, 1, 2].map(|k| sum[k] + c[k]);
     }
     sum.map(|c| c / SAMPLES as f32)
+}
+
+/// Rec. 709 brightness.
+pub(crate) fn luma(c: [f32; 3]) -> f32 {
+    0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
 }
 
 /// The edge zoom: pushed in (or pulled out, the frame mirrored past its
@@ -483,7 +554,7 @@ fn mirror(v: f32) -> f32 {
     if m > 1.0 { 2.0 - m } else { m }
 }
 
-fn mix(a: [f32; 3], b: [f32; 3], t: f32) -> [f32; 3] {
+pub(crate) fn mix(a: [f32; 3], b: [f32; 3], t: f32) -> [f32; 3] {
     [0, 1, 2].map(|c| a[c] + (b[c] - a[c]) * t)
 }
 
@@ -573,8 +644,30 @@ mod tests {
     }
 
     #[test]
+    fn a_style_at_nothing_is_the_picture_and_at_its_defaults_changes_it() {
+        // Fine detail, as footage has: a blur shows on it.
+        let a = |uv: [f32; 2]| [uv[0] * uv[0], 0.4, 0.5 + 0.5 * (uv[1] * 150.0).sin()];
+        for look in Look::STYLES {
+            assert_eq!(look.group(), Group::Style);
+            let mut none = Spec::of(Some(look));
+            none.values[0] = 0.0;
+            let (mut still, mut moved) = (0.0f32, 0.0f32);
+            for n in 0..64u32 {
+                let at = [0.1 + 0.1 * (n % 8) as f32, 0.1 + 0.1 * (n / 8) as f32];
+                for t in [0.0, 1.37, 20.5] {
+                    let diff = |s: &Spec| colour(s, t, at, 16.0 / 9.0, [n, 3 * n], &a, &a).iter().zip(a(at)).map(|(g, w)| (g - w).abs()).sum::<f32>();
+                    still = still.max(diff(&none));
+                    moved += diff(&Spec::of(Some(look))) / 192.0;
+                }
+            }
+            assert!(still < 1e-4, "{look:?} at nothing is off by {still}");
+            assert!(moved > 0.01, "{look:?} barely changes the picture: {moved}");
+        }
+    }
+
+    #[test]
     fn knobs_fit_the_shader_and_fill_by_default() {
-        assert!(Look::OVERLAP.iter().chain(&Look::EDGES).all(|l| l.knobs().len() <= MOST_KNOBS && l.knobs().iter().all(|k| k.least <= k.default && k.default <= k.most)));
+        assert!(Look::OVERLAP.iter().chain(&Look::EDGES).chain(&Look::STYLES).all(|l| l.knobs().len() <= MOST_KNOBS && l.knobs().iter().all(|k| k.least <= k.default && k.default <= k.most)));
         let mut set = std::collections::BTreeMap::new();
         set.insert("turns".to_owned(), 2.1);
         let v = values(Some(Look::SpinBlur), &set);

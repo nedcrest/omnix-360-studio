@@ -49,6 +49,7 @@ pub mod desktop;
 pub mod sibling;
 pub mod transition;
 mod template;
+mod style;
 mod fsutil;
 mod pipeline;
 mod preview;

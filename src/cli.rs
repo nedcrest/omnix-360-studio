@@ -141,11 +141,11 @@ pub(crate) enum Cmd {
     /// The JSON Schema of an ops file for `apply`: every operation, its
     /// fields and what they mean (for an agent's tools, or an editor).
     OpsSchema,
-    /// The transitions an operation can set: every look by its key, with
-    /// its settings (key, range, default, choices), and the saved
-    /// templates; with --template NAME, that template as a `template` op
-    /// takes it.
-    Transitions {
+    /// The looks an operation can set (a join's, an edge's, a cut's
+    /// style): every one by its key, with its settings (key, range,
+    /// default, choices), and the saved transition templates; with
+    /// --template NAME, that template as a `template` op takes it.
+    Looks {
         #[arg(long)]
         template: Option<String>,
     },
@@ -644,7 +644,7 @@ pub(crate) fn run() -> Result<()> {
         Cmd::Apply { project, ops, output } => crate::apply::run(&project, &ops, output.as_deref())?,
         Cmd::Describe { project } => crate::apply::describe(&project)?,
         Cmd::OpsSchema => println!("{}", crate::apply::schema()),
-        Cmd::Transitions { template } => print!("{}", crate::apply::transitions(template.as_deref())?),
+        Cmd::Looks { template } => print!("{}", crate::apply::looks(template.as_deref())?),
         Cmd::Install => {
             let written = crate::desktop::install("omnix", &crate::desktop::omnix_entry(&std::env::current_exe()?), crate::desktop::OMNIX_ICON).map_err(|e| anyhow::anyhow!("{e}"))?;
             for f in written {

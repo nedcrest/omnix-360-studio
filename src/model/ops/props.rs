@@ -71,6 +71,7 @@ fn cut_op() -> impl Strategy<Value = CutOp> {
         (id(), 0.0..4.0f64).prop_map(|(cut, seconds)| CutOp::Crossfade { cut, seconds }),
         (id(), prop::option::of(prop::sample::select(crate::transition::Look::OVERLAP.to_vec()))).prop_map(|(cut, look)| CutOp::Transition { cut, look }),
         (id(), end(), prop::option::of(prop::sample::select(crate::transition::Look::EDGES.to_vec())), 0.0..4.0f64).prop_map(|(cut, end, look, seconds)| CutOp::Edge { cut, end, look, seconds }),
+        (id(), prop::option::of(prop::sample::select(crate::transition::Look::STYLES.to_vec()))).prop_map(|(cut, look)| CutOp::Style { cut, look }),
         id().prop_map(|cut| CutOp::Delete { cut }),
         (id(), time(), "[a-z]{0,6}").prop_map(|(cut, t, note)| CutOp::Mark { cut, t, note }),
         (id(), time(), time()).prop_map(|(cut, from, t)| CutOp::MoveMark { cut, from, t }),

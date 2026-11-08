@@ -60,8 +60,23 @@ impl App {
         self.project.as_deref().unwrap_or(&self.edit.cuts[0].input)
     }
 
+    /// A video's name, else the project file's or the first clip's.
     pub(super) fn export_name(&self) -> String {
+        if let Some((_, video)) = self.project.as_deref().and_then(dailix_sheet::project::video_of) {
+            return video;
+        }
         self.export_base().file_stem().map_or_else(|| "export".to_owned(), |s| s.to_string_lossy().into_owned())
+    }
+
+    /// Where the export dialog opens: a video's `export/` (made), else
+    /// beside the project or its first clip.
+    fn export_dir(&self) -> Option<PathBuf> {
+        if let Some(dir) = self.project.as_deref().and_then(dailix_sheet::project::export_dir)
+            && std::fs::create_dir_all(&dir).is_ok()
+        {
+            return Some(dir);
+        }
+        self.export_base().parent().map(Path::to_owned)
     }
 
     /// Tracks `colour` from the playhead to the end of the cut on a thread,
@@ -261,7 +276,7 @@ impl App {
                 if self.edit.cuts.is_empty() || self.exporting.is_some() {
                     return Task::none();
                 }
-                let dir = self.export_base().parent().map(Path::to_owned);
+                let dir = self.export_dir();
                 let (clips, ext) = (self.export_clips, self.export_format.extension());
                 let name = format!("{}_{}.{ext}", self.export_name(), self.resolution);
                 return Task::perform(

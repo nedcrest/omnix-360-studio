@@ -196,8 +196,13 @@ pub struct Bin {
     pub hidden: std::collections::HashSet<PathBuf>,
 }
 
-/// The project's folder for a project file at `project`.
+/// The project's folder for a project file at `project`: a Dailix trip's
+/// for one of its videos; above an older project's `04_project`; else
+/// the file's own folder.
 pub fn root(project: &Path) -> Option<PathBuf> {
+    if let Some(trip) = dailix_sheet::project::of_edit(project) {
+        return Some(trip);
+    }
     let dir = project.parent()?;
     if dir.file_name().is_some_and(|n| n == "04_project") { dir.parent().map(Path::to_owned) } else { Some(dir.to_owned()) }
 }
@@ -576,7 +581,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn root_is_above_04_project() {
+    fn root_is_the_trip_or_above_04_project() {
+        let trip = std::env::temp_dir().join(format!("omnix-bin-root-{}", std::process::id()));
+        let l = dailix_sheet::Layout::new(&trip);
+        std::fs::create_dir_all(l.data()).unwrap();
+        dailix_sheet::project::update(&l, |_| {}).unwrap();
+        assert_eq!(root(&l.video_edit("2030-05-01")), Some(trip.clone()), "a video's edit: its trip");
+        std::fs::remove_dir_all(&trip).unwrap();
         assert_eq!(root(Path::new("/v/kos/04_project/den2.json")), Some(PathBuf::from("/v/kos")));
         assert_eq!(root(Path::new("/v/edit.json")), Some(PathBuf::from("/v")));
     }

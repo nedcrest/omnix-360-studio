@@ -41,7 +41,7 @@ impl App {
             let shown = column![text(label).size(15), text(hint).size(12).style(text::secondary)].spacing(2);
             button(shown).width(Length::Fill).padding([6, 12]).style(button::text).on_press(Message::ProjectPicked(Some(edit.clone()))).into()
         };
-        let name = |edit: &PathBuf| edit.file_stem().map_or_else(String::new, |s| s.to_string_lossy().into_owned());
+        let name = |edit: &PathBuf| dailix_sheet::project::edit_name(edit);
         let mut col = column![].spacing(6).width(560);
         let recent: Vec<&PathBuf> = self.recent.iter().filter(|p| p.is_file()).collect();
         if !recent.is_empty() {

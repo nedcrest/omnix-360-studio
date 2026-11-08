@@ -30,7 +30,7 @@
 - віха: Ритм і переходи
 - де: Omnix
 - пункт: 25
-- коміт: fca08ed, 2e02d3c, 4da0735, b54d6c8, 8ebb7dd
+- коміт: fca08ed, 2e02d3c, 4da0735, b54d6c8, 8ebb7dd, 914e706, e4c05f9
 
 Замість банальних переходів — бібліотека прикольних (TRANSITIONS.md, з
 gl-transitions, MIT): whip pan, zoom punch, spin blur, спалах, light

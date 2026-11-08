@@ -108,6 +108,7 @@ done in part stays here until its last card is done.
 | 86 | A program of its own: animated cutaways from a prompt and parameters (8-bit game, animated slides) | below |
 | 87 | Style looks (old film, VHS, neo-cyberpunk) for a video, an overlay picture or text; animation presets for text and pictures | below |
 | 88 | The Osmo 360 II: its calibration and 8K50 decoding | below |
+| 89 | Auto colour: exposure and white balance set from the picture (or by an AI), keyed where the camera misses | below |
 
 ## Open gaps
 
@@ -1472,6 +1473,28 @@ it: its lens calibration read as the Osmo 360's is, and decoding 8K50
 fast enough (about twice the Osmo 360's frames; `CONTEXT.md` «Machine»
 measured ~2× headroom on the 3060, unverified). Nothing to do before
 there's footage.
+
+### 89. Auto colour: exposure and white balance from the picture — idea (user, 2026-11-09)
+
+The user: "an AI can choose white balance and exposure better than me,
+make a good frame; and where the camera copes badly, it could give
+automatic moves of these or those colour values in the Effects tab, so
+the frame is neither blown out nor too dark." Why the core must let an
+agent set every value (`omnix describe`, `ops-schema`, ops for effect
+keys).
+
+- A measure first, in the core and tested: per stretch of a cut, the
+  picture's levels (the scopes of 69: clipped highlights, crushed
+  shadows, the grey balance), so «too bright», «too dark», «too blue»
+  are numbers, not looks.
+- From it, effect keyframes on the cut (exposure, highlights, shadows,
+  temperature, tint) that keep the frame in range, eased, written as ops
+  (`omnix` command and a button in Effects: «Auto»); the user's own keys
+  kept or replaced by choice.
+- An agent (or a local model) may choose instead, from frames and the
+  measure, through the same ops; nothing it does is hidden from undo.
+- In the milestone «Ефекти, колір і розумний звук», with the colour
+  tools (after 69 scopes).
 
 ## Format rule for all of these
 

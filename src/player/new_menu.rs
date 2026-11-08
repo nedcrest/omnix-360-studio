@@ -29,7 +29,12 @@ impl App {
                     let t = dailix_sheet::project::title(&r);
                     (r, t)
                 });
-                self.new_menu = Some(NewMenu { trips: trips.collect(), ..NewMenu::default() });
+                let trips: Vec<(PathBuf, String)> = trips.collect();
+                // Picked from the start (user, 2026-11-08: the button looked
+                // dead with none picked): the open edit's trip, else the first.
+                let open = self.project.as_deref().and_then(dailix_sheet::project::of_edit);
+                let trip = open.filter(|r| trips.iter().any(|(t, _)| t == r)).or_else(|| trips.first().map(|(r, _)| r.clone()));
+                self.new_menu = Some(NewMenu { trips, trip, ..NewMenu::default() });
                 return iced::widget::operation::focus(NAME);
             }
             Message::NewMenuClose => self.new_menu = None,
@@ -70,7 +75,9 @@ impl App {
         let mut trips = column![].spacing(2);
         for (root, title) in &m.trips {
             let picked = m.trip.as_ref() == Some(root);
-            trips = trips.push(button(text(title.clone()).size(14)).width(Length::Fill).padding([4, 10]).style(if picked { button::primary } else { button::text }).on_press(Message::NewVideoTrip(root.clone())));
+            // A choice of one, so it reads as one: ● the picked, ○ the rest.
+            let label = format!("{} {title}", if picked { "●" } else { "○" });
+            trips = trips.push(button(text(label).size(14)).width(Length::Fill).padding([4, 10]).style(if picked { button::secondary } else { button::text }).on_press(Message::NewVideoTrip(root.clone())));
         }
         if m.trips.is_empty() {
             trips = trips.push(note("No trips in the projects place yet: make one in Dailix."));
@@ -78,7 +85,7 @@ impl App {
         let ready = m.trip.is_some();
         let video = column![
             text("A video in a trip").size(16),
-            note("An empty edit in the trip's own folder for it, its clips in the bin."),
+            note("Pick the trip, name the video: an empty edit in a folder of its own in the trip, the trip's clips in the bin."),
             scrollable(trips).height(Length::Shrink),
             row![
                 text_input("Its name, e.g. Shorts: peacocks", &m.name).id(NAME).size(14).on_input(Message::NewVideoName).on_submit_maybe(ready.then_some(Message::NewVideoMake)),

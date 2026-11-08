@@ -88,6 +88,61 @@ pub fn parse_tags(typed: &str) -> Vec<String> {
     tags
 }
 
+/// A trip's folder name from its name as people say it and its month
+/// (`YYYY-MM`): `2026-11_motopokatushky-lystopad`, as the trips made so far
+/// are named (user, 2026-11-08). Ukrainian letters spelled in Latin ones;
+/// anything else a dash.
+pub fn trip_folder(month: &str, title: &str) -> String {
+    let mut slug = String::new();
+    for c in title.to_lowercase().chars() {
+        let latin = match c {
+            'а' => "a", 'б' => "b", 'в' => "v", 'г' => "h", 'ґ' => "g", 'д' => "d", 'е' => "e", 'є' => "ie", 'ж' => "zh", 'з' => "z",
+            'и' => "y", 'і' => "i", 'ї' => "i", 'й' => "i", 'к' => "k", 'л' => "l", 'м' => "m", 'н' => "n", 'о' => "o", 'п' => "p",
+            'р' => "r", 'с' => "s", 'т' => "t", 'у' => "u", 'ф' => "f", 'х' => "kh", 'ц' => "ts", 'ч' => "ch", 'ш' => "sh", 'щ' => "shch",
+            'ь' | '\'' | '’' => "", 'ю' => "iu", 'я' => "ia",
+            c if c.is_ascii_alphanumeric() => {
+                slug.push(c);
+                continue;
+            }
+            _ => "-",
+        };
+        slug.push_str(latin);
+    }
+    let slug: Vec<&str> = slug.split('-').filter(|p| !p.is_empty()).collect();
+    let slug = slug.join("-");
+    let slug: String = slug.chars().take(40).collect::<String>().trim_end_matches('-').to_owned();
+    format!("{month}_{}", if slug.is_empty() { "trip" } else { &slug })
+}
+
+/// The month (`YYYY-MM`, UTC) of a time in seconds since 1970: a new
+/// trip's folder starts with it.
+pub fn month_of(unix_secs: u64) -> String {
+    // Days to a civil date (Howard Hinnant's algorithm).
+    let z = (unix_secs / 86_400) as i64 + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = yoe + era * 400 + i64::from(m <= 2);
+    format!("{y:04}-{m:02}")
+}
+
+/// A new trip in the place `projects`: its folder (`folder`, or `-2`, …
+/// when taken) made in the fixed layout, named `title`, with what was
+/// written about it. Its folder.
+pub fn new_trip(projects: &Path, folder: &str, title: &str, about: &About) -> std::io::Result<PathBuf> {
+    let free = (1..).map(|n| if n == 1 { folder.to_owned() } else { format!("{folder}-{n}") }).find(|n| !projects.join(n).exists()).expect("a free name");
+    let root = projects.join(free);
+    let l = Layout::new(&root);
+    l.create()?;
+    update(&l, |_| {})?;
+    set_title(&root, title)?;
+    set_about(&root, about)?;
+    Ok(root)
+}
+
 /// The projects in the place `projects`: its folders that are Dailix
 /// projects, by name. The home view and Omnix's start window both list
 /// them.
@@ -270,6 +325,24 @@ mod tests {
         assert!(plan.contains(&Tidy::Other { path: old.join("den1.kdenlive") }));
         assert_eq!(plan.len(), 5);
         std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn a_new_trip_is_named_by_its_month_and_made_in_the_layout() {
+        assert_eq!(trip_folder("2026-11", "Мотопокатушки, листопад!"), "2026-11_motopokatushky-lystopad");
+        assert_eq!(trip_folder("2026-08", "Кос'2026 — Греція"), "2026-08_kos2026-hretsiia");
+        assert_eq!(trip_folder("2026-08", "  …  "), "2026-08_trip");
+        assert_eq!((month_of(0), month_of(1_793_836_800), month_of(951_782_400)), ("1970-01".to_owned(), "2026-11".to_owned(), "2000-02".to_owned()));
+        let place = std::env::temp_dir().join(format!("dailix-new-trip-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&place);
+        let about = About { description: "Hills".into(), tags: vec!["moto".into()] };
+        let a = new_trip(&place, "2026-11_moto", "Moto", &about).unwrap();
+        let b = new_trip(&place, "2026-11_moto", "Moto again", &About::default()).unwrap();
+        assert_eq!((a.clone(), b.clone()), (place.join("2026-11_moto"), place.join("2026-11_moto-2")));
+        assert!(Layout::new(&a).is_project() && Layout::new(&a).videos().is_dir() && Layout::new(&a).footage().is_dir());
+        assert_eq!((title(&a), self::about(&a)), ("Moto".to_owned(), about));
+        assert_eq!(all(&place), [a, b]);
+        std::fs::remove_dir_all(&place).unwrap();
     }
 
     #[test]

@@ -420,9 +420,12 @@ Decided (2026-11-08): a transition stays keyed by the cut after its join
 transitions lane (25f) and edge transitions (25b), when a cut can have
 more than one; then a moved cut leaves its transition behind, as other
 editors do.
-Now (user, 2026-11-08): light leak, luma fade and glitch; tabs atop the
-panel for the kinds (overlap as now, edge 25b, stingers 25d). The 360
-one once there's footage. A look's own parameters wait as 25g.
+Then (`6dba398`) light leak (after FilmBurn), luma fade (ours) and
+glitch (after StripDatamoshGlitch and GlitchMemories), their sine noise
+put on the integer `hash` so GPU and CPU agree; and (`616305c`) the
+kinds as tabs atop the panel: overlap open, edges (25b) and stingers
+(25d) greyed until built. Waiting for the user's check. The 360 one
+once there's footage; a look's own parameters wait as 25g.
 
 Split into steps so each can be tried on Kos on its own:
 - **25a. Basic transitions and quick placement:** dissolve with a curve,

@@ -5,7 +5,7 @@
 
 use crate::Layout;
 use serde_json::{Map, Value};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// The file's fields; none when it isn't there.
 pub fn read(layout: &Layout) -> std::io::Result<Map<String, Value>> {
@@ -91,26 +91,109 @@ pub fn parse_tags(typed: &str) -> Vec<String> {
 /// The projects in the place `projects`: its folders that are Dailix
 /// projects, by name. The home view and Omnix's start window both list
 /// them.
-pub fn all(projects: &Path) -> Vec<std::path::PathBuf> {
+pub fn all(projects: &Path) -> Vec<PathBuf> {
     let Ok(entries) = std::fs::read_dir(projects) else { return Vec::new() };
     let mut roots: Vec<_> = entries.flatten().map(|e| e.path()).filter(|p| Layout::new(p).is_project()).collect();
     roots.sort();
     roots
 }
 
-/// A project's edits (`04_project/*.json`), the latest changed first.
-pub fn edits(root: &Path) -> Vec<std::path::PathBuf> {
-    let Ok(entries) = std::fs::read_dir(Layout::new(root).edits()) else { return Vec::new() };
-    let mut found: Vec<_> = entries.flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|x| x == "json")).map(|p| (std::fs::metadata(&p).and_then(|m| m.modified()).ok(), p)).collect();
+/// A project's videos' edits (`videos/<name>/edit.json`), the latest
+/// changed first.
+pub fn edits(root: &Path) -> Vec<PathBuf> {
+    let Ok(entries) = std::fs::read_dir(Layout::new(root).videos()) else { return Vec::new() };
+    let mut found: Vec<_> = entries.flatten().map(|e| e.path().join(crate::layout::EDIT)).filter(|p| p.is_file()).map(|p| (std::fs::metadata(&p).and_then(|m| m.modified()).ok(), p)).collect();
     found.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.cmp(&b.1)));
     found.into_iter().map(|(_, p)| p).collect()
 }
 
-/// The project an edit file is one of (it lies in its `04_project`).
-pub fn of_edit(edit: &Path) -> Option<std::path::PathBuf> {
-    let root = edit.parent()?.parent()?;
+/// The project and the video an edit file is (`<root>/videos/<name>/edit.json`).
+pub fn of_edit(edit: &Path) -> Option<PathBuf> {
+    video_of(edit).map(|(root, _)| root)
+}
+
+/// The project and the video's name of an edit file, if it's a video's.
+pub fn video_of(edit: &Path) -> Option<(PathBuf, String)> {
+    if edit.file_name()? != crate::layout::EDIT {
+        return None;
+    }
+    let folder = edit.parent()?;
+    let root = folder.parent()?.parent()?;
     let l = Layout::new(root);
-    (edit.parent() == Some(l.edits().as_path()) && l.is_project()).then(|| root.to_owned())
+    let name = folder.file_name()?.to_str()?.to_owned();
+    (folder.parent() == Some(l.videos().as_path()) && l.is_project()).then(|| (root.to_owned(), name))
+}
+
+/// What an edit is called in lists: its video's name, else its file's.
+pub fn edit_name(edit: &Path) -> String {
+    video_of(edit).map(|(_, name)| name).or_else(|| edit.file_stem().map(|s| s.to_string_lossy().into_owned())).unwrap_or_default()
+}
+
+/// Where a video's edit exports to by default (user, 2026-11-08).
+pub fn export_dir(edit: &Path) -> Option<PathBuf> {
+    video_of(edit).map(|(root, name)| Layout::new(root).video(&name).join(crate::layout::EXPORT))
+}
+
+/// A new video's folder, made: `name`, or `name-2`, `name-3`, … when taken.
+/// Its edit's path (not written).
+pub fn new_video(root: &Path, name: &str) -> std::io::Result<PathBuf> {
+    let l = Layout::new(root);
+    let free = (1..).map(|n| if n == 1 { name.to_owned() } else { format!("{name}-{n}") }).find(|n| !l.video(n).exists()).expect("a free name");
+    std::fs::create_dir_all(l.video(&free))?;
+    Ok(l.video_edit(&free))
+}
+
+/// What becomes of an edit lying loose in the old `04_project`.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Tidy {
+    /// Moved into a video of its own (its name: the file's, `omnix-` off).
+    Move { from: PathBuf, to: PathBuf },
+    /// The same bytes as one moved: to the trash.
+    Same { path: PathBuf, as_: PathBuf },
+    /// Nothing in it (no cuts, no sounds, no items): to the trash.
+    Empty { path: PathBuf },
+    /// Not an Omnix edit: left where it is.
+    Other { path: PathBuf },
+}
+
+/// What tidying the old `04_project` into videos does (user, 2026-11-08:
+/// one copy of each edit kept, each in its video; copies and empty ones
+/// go). Only planned: the caller moves and trashes.
+pub fn tidy_old_edits(root: &Path) -> Vec<Tidy> {
+    let l = Layout::new(root);
+    let Ok(entries) = std::fs::read_dir(l.old_edits()) else { return Vec::new() };
+    let mut files: Vec<PathBuf> = entries.flatten().map(|e| e.path()).filter(|p| p.is_file()).collect();
+    // The first made first: `omnix-x` before `omnix-x-2`.
+    files.sort_by_key(|p| (p.file_stem().map_or(0, |s| s.len()), p.clone()));
+    let mut kept: Vec<(Vec<u8>, PathBuf)> = Vec::new();
+    let mut names: Vec<String> = Vec::new();
+    let mut out = Vec::new();
+    for f in files {
+        let bytes = std::fs::read(&f).unwrap_or_default();
+        let json: Option<Value> = (f.extension().is_some_and(|x| x == "json")).then(|| serde_json::from_slice(&bytes).ok()).flatten();
+        let Some(Value::Object(fields)) = json.filter(|v| v.get("cuts").is_some()) else {
+            out.push(Tidy::Other { path: f });
+            continue;
+        };
+        let empty = fields.iter().filter(|(k, _)| *k != "aspect").all(|(_, v)| match v {
+            Value::Array(a) => a.is_empty(),
+            Value::Object(o) => o.values().all(|x| x.as_array().is_none_or(|a| a.is_empty())),
+            _ => true,
+        });
+        if empty {
+            out.push(Tidy::Empty { path: f });
+        } else if let Some((_, first)) = kept.iter().find(|(b, _)| *b == bytes) {
+            out.push(Tidy::Same { path: f.clone(), as_: first.clone() });
+        } else {
+            let stem = f.file_stem().and_then(|s| s.to_str()).unwrap_or("video");
+            let base = stem.strip_prefix("omnix-").unwrap_or(stem).to_owned();
+            let name = (1..).map(|n| if n == 1 { base.clone() } else { format!("{base}-{n}") }).find(|n| !names.contains(n) && !l.video(n).exists()).expect("a free name");
+            names.push(name.clone());
+            kept.push((bytes, f.clone()));
+            out.push(Tidy::Move { from: f, to: l.video_edit(&name) });
+        }
+    }
+    out
 }
 
 #[cfg(test)]
@@ -147,18 +230,46 @@ mod tests {
         }
         std::fs::create_dir_all(place.join("not_a_project")).unwrap();
         assert_eq!(all(&place), [place.join("a_trip"), place.join("b_trip")]);
-        let edits_dir = Layout::new(place.join("a_trip")).edits();
-        std::fs::create_dir_all(&edits_dir).unwrap();
-        std::fs::write(edits_dir.join("old.json"), "{}").unwrap();
-        std::fs::write(edits_dir.join("notes.txt"), "").unwrap();
+        let trip = place.join("a_trip");
+        let old = new_video(&trip, "2030-05-01").unwrap();
+        std::fs::write(&old, "{}").unwrap();
         std::thread::sleep(std::time::Duration::from_millis(20));
-        std::fs::write(edits_dir.join("new.json"), "{}").unwrap();
-        assert_eq!(edits(&place.join("a_trip")), [edits_dir.join("new.json"), edits_dir.join("old.json")]);
+        let new = new_video(&trip, "2030-05-01").unwrap();
+        std::fs::write(&new, "{}").unwrap();
+        std::fs::create_dir_all(Layout::new(&trip).video("not-yet")).unwrap();
+        assert_eq!(new, Layout::new(&trip).video_edit("2030-05-01-2"));
+        assert_eq!(edits(&trip), [new.clone(), old.clone()]);
         assert!(edits(&place.join("b_trip")).is_empty());
-        assert_eq!(of_edit(&edits_dir.join("new.json")), Some(place.join("a_trip")));
-        assert_eq!(of_edit(&place.join("a_trip/elsewhere.json")), None);
+        assert_eq!(video_of(&new), Some((trip.clone(), "2030-05-01-2".to_owned())));
+        assert_eq!(export_dir(&new), Some(trip.join("videos/2030-05-01-2/export")));
+        assert_eq!((edit_name(&new), edit_name(Path::new("/x/my-edit.json"))), ("2030-05-01-2".to_owned(), "my-edit".to_owned()));
+        assert_eq!(of_edit(&trip.join("videos/x/other.json")), None);
+        assert_eq!(of_edit(&trip.join("04_project/edit.json")), None);
         assert!(all(&place.join("gone")).is_empty());
         std::fs::remove_dir_all(&place).unwrap();
+    }
+
+    #[test]
+    fn old_edits_go_one_copy_each_into_videos_and_the_rest_out() {
+        let root = std::env::temp_dir().join(format!("dailix-tidy-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let l = Layout::new(&root);
+        std::fs::create_dir_all(l.data()).unwrap();
+        update(&l, |_| {}).unwrap();
+        let old = l.old_edits();
+        std::fs::create_dir_all(&old).unwrap();
+        let edit = r#"{"cuts": [{"input": "a.mp4", "in": 0, "out": 2}]}"#;
+        for (f, text) in [("omnix-2030-05-01.json", edit), ("omnix-2030-05-01-2.json", edit), ("omnix-all-days.json", r#"{"aspect": "16:9", "cuts": []}"#), ("omnix-test.json", r#"{"cuts": [], "music": {"clips": [{"input": "s.wav"}]}}"#), ("den1.kdenlive", "<mlt/>")] {
+            std::fs::write(old.join(f), text).unwrap();
+        }
+        let plan = tidy_old_edits(&root);
+        assert!(plan.contains(&Tidy::Move { from: old.join("omnix-2030-05-01.json"), to: l.video_edit("2030-05-01") }), "{plan:?}");
+        assert!(plan.contains(&Tidy::Same { path: old.join("omnix-2030-05-01-2.json"), as_: old.join("omnix-2030-05-01.json") }));
+        assert!(plan.contains(&Tidy::Empty { path: old.join("omnix-all-days.json") }));
+        assert!(plan.contains(&Tidy::Move { from: old.join("omnix-test.json"), to: l.video_edit("test") }), "music alone is not empty");
+        assert!(plan.contains(&Tidy::Other { path: old.join("den1.kdenlive") }));
+        assert_eq!(plan.len(), 5);
+        std::fs::remove_dir_all(&root).unwrap();
     }
 
     #[test]

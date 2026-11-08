@@ -9,7 +9,10 @@
 //!   01_footage/<day>/<clip>   the clips, copied in (originals stay in the archive)
 //!   02_audio/music, 02_audio/voiceover
 //!   03_proxies/<day>/<clip>   light copies for quick editing (none made yet)
-//!   04_project … 09_luts
+//!   06_external … 09_luts
+//!   videos/<name>/            a video made from the trip (user, 2026-11-08):
+//!     edit.json                 its edit, in Omnix
+//!     export/                   what it was exported as
 //!   dailix/
 //!     project.json            what the project is and where it came from
 //!     sheet.json              the contact sheet's marking (`Doc`)
@@ -23,18 +26,22 @@
 use std::path::{Path, PathBuf};
 
 /// The numbered folders (footage-agent's `layout.py`, the same tree).
-pub const FOLDERS: [&str; 10] = [
+pub const FOLDERS: [&str; 9] = [
     "01_footage",         // the clips, copied in; the originals stay in the sources
     "02_audio/music",     // music
     "02_audio/voiceover", // voice-over recorded on its own
     "03_proxies",         // light copies for quick editing (none made yet)
-    "04_project",         // edits: .json for Omnix
-    "05_export",          // finished videos
+    "videos",             // a folder per video: its edit and its exports
     "06_external",        // outside video: memes, inserts, transitions
     "07_sfx",             // sound effects
     "08_graphics",        // pictures over the video: logos, captions, arrows
     "09_luts",            // LUT files (.cube) for this project's colour
 ];
+
+/// A video's edit, in its folder.
+pub const EDIT: &str = "edit.json";
+/// A video's exports, in its folder.
+pub const EXPORT: &str = "export";
 
 /// The folders whose files come from elsewhere: each gets a `LICENSES.md`
 /// to note where a file came from and on what terms.
@@ -79,8 +86,20 @@ impl Layout {
     pub fn footage(&self) -> PathBuf {
         self.root.join("01_footage")
     }
-    /// Where edits go (Omnix's projects).
-    pub fn edits(&self) -> PathBuf {
+    /// The trip's videos, a folder each.
+    pub fn videos(&self) -> PathBuf {
+        self.root.join("videos")
+    }
+    /// Video `name`'s folder, its edit and where it exports to.
+    pub fn video(&self, name: &str) -> PathBuf {
+        self.videos().join(name)
+    }
+    pub fn video_edit(&self, name: &str) -> PathBuf {
+        self.video(name).join(EDIT)
+    }
+    /// Where edits lay loose before the videos' folders (gap 82): only
+    /// read, to move them in (`project::tidy_old_edits`).
+    pub fn old_edits(&self) -> PathBuf {
         self.root.join("04_project")
     }
 

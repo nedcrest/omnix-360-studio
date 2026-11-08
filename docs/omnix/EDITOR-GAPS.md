@@ -119,8 +119,9 @@ User: wants a bin, maybe with better UI, with "our extra sound tracks" in it.
 - A panel of its own at the far left, beside whichever left panel (Info,
   Settings, Text) is open; folds to a narrow strip (B toggles).
 - Pin (🔒) keeps it open, and open at the next start (`Settings.bin_pinned`).
-- Lists the project's folder (above `04_project`, footage-agent's
-  `layout.py`): Footage, External video, Music, Voice-over, Sound effects,
+- Lists the project's folder (`bin::root`: the trip of an edit in its
+  `videos/<name>/`, folder names by Dailix's `Layout`; above an older
+  edit's `04_project`): Footage, External video, Music, Voice-over, Sound effects,
   Graphics (cleaned voice left out at the user's word: it belongs to its clip
   and comes in through the export, gap 3a), then the
   clips already loaded (Kos footage lives in the archive). Needs a saved
@@ -333,10 +334,10 @@ marks, and beats (found for gap 13, used by 57).
 
 The TODO: "a cut doesn't land on the beat", found by ear. Find the music's
 beats (onset or beat tracking: ffmpeg has no beat tracker, so a small Rust
-onset detector or footage-agent's Python with librosa or aubio), list the
-cuts more than N ms off a beat (`omnix check` gains a `beat` rule), and
-draw the beats as marks on the music lane that cuts snap to (needs 5 and
-the snapping pack of 9).
+onset detector, or a tool run as a CLI process), list the cuts more than
+N ms off a beat (`omnix check` gains a `beat` rule), and draw the beats
+as marks on the music lane that cuts snap to (markers, gap 5, and
+snapping are there). Later (user, 2026-11-09).
 
 ### 14. Black and white levels — small (Kos TODO, 2026-10-23)
 
@@ -374,10 +375,10 @@ seen on the timeline where it runs.
 Mar'yana can't be heard even cleaned (action-cam mic, distance). Run
 Whisper only on the cuts where someone speaks (the TODO warns CPU Whisper is
 slow), on the cleaned voice. Put the draft as items on the text lane, one
-per phrase, timed, to be fixed by hand. Recognition belongs in footage-agent
-(Python, it already has the voices). Omnix gets the result through
-`export/omnix.py` as `text` lane items (existing format) or imports an `.srt`
-(new). The same transcript later feeds text-based editing (9).
+per phrase, timed, to be fixed by hand. Recognition belongs in Dailix
+(gap 83 finds the talk, 77 cleans the voice; transcription is gap 29).
+Omnix gets the result as `text` lane items (existing format) or imports
+an `.srt` (new). The same transcript later feeds text-based editing (9).
 
 ### 17–24. From OpenOSV — research done (user, 2026-10-23)
 
@@ -404,97 +405,67 @@ in `OPENOSV.md`. Short list:
 
 ### 25. Transitions and stingers — spec in `TRANSITIONS.md` (user, 2026-10-22/23)
 
-Under way (2026-11-08): the user wants few banal transitions; a library
-of non-banal ones was surveyed (`TRANSITIONS.md` «The library to build
-from»). Built: `transition::Look` (the first eight) on the incoming cut,
-`CutOp::Transition`; the Transitions side panel (T), a proof of concept
-where only the dissolve showed at first. Then (`b54d6c8`) the looks: a
-join's two cuts drawn into pictures of their own and mixed by a
-transition pass (`transition.wgsl`), the export by the same function on
-the CPU (`transition::blend`); whip pan, zoom punch, spin blur and flash
-ported from gl-transitions, a GPU test within one level of the CPU.
-Checked by the user; then (`8ebb7dd`) playing the join as asked (the
-nearest, 15 frames before to 10 after, back to the start, paused), a
-crossfade's X selecting its join (`Selection::Join`), no dissolve tile.
-Decided (2026-11-08): a transition stays keyed by the cut after its join
-(its id is stable); transitions get ids of their own with the
-transitions lane (25f) and edge transitions (25b), when a cut can have
-more than one; then a moved cut leaves its transition behind, as other
-editors do.
-Then (`6dba398`) light leak (after FilmBurn), luma fade (ours) and
-glitch (after StripDatamoshGlitch and GlitchMemories), their sine noise
-put on the integer `hash` so GPU and CPU agree; and (`616305c`) the
-kinds as tabs atop the panel: overlap open, edges (25b) and stingers
-(25d) greyed until built. All checked by the user 2026-11-08. The 360 one
-once there's footage; a look's own parameters wait as 25g.
+Where it stands (2026-11-09): built and checked, all but stingers
+(postponed) and the 360 looks (wait for footage). The user wanted few
+banal transitions: a library of non-banal ones, from gl-transitions
+(MIT; each port keeps its Author and License), `TRANSITIONS.md` «The
+library to build from». Every look exists twice, `transition::colour`
+on the CPU (the export's `Dissolve`) and `transition.wgsl` (the
+player's transition pass over two offscreen pictures, or one for an
+edge), with a GPU test against the CPU at defaults and at every knob's
+far end. Noise is the integer `transition::hash`, never a sine's.
 
-Split into steps so each can be tried on Kos on its own:
-- **25a. Basic transitions and quick placement:** dissolve with a curve,
-  dip to colour, wipe, zoom blur. Three ways to add one, in
-  `TRANSITIONS.md` → "Quick ways": T at the playhead, between two selected
-  clips, or on every join. Builds on the existing crossfade.
-- **25b. Edge transitions** (out on one cut, in on the next, no overlap).
-  Built 2026-11-08 (`b75e5dd`, `eeb8293`, `cf975fd`, `4d3d9ce`), checked
-  2026-11-08: `Cut::edge_in`/`edge_out` (`Edge`: look, seconds, moved
-  settings), `CutOp::Edge`/`EdgeKnob`; looks fade (black or white),
-  blur, zoom, glitch, flash, drawn by the transition pass on one picture
-  (`Cut::edge_at`) and by the export's `Dissolve` alike, never through a
-  join's overlap; a fade to black lengthens the cut's sound fade
-  (`Cut::sound_fades`). The Edges tab (Out, In, each with tiles, length,
-  ✕, settings beside); an orange wedge on the timeline.
-- **25c. Templates** (its card merged into the transitions lane's, 25f,
-  2026-11-07)**:** built 2026-11-08 (`a542e86`), checked 2026-11-09.
-  The user chose one library for the program (not per trip or video):
-  `<config>/transitions/<name>.json` beside the LUTs, its folder made by
-  Omnix at its start (never by hand), again on save if it went. A
-  template is a join whole (`template::Template`: overlap, out, in), put
-  on by `CutOp::Template`, all or nothing. The panel's Templates
-  section: put on, save the join under a name, remove (asked).
+Decisions that still hold:
+- A join's overlap is keyed by the cut after it (`Cut::transition`,
+  `transition_params`); an edge look belongs to its own cut
+  (`edge_in`, `edge_out`) and goes where the cut goes. No ids of their
+  own so far: the lane draws its zones from the cuts.
+- Only what the user moved is stored; another look starts at its
+  defaults; a split gives the join's look to the first half only.
+- A fade to black takes the cut's sound with it (`Cut::sound_fades`).
+- Templates are one library for the program, its folder made by Omnix
+  at start (the user, 2026-11-08).
+
+Steps:
+- **25a. The overlap library and quick placement** (checked
+  2026-11-08): whip pan, zoom punch, spin blur, flash, light leak, luma
+  fade, glitch (`transition::Look`, `CutOp::Transition`); the
+  Transitions panel (T, or a crossfade's X: `Selection::Join`): the join
+  near the playhead and following it, Previous / Next, length by 0.25 s,
+  tabs for the kinds, On every join, Remove, «▶ Play the join» (15
+  frames before to 10 after, back to the start). Between two selected
+  cuts waits for multi-select (gap 8).
+- **25b. Edge transitions** (checked 2026-11-08): an out on one cut and
+  an in on the next, no overlap (`Edge`, `CutOp::Edge`/`EdgeKnob`):
+  fade (black or white), blur, zoom, glitch, flash; never drawn through
+  a join's overlap; the Edges tab; an orange wedge on the cut.
+- **25c. Templates** (checked 2026-11-09): a join whole (overlap, out,
+  in: `template::Template`) saved by name to `<config>/transitions/`
+  beside the LUTs and put on any join by `CutOp::Template`, all or
+  nothing; the panel's Templates section (put on, save, remove asked).
 - **25d. Stingers («перебивки», video transitions)** — postponed (user,
-  2026-11-09: "more an extra than a must"; both modes wanted, insert and
-  over the join, e.g. cinematic film-burn clips; the over mode needs video
-  on the overlay lane), their own yellow
-  group: a short clip with its own sound on a cut, insert or cover, from the
-  project's `06_external` / `07_sfx`. Needs the overlay lane to take video
-  (milestone 4's first card) and sound lanes (milestone 1).
-- **25e. 360 looks:** whip pan, little-planet zoom, sphere roll.
-- **25g. A look's own parameters** (user, 2026-11-08; built
-  `c0d0f4c`, `eedb26b`, `e016921`, checked 2026-11-08; light leak,
-  luma fade and glitch got theirs too): choosing a look opens a second narrow side panel beside the
-  Transitions panel, its sliders and switches: whip pan, direction
-  (left, right, up, down) and streak length; zoom punch, strength and a
-  drifting centre or not; spin blur, turns (0.5-3), direction, blur,
-  colour split, zoom; flash, strength and colour (white, warm). «Reset»;
-  «Every join» copies them too. Stored per join, only what the user
-  changed (`"transition_params": {"turns": 2}`), reset when the look
-  changes; `CutOp::TransitionParam`; a slider's drag one undo step; the
-  values a uniform in the shader and arguments on the CPU, the GPU test
-  run with values off their defaults.
-- **25f. A Transitions lane** (built 2026-11-08, `cace77d`, checked
-  2026-11-09: under the clip sound, over Effects; zones from
-  `Timeline::zones`; a drawn rectangle by `Project::drawn_zone`; the look
-  chosen last; folds) (user, 2026-11-01): "transitions could also
-  be our own collapsible field somewhere above the effects. Why: on the
-  transition line you draw a rectangle (over the join of one video and the
-  next) and the program fills it with a transition we like: either a video
-  manipulation (out-in) or a video insert (white-video-noise), whose sound
-  goes straight onto the SFX lane."
-  - A thin lane of its own, folding like gap 39's groups, above Effects.
-    It replaces `TRANSITIONS.md`'s «transition mode» (T toggling handles
-    on the cut row): the zones live on this lane, so the cut row stays as
-    it is.
-  - Drag a rectangle across a join → it's filled at once with the
-    default template (the last used, or a chosen favourite); the rectangle's
-    width is the transition's length, snapped to 0.25 s. A click on it
-    opens the presets panel to change it.
-  - Kinds as `TRANSITIONS.md` has them, chosen by what the template is:
-    an overlap or edge transition (out-in, dissolve, wipe…) or a stinger
-    (an inserted clip: white noise, film burn).
-  - A stinger's sound is placed on the SFX lane at the same time and
-    length, linked to it: moving or deleting the stinger moves or deletes
-    its sound; on SFX it can still be levelled and faded like any clip.
-  - The three quick ways (T at the playhead, between two selected cuts,
-    on every join) fill the same lane.
+  2026-11-09: "more an extra than a must"). Both modes wanted: inserted
+  between the cuts (the edit grows) and over the join (cinematic clips
+  such as film burn or light flashes, blended). A short clip with its own
+  sound, its sound on the SFX lane and linked to it; from the project's
+  own clips. The over mode needs video on the overlay lane (gap 4, the
+  B-roll milestone).
+- **25e. 360 looks:** a whip round the sphere, little-planet zoom,
+  sphere roll; wait for 360 footage (the camera not before ~2027-02).
+- **25f. The transitions lane** (checked 2026-11-09; user, 2026-11-01:
+  "our own collapsible field somewhere above the effects"): under the
+  clip sound, over Effects, folding (kept in the settings). Its zones
+  (`Timeline::zones`) show each overlap and edge look by name; a
+  rectangle drawn across a join's middle makes an overlap as long as
+  it, on one side an edge look on the nearer end of that cut
+  (`Project::drawn_zone`), with the look chosen last; a click opens the
+  zone in the panel; its length's edge drags. Later, with stingers: a
+  stinger zone yellow.
+- **25g. A look's own settings** (checked 2026-11-08): choosing a look
+  opens a narrow panel beside the Transitions panel with its sliders and
+  choices (`Look::knobs`; stored as `"transition_params": {"turns": 2}`,
+  `CutOp::TransitionKnob`), a drag one undo step, Reset, copied by On
+  every join; edge looks have theirs the same way.
 
 ### 26. Glow and blur — small-medium (Kos TODO, 2026-10-23)
 
@@ -528,8 +499,8 @@ are in `AUTO-EDIT.md`:
 
 ### 29. Speech transcription — medium (user, 2026-10-23)
 
-footage-agent's planned `speech.py` (README: ⬜, the `speech` Poetry group
-already lists faster-whisper; not installed). Whisper locally on the RTX
+Planned in Dailix, after gap 83 finds the talk (footage-agent's planned
+`speech.py` was never built). faster-whisper locally on the RTX
 3060 (large-v3 fits 12 GB; Ukrainian is supported), word timestamps, run on
 the cleaned voice where one is chosen, else the clip's sound, and only
 where there is speech. Written to the clip's sidecar. It feeds subtitles
@@ -539,8 +510,8 @@ and later AI auto-edit cutting on phrases (28). Licence: faster-whisper
 
 ### 30. Who is in the frame — medium (user, 2026-10-23)
 
-footage-agent's planned `faces.py` (README: ⬜, the `faces` group lists
-insightface + onnxruntime-gpu). The README's plan: take the named people's
+Planned in Dailix (footage-agent's planned `faces.py`, insightface +
+onnxruntime-gpu, was never built). The plan: take the named people's
 reference embeddings from the home Immich, which already recognises and
 names them with the same model family (InsightFace / ArcFace), so nothing is
 labelled twice. Per clip: who appears, when, how big. Omnix shows it in the
@@ -650,7 +621,11 @@ I want."
   and 31e on the main timeline; then the window 31c; 31d whenever the
   one-clip editor gets its menu.
 
-### 34. Import from devices in the studio — medium, footage-agent (user, 2026-10-28)
+### 34. Import from devices in the studio — medium (user, 2026-10-28)
+
+Taken into Dailix (gap 74): ingest designed and decided in
+`dailix/docs/INGEST.md`, built later. What follows is what footage-agent
+had when the idea came.
 
 The user recalled wanting a new project plus dropping files into it from
 devices (phone, camera, drone), "or some handy integration". Then they
@@ -780,14 +755,14 @@ is one description, not a new widget:
 - `Param`: id, name, range, unit, default, scale (linear, dB, log for
   speed), how it is applied (into a `Grade`, a `View`, a gain).
 - `Curve`: points `{t, v, ease}` with `value_at(t)`, add, move between
-  neighbours, remove: the volume-point functions of the edit API
-  (`ARCHITECTURE.md` step 5) made generic.
+  neighbours, remove: `model::curve` (`Key`, `key_at`, the effect and
+  motion keys) and the volume points made one.
 - The timeline's lane drawing and mouse handling take a `Param` + `Curve`
-  (`ARCHITECTURE.md` step 8, «timeline lanes behind one lane type»).
+  (timeline lanes behind one lane type).
 - Users of it: Effects (11 parameters), View (yaw, pitch, roll, FOV),
   a cut's volume and the tracks' volume (already curves), speed (gap
-  31), overlay motion and opacity, and later a stinger's or transition's
-  parameters.
+  31), overlay motion and opacity, and a transition's knobs
+  (`Look::knobs`), later a stinger's.
 
 **View today.** The user says View «doesn't work now»: its row shows the
 view keys of 360 framing, but turning the view by keys (automation of
@@ -823,8 +798,8 @@ Where it stands (answered 2026-11-01, not planned):
 - **Android phone, minimal UI:** the same core and the same costs, plus
   a small screen: a «trim, order, music, export» editor rather than the
   full one. Cheapest of the three on UI, same price on the plumbing.
-- What keeps the door open now: the edit API (`ARCHITECTURE.md` step 5)
-  and no new Linux-only code without a stub.
+- What keeps the door open now: the core of ops (`model::ops`,
+  `OPS-API.md`) and no new Linux-only code without a stub.
 
 ### 41. Core, functions and API: what to unify and separate — analysis (user, 2026-11-01)
 
@@ -1199,7 +1174,7 @@ per channel) and adjusting one hue only (HSL: the grass greener, the sky
 deeper, the skin left alone), as Resolve's and Premiere's colour tools
 do. Kept in the effect keyframes like the other values (new optional
 fields), mirrored in the shader and `Grade::apply` with a GPU-CPU test.
-Milestone «Колір і текст», after the black and white levels (gap 14).
+Milestone «Ефекти, колір і розумний звук», after the black and white levels (gap 14).
 
 ### 69. Scopes: a histogram and a waveform of the picture — idea (user, 2026-11-04)
 
@@ -1208,7 +1183,7 @@ Kos film's darkest is 14 of 255, gap 14), as editors show: a histogram
 and a luma / RGB waveform of the frame shown, in the Effects panel or a
 small panel of its own, updated while paused and a few times a second
 while playing (measured from the frame already decoded, so cheap).
-Milestone «Колір і текст», with gap 14, which it helps set by eye.
+Milestone «Ефекти, колір і розумний звук», with gap 14, which it helps set by eye.
 
 ### 70. The text and overlay lanes as groups of several lanes — idea (user, 2026-11-04)
 
@@ -1231,7 +1206,7 @@ between lanes of the group by dragging up or down (or the menu); new
 items go to the lane under the selection, else the first with room at
 the playhead. Order is drawing order: the lane higher in the group on
 top. Subtitles (gap 16) get a lane of their own by default. No format
-change: lanes gain an optional `name`. Milestone «Колір і текст» (text
+change: lanes gain an optional `name`. Milestone «Ефекти, колір і розумний звук» (text
 and titles), and the overlay side with «B-roll і групи».
 
 ### 71. Two viewers: the source and the edit; effects tried beside the original, then applied — idea (user, 2026-11-04)
@@ -1264,8 +1239,8 @@ panel: off (the default), changes write into the edit at once, as today.
 On, the second viewer shows the cut before and the first after, and
 nothing reaches the edit until Apply; then each effect's values land on
 the effects group (gap 39's automation lanes) as a block with its value
-curve. Needs gap 39's lanes for «as separate lines». Milestone «Колір і
-текст». Note: the effects split line (`SplitDrag`) already compares
+curve. Needs gap 39's lanes for «as separate lines». Milestone «Ефекти, колір і
+розумний звук». Note: the effects split line (`SplitDrag`) already compares
 before and after inside one viewer; 71b adds the side by side and the
 staging.
 
@@ -1338,9 +1313,13 @@ one copy now, two later) and an Omnix project. Repo
 over from Python and how, the open decisions). Shares data with Omnix
 (`notes.json`, sidecars, the folder tree), later a small common crate.
 Takes in gap 34 (import from devices) and 61 (the sheet standalone).
-Milestone «Матеріал і бін». Its first piece, the contact
-sheet's core, was built 2026-11-04 (`dailix/docs/SHEET-CORE.md`), and
-Omnix's bin runs on it (`98f2795`).
+Milestone «Матеріал і бін». Built so far: the contact sheet's core
+(2026-11-04, `dailix/docs/SHEET-CORE.md`; Omnix's bin runs on it,
+`98f2795`), its window (culling, marking keys, Omnix's player beside),
+Home of trips with their videos and days (gap 82), Settings, a new
+trip; Kos is its first project. Still to do, by its own context: the
+parity steps (voice clean-up 77 among them) before the web sheet
+retires, then ingest (34, `dailix/docs/INGEST.md`).
 
 ### 77. Dailix: voice clean-up and loudness for camera and phone sound — idea (user, 2026-11-05)
 
@@ -1363,7 +1342,7 @@ which one the edit uses. Dailix needs the same, as its parity step 4
   never stacked (the sound rule);
 - the same `voice/` layout and recipe names, so Kos's variants made by
   the web sheet stay valid.
-Milestone «Звук для Косу».
+Milestone «Ефекти, колір і розумний звук».
 
 ### 78. A vertical video in a wide edit: its sides filled from itself, not black — idea (user, 2026-11-05)
 
@@ -1391,7 +1370,7 @@ duck finds nothing. Ways (the user to choose):
   200–3500 Hz against the rest): automatic, fooled by wind sometimes.
 - c. Wait for gap 77: cleaned voices from Dailix, the duck as it is.
 Chosen (user, 2026-11-06): c. Nothing changes in Omnix; gap 77 closes
-this one. Milestone «Звук для Косу».
+this one. Milestone «Ефекти, колір і розумний звук».
 
 ### 83. Dailix finds where people talk, even in bad sound — idea (user, 2026-11-07)
 
@@ -1400,9 +1379,8 @@ split right: Dailix takes the material apart, Omnix edits with it), as
 modules that pull the voice and the talk out of bad sound (wind, road).
 With gap 77 (voice clean-up and loudness in Dailix); it ends gap 81 (the
 duck under a cut's own talk) and feeds the marking.
-Order (user, 2026-11-07), after gap 80: transitions, the source viewer
-(71a), cuts on the music's beat (13), then this.
-Milestone «Розуміння матеріалу».
+Order (user, 2026-11-09): in milestone «Ефекти, колір і розумний звук», after
+transitions; the source viewer (71a) and beat cuts (13) went later.
 
 ### 84. A video drawing on several trips («a year in review») — idea, backlog (user, 2026-11-07)
 
@@ -1508,9 +1486,10 @@ whenever a better grouping shows. `ROADMAP.md` shows the same as cards (field
    → 9 skimmer on the timeline (needs 10 for S; in the bin 71a replaces it) → 9 action bar → 9 typed time and UI scale
    → 27 overview strip, centred playhead option.
 3. **Матеріал і бін** (material in): trips holding their videos in
-   Dailix (82), «New project» through Dailix (80 → 82); the source viewer
-   beside the edit (71a); ratings from Dailix, LUTs, E/W in the bin (2);
-   ingest in Dailix (74 with 34; one's own videos first).
+   Dailix (82), «New project» through Dailix (80 → 82), both done; ratings
+   from Dailix, LUTs, E/W in the bin (2); ingest in Dailix (74 with 34;
+   one's own videos first); the source viewer beside the edit (71a)
+   later (user, 2026-11-09: re-cutting is done in Dailix for now).
 4. **Ритм і переходи**: 25a basic transitions with quick placement →
    25g a look's settings → 25b edge transitions → 25c templates → 25f
    the lane (all built 2026-11-08) → 25d stingers → 25e 360 looks (with
@@ -1532,7 +1511,7 @@ whenever a better grouping shows. `ROADMAP.md` shows the same as cards (field
    speech (83, 29) moved into 5.
 7. **B-roll і групи**: video on the overlay lane (cheap cutaway) → 4B
    group/ungroup + connected clips + 8 multi-select, one format change,
-   designed as one. The source viewer (71a) waits after it.
+   designed as one.
 8. **Кадрування** (gap 53, user 2026-11-02): framing grown up from gap
    10's switch: research the best practices first (Insta360 Studio, DJI
    Studio, GoPro, Auto/Smart Reframe), then faces and people (53a, with
@@ -1548,8 +1527,8 @@ whenever a better grouping shows. `ROADMAP.md` shows the same as cards (field
    careful; after B-roll and groups, since it touches the same time
    mapping. With it: 31b keep-the-pitch switch, 31e speed points on the
    main timeline, 31c the speed editor window, 31d right-click keyframes,
-   and the automation idea that 37 object tracking (now in «Кадрування»)
-   keys into.
+   and the automation idea that 37 object tracking (in milestone 5) keys
+   into.
 11. **Якість 360** (from `OPENOSV.md`, mostly needs 360 footage: one public
    sample now, the user's camera ~2027-02): 17 easing presets and 18 bundled
    LUT any time (small, useful now) → 24 file facts → 19 lens protectors →

@@ -18,6 +18,7 @@ mod info;
 mod settings_panel;
 mod new_menu;
 mod transitions_panel;
+mod transition_edges;
 mod meter;
 
 mod playback;
@@ -381,6 +382,12 @@ enum Message {
     TransitionKnob(&'static str, f32),
     TransitionKnobDone,
     TransitionKnobsReset,
+    TransitionsTab(transitions_panel::Kind),
+    /// The Edges tab: a look on the out or in (none: off), its length by
+    /// steps, which of the two the settings panel shows.
+    EdgeLook(crate::model::ops::End, Option<crate::transition::Look>),
+    EdgeLength(crate::model::ops::End, i64),
+    EdgeSide(crate::model::ops::End),
     NewMenuClose,
     NewVideoTrip(PathBuf),
     NewVideoName(String),
@@ -709,6 +716,9 @@ struct App {
     /// while it's played, where to stop and where to go back to.
     join: Option<crate::project::Id>,
     join_play: Option<(f64, f64)>,
+    /// The panel's open tab, and the edge whose settings show on Edges.
+    transitions_tab: transitions_panel::Kind,
+    edge_side: crate::model::ops::End,
     /// The bin, at the far left (`bin.rs`).
     bin: bin::Bin,
     /// 10-bit tracks decode at 10 bits (`source::deep`).
@@ -875,6 +885,8 @@ impl App {
             new_menu: None,
             join: None,
             join_play: None,
+            transitions_tab: Default::default(),
+            edge_side: crate::model::ops::End::Out,
             bin: bin::Bin { open: saved.bin_pinned, pinned: saved.bin_pinned, tile: saved.bin_tile, side: saved.bin_side, ..Default::default() },
             fullscreen: false,
             volume: saved.volume,
@@ -1058,7 +1070,15 @@ impl App {
     fn handle(&mut self, message: Message) -> Task<Message> {
         // Each area handles its own messages (`on_*` in its module).
         match message {
-            m @ (Message::TransitionsPanel | Message::SelectJoin(_) | Message::TransitionJoin(_) | Message::TransitionLook(_) | Message::TransitionLength(_) | Message::TransitionRemove | Message::TransitionAll | Message::TransitionPreview | Message::TransitionKnob(..) | Message::TransitionKnobDone | Message::TransitionKnobsReset) => self.on_transitions(m),
+            m @ (Message::TransitionsPanel | Message::SelectJoin(_) | Message::TransitionJoin(_) | Message::TransitionLook(_) | Message::TransitionLength(_) | Message::TransitionRemove | Message::TransitionAll | Message::TransitionPreview | Message::TransitionsTab(_)) => self.on_transitions(m),
+            m @ (Message::TransitionKnob(..) | Message::TransitionKnobDone | Message::TransitionKnobsReset) => {
+                self.on_knobs(m);
+                Task::none()
+            }
+            m @ (Message::EdgeLook(..) | Message::EdgeLength(..) | Message::EdgeSide(_)) => {
+                self.on_edges(m);
+                Task::none()
+            }
             m @ (Message::NewMenuClose | Message::NewVideoTrip(_) | Message::NewVideoName(_) | Message::NewVideoMake | Message::NewTripInDailix) => self.on_new_menu(m),
             m @ (Message::Open | Message::Picked { .. } | Message::Loaded { .. } | Message::OpenProject | Message::NewProject | Message::NewMenu | Message::CloseRequested | Message::StopAndClose { .. } | Message::Confirmed { .. } | Message::ProjectPicked { .. } | Message::SaveProjectTo { .. } | Message::SaveProject { .. } | Message::LoadingTick | Message::Thumb { .. }) => self.on_file(m),
             m @ (Message::Export | Message::ExportTo { .. } | Message::ExportProgress { .. } | Message::ExportCancel | Message::PickColour | Message::PickArea { .. } | Message::AreaPicked { .. } | Message::TrackProgress { .. } | Message::TrackCancel | Message::Tracked { .. } | Message::ExportDone { .. } | Message::Save { .. } | Message::SaveTo { .. } | Message::Saved { .. }) => self.on_jobs(m),

@@ -18,8 +18,7 @@ use proptest::prelude::*;
 
 /// Three cuts, a song, a sound effect, a picture and a title: ids 1 to 7.
 fn project() -> Project {
-    let mut p = Project::default();
-    p.cuts = vec![Cut::new("a.mp4".into(), 0.0, 4.0), Cut::new("b.mp4".into(), 1.0, 4.0), Cut::new("c.mp4".into(), 0.0, 2.0)];
+    let mut p = Project { cuts: vec![Cut::new("a.mp4".into(), 0.0, 4.0), Cut::new("b.mp4".into(), 1.0, 4.0), Cut::new("c.mp4".into(), 0.0, 2.0)], ..Default::default() };
     p.music.clips.push(MusicClip { input: "song.wav".into(), at: 0.0, start: 0.0, end: 9.0, ..Default::default() });
     p.sfx.clips.push(MusicClip { input: "bell.wav".into(), at: 2.0, start: 0.0, end: 1.0, ..Default::default() });
     let item = |text: bool, at: f64| Item { id: 0, input: if text { "".into() } else { "logo.png".into() }, text: text.then(Default::default), at, start: 0.0, end: 3.0, motion: Vec::new(), effects: Vec::new() };

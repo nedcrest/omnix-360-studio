@@ -351,9 +351,7 @@ mod tests {
     }
 
     fn edit() -> Edit {
-        let mut e = Edit::default();
-        e.cuts = vec![cut("a", 10.0, 14.0), cut("b", 2.0, 5.0)];
-        e
+        Edit { project: Project { cuts: vec![cut("a", 10.0, 14.0), cut("b", 2.0, 5.0)], ..Default::default() }, ..Default::default() }
     }
 
     #[test]
@@ -491,8 +489,7 @@ mod tests {
 
     #[test]
     fn crossfades_settle_after_removing_and_inserting() {
-        let mut e = Edit::default();
-        e.cuts = vec![cut("a", 0.0, 4.0), cut("b", 0.0, 4.0), cut("c", 0.0, 4.0)];
+        let mut e = Edit { project: Project { cuts: vec![cut("a", 0.0, 4.0), cut("b", 0.0, 4.0), cut("c", 0.0, 4.0)], ..Default::default() }, ..Default::default() };
         e.cuts[1].crossfade = 1.0;
         e.cuts[2].crossfade = 1.0;
         // The first cut has nothing before it: its crossfade goes.
@@ -509,8 +506,7 @@ mod tests {
 
     #[test]
     fn edit_time_and_clip_time_go_back_and_forth() {
-        let mut e = Edit::default();
-        e.cuts = vec![cut("a", 10.0, 14.0), cut("b", 2.0, 5.0), cut("c", 0.0, 6.0)];
+        let mut e = Edit { project: Project { cuts: vec![cut("a", 10.0, 14.0), cut("b", 2.0, 5.0), cut("c", 0.0, 6.0)], ..Default::default() }, ..Default::default() };
         e.cuts[1].crossfade = 0.5;
         e.cuts[2].crossfade = 1.0;
         let duration = e.duration();
@@ -534,8 +530,7 @@ mod tests {
         let names = ["a", "b", "c", "d", "e"];
         for from in 0..5 {
             for to in 0..=5 {
-                let mut e = Edit::default();
-                e.cuts = names.iter().map(|n| cut(n, 0.0, 1.0)).collect();
+                let mut e = Edit { project: Project { cuts: names.iter().map(|n| cut(n, 0.0, 1.0)).collect(), ..Default::default() }, ..Default::default() };
                 e.move_cut(from, to);
                 let mut seen = [false; 5];
                 for (i, name) in names.iter().enumerate() {
@@ -566,8 +561,7 @@ mod tests {
     #[test]
     fn indices_follow_a_moved_cut() {
         // Five cuts a b c d e; b (1) moved to before e (4): a c d b e.
-        let mut e = Edit::default();
-        e.cuts = ["a", "b", "c", "d", "e"].iter().map(|n| cut(n, 0.0, 1.0)).collect();
+        let mut e = Edit { project: Project { cuts: ["a", "b", "c", "d", "e"].iter().map(|n| cut(n, 0.0, 1.0)).collect(), ..Default::default() }, ..Default::default() };
         e.move_cut(1, 4);
         let names: Vec<_> = e.cuts.iter().map(|c| c.input.to_string_lossy().into_owned()).collect();
         assert_eq!(names, ["a", "c", "d", "b", "e"]);
@@ -579,8 +573,7 @@ mod tests {
 
     #[test]
     fn a_change_that_fails_leaves_undo_redo_and_the_saved_state() {
-        let mut e = Edit::default();
-        e.cuts = vec![cut("a.mp4", 0.0, 10.0)];
+        let mut e = Edit { project: Project { cuts: vec![cut("a.mp4", 0.0, 10.0)], ..Default::default() }, ..Default::default() };
         e.attempt(|e| {
             e.cuts[0].end = 8.0;
             true

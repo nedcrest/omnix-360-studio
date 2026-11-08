@@ -403,6 +403,13 @@ in `OPENOSV.md`. Short list:
 
 ### 25. Transitions and stingers — spec in `TRANSITIONS.md` (user, 2026-10-22/23)
 
+Under way (2026-11-08): the user wants few banal transitions; a library
+of non-banal ones was surveyed (`TRANSITIONS.md` «The library to build
+from»). Built: `transition::Look` (the first eight) on the incoming cut,
+`CutOp::Transition`; the Transitions side panel (T), a proof of concept
+where only the dissolve shows yet. Next: whip pan, zoom punch, spin blur
+and flash (one blur machine) in the shader and the export, tested alike.
+
 Split into steps so each can be tried on Kos on its own:
 - **25a. Basic transitions and quick placement:** dissolve with a curve,
   dip to colour, wipe, zoom blur. Three ways to add one, in

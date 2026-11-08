@@ -407,8 +407,16 @@ Under way (2026-11-08): the user wants few banal transitions; a library
 of non-banal ones was surveyed (`TRANSITIONS.md` «The library to build
 from»). Built: `transition::Look` (the first eight) on the incoming cut,
 `CutOp::Transition`; the Transitions side panel (T), a proof of concept
-where only the dissolve shows yet. Next: whip pan, zoom punch, spin blur
-and flash (one blur machine) in the shader and the export, tested alike.
+where only the dissolve showed at first. Then (`b54d6c8`) the looks: a
+join's two cuts drawn into pictures of their own and mixed by a
+transition pass (`transition.wgsl`), the export by the same function on
+the CPU (`transition::blend`); whip pan, zoom punch, spin blur and flash
+ported from gl-transitions, a GPU test within one level of the CPU.
+Next (user, 2026-11-08): a look's own parameters (a whip's direction and
+blur, a spin's turns and colour split, a flash's strength) in a second
+side panel that opens when a look is chosen, beside the Transitions
+panel; then light leak, luma fade, glitch; the 360 one once there's
+footage.
 
 Split into steps so each can be tried on Kos on its own:
 - **25a. Basic transitions and quick placement:** dissolve with a curve,

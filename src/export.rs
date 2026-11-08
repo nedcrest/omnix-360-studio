@@ -219,7 +219,7 @@ pub(crate) fn export(project: &project::Project, opts: &StitchOpts, out: &Export
         for (n, &(i, start, frames)) in cuts.clone().zip(&plan[cuts.clone()]) {
             let tail = if n + 1 < cuts.end { overlap[n + 1] } else { 0 };
             let head = if n > cuts.start { overlap[n] } else { 0 };
-            sink.cut(frames, head, tail, project.cuts[i].transition_spec())?;
+            sink.cut(frames, head, tail, project.cuts[n].transition_spec())?;
             let size = out.size;
             let mut tick = |n: usize| progress(done + n, total);
             // Framed by its keyframes and graded by its effects (in the whole

@@ -471,6 +471,9 @@ Steps:
 
 ### 26. Glow and blur — small-medium (Kos TODO, 2026-10-23)
 
+Built 2026-11-09 as two style looks of gap 87 (Glow: strength, radius,
+threshold; Soft focus: amount, radius), waiting for the check.
+
 The Kos TODO's «Міст» shot wants Kdenlive's "Blur of the glow" (blur 0.2,
 brightness 0.1) to soften hard edges. A keyframed effect value: a blur
 radius plus a glow (the blurred highlights added back). CPU and GPU with a
@@ -1444,7 +1447,17 @@ neo-cyberpunk; rather for certain one-off short videos, but could be
 interesting. Different animations for text. Animations and different
 kinds of overlays for pictures. Just a rough idea."
 
-Checked 2026-11-09, not there yet: Effects (colour, keyframed), LUTs and
+**Built 2026-11-09, waiting for the check** (`5e2ddde`, `722a7d3`,
+`e515b72`): style looks on a cut (`Cut::style`, `CutOp::Style`/
+`StyleKnob`, the Effects panel's Style section): old film, VHS,
+cyberpunk, glow and soft focus (the last two are gap 26), one function
+each in `style.rs` and `style.wgsl`, living with the clip's time; the
+player draws them in a pass of their own before a join, an edge look or
+the view; the export runs them on the CPU (≈0.3 s a 1080p frame for the
+blurs on 12 cores: a GPU path for the export's looks is the follow-up).
+Next: styles and animations for text and pictures (the milestone's step 2).
+
+Checked 2026-11-09 before building: Effects (colour, keyframed), LUTs and
 the overlay and text lanes' own motion keys are hand-set values; there
 is no ready look to put on, and no animation preset. Gap 86 (animated
 cutaways, a program of its own) is another thing: it makes new footage.

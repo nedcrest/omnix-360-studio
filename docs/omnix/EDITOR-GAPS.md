@@ -450,7 +450,10 @@ Split into steps so each can be tried on Kos on its own:
   template is a join whole (`template::Template`: overlap, out, in), put
   on by `CutOp::Template`, all or nothing. The panel's Templates
   section: put on, save the join under a name, remove (asked).
-- **25d. Stingers («перебивки», video transitions)**, their own yellow
+- **25d. Stingers («перебивки», video transitions)** — postponed (user,
+  2026-11-09: "more an extra than a must"; both modes wanted, insert and
+  over the join, e.g. cinematic film-burn clips; the over mode needs video
+  on the overlay lane), their own yellow
   group: a short clip with its own sound on a cut, insert or cover, from the
   project's `06_external` / `07_sfx`. Needs the overlay lane to take video
   (milestone 4's first card) and sound lanes (milestone 1).

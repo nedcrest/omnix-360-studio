@@ -1516,7 +1516,11 @@ whenever a better grouping shows. `ROADMAP.md` shows the same as cards (field
    overlay groups; 43 the palette), 87 style looks and animation presets
    for text and pictures, 37 object tracking, 83 where people talk with
    77's clean voice and level, 81 auto-duck under talk in a cut's own
-   sound, 29 speech transcription. Its order to be agreed when it starts.
+   sound, 29 speech transcription. Order agreed with the user 2026-11-09:
+   style looks (87 with 26 glow and blur, 6 vignette shapes, 15 bars) →
+   text and picture animations and overlay kinds (87, 70) → colour tools
+   (69 scopes → 14 levels → 68 curves, 71b) → speech and sound in Dailix
+   (83 + 77 → 81 → 29 → 16 subtitles, text-based editing) → tracking (37).
 6. **Розуміння матеріалу**: 30 who is in the frame (names from Immich);
    speech (83, 29) moved into 5.
 7. **B-roll і групи**: video on the overlay lane (cheap cutaway) → 4B

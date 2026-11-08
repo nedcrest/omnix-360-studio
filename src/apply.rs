@@ -43,6 +43,9 @@ pub fn describe(project: &Path) -> Result<()> {
     println!("cuts:");
     for (c, at) in p.cuts.iter().zip(offsets) {
         println!("  cut #{:<3} {:7.2}-{:7.2} s  {} {:.2}-{:.2}  level {:+.1} dB{}", c.id, at, at + c.len(), name(&c.input), c.start, c.end, c.gain, if c.mute { " muted" } else { "" });
+        for line in transition_lines(c) {
+            println!("    {line}");
+        }
         for m in c.marks.iter().filter(|m| m.t >= c.start && m.t <= c.end) {
             println!("    marker {:.2} s (clip) at {:.2} s{}", m.t, at + m.t - c.start, if m.note.is_empty() { String::new() } else { format!("  «{}»", m.note) });
         }
@@ -71,8 +74,73 @@ pub fn describe(project: &Path) -> Result<()> {
     Ok(())
 }
 
+/// A cut's transitions as `describe` says them: the join before it (its
+/// overlap and look) and its edge looks, each with the settings moved.
+fn transition_lines(c: &crate::project::Cut) -> Vec<String> {
+    use std::collections::BTreeMap;
+    let set = |params: &BTreeMap<String, f32>| if params.is_empty() { String::new() } else { format!("  {}", params.iter().map(|(k, v)| format!("{k} {v}")).collect::<Vec<_>>().join(", ")) };
+    let mut lines = Vec::new();
+    if c.crossfade > 0.0 || c.transition.is_some() {
+        let look = c.transition.map_or("dissolve".to_owned(), key_of);
+        lines.push(format!("join before: {look} over {:.2} s{}", c.crossfade, set(&c.transition_params)));
+    }
+    for (side, edge) in [("in", &c.edge_in), ("out", &c.edge_out)] {
+        if let Some(e) = edge {
+            lines.push(format!("{side}: {} {:.2} s{}", key_of(e.look), e.seconds, set(&e.params)));
+        }
+    }
+    lines
+}
+
+/// A look's name in the project and the ops (`whip_pan`).
+fn key_of(look: crate::transition::Look) -> String {
+    serde_json::to_string(&look).expect("a look is JSON").trim_matches('"').to_owned()
+}
+
+/// The transitions an agent can set, for `omnix transitions`: every look
+/// by its key, with its settings (key, range, default, choices), then the
+/// templates' library and its names; or, given one, that template as the
+/// JSON a `template` op takes.
+pub fn transitions(template: Option<&str>) -> Result<String> {
+    use crate::transition::Look;
+    if let Some(name) = template {
+        return Ok(serde_json::to_string_pretty(&crate::template::load(name)?)?);
+    }
+    let mut out = String::new();
+    for (kind, looks) in [("overlap (op `transition`, settings `transition_knob`)", &Look::OVERLAP[..]), ("edge (op `edge`, settings `edge_knob`)", &Look::EDGES[..])] {
+        out += &format!("{kind}:\n");
+        for &l in looks {
+            let built = if Look::code(Some(l)) == 0 { "  (not built yet: plays as a dissolve)" } else { "" };
+            out += &format!("  {}  {}: {}{built}\n", key_of(l), l.name(), l.about());
+            for k in l.knobs() {
+                let range = if k.choices.is_empty() { format!("{}..{} by {}", k.least, k.most, k.step) } else { k.choices.iter().enumerate().map(|(i, c)| format!("{i} {c}")).collect::<Vec<_>>().join(", ") };
+                out += &format!("    {} = {}  ({range})\n", k.key, k.default);
+            }
+        }
+    }
+    let names = crate::template::names();
+    let dir = crate::template::library().map_or_else(|| "none".to_owned(), |d| d.display().to_string());
+    out += &format!("templates in {dir}: {}\n", if names.is_empty() { "none".to_owned() } else { names.join(", ") });
+    Ok(out)
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn transitions_are_said_with_their_settings() {
+        use crate::project::{Cut, Edge};
+        use crate::transition::Look;
+        let mut c = Cut::new("a.mp4".into(), 0.0, 4.0);
+        (c.crossfade, c.transition) = (0.5, Some(Look::WhipPan));
+        c.transition_params.insert("streak".into(), 1.5);
+        c.edge_out = Some(Edge { look: Look::EdgeFade, seconds: 1.0, params: Default::default() });
+        assert_eq!(super::transition_lines(&c), ["join before: whip_pan over 0.50 s  streak 1.5", "out: edge_fade 1.00 s"]);
+        let list = super::transitions(None).unwrap();
+        for word in ["whip_pan", "streak = 1", "edge_zoom", "0 In, 1 Out", "sphere_whip", "not built yet", "templates in"] {
+            assert!(list.contains(word), "{word} missing:\n{list}");
+        }
+    }
+
     #[test]
     fn the_schema_names_every_area_and_op_with_what_it_does() {
         let schema = super::schema();

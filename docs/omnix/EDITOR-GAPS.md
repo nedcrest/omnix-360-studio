@@ -442,7 +442,7 @@ Split into steps so each can be tried on Kos on its own:
   (milestone 4's first card) and sound lanes (milestone 1).
 - **25e. 360 looks:** whip pan, little-planet zoom, sphere roll.
 - **25g. A look's own parameters** (user, 2026-11-08; built
-  `c0d0f4c`, `eedb26b`, `e016921`, waiting for the check; light leak,
+  `c0d0f4c`, `eedb26b`, `e016921`, checked 2026-11-08; light leak,
   luma fade and glitch got theirs too): choosing a look opens a second narrow side panel beside the
   Transitions panel, its sliders and switches: whip pan, direction
   (left, right, up, down) and streak length; zoom punch, strength and a

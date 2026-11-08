@@ -219,10 +219,6 @@ pub(crate) fn export(project: &project::Project, opts: &StitchOpts, out: &Export
         for (n, &(i, start, frames)) in cuts.clone().zip(&plan[cuts.clone()]) {
             let tail = if n + 1 < cuts.end { overlap[n + 1] } else { 0 };
             let head = if n > cuts.start { overlap[n] } else { 0 };
-            // Edge looks in the whole edit, as its fades (a file per cut is
-            // for another editor).
-            let edges = if matches!(out.target, Target::One(_)) { (0..frames).map(|k| project.cuts[n].edge_at(start + k as f64 / fps)).collect() } else { Vec::new() };
-            sink.cut(frames, head, tail, project.cuts[n].transition_spec(), edges)?;
             let size = out.size;
             let mut tick = |n: usize| progress(done + n, total);
             // Framed by its keyframes and graded by its effects (in the whole
@@ -231,6 +227,16 @@ pub(crate) fn export(project: &project::Project, opts: &StitchOpts, out: &Export
                 Target::One(_) => (true, true),
                 Target::Clips { graded, .. } => (false, graded),
             };
+            // Its style where it's graded, its edge looks in the whole edit
+            // only, as its fades (a file per cut is for another editor).
+            let cut = &project.cuts[n];
+            let over = (0..frames)
+                .map(|k| {
+                    let t = start + k as f64 / fps;
+                    dissolve::Over { style: cut.style.as_ref().filter(|_| graded).map(|s| (s.spec(), t as f32)), edge: cut.edge_at(t).filter(|_| whole) }
+                })
+                .collect();
+            sink.cut(frames, head, tail, cut.transition_spec(), over)?;
             let camera = |t: f64| {
                 let mut c = project::camera_at(&project.cuts, n, t, &|f, t| pipelines[i].aim(f, t));
                 if !graded {

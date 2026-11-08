@@ -368,7 +368,7 @@ mod tests {
 /// Two ordinary videos' frames drawn as a join: `a` going, `b` coming,
     /// mixed by the transition's pass (`look`'s code) `p` of the way through.
     /// `a` and `b` drawn as a join, or `a` alone under an edge look (no `b`).
-    fn draw_join(gpu: &mut Gpu, a: Frame, b: Option<Frame>, spec: &crate::transition::Spec, p: f32, (w, h): (usize, usize)) -> stitch::Frame {
+    fn draw_join(gpu: &mut Gpu, a: Frame, b: Option<Frame>, spec: &crate::transition::Spec, p: f32, styles: [Option<(crate::transition::Spec, f32)>; 2], (w, h): (usize, usize)) -> stitch::Frame {
         let camera = crate::view::View::home(crate::view::Projection::Perspective).camera();
         let (ra, rb) = (Rig::flat(0, crate::hdr::Hdr::None), Rig::flat(0, crate::hdr::Hdr::None));
         gpu.size = (0, 0);
@@ -378,6 +378,9 @@ mod tests {
         match b {
             Some(b) => gpu.stitcher.prepare_incoming(&gpu.device, &gpu.queue, &rb, &Shown::new(b, SeamFix::default()), &camera, &[stitch::IDENTITY], size, [0.0, 0.0], spec, p),
             None => gpu.stitcher.prepare_edge(&gpu.device, &gpu.queue, size, [0.0, 0.0], spec, p),
+        }
+        for (layer, (style, t)) in styles.iter().enumerate().filter_map(|(i, s)| Some((i, s.as_ref()?))) {
+            gpu.stitcher.prepare_style(&gpu.queue, layer, style, *t);
         }
         gpu.stitcher.prepare_overlays(&gpu.device, &gpu.queue, &[], size, [0.0, 0.0], size);
         let target = &gpu.targets[0];
@@ -432,7 +435,7 @@ mod tests {
         for (spec, ps) in cases.into_iter().chain(edges) {
             let (look, edge) = (spec.look, spec.look.is_some_and(Look::is_edge));
             for p in ps {
-                let got = draw_join(&mut gpu, a(), (!edge).then(b), &spec, p, (w, h));
+                let got = draw_join(&mut gpu, a(), (!edge).then(b), &spec, p, [None, None], (w, h));
                 let want = transition::blend(&spec, p, &fa, if edge { &fa } else { &fb });
                 let diffs: Vec<i32> = got.rgb.iter().zip(&want.rgb).map(|(&g, &c)| (g as i32 - c as i32).abs()).collect();
                 let off = diffs.iter().filter(|&&d| d > 3).count();
@@ -446,6 +449,40 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// A style drawn by the player's passes is what the export's
+    /// `transition::blend` makes: each look alone, at its defaults and its
+    /// knobs' far ends; under an edge look; on both cuts of a join.
+    #[test]
+    fn gpu_styles_match_the_cpu() {
+        use crate::transition::{Spec, Look, blend};
+        let Ok(mut gpu) = Gpu::new(false) else { return };
+        let (w, h) = (64, 32);
+        let a = || p010(w, h, |x| if (x / 4) % 2 == 0 { 250 } else { 800 }, 512, 512);
+        let b = || p010(w, h, |x| if (x / 6) % 2 == 0 { 900 } else { 350 }, 600, 440);
+        let (fa, fb) = (draw_flat(&mut gpu, a(), crate::hdr::Hdr::None, (w, h)), draw_flat(&mut gpu, b(), crate::hdr::Hdr::None, (w, h)));
+        let close = |got: &stitch::Frame, want: &stitch::Frame, what: &str| {
+            let off = got.rgb.iter().zip(&want.rgb).filter(|(g, c)| g.abs_diff(**c) > 3).count();
+            assert!(off * 100 <= got.rgb.len(), "{what}: {off} samples off");
+        };
+        for look in Look::STYLES {
+            let mut far = Spec::of(Some(look));
+            for (v, k) in far.values.iter_mut().zip(look.knobs()) {
+                *v = k.most;
+            }
+            for style in [Spec::of(Some(look)), far] {
+                let got = draw_join(&mut gpu, a(), None, &Spec::default(), 0.0, [Some((style, 1.3)), None], (w, h));
+                close(&got, &blend(&style, 1.3, &fa, &fa), &format!("{style:?}"));
+            }
+        }
+        let (film, edge) = (Spec::of(Some(Look::OldFilm)), Spec::of(Some(Look::EdgeBlur)));
+        let got = draw_join(&mut gpu, a(), None, &edge, 0.6, [Some((film, 2.0)), None], (w, h));
+        let styled = blend(&film, 2.0, &fa, &fa);
+        close(&got, &blend(&edge, 0.6, &styled, &styled), "a style under an edge look");
+        let (vhs, glow, whip) = (Spec::of(Some(Look::Vhs)), Spec::of(Some(Look::Glow)), Spec::of(Some(Look::WhipPan)));
+        let got = draw_join(&mut gpu, a(), Some(b()), &whip, 0.5, [Some((vhs, 0.7)), Some((glow, 0.2))], (w, h));
+        close(&got, &blend(&whip, 0.5, &blend(&vhs, 0.7, &fa, &fa), &blend(&glow, 0.2, &fb, &fb)), "styles on both cuts of a join");
     }
 
     /// The shader brings a 10-bit HLG picture to SDR as `hdr::to_sdr` does.

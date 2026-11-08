@@ -20,6 +20,8 @@ pub(super) struct Sphere {
     pub(super) incoming: Option<gpu::Incoming>,
     /// Otherwise the cut's edge look now, and how much of it.
     pub(super) edge: Option<(crate::transition::Spec, f32)>,
+    /// The cut's style at its clip time.
+    pub(super) style: Option<(crate::transition::Spec, f32)>,
     pub(super) overlays: Vec<gpu::OverlayDraw>,
 }
 
@@ -120,6 +122,7 @@ impl shader::Program<Message> for Sphere {
             rig_from_view: self.rig_from_view.clone(),
             incoming: self.incoming.clone(),
             edge: self.edge,
+            style: self.style,
             overlays: self.overlays.clone(),
         }
     }

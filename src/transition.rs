@@ -591,20 +591,24 @@ pub fn blend(spec: &Spec, p: f32, a: &crate::stitch::Frame, b: &crate::stitch::F
         })
     };
     let (from, to) = (|uv: [f32; 2]| sample(a, uv), |uv: [f32; 2]| sample(b, uv));
-    let mut rgb = Vec::with_capacity(a.rgb.len());
-    for y in 0..h {
+    // Row by row on every core: a style's blur is 24 samples a pixel.
+    use rayon::prelude::*;
+    let bytes = if deep { 2 } else { 1 };
+    let mut rgb = vec![0u8; a.rgb.len()];
+    rgb.par_chunks_mut(w * 3 * bytes).enumerate().for_each(|(y, row)| {
         for x in 0..w {
             let uv = [(x as f32 + 0.5) / w as f32, (y as f32 + 0.5) / h as f32];
-            for v in colour(spec, p, uv, aspect, [x as u32, y as u32], &from, &to) {
+            for (c, v) in colour(spec, p, uv, aspect, [x as u32, y as u32], &from, &to).into_iter().enumerate() {
                 let v = (v.clamp(0.0, 1.0) * scale).round();
+                let at = (x * 3 + c) * bytes;
                 if deep {
-                    rgb.extend((v as u16).to_le_bytes());
+                    row[at..at + 2].copy_from_slice(&(v as u16).to_le_bytes());
                 } else {
-                    rgb.push(v as u8);
+                    row[at] = v as u8;
                 }
             }
         }
-    }
+    });
     crate::stitch::Frame { width: w, height: h, rgb, deep }
 }
 

@@ -285,6 +285,7 @@ impl App {
             picking: self.picking.is_some(),
             incoming: self.partner_layer(),
             edge: self.clip_now().and_then(|(cut, t)| cut.edge_at(t)),
+            style: self.clip_now().and_then(|(cut, t)| Some((cut.style.as_ref()?.spec(), t as f32))),
             overlays: self.overlay_draws(),
         })
     }

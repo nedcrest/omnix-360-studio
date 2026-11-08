@@ -152,6 +152,6 @@ impl<M> shader::Program<M> for Picture {
     type Primitive = gpu::Primitive;
 
     fn draw(&self, _: &(), _: mouse::Cursor, _: Rectangle) -> gpu::Primitive {
-        gpu::Primitive { rig: self.rig.clone(), shown: self.shown.clone(), camera: self.camera, rig_from_view: self.rig_from_view.clone(), incoming: None, edge: None, overlays: Vec::new() }
+        gpu::Primitive { rig: self.rig.clone(), shown: self.shown.clone(), camera: self.camera, rig_from_view: self.rig_from_view.clone(), incoming: None, edge: None, style: None, overlays: Vec::new() }
     }
 }

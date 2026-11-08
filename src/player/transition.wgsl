@@ -152,13 +152,23 @@ fn two(uv: vec2f, one: bool) -> vec3f {
 
 // `transition::edge_blur`.
 fn edge_blur(p: f32, uv: vec2f, aspect: f32, pixel: vec2u) -> vec3f {
-    let radius = p * 0.04 * t.ka.x;
-    let turn = hash(pixel, 11u) * 6.2831855;
+    return disc(p * 0.04 * t.ka.x, 11u, uv, aspect, pixel, -1.0);
+}
+
+// `transition::disc`: the mean over a golden-angle disc; with `over` 0 or
+// more, of what's brighter than it only (the glow's highlights).
+fn disc(radius: f32, salt: u32, uv: vec2f, aspect: f32, pixel: vec2u, over: f32) -> vec3f {
+    let turn = hash(pixel, salt) * 6.2831855;
     var sum = vec3f(0.0);
     for (var i = 0u; i < SAMPLES; i++) {
         let r = radius * sqrt((f32(i) + 0.5) / f32(SAMPLES));
         let a = f32(i) * 2.399963 + turn;
-        sum += from_c(clamp(vec2f(uv.x + cos(a) * r / aspect, uv.y + sin(a) * r), vec2f(0.0), vec2f(1.0)));
+        let s = from_c(clamp(vec2f(uv.x + cos(a) * r / aspect, uv.y + sin(a) * r), vec2f(0.0), vec2f(1.0)));
+        if over >= 0.0 {
+            sum += max(s - over, vec3f(0.0));
+        } else {
+            sum += s;
+        }
     }
     return sum / f32(SAMPLES);
 }
@@ -285,6 +295,21 @@ fn transition(code: u32, p: f32, uv: vec2f, aspect: f32, pixel: vec2u) -> vec3f 
         }
         case 11u: {
             return tear(t.ka.y, sqrt(p) * t.ka.x, 0.0, u32(floor(p * 24.0)), uv, pixel, true);
+        }
+        case 20u: {
+            return old_film(p, uv, pixel);
+        }
+        case 21u: {
+            return vhs(p, uv, pixel);
+        }
+        case 22u: {
+            return cyberpunk(p, uv, pixel);
+        }
+        case 23u: {
+            return glow(uv, aspect, pixel);
+        }
+        case 24u: {
+            return soft_focus(uv, aspect, pixel);
         }
         case 12u: {
             let lift = p * t.ka.x;

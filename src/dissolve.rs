@@ -16,6 +16,14 @@ use std::fs::File;
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::PathBuf;
 
+/// What goes over one frame of a cut: its style at the frame's clip time
+/// (`Cut::style`), and its edge look and how much (`Cut::edge_at`).
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Over {
+    pub style: Option<(crate::transition::Spec, f32)>,
+    pub edge: Option<(crate::transition::Spec, f32)>,
+}
+
 pub struct Dissolve<'a> {
     out: &'a mut dyn FrameSink,
     /// The cut being written: frames so far, how many it has, how many of
@@ -27,9 +35,8 @@ pub struct Dissolve<'a> {
     tail: usize,
     /// The look of the join into the cut being written.
     look: crate::transition::Spec,
-    /// Its edge look on each frame (`Cut::edge_at`), outside its overlaps
-    /// as the player draws it.
-    edges: Vec<Option<(crate::transition::Spec, f32)>>,
+    /// What goes over each of its frames (`Over`).
+    over: Vec<Over>,
     held: Option<BufReader<File>>,
     holding: Option<BufWriter<File>>,
     /// The two files, swapped at each cut: one read, one written.
@@ -45,14 +52,14 @@ impl<'a> Dissolve<'a> {
         hasher.write_u128(std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_nanos()));
         let key = hasher.finish();
         let file = |k| std::env::temp_dir().join(format!("omnix-dissolve-{}-{key:016x}-{k}.rgb", std::process::id()));
-        Dissolve { out, n: 0, frames: 0, head: 0, tail: 0, look: Default::default(), edges: Vec::new(), held: None, holding: None, files: [file(0), file(1)] }
+        Dissolve { out, n: 0, frames: 0, head: 0, tail: 0, look: Default::default(), over: Vec::new(), held: None, holding: None, files: [file(0), file(1)] }
     }
 
     /// Starts the next cut of `frames` frames, whose first `head` cross the
     /// last cut's held tail by `look` and whose last `tail` cross the next
-    /// cut; `edges` its frames' edge looks.
-    pub fn cut(&mut self, frames: usize, head: usize, tail: usize, look: crate::transition::Spec, edges: Vec<Option<(crate::transition::Spec, f32)>>) -> Result<()> {
-        (self.look, self.edges) = (look, edges);
+    /// cut; `over` what goes over each of its frames.
+    pub fn cut(&mut self, frames: usize, head: usize, tail: usize, look: crate::transition::Spec, over: Vec<Over>) -> Result<()> {
+        (self.look, self.over) = (look, over);
         self.held = None;
         if let Some(mut w) = self.holding.take() {
             w.flush()?;
@@ -76,14 +83,13 @@ impl FrameSink for Dissolve<'_> {
     fn write(&mut self, frame: &Frame) -> Result<()> {
         let n = self.n;
         self.n += 1;
-        let edged;
-        let frame = match self.edges.get(n).copied().flatten() {
-            Some((spec, q)) if n >= self.head && n + self.tail < self.frames => {
-                edged = crate::transition::blend(&spec, q, frame, frame);
-                &edged
-            }
-            _ => frame,
-        };
+        let over = self.over.get(n).copied().unwrap_or_default();
+        // Its style, then (outside its overlaps, as the player draws it) its
+        // edge look.
+        let styled = over.style.map(|(spec, t)| crate::transition::blend(&spec, t, frame, frame));
+        let frame = styled.as_ref().unwrap_or(frame);
+        let edged = over.edge.filter(|_| n >= self.head && n + self.tail < self.frames).map(|(spec, q)| crate::transition::blend(&spec, q, frame, frame));
+        let frame = edged.as_ref().unwrap_or(frame);
         if n + self.tail >= self.frames
             && let Some(w) = &mut self.holding
         {

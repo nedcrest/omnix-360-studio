@@ -46,6 +46,9 @@ pub enum CutOp {
     Split { cut: Id, t: f64 },
     /// How far it overlaps the cut before, seconds; kept within both.
     Crossfade { cut: Id, seconds: f64 },
+    /// How its crossfade looks (`transition::Look`); none: a dissolve.
+    /// The first cut has no join before it.
+    Transition { cut: Id, look: Option<crate::transition::Look> },
     Stabilize { cut: Id, mode: Option<Mode> },
     Lut { cut: Id, lut: Option<String> },
     Delete { cut: Id },
@@ -113,6 +116,14 @@ pub(super) fn apply(p: &mut Project, op: &CutOp) -> Result<Outcome, OpError> {
             let id = p.next_id();
             p.cuts[i + 1].id = id;
             Ok(Outcome { summary: format!("cut #{cut} split at {t:.2} s; the second half is cut #{id}"), made: Some(id) })
+        }
+        &CutOp::Transition { cut, look } => {
+            let i = find(p, cut)?;
+            if i == 0 {
+                return Err(OpError::Invalid(format!("cut #{cut} is the first: no join before it")));
+            }
+            p.cuts[i].transition = look;
+            said(format!("cut #{cut}: transition {}", look.map_or("dissolve", |l| l.name())))
         }
         &CutOp::Crossfade { cut, seconds } => {
             let i = find(p, cut)?;
@@ -302,6 +313,9 @@ mod tests {
         let b = e.apply(&add("b", 3.0, Place::End)).unwrap().made.unwrap();
         e.apply(&Op::Cut(CutOp::Trim { cut: a, end: End::Out, t: 9.0, most: 6.0 })).unwrap();
         assert_eq!(e.cuts[0].end, 6.0, "not past the clip's length");
+        e.apply(&Op::Cut(CutOp::Transition { cut: b, look: Some(crate::transition::Look::WhipPan) })).unwrap();
+        assert_eq!(e.cuts[1].transition, Some(crate::transition::Look::WhipPan));
+        assert!(e.apply(&Op::Cut(CutOp::Transition { cut: a, look: Some(crate::transition::Look::Flash) })).is_err(), "the first cut has no join before it");
         e.apply(&Op::Cut(CutOp::Crossfade { cut: b, seconds: 10.0 })).unwrap();
         assert!(e.cuts[1].crossfade < 3.0 && e.cuts[1].crossfade > 0.0, "within the shorter cut: {}", e.cuts[1].crossfade);
         e.apply(&Op::Cut(CutOp::Stabilize { cut: a, mode: Some(Mode::Level) })).unwrap();

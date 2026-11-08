@@ -564,6 +564,9 @@ pub struct Cut {
     /// (picture and sound); the edit is that much shorter.
     #[serde(default, skip_serializing_if = "is_zero")]
     pub crossfade: f64,
+    /// How that crossfade looks (`transition::Look`); none: a dissolve.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transition: Option<crate::transition::Look>,
     /// Its colour effects' keyframes, clip time, apart from the camera's.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub effects: Vec<crate::grade::EffectKey>,
@@ -644,6 +647,7 @@ impl Cut {
             audio: None,
             volume: Vec::new(),
             crossfade: 0.0,
+            transition: None,
             effects: Vec::new(),
             marks: Vec::new(),
             lut: None,

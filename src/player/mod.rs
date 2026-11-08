@@ -958,6 +958,7 @@ impl App {
             self.angle_draft = None;
         }
         let (selected, opens_info) = (self.selection, matches!(message, Message::Info(_)));
+        let at = self.clip_place();
         let task = self.handle(message);
         // Something else selected: the Info panel told of what was
         // right-clicked before, and it stood over the Text panel (user,
@@ -978,6 +979,7 @@ impl App {
         self.follow_crossfade();
         self.follow_music();
         let task = Task::batch([task, self.follow_join_play()]);
+        self.follow_playhead_join(at);
         let task = Task::batch([task, self.follow_bin()]);
         // Another panel took the Record panel's place: stop listening.
         let task = if self.side != Some(Side::Record) && self.record.active() { Task::batch([task, self.close_record()]) } else { task };

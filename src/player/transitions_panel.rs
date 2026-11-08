@@ -122,6 +122,21 @@ impl App {
         Task::batch([self.update(Message::Toggle), self.update(Message::Scrub(start)), self.update(Message::ScrubDone)])
     }
 
+    /// The playhead moved (a click, a drag, a key, playing): the panel
+    /// takes the join nearest it (user, 2026-11-08: not only by Previous
+    /// and Next). Moved means in the clip: a longer transition shifts the
+    /// edit's time under a playhead that stays put. Not while a join plays.
+    pub(super) fn follow_playhead_join(&mut self, before: Option<(usize, f64)>) {
+        if self.side == Some(Side::Transitions) && self.join_play.is_none() && self.clip_place() != before {
+            self.join = self.nearest_join_cut();
+        }
+    }
+
+    /// Where the playhead is: the cut and the time in its clip.
+    pub(super) fn clip_place(&self) -> Option<(usize, f64)> {
+        self.clip_now().map(|(_, t)| (self.current, t))
+    }
+
     /// The cut after the join nearest the playhead (the first has none).
     fn nearest_join_cut(&self) -> Option<Id> {
         let n = self.edit.cuts.len();

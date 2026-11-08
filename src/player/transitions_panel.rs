@@ -94,11 +94,13 @@ impl App {
                 let at = crate::project::offsets(&self.edit.cuts)[i];
                 let frame = 1.0 / self.fps();
                 let (start, stop) = ((at - BEFORE * frame).max(0.0), at + c.crossfade + AFTER * frame);
-                let seek = self.update(Message::Scrub(start));
-                let done = self.update(Message::ScrubDone);
-                let play = if self.playing() { Task::none() } else { self.update(Message::Toggle) };
+                // One jump that plays: a seek and then Play started from the
+                // frame still on screen, before the seek's had decoded.
+                let Some((i, t)) = self.edit.locate(start) else { return Task::none() };
+                self.pause_source();
+                self.follow = true;
+                self.goto(i, t, true);
                 self.join_play = Some((stop, start));
-                return Task::batch([seek, done, play]);
             }
             _ => {}
         }

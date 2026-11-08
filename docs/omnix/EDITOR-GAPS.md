@@ -412,6 +412,14 @@ join's two cuts drawn into pictures of their own and mixed by a
 transition pass (`transition.wgsl`), the export by the same function on
 the CPU (`transition::blend`); whip pan, zoom punch, spin blur and flash
 ported from gl-transitions, a GPU test within one level of the CPU.
+Checked by the user; then (`8ebb7dd`) playing the join as asked (the
+nearest, 15 frames before to 10 after, back to the start, paused), a
+crossfade's X selecting its join (`Selection::Join`), no dissolve tile.
+Decided (2026-11-08): a transition stays keyed by the cut after its join
+(its id is stable); transitions get ids of their own with the
+transitions lane (25f) and edge transitions (25b), when a cut can have
+more than one; then a moved cut leaves its transition behind, as other
+editors do.
 Next (user, 2026-11-08): a look's own parameters (a whip's direction and
 blur, a spin's turns and colour split, a flash's strength) in a second
 side panel that opens when a look is chosen, beside the Transitions

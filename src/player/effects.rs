@@ -47,6 +47,11 @@ pub enum EffectMsg {
     PickWhite,
     FadeIn(f64),
     FadeOut(f64),
+    /// The cut's style look (none: off), one of its settings moved (a
+    /// slider's drag one undo step, closed by `Done`), all of them back.
+    Style(Option<crate::transition::Look>),
+    StyleKnob(&'static str, f32),
+    StyleReset,
     /// Jump to cut `cut`'s effect keyframe at clip time `t`.
     Jump(usize, f64),
     /// Cut `cut`'s effect keyframe `key` dragged to clip time `t`.
@@ -299,6 +304,10 @@ impl App {
                 self.change_place(starting, |place| *place = to);
             }
             EffectMsg::Done => self.edit.commit(),
+            m @ (EffectMsg::Style(_) | EffectMsg::StyleKnob(..) | EffectMsg::StyleReset) => {
+                let Some((Target::Cut(i), _)) = target else { return };
+                self.on_style(i, m);
+            }
             EffectMsg::Lut(choice) => {
                 let Some((Target::Cut(i), _)) = target else { return };
                 let cut = self.edit.cuts[i].id;
@@ -507,6 +516,53 @@ impl App {
 
     /// Cut `i`'s LUT, and its strength in `grade` (the effects at the
     /// playhead): the LUT acts before the effects, which act on what it gives.
+    /// Cut `i`'s style look: set, a setting moved, all set back.
+    fn on_style(&mut self, i: usize, message: EffectMsg) {
+        use crate::model::ops::cuts::CutOp;
+        let c = &self.edit.cuts[i];
+        let (cut, style) = (c.id, c.style.clone());
+        match message {
+            EffectMsg::Style(look) => {
+                self.op(Op::Cut(CutOp::Style { cut, look }));
+            }
+            EffectMsg::StyleKnob(key, value) => {
+                let choice = style.and_then(|s| s.look.knob(key)).is_some_and(|k| !k.choices.is_empty());
+                self.edit.begin();
+                self.op(Op::Cut(CutOp::StyleKnob { cut, key: key.to_owned(), value: Some(value) }));
+                if choice {
+                    self.edit.commit();
+                }
+            }
+            EffectMsg::StyleReset => {
+                self.edit.begin();
+                for key in style.iter().flat_map(|s| s.params.keys()) {
+                    self.op(Op::Cut(CutOp::StyleKnob { cut, key: key.clone(), value: None }));
+                }
+                self.edit.commit();
+            }
+            _ => {}
+        }
+    }
+
+    /// Cut `i`'s style (gap 87): a look over its whole picture, its tiles
+    /// and its settings.
+    fn style_controls(&self, i: usize) -> Element<'_, Message> {
+        use crate::transition::Look;
+        let style = self.edit.cuts[i].style.as_ref();
+        let m = |e: EffectMsg| Message::Effect(e);
+        let off = tip(button(text("✕").size(12)).padding([1, 6]).style(button::text).on_press_maybe(style.map(|_| m(EffectMsg::Style(None)))), text("No style"), tooltip::Position::Left);
+        let looks = Look::STYLES.into_iter().map(|l| (l, m(EffectMsg::Style(Some(l)))));
+        let mut col = column![row![text("Style").size(16).width(Length::Fill), off].align_y(Alignment::Center), super::transitions_panel::tiles(looks, style.map(|s| s.look))].spacing(10);
+        if let Some(s) = style {
+            for (k, &v) in s.look.knobs().iter().zip(&s.spec().values) {
+                col = col.push(super::transitions_panel::knob(k, v, |key, v| Message::Effect(EffectMsg::StyleKnob(key, v)), m(EffectMsg::Done)));
+            }
+            let reset = button(text("Reset").size(13)).style(button::secondary).on_press_maybe((!s.params.is_empty()).then(|| m(EffectMsg::StyleReset)));
+            col = col.push(tip(reset, text("Every setting back to the style's own"), tooltip::Position::Left));
+        }
+        col.push(rule::horizontal(1)).into()
+    }
+
     fn lut_controls(&self, i: usize, grade: &Grade) -> Element<'_, Message> {
         let cut = &self.edit.cuts[i];
         let mut choices = vec![LutChoice::None];
@@ -595,6 +651,7 @@ impl App {
         let mut body = column![row![text("Effects").size(18).width(Length::Fill), close].align_y(Alignment::Center), text(cut_name).size(13)].spacing(10).padding(12);
         if let Some((Target::Cut(i), _)) = target {
             body = body.push(self.lut_controls(i, &grade));
+            body = body.push(self.style_controls(i));
         }
         let body = body.extend([column![sliders, keys, tools, rule::horizontal(1), self.edit_and_correction()].spacing(10).into()]);
         container(scrollable(body)).width(WIDTH).height(Length::Fill).into()

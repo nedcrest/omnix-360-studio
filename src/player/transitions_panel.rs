@@ -314,7 +314,7 @@ impl App {
         };
         let mut body = column![text(look.name()).size(16)].spacing(14);
         for (k, &v) in look.knobs().iter().zip(&spec.values) {
-            body = body.push(knob(k, v));
+            body = body.push(knob(k, v, Message::TransitionKnob, Message::TransitionKnobDone));
         }
         let reset = button(text("Reset").size(13)).style(button::secondary).on_press_maybe((!set.is_empty()).then_some(Message::TransitionKnobsReset));
         body = body.push(tip(reset, text("Every setting back to the look's own"), tooltip::Position::Top));
@@ -348,16 +348,16 @@ pub(super) fn tiles_of<'a>(tiles: impl Iterator<Item = Element<'a, Message>>) ->
 }
 
 /// One setting: its choices as buttons, or a slider with its value.
-fn knob(k: &'static transition::Knob, v: f32) -> Element<'static, Message> {
+/// `set` the message a move sends, `done` the one a slider's release does.
+pub(super) fn knob(k: &'static transition::Knob, v: f32, set: fn(&'static str, f32) -> Message, done: Message) -> Element<'static, Message> {
     let name = text(k.name).size(13);
     if !k.choices.is_empty() {
         let options = k.choices.iter().enumerate().map(|(i, &label)| {
             let on = v.round() as usize == i;
-            button(text(label).size(12)).padding([3, 8]).style(if on { button::primary } else { button::secondary }).on_press(Message::TransitionKnob(k.key, i as f32)).into()
+            button(text(label).size(12)).padding([3, 8]).style(if on { button::primary } else { button::secondary }).on_press(set(k.key, i as f32)).into()
         });
         return column![name, iced::widget::row(options).spacing(4).wrap().vertical_spacing(4)].spacing(6).into();
     }
     let shown = if k.step >= 1.0 { format!("{v:.0}") } else { format!("{v:.2}") };
-    let set = move |v| Message::TransitionKnob(k.key, v);
-    column![row![name.width(Length::Fill), text(shown).size(13)], slider(k.least..=k.most, v, set).step(k.step).on_release(Message::TransitionKnobDone)].spacing(4).into()
+    column![row![name.width(Length::Fill), text(shown).size(13)], slider(k.least..=k.most, v, move |v| set(k.key, v)).step(k.step).on_release(done)].spacing(4).into()
 }

@@ -8,9 +8,9 @@
 //! a sound on its section's lane (music, SFX, voice-over), a picture over
 //! the picture.
 //!
-//! The project's folder is the one holding the project file, or the one
-//! above it when the file sits in a `04_project` folder: the layout
-//! footage-agent makes (`footage_agent/layout.py` there).
+//! The project's folder (`root`): a Dailix trip's for one of its videos
+//! (`videos/<name>/`), the one above an older project's `04_project`, or
+//! the one holding the project file.
 //!
 //! Sounds and clips are heard through `ffplay`, ffmpeg's player, as a
 //! separate process like every ffmpeg tool here; a clip plays in a small

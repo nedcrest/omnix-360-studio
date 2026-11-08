@@ -107,6 +107,7 @@ done in part stays here until its last card is done.
 | 85 | Project cards in a grid, a GIF of the project on hover, basic facts and a description | below |
 | 86 | A program of its own: animated cutaways from a prompt and parameters (8-bit game, animated slides) | below |
 | 87 | Style looks (old film, VHS, neo-cyberpunk) for a video, an overlay picture or text; animation presets for text and pictures | below |
+| 88 | The Osmo 360 II: its calibration and 8K50 decoding | below |
 
 ## Open gaps
 
@@ -1462,6 +1463,15 @@ cutaways, a program of its own) is another thing: it makes new footage.
   a polaroid, picture-in-picture with a frame).
 - A preset is a template as transitions have (gap 25c): one library for
   the program.
+
+### 88. The Osmo 360 II — when the camera comes (numbered 2026-11-09)
+
+The card «Osmo 360 II» (milestone «Якість 360») had no number. The user's
+360 camera will be an Osmo 360 or Osmo 360 II, not before ~2027-02. With
+it: its lens calibration read as the Osmo 360's is, and decoding 8K50
+fast enough (about twice the Osmo 360's frames; `CONTEXT.md` «Machine»
+measured ~2× headroom on the 3060, unverified). Nothing to do before
+there's footage.
 
 ## Format rule for all of these
 

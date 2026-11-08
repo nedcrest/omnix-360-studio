@@ -362,7 +362,7 @@ impl App {
             Message::AngleNudge(angle, dir) => self.nudge_angle(angle, dir),
             Message::AngleArrow(Some(angle), dir) => self.nudge_angle(angle, dir),
             // Editing: no field being typed in, ↑ ↓ go to the joins (gap 55).
-            Message::AngleArrow(None, dir) if !self.framing => return self.to_join(-dir),
+            Message::AngleArrow(None, dir) if !self.framing => return self.go_to_join(-dir),
             Message::AngleArrow(None, dir) => self.free_look().pitch += 5.0 * dir,
             Message::Stab(mode) => {
                 // The playing cut's, and the one new cuts get.

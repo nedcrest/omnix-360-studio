@@ -93,6 +93,10 @@ impl App {
         if self.normalize.is_some() {
             return if escape { self.update(Message::Sound(sound_ui::SoundMsg::Cancel)) } else { Task::none() };
         }
+        // The «New» window open: Esc closes it; its field takes the rest.
+        if self.new_menu.is_some() {
+            return if escape { self.update(Message::NewMenuClose) } else { Task::none() };
+        }
         // The Settings window open: Esc closes it, the rest wait.
         if self.settings_open.is_some() {
             return if escape { self.update(Message::SettingsPanel) } else { Task::none() };
@@ -122,8 +126,8 @@ impl App {
             match key.as_ref() {
                 Key::Named(Named::ArrowLeft) if mods.shift() => return self.seek_by(-1.0, "−1 s"),
                 Key::Named(Named::ArrowRight) if mods.shift() => return self.seek_by(1.0, "+1 s"),
-                Key::Named(Named::ArrowUp) => return self.to_join(-1.0),
-                Key::Named(Named::ArrowDown) => return self.to_join(1.0),
+                Key::Named(Named::ArrowUp) => return self.go_to_join(-1.0),
+                Key::Named(Named::ArrowDown) => return self.go_to_join(1.0),
                 Key::Named(Named::Home) => return self.seek_to(0.0, "start"),
                 Key::Named(Named::End) => return self.seek_to(self.edit.frame(), "end"),
                 _ => {}
@@ -188,7 +192,7 @@ impl App {
                 "i" | "I" if self.bin.view && self.bin.source.is_some() && !mods.command() => return self.update(Message::BinPlayer(super::bin_player::SourceMsg::In(!mods.alt()))),
                 "o" | "O" if self.bin.view && self.bin.source.is_some() && !mods.command() => return self.update(Message::BinPlayer(super::bin_player::SourceMsg::Out(!mods.alt()))),
                 "o" | "O" if mods.command() && mods.shift() => return self.update(Message::OpenProject),
-                "n" | "N" if mods.command() => return self.update(Message::NewProject),
+                "n" | "N" if mods.command() => return self.update(Message::NewMenu),
                 "o" if mods.command() => return self.update(Message::Open),
                 "s" | "S" if mods.command() => return self.update(Message::SaveProject(mods.shift())),
                 "z" | "Z" if mods.command() && mods.shift() => return self.update(Message::Redo),
@@ -321,7 +325,7 @@ impl App {
     /// The playhead to the previous (`dir` < 0) or next stop: a marker, a
     /// cut's edge, the edit's ends. Said by the playhead as what it is
     /// («← marker»).
-    pub(super) fn to_join(&mut self, dir: f64) -> Task<Message> {
+    pub(super) fn go_to_join(&mut self, dir: f64) -> Task<Message> {
         match next_stop(&stops(&self.edit), self.aimed(), dir, 1.0 / self.fps()) {
             Some((t, stop)) => {
                 let note = match (stop, dir < 0.0) {

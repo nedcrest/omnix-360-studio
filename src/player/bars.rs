@@ -22,6 +22,7 @@ impl App {
         };
         let idle = self.loading.is_none();
         let buttons = row![
+            labelled_button(NEW_PROJECT, "New…", idle.then_some(Message::NewMenu)),
             labelled_button(ADD_CLIP, "Open clips…", idle.then_some(Message::Open)),
             labelled_button(OPEN_PROJECT, "Open project…", idle.then_some(Message::OpenProject)),
             labelled_button(ADD_MUSIC, "Add music…", idle.then_some(Message::AddSound(SoundTrack::Music))),
@@ -150,7 +151,7 @@ impl App {
             ]),
             separator(),
             group("Project", open, row![
-                tip(tint_button(Tint::Global, NEW_PROJECT, Some(Message::NewProject)), text("Start a new, empty project (Ctrl+N)"), tooltip::Position::Bottom),
+                tip(tint_button(Tint::Global, NEW_PROJECT, Some(Message::NewMenu)), text("New: a video in a trip, a trip, or an edit without one (Ctrl+N)"), tooltip::Position::Bottom),
                 tip(tint_button(Tint::Global, OPEN_PROJECT, Some(Message::OpenProject)), text("Open a saved edit (Ctrl+Shift+O)"), tooltip::Position::Bottom),
                 tip(
                     tint_button(Tint::Global, SAVE, self.unsaved().then_some(Message::SaveProject(false))),

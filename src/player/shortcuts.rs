@@ -91,7 +91,7 @@ const GROUPS: &[(&str, &[(&str, &str)])] = &[
             ("Delete", "bin player: delete the picked segment"),
             ("Ctrl+,", "settings"),
             ("Ctrl+E", "export"),
-            ("Ctrl+N", "new project"),
+            ("Ctrl+N", "new: a video in a trip, a trip, an edit"),
             ("Ctrl+O", "add clips"),
             ("Ctrl+Shift+O", "open a project"),
             ("Ctrl+S / Ctrl+Shift+S", "save / save as"),

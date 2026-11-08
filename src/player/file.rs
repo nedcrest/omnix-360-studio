@@ -10,6 +10,7 @@ pub(super) enum Then {
     Close,
     OpenProject,
     NewProject,
+    NewMenu,
 }
 
 /// An answer to "save changes first?".
@@ -76,6 +77,7 @@ impl App {
             }
             Then::OpenProject => self.update(Message::OpenProject),
             Then::NewProject => self.update(Message::NewProject),
+            Then::NewMenu => self.on_new_menu(Message::NewMenu),
         }
     }
 
@@ -233,7 +235,10 @@ impl App {
             }
             Message::OpenProject if self.unsaved() => return self.confirm(Then::OpenProject),
             Message::NewProject if self.unsaved() => return self.confirm(Then::NewProject),
+            Message::NewMenu if self.unsaved() => return self.confirm(Then::NewMenu),
+            Message::NewMenu => return self.on_new_menu(Message::NewMenu),
             Message::NewProject => {
+                self.new_menu = None;
                 // Back to the start screen with an empty edit. Loaded clips
                 // stay in the library, so adding them again is instant; one
                 // still loading finishes there without becoming a cut.

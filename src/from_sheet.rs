@@ -94,8 +94,14 @@ pub fn write_empty(root: &Path, day: Option<&str>) -> Result<PathBuf> {
     save(root, day, &Project { aspect: Some(Aspect(16, 9)), ..Default::default() })
 }
 
-fn save(root: &Path, day: Option<&str>, project: &Project) -> Result<PathBuf> {
-    let path = dailix_sheet::project::new_video(root, day.unwrap_or("all-days"))?;
+/// An empty edit as a new video called `name` (Omnix's «New video»).
+pub fn write_named(root: &Path, name: &str) -> Result<PathBuf> {
+    let slug = dailix_sheet::project::slug(name);
+    save(root, Some(if slug.is_empty() { "video" } else { &slug }), &Project { aspect: Some(Aspect(16, 9)), ..Default::default() })
+}
+
+fn save(root: &Path, name: Option<&str>, project: &Project) -> Result<PathBuf> {
+    let path = dailix_sheet::project::new_video(root, name.unwrap_or("all-days"))?;
     project.save(&path)?;
     Ok(path)
 }

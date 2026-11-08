@@ -424,7 +424,7 @@ Then (`6dba398`) light leak (after FilmBurn), luma fade (ours) and
 glitch (after StripDatamoshGlitch and GlitchMemories), their sine noise
 put on the integer `hash` so GPU and CPU agree; and (`616305c`) the
 kinds as tabs atop the panel: overlap open, edges (25b) and stingers
-(25d) greyed until built. Waiting for the user's check. The 360 one
+(25d) greyed until built. All checked by the user 2026-11-08. The 360 one
 once there's footage; a look's own parameters wait as 25g.
 
 Split into steps so each can be tried on Kos on its own:

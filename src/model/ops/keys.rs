@@ -348,7 +348,7 @@ mod tests {
     #[test]
     fn a_place_value_holds_for_the_whole_item_and_makes_no_key() {
         let mut e = edit();
-        let item = e.apply(&Op::Item(crate::model::ops::items::ItemOp::AddText { text: Default::default(), at: 0.0, len: 3.0 })).unwrap().made.unwrap();
+        let item = e.apply(&Op::Item(crate::model::ops::items::ItemOp::AddText { text: Default::default(), at: 0.0, len: 3.0, lane: 0 })).unwrap().made.unwrap();
         let place = |param: &str, value| Op::Key(KeyOp::PlaceValue { item, param: param.into(), value });
         e.apply(&place("x", 0.2)).unwrap();
         e.apply(&place("size", 0.5)).unwrap();

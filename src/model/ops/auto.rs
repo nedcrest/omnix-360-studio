@@ -341,7 +341,7 @@ mod tests {
         let mut e = Edit::default();
         e.replace(p);
         let cut = e.cuts[0].id;
-        let item = e.apply(&Op::Item(crate::model::ops::items::ItemOp::AddText { text: Default::default(), at: 1.0, len: 2.0 })).unwrap().made.unwrap();
+        let item = e.apply(&Op::Item(crate::model::ops::items::ItemOp::AddText { text: Default::default(), at: 1.0, len: 2.0, lane: 0 })).unwrap().made.unwrap();
         let samples = (0..=8).map(|k| TrackSample { t: 10.0 + k as f64 * 0.5, x: 0.1 * k as f64, y: 0.5, size: None, rotation: None, confidence: 1.0 }).collect();
         e.apply(&Op::Cut(crate::model::ops::cuts::CutOp::Track { cut, track: ObjectTrack { name: "ball".into(), samples } })).unwrap();
         e.apply(&Op::Auto(AutoOp::Follow { item, cut, track: "ball".into(), params: vec!["x".into(), "y".into()], offsets: vec![0.0, -0.1] })).unwrap();
@@ -360,7 +360,7 @@ mod tests {
     fn an_item_animates_in_and_out_and_keeps_them_on_its_edges() {
         use crate::animate::Anim;
         let mut e = Edit::default();
-        let item = e.apply(&Op::Item(crate::model::ops::items::ItemOp::AddText { text: Default::default(), at: 0.0, len: 6.0 })).unwrap().made.unwrap();
+        let item = e.apply(&Op::Item(crate::model::ops::items::ItemOp::AddText { text: Default::default(), at: 0.0, len: 6.0, lane: 0 })).unwrap().made.unwrap();
         let animate = |edge, anim| Op::Auto(AutoOp::Animate { item, edge, anim, seconds: 1.0 });
         e.apply(&animate(End::In, Some(Anim::Fade))).unwrap();
         e.apply(&animate(End::Out, Some(Anim::Zoom))).unwrap();

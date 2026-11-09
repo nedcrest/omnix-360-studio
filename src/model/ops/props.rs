@@ -113,9 +113,9 @@ fn sound_op() -> impl Strategy<Value = SoundOp> {
 
 fn item_op() -> impl Strategy<Value = ItemOp> {
     prop_oneof![
-        (time(), 0.0..5.0f64).prop_map(|(at, len)| ItemOp::AddPictures { inputs: vec!["p.png".into(), "q.png".into()], at, len }),
-        (time(), 0.0..5.0f64).prop_map(|(at, len)| ItemOp::AddText { text: Default::default(), at, len }),
-        (id(), time()).prop_map(|(item, at)| ItemOp::Move { item, at }),
+        (time(), 0.0..5.0f64).prop_map(|(at, len)| ItemOp::AddPictures { inputs: vec!["p.png".into(), "q.png".into()], at, len, lane: 0 }),
+        (time(), 0.0..5.0f64).prop_map(|(at, len)| ItemOp::AddText { text: Default::default(), at, len, lane: 0 }),
+        (id(), time()).prop_map(|(item, at)| ItemOp::Move { item, at, lane: None }),
         (id(), end(), time()).prop_map(|(item, end, t)| ItemOp::Trim { item, end, t, most: 3600.0 }),
         (id(), "[a-z ]{0,8}").prop_map(|(item, content)| ItemOp::SetText { item, text: crate::text::Text { content, ..Default::default() } }),
         id().prop_map(|item| ItemOp::Delete { item }),
@@ -192,7 +192,7 @@ proptest! {
 fn a_squeezed_item_trims_without_a_panic() {
     let mut e = Edit::default();
     e.replace(project());
-    let pictures = |at: f64, len: f64| Op::Item(ItemOp::AddPictures { inputs: vec!["p.png".into(), "q.png".into()], at, len });
+    let pictures = |at: f64, len: f64| Op::Item(ItemOp::AddPictures { inputs: vec!["p.png".into(), "q.png".into()], at, len, lane: 0 });
     e.apply(&pictures(11.758063601041425, 1.6549611253934415)).unwrap();
     e.apply(&pictures(6.476533619232805, 3.4309897559092923)).unwrap();
     e.apply(&Op::Item(ItemOp::Trim { item: 9, end: End::In, t: 11.801837021077244, most: 3600.0 })).unwrap();

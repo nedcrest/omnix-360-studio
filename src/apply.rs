@@ -61,12 +61,15 @@ pub fn describe(project: &Path) -> Result<()> {
         }
     }
     for (what, lanes) in [("overlays", &p.overlays), ("text", &p.text)] {
-        let items: Vec<_> = lanes.iter().flat_map(|l| &l.items).collect();
-        if items.is_empty() {
+        if lanes.iter().all(|l| l.items.is_empty()) {
             continue;
         }
         println!("{what}:");
-        for i in items {
+        // Lane by lane when there are several, 0 the lowest (gap 70).
+        for (n, i) in lanes.iter().enumerate().flat_map(|(n, l)| l.items.iter().map(move |i| (n, i))) {
+            if lanes.len() > 1 && lanes[n].items.first().is_some_and(|f| f.id == i.id) {
+                println!("  lane {n}:");
+            }
             let label = match (&i.text, i.bars) {
                 (Some(t), _) => format!("«{}»", t.content),
                 (None, Some(b)) => format!("bars {:.2}:1, sliding {:.1} s, colour {:?}", b.ratio, b.slide, b.colour),

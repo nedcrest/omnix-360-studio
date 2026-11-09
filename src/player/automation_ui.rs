@@ -112,7 +112,7 @@ impl App {
     pub(super) fn lanes_of(&self, of: LaneOf) -> Vec<Param> {
         let clips: Vec<&crate::automation::AutoClip> = match of {
             LaneOf::Cuts => self.edit.cuts.iter().flat_map(|c| &c.automation).collect(),
-            LaneOf::Track(track) => self.edit.lane(track).iter().flat_map(|l| &l.items).flat_map(|it| &it.automation).collect(),
+            LaneOf::Track(track) => self.edit.track_lanes(track).iter().flat_map(|l| &l.items).flat_map(|it| &it.automation).collect(),
         };
         let place = (0..4).map(Param::Place).filter(|_| of != LaneOf::Cuts);
         let all = place.chain((0..crate::grade::NAMES.len()).map(Param::Grade));

@@ -13,15 +13,40 @@ use std::path::PathBuf;
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(tag = "op", rename_all = "snake_case", deny_unknown_fields)]
 pub enum ItemOp {
-    /// Pictures on the overlay track, `len` seconds each, one after
-    /// another from edit time `at`, each where it fits. Gives the last one.
-    AddPictures { inputs: Vec<PathBuf>, at: f64, len: f64 },
-    /// Text on the text track at edit time `at` for `len` seconds, or where
-    /// it fits nearest.
-    AddText { text: Text, at: f64, len: f64 },
-    /// Cinematic bars on the overlay track at edit time `at` for `len`
-    /// seconds, or where they fit nearest (gap 15).
-    AddBars { bars: crate::overlay::Bars, at: f64, len: f64 },
+    /// Pictures on lane `lane` (0 the lowest) of the overlay track, `len`
+    /// seconds each, one after another from edit time `at`, each where it
+    /// fits. Gives the last one.
+    AddPictures {
+        inputs: Vec<PathBuf>,
+        at: f64,
+        len: f64,
+        #[serde(default)]
+        lane: usize,
+    },
+    /// Text on lane `lane` of the text track at edit time `at` for `len`
+    /// seconds, or where it fits nearest.
+    AddText {
+        text: Text,
+        at: f64,
+        len: f64,
+        #[serde(default)]
+        lane: usize,
+    },
+    /// Cinematic bars on lane `lane` of the overlay track at edit time
+    /// `at` for `len` seconds, or where they fit nearest (gap 15).
+    AddBars {
+        bars: crate::overlay::Bars,
+        at: f64,
+        len: f64,
+        #[serde(default)]
+        lane: usize,
+    },
+    /// An empty lane on top of `track`'s (gap 70): what's on it is drawn
+    /// over the lanes below.
+    AddLane { track: Track },
+    /// Lane `lane` of `track` taken away: an empty one only, and never the
+    /// last.
+    RemoveLane { track: Track, lane: usize },
     /// A bars item's ratio, slide and colour, all of it.
     SetBars { item: Id, bars: crate::overlay::Bars },
     /// A picture dressed as a sticker, a polaroid or a picture in
@@ -32,8 +57,14 @@ pub enum ItemOp {
     Style { item: Id, look: Option<crate::transition::Look> },
     /// One of its style's settings, as `CutOp::StyleKnob`.
     StyleKnob { item: Id, key: String, value: Option<f32> },
-    /// To start at edit time `at`, or where it fits nearest.
-    Move { item: Id, at: f64 },
+    /// To start at edit time `at`, or where it fits nearest; onto lane
+    /// `lane` of its track if given.
+    Move {
+        item: Id,
+        at: f64,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        lane: Option<usize>,
+    },
     /// Its in or out edge to `t` (its own time), staying where it is on the
     /// edit; no longer than `most` from its start.
     Trim { item: Id, end: End, t: f64, most: f64 },
@@ -58,29 +89,29 @@ fn check_bars(b: &crate::overlay::Bars) -> Result<(), OpError> {
 
 pub(super) fn apply(p: &mut Project, op: &ItemOp) -> Result<Outcome, OpError> {
     match op {
-        ItemOp::AddPictures { inputs, at, len } => {
+        ItemOp::AddPictures { inputs, at, len, lane } => {
             positive(*len)?;
             let mut at = *at;
             let mut last = None;
             for input in inputs {
                 let id = p.next_id();
-                at = add(p, Track::Overlay, Item { id, input: input.clone(), text: None, at, start: 0.0, end: *len, motion: Vec::new(), effects: Vec::new(), bars: None, automation: Vec::new(), kind: None, style: None });
+                at = add(p, Track::Overlay, *lane, Item { id, input: input.clone(), text: None, at, start: 0.0, end: *len, motion: Vec::new(), effects: Vec::new(), bars: None, automation: Vec::new(), kind: None, style: None });
                 last = Some(id);
             }
             let Some(id) = last else { return Err(OpError::Invalid("no pictures to add".into())) };
             Ok(Outcome { summary: format!("{} picture(s) added, the last item #{id}", inputs.len()), made: Some(id) })
         }
-        ItemOp::AddText { text, at, len } => {
+        ItemOp::AddText { text, at, len, lane } => {
             positive(*len)?;
             let id = p.next_id();
-            add(p, Track::Text, Item { id, input: PathBuf::new(), text: Some(text.clone()), at: *at, start: 0.0, end: *len, motion: Vec::new(), effects: Vec::new(), bars: None, automation: Vec::new(), kind: None, style: None });
+            add(p, Track::Text, *lane, Item { id, input: PathBuf::new(), text: Some(text.clone()), at: *at, start: 0.0, end: *len, motion: Vec::new(), effects: Vec::new(), bars: None, automation: Vec::new(), kind: None, style: None });
             Ok(Outcome { summary: format!("text item #{id} added"), made: Some(id) })
         }
-        ItemOp::AddBars { bars, at, len } => {
+        ItemOp::AddBars { bars, at, len, lane } => {
             positive(*len)?;
             check_bars(bars)?;
             let id = p.next_id();
-            add(p, Track::Overlay, Item { id, input: PathBuf::new(), text: None, at: *at, start: 0.0, end: *len, motion: Vec::new(), effects: Vec::new(), bars: Some(*bars), automation: Vec::new(), kind: None, style: None });
+            add(p, Track::Overlay, *lane, Item { id, input: PathBuf::new(), text: None, at: *at, start: 0.0, end: *len, motion: Vec::new(), effects: Vec::new(), bars: Some(*bars), automation: Vec::new(), kind: None, style: None });
             Ok(Outcome { summary: format!("bars {:.2}:1, item #{id}", bars.ratio), made: Some(id) })
         }
         ItemOp::SetBars { item, bars } => {
@@ -111,11 +142,43 @@ pub(super) fn apply(p: &mut Project, op: &ItemOp) -> Result<Outcome, OpError> {
             let style = styleable(p, *item)?.style.as_mut().ok_or_else(|| OpError::Invalid(format!("item #{item} has no style to set")))?;
             said(format!("item #{item}: {}", super::cuts::set_knob(style.look, &mut style.params, key, *value)?))
         }
-        &ItemOp::Move { item, at } => {
-            let (track, lane, i) = find(p, item)?;
-            let lane = &mut lanes(p, track)[lane];
-            lane.move_to(i, at);
-            said(format!("item #{item} at {:.2} s", lane.items[i].at))
+        &ItemOp::Move { item, at, lane: onto } => {
+            let (track, l, i) = find(p, item)?;
+            match onto.filter(|&to| to != l) {
+                Some(to) => {
+                    if to >= lanes(p, track).len() {
+                        return Err(OpError::NotFound(format!("lane {to} of the {track:?} track")));
+                    }
+                    let moved = lanes(p, track)[l].items.remove(i);
+                    let lane = &mut lanes(p, track)[to];
+                    lane.items.push(moved);
+                    let i = lane.items.len() - 1;
+                    lane.items[i].at = lane.place(i, at);
+                    lane.items.sort_by(|a, b| a.at.total_cmp(&b.at));
+                    let now = lane.items.iter().find(|it| it.id == item).map_or(at, |it| it.at);
+                    said(format!("item #{item} on lane {to} at {now:.2} s"))
+                }
+                None => {
+                    let lane = &mut lanes(p, track)[l];
+                    lane.move_to(i, at);
+                    said(format!("item #{item} at {:.2} s", lane.items[i].at))
+                }
+            }
+        }
+        &ItemOp::AddLane { track } => {
+            lanes(p, track).push(crate::overlay::Lane::default());
+            said(format!("{track:?} track: lane {} added on top", lanes(p, track).len() - 1))
+        }
+        &ItemOp::RemoveLane { track, lane } => {
+            let all = lanes(p, track);
+            match all.get(lane) {
+                None => return Err(OpError::NotFound(format!("lane {lane} of the {track:?} track"))),
+                Some(_) if all.len() == 1 => return Err(OpError::Invalid("a track keeps one lane".into())),
+                Some(l) if !l.items.is_empty() => return Err(OpError::Invalid(format!("lane {lane} isn't empty"))),
+                Some(_) => {}
+            }
+            all.remove(lane);
+            said(format!("{track:?} track: lane {lane} taken away"))
         }
         &ItemOp::Trim { item, end, t, most } => {
             let (track, lane, i) = find(p, item)?;
@@ -150,8 +213,8 @@ fn positive(len: f64) -> Result<(), OpError> {
 
 /// Puts `item` on the lane of `track` the player shows, nearest its `at`
 /// where it fits; returns where it ends.
-fn add(p: &mut Project, track: Track, item: Item) -> f64 {
-    let lane = p.lane_mut(track);
+fn add(p: &mut Project, track: Track, l: usize, item: Item) -> f64 {
+    let lane = p.lane_mut(track, l);
     lane.items.push(item);
     let i = lane.items.len() - 1;
     lane.items[i].at = lane.place(i, lane.items[i].at);
@@ -187,9 +250,27 @@ mod tests {
     use crate::model::edit::Edit;
 
     #[test]
+    fn a_track_holds_lanes_one_over_another() {
+        let mut e = Edit::default();
+        let add = |lane| Op::Item(ItemOp::AddText { text: Text::default(), at: 1.0, len: 3.0, lane });
+        let low = e.apply(&add(0)).unwrap().made.unwrap();
+        e.apply(&Op::Item(ItemOp::AddLane { track: Track::Text })).unwrap();
+        let high = e.apply(&add(1)).unwrap().made.unwrap();
+        assert_eq!((e.text.len(), e.text[1].items[0].at), (2, 1.0), "the same time, a lane above");
+        // Moved down onto the low lane: where it fits there.
+        e.apply(&Op::Item(ItemOp::Move { item: high, at: 1.0, lane: Some(0) })).unwrap();
+        assert_eq!((e.text[0].items.len(), e.text[1].items.len(), e.item_index(high)), (2, 0, Some((Track::Text, 0, 1))));
+        assert_eq!(e.text[0].items[1].at, 4.0, "after the one already there");
+        e.apply(&Op::Item(ItemOp::RemoveLane { track: Track::Text, lane: 1 })).unwrap();
+        assert!(e.apply(&Op::Item(ItemOp::RemoveLane { track: Track::Text, lane: 0 })).is_err(), "the last stays");
+        assert!(e.apply(&Op::Item(ItemOp::Move { item: low, at: 0.0, lane: Some(3) })).is_err(), "no such lane");
+        check(&e).unwrap();
+    }
+
+    #[test]
     fn pictures_follow_one_another_and_text_is_set_whole() {
         let mut e = Edit::default();
-        let last = e.apply(&Op::Item(ItemOp::AddPictures { inputs: vec!["a.png".into(), "b.png".into()], at: 1.0, len: 5.0 })).unwrap().made.unwrap();
+        let last = e.apply(&Op::Item(ItemOp::AddPictures { inputs: vec!["a.png".into(), "b.png".into()], at: 1.0, len: 5.0, lane: 0 })).unwrap().made.unwrap();
         let lane = &e.overlays[0].items;
         assert_eq!((lane[0].at, lane[1].at, lane[1].id), (1.0, 6.0, last));
         e.apply(&Op::Item(ItemOp::Kind { item: last, kind: Some(crate::dress::Kind::Polaroid) })).unwrap();
@@ -199,7 +280,7 @@ mod tests {
         e.apply(&Op::Item(ItemOp::StyleKnob { item: last, key: "amount".into(), value: Some(0.5) })).unwrap();
         assert_eq!(e.overlays[0].items[1].style.as_ref().map(|s| (s.look, s.params.len())), Some((Look::Vhs, 1)));
         assert!(e.apply(&Op::Item(ItemOp::Style { item: last, look: Some(Look::WhipPan) })).is_err(), "a transition isn't a style");
-        let words = e.apply(&Op::Item(ItemOp::AddText { text: Text::default(), at: 2.0, len: 3.0 })).unwrap().made.unwrap();
+        let words = e.apply(&Op::Item(ItemOp::AddText { text: Text::default(), at: 2.0, len: 3.0, lane: 0 })).unwrap().made.unwrap();
         let text = Text { content: "Kos".into(), bold: false, ..Text::default() };
         let set = Op::Item(ItemOp::SetText { item: words, text: text.clone() });
         e.apply(&set).unwrap();
@@ -210,7 +291,7 @@ mod tests {
         assert!(matches!(e.apply(&Op::Item(ItemOp::SetText { item: last, text })), Err(OpError::Invalid(_))));
         // A move into the next picture stops at its edge.
         let first = e.overlays[0].items[0].id;
-        e.apply(&Op::Item(ItemOp::Move { item: first, at: 3.0 })).unwrap();
+        e.apply(&Op::Item(ItemOp::Move { item: first, at: 3.0, lane: None })).unwrap();
         assert!(e.overlays[0].items[0].ends() <= e.overlays[0].items[1].at + 1e-9);
         e.apply(&Op::Item(ItemOp::Trim { item: last, end: End::Out, t: 99.0, most: 3600.0 })).unwrap();
         e.apply(&Op::Item(ItemOp::Delete { item: first })).unwrap();
@@ -221,13 +302,13 @@ mod tests {
     #[test]
     fn bars_are_added_set_and_kept_in_range() {
         let mut e = Edit::default();
-        let id = e.apply(&Op::Item(ItemOp::AddBars { bars: Default::default(), at: 2.0, len: 5.0 })).unwrap().made.unwrap();
+        let id = e.apply(&Op::Item(ItemOp::AddBars { bars: Default::default(), at: 2.0, len: 5.0, lane: 0 })).unwrap().made.unwrap();
         let bars = |ratio| crate::overlay::Bars { ratio, colour: [1.0, 1.0, 1.0], ..Default::default() };
         e.apply(&Op::Item(ItemOp::SetBars { item: id, bars: bars(2.0) })).unwrap();
         assert_eq!(e.overlays[0].items[0].bars, Some(bars(2.0)));
         assert!(e.apply(&Op::Item(ItemOp::Kind { item: id, kind: Some(crate::dress::Kind::Sticker) })).is_err(), "bars aren't a picture to dress");
         assert!(e.apply(&Op::Item(ItemOp::SetBars { item: id, bars: bars(9.0) })).is_err(), "out of range");
-        let text = e.apply(&Op::Item(ItemOp::AddText { text: Default::default(), at: 0.0, len: 2.0 })).unwrap().made.unwrap();
+        let text = e.apply(&Op::Item(ItemOp::AddText { text: Default::default(), at: 0.0, len: 2.0, lane: 0 })).unwrap().made.unwrap();
         assert!(e.apply(&Op::Item(ItemOp::SetBars { item: text, bars: bars(2.0) })).is_err(), "text isn't bars");
     }
 

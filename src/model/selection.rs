@@ -98,11 +98,10 @@ impl Selection {
         Some((own, k))
     }
 
-    /// The selected item's track and place, in the lanes the player shows.
+    /// The selected item's track, lane and place.
     pub fn item(self, p: &Project) -> Option<ItemRef> {
         let Selection::Item(id) = self else { return None };
-        // The player shows each track's first lane (lanes as groups: gap 70).
-        p.item_index(id).filter(|&(_, lane, _)| lane == 0).map(|(t, _, i)| (t, i))
+        p.item_index(id)
     }
 
     /// The sound a volume point would go on: the selected point's line, or
@@ -222,13 +221,13 @@ mod tests {
         e.cuts[0].volume = vec![VolumeKey { t: 1.0, volume: -6.0 }];
         e.cuts[1].crossfade = 0.5;
         e.track_mut(SoundTrack::Music).append_part(PathBuf::from("song"), 0.0, 0.0, 5.0);
-        e.lane_mut(Track::Text).items.push(crate::overlay::Item { id: 0, input: PathBuf::new(), text: Some(Default::default()), at: 0.0, start: 0.0, end: 5.0, motion: Vec::new(), effects: Vec::new(), bars: None, automation: Vec::new(), kind: None, style: None });
+        e.lane_mut(Track::Text, 0).items.push(crate::overlay::Item { id: 0, input: PathBuf::new(), text: Some(Default::default()), at: 0.0, start: 0.0, end: 5.0, motion: Vec::new(), effects: Vec::new(), bars: None, automation: Vec::new(), kind: None, style: None });
         e.settle_ids();
         e
     }
 
     fn every(e: &Edit) -> [Selection; 5] {
-        [Selection::cut_at(e, 1), Selection::clip_at(e, SoundTrack::Music, 0), Selection::point_at(e, Own::Cut(0), 0), Selection::item_at(e, (Track::Text, 0)), Selection::join_at(e, 1)]
+        [Selection::cut_at(e, 1), Selection::clip_at(e, SoundTrack::Music, 0), Selection::point_at(e, Own::Cut(0), 0), Selection::item_at(e, (Track::Text, 0, 0)), Selection::join_at(e, 1)]
     }
 
     #[test]
@@ -240,7 +239,7 @@ mod tests {
         assert_eq!(cut.picked(&e), Picked::Cut(1));
         assert_eq!(clip.picked(&e), Picked::Clip(SoundTrack::Music, 0));
         assert_eq!(point.picked(&e), Picked::Point(Own::Cut(0), 0));
-        assert_eq!(item.picked(&e), Picked::Item((Track::Text, 0)));
+        assert_eq!(item.picked(&e), Picked::Item((Track::Text, 0, 0)));
         assert_eq!(Selection::mark_at(&e, 0, 2.0).picked(&e), Picked::None, "no marker there");
         let mut gone = edit();
         gone.delete(cut);

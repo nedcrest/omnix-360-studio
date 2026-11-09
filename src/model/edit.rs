@@ -214,28 +214,34 @@ impl Project {
         self.overlays.iter().chain(&self.text)
     }
 
-    /// The lane of `track` the player shows, if there is one yet.
-    pub fn lane(&self, track: Track) -> Option<&Lane> {
+    /// `track`'s lanes (gap 70), lowest first: a lane is drawn over the
+    /// ones before it, and shown above them on the timeline.
+    pub fn track_lanes(&self, track: Track) -> &[Lane] {
         match track {
-            Track::Overlay => self.overlays.first(),
-            Track::Text => self.text.first(),
+            Track::Overlay => &self.overlays,
+            Track::Text => &self.text,
         }
     }
 
-    /// The lane of `track` the player shows, made if there's none yet.
-    pub fn lane_mut(&mut self, track: Track) -> &mut Lane {
+    /// Lane `l` of `track`, if there is one.
+    pub fn lane(&self, track: Track, l: usize) -> Option<&Lane> {
+        self.track_lanes(track).get(l)
+    }
+
+    /// Lane `l` of `track`, made (with any below it) if it isn't there yet.
+    pub fn lane_mut(&mut self, track: Track, l: usize) -> &mut Lane {
         let lanes = match track {
             Track::Overlay => &mut self.overlays,
             Track::Text => &mut self.text,
         };
-        if lanes.is_empty() {
+        while lanes.len() <= l {
             lanes.push(Lane::default());
         }
-        &mut lanes[0]
+        &mut lanes[l]
     }
 
-    pub fn item(&self, (track, i): ItemRef) -> Option<&Item> {
-        self.lane(track)?.items.get(i)
+    pub fn item(&self, (track, l, i): ItemRef) -> Option<&Item> {
+        self.lane(track, l)?.items.get(i)
     }
 
     /// Splits cut `i` at clip time `t`. Both halves keep all its keyframes,

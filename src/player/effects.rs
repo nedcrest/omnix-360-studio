@@ -625,7 +625,7 @@ impl App {
         use super::automation_ui::LaneOf;
         match self.effect_target()? {
             (Target::Cut(_), _) => Some(LaneOf::Cuts),
-            (Target::Overlay((track, _)), _) => Some(LaneOf::Track(track)),
+            (Target::Overlay((track, _, _)), _) => Some(LaneOf::Track(track)),
         }
     }
 
@@ -783,7 +783,7 @@ mod tests {
 
     #[test]
     fn the_panel_edits_the_selection_only_with_the_playhead_on_it() {
-        let item = Selected { target: Target::Overlay((crate::overlay::Track::Text, 0)), at: 10.0, len: 4.0, start: 1.0 };
+        let item = Selected { target: Target::Overlay((crate::overlay::Track::Text, 0, 0)), at: 10.0, len: 4.0, start: 1.0 };
         assert!(focus(12.0, Some(item), Some((3, 5.0))) == Focus::On(item.target, 3.0), "on it, its own clock");
         assert!(focus(14.0, Some(item), None) == Focus::On(item.target, 5.0), "its end counts");
         assert!(focus(15.0, Some(item), Some((3, 5.0))) == Focus::Apart(item.target), "off it: not the cut under the playhead");

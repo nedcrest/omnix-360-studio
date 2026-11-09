@@ -85,22 +85,28 @@ impl App {
     pub(super) fn overlay_handles(&self) -> handles::Handles {
         let t = self.position();
         let playing = self.playing();
-        let items = [crate::overlay::Track::Overlay, crate::overlay::Track::Text]
-            .into_iter()
+        let lanes = [crate::overlay::Track::Overlay, crate::overlay::Track::Text].into_iter().flat_map(|track| (0..self.edit.track_lanes(track).len()).map(move |l| (track, l)));
+        let items = lanes
             .filter(|_| !playing)
-            .filter_map(|track| {
+            .filter_map(|(track, l)| {
                 // Bars have no place to drag.
-                let (i, item) = self.edit.lane(track)?.at(t).filter(|(_, it)| it.bars.is_none())?;
+                let (i, item) = self.edit.lane(track, l)?.at(t).filter(|(_, it)| it.bars.is_none())?;
                 let (_, picture) = self.overlay_pictures.get(&item.key())?.clone()?;
-                Some(((track, i), crate::overlay::look(item, t).0, picture))
+                Some(((track, l, i), crate::overlay::look(item, t).0, picture))
             })
             .collect();
         handles::Handles { items, selected: self.selection.item(&self.edit) }
     }
 
-    /// The timeline's blocks for `track`'s lane.
-    pub(super) fn overlay_blocks(&self, track: crate::overlay::Track) -> Vec<timeline::OverlayBlock> {
-        self.edit.lane(track).map_or_else(Vec::new, |lane| {
+    /// Which lane of `track` something added goes on (gap 70): the
+    /// selected item's, if it's on that track, else the lowest.
+    fn adding_lane(&self, track: crate::overlay::Track) -> usize {
+        self.selection.item(&self.edit).filter(|r| r.0 == track).map_or(0, |r| r.1)
+    }
+
+    /// The timeline's blocks for lane `l` of `track`.
+    pub(super) fn overlay_blocks(&self, track: crate::overlay::Track, l: usize) -> Vec<timeline::OverlayBlock> {
+        self.edit.lane(track, l).map_or_else(Vec::new, |lane| {
             lane.items
                 .iter()
                 .map(|it| timeline::OverlayBlock { item: it.clone(), label: it.name(), thumb: self.overlay_thumbs.get(&it.key()).cloned() })
@@ -132,7 +138,7 @@ impl App {
                 // Folded, the lane opens to show what came.
                 self.folds.overlay = false;
                 // One after another from the playhead, each where it fits.
-                let added = self.op(Op::Item(ItemOp::AddPictures { inputs: paths, at: self.position(), len: ffmpeg::PICTURE_SECONDS }));
+                let added = self.op(Op::Item(ItemOp::AddPictures { inputs: paths, at: self.position(), len: ffmpeg::PICTURE_SECONDS, lane: self.adding_lane(crate::overlay::Track::Overlay) }));
                 if let Some(id) = added.and_then(|o| o.made) {
                     self.selection = Selection::Item(id);
                 }
@@ -148,14 +154,14 @@ impl App {
                     None => {}
                 }
             }
-            Message::OverlayMove((track, i), at) => {
-                if let Some(item) = self.edit.item((track, i)).map(|it| it.id) {
+            Message::OverlayMove(r, at) => {
+                if let Some(item) = self.edit.item(r).map(|it| it.id) {
                     self.edit.begin();
-                    self.op(Op::Item(ItemOp::Move { item, at }));
+                    self.op(Op::Item(ItemOp::Move { item, at, lane: None }));
                 }
             }
-            Message::OverlayTrim((track, i), start, t) => {
-                if let Some(item) = self.edit.item((track, i)).map(|it| it.id) {
+            Message::OverlayTrim(r, start, t) => {
+                if let Some(item) = self.edit.item(r).map(|it| it.id) {
                     self.edit.begin();
                     self.op(Op::Item(ItemOp::Trim { item, end: if start { End::In } else { End::Out }, t, most: ffmpeg::PICTURE_MOST }));
                 }
@@ -196,7 +202,7 @@ impl App {
             }
             Message::AddText => {
                 self.folds.text = false;
-                let added = self.op(Op::Item(ItemOp::AddText { text: Default::default(), at: self.position(), len: ffmpeg::PICTURE_SECONDS }));
+                let added = self.op(Op::Item(ItemOp::AddText { text: Default::default(), at: self.position(), len: ffmpeg::PICTURE_SECONDS, lane: self.adding_lane(crate::overlay::Track::Text) }));
                 if let Some(id) = added.and_then(|o| o.made) {
                     self.selection = Selection::Item(id);
                 }
@@ -208,7 +214,7 @@ impl App {
             // in the Effects panel.
             Message::AddBars => {
                 self.folds.overlay = false;
-                let added = self.op(Op::Item(ItemOp::AddBars { bars: Default::default(), at: self.position(), len: 10.0 }));
+                let added = self.op(Op::Item(ItemOp::AddBars { bars: Default::default(), at: self.position(), len: 10.0, lane: self.adding_lane(crate::overlay::Track::Overlay) }));
                 if let Some(id) = added.and_then(|o| o.made) {
                     self.selection = Selection::Item(id);
                 }

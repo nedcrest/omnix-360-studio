@@ -21,15 +21,16 @@ use std::sync::Arc;
 
 /// Which kind of track: pictures (and later video), or text, which lies
 /// over them.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
 pub enum Track {
     Overlay,
     Text,
 }
 
-/// An item of the edit's overlays: its track (the first lane of it, the
-/// one the player shows) and its place in it.
-pub type ItemRef = (Track, usize);
+/// An item of the edit's overlays: its track, its lane there (0 the
+/// lowest, gap 70) and its place in it.
+pub type ItemRef = (Track, usize, usize);
 
 /// One overlay lane: items one after another, never two at once.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]

@@ -1526,7 +1526,7 @@ impl OverlayLane {
         }
         match self.item_at(p.x, b) {
             None => OverlayHit::Empty,
-            Some(item) => match self.edge_at(item, p.x, b).filter(|_| self.0.picked.item() == Some((self.1, item))) {
+            Some(item) => match self.edge_at(item, p.x, b).filter(|_| self.0.picked.item() == Some((self.1, 0, item))) {
                 Some(start) => OverlayHit::Edge { item, start },
                 None => OverlayHit::Item(item),
             },
@@ -1608,7 +1608,7 @@ impl canvas::Program<Message> for OverlayLane {
             Mouse(mouse::Event::ButtonPressed(mouse::Button::Right)) if self.1 == Track::Overlay => {
                 let p = cursor.position_in(bounds)?;
                 let item = self.item_at(p.x, bounds).filter(|_| p.y < self.0.rows.overlay)?;
-                Some(canvas::Action::publish(Message::Info(super::info::Of::Overlay((self.1, item)))).and_capture())
+                Some(canvas::Action::publish(Message::Info(super::info::Of::Overlay((self.1, 0, item)))).and_capture())
             }
             Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
                 let p = cursor.position_in(bounds)?;
@@ -1634,11 +1634,11 @@ impl canvas::Program<Message> for OverlayLane {
                     OverlayHit::Edge { item, start } => {
                         let o = &self.blocks()[item];
                         *drag = OverlayDrag::Trim { item, start, x0: p.x, from: if start { o.item.start } else { o.item.start + o.len() }, per_px };
-                        Message::OverlaySelect(Some((self.1, item)))
+                        Message::OverlaySelect(Some((self.1, 0, item)))
                     }
                     OverlayHit::Item(item) => {
                         *drag = OverlayDrag::Move { item, x0: p.x, at: self.blocks()[item].item.at, per_px };
-                        Message::OverlaySelect(Some((self.1, item)))
+                        Message::OverlaySelect(Some((self.1, 0, item)))
                     }
                 };
                 Some(canvas::Action::publish(message).and_capture())
@@ -1651,18 +1651,18 @@ impl canvas::Program<Message> for OverlayLane {
                         let (track, item) = (self.1, *item);
                         let at = *at + (x - *x0) as f64 * *per_px;
                         let len = self.blocks()[item].len();
-                        snapped(t.snap(&[at, at + len], *per_px, |of| of == Of::Item(track, item)), |by| Message::OverlayMove((track, item), at + by))
+                        snapped(t.snap(&[at, at + len], *per_px, |of| of == Of::Item(track, item)), |by| Message::OverlayMove((track, 0, item), at + by))
                     }
                     OverlayDrag::Trim { item, start, x0, from, per_px } => {
                         let (track, item, start) = (self.1, *item, *start);
                         let own_t = *from + (x - *x0) as f64 * *per_px;
                         let o = &self.blocks()[item];
-                        snapped(t.snap(&[o.item.at - o.item.start + own_t], *per_px, |of| of == Of::Item(track, item)), |by| Message::OverlayTrim((track, item), start, own_t + by))
+                        snapped(t.snap(&[o.item.at - o.item.start + own_t], *per_px, |of| of == Of::Item(track, item)), |by| Message::OverlayTrim((track, 0, item), start, own_t + by))
                     }
                     OverlayDrag::Key { item, effects, key } => {
                         let o = &self.blocks()[*item];
                         let at = self.0.t(x, bounds).clamp(o.item.at, o.item.at + o.len());
-                        Message::OverlayKeyMove((self.1, *item), *effects, *key, o.item.start + at - o.item.at)
+                        Message::OverlayKeyMove((self.1, 0, *item), *effects, *key, o.item.start + at - o.item.at)
                     }
                     OverlayDrag::Auto(motion, d) => {
                         let message = self.lanes(*motion).drag(d, Point::new(x, position.y - bounds.y), bounds, t.held.shift());
@@ -1703,7 +1703,7 @@ impl canvas::Program<Message> for OverlayLane {
             if r < 0.0 || l > bounds.width {
                 continue;
             }
-            let selected = Some((self.1, i)) == t.picked.item();
+            let selected = Some((self.1, 0, i)) == t.picked.item();
             coloured_block(&mut frame, (l, r), (top, h), colour, selected);
             if selected {
                 // A picture or text has no end of its own: footage both ways

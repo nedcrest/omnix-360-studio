@@ -2,10 +2,10 @@
 //! sliders (or, with an overlay selected, that overlay's place and effects),
 //! and the edit's fades.
 //!
-//! Moving a slider sets the effect keyframe at the playhead, making one
-//! there if there isn't (holding the look there so far, so nothing else
-//! moves): a cut's single keyframe is its look throughout, and more of them
-//! animate it.
+//! Moving a slider sets that effect for the whole cut or item
+//! (`KeyOp::EffectValue`): it makes no keyframe (the user, 2026-11-09).
+//! Animating an effect is the automation lanes' (gap 39); keys from
+//! before still play, and a slider moved sets its effect in all of them.
 
 use super::{App, Message, Selection, icon_button, tip};
 use crate::grade::{EffectKey, Grade, grade_at};
@@ -14,7 +14,6 @@ use crate::model::ops::keys::{EXACT, Graded, KeyOp, Line};
 use crate::model::ops::sound::SoundOp;
 use crate::model::ops::{End, Op, items::ItemOp};
 use crate::text::{Colour, Outline, Text, TextAlign};
-use crate::view::Ease;
 use iced::widget::{button, column, container, pick_list, row, rule, scrollable, slider, text, toggler, tooltip};
 use iced::{Alignment, Element, Length};
 
@@ -26,10 +25,6 @@ pub enum EffectMsg {
     Set(usize, f64),
     /// A slider let go: the next move is a change of its own for undo.
     Done,
-    /// A keyframe at the playhead holding the effects there.
-    Key,
-    DeleteKey,
-    Ease(Ease),
     /// Effect `i` back to none here, or the cut's effects all gone.
     Reset(Option<usize>),
     /// The selected overlay's place value `i` (as in `PLACE`) moved to this.
@@ -59,7 +54,7 @@ pub enum EffectMsg {
     Jump(usize, f64),
     /// Cut `cut`'s effect keyframe `key` dragged to clip time `t`.
     KeyMove(usize, usize, f64),
-    /// The cut's LUT (how much of it is effect `LUT`, keyframed).
+    /// The cut's LUT (how much of it is effect `LUT`).
     Lut(LutChoice),
 }
 
@@ -199,12 +194,6 @@ impl App {
     }
 
 
-    /// The effect keyframe of `target` at its time `t`, if there's one.
-    fn effect_key_at(&self, target: Target, t: f64) -> Option<usize> {
-        let tolerance = self.tolerance();
-        self.effects_of(target).iter().position(|k| (k.t - t).abs() <= tolerance)
-    }
-
     /// Overlay `i`'s motion keyframe at its time `t`, if there's one.
     fn motion_key_at(&self, i: crate::overlay::ItemRef, t: f64) -> Option<usize> {
         let tolerance = self.tolerance();
@@ -223,16 +212,13 @@ impl App {
         there.then_some((target, t))
     }
 
-    /// Sets `target`'s effects with `change`, at the playhead the drag
-    /// started at: in the keyframe there, made from the look so far if
-    /// there's none.
-    fn change_effects(&mut self, starting: bool, change: impl FnOnce(&mut Grade)) {
-        let Some((target, t)) = self.pinned(starting) else { return };
-        let keys = self.effects_of(target);
-        let mut grade = self.effect_key_at(target, t).map_or_else(|| grade_at(keys, t), |k| keys[k].grade);
-        change(&mut grade);
-        let (on, tolerance) = (self.graded(target), self.tolerance());
-        self.op(Op::Key(KeyOp::Effects { on, t, grade, tolerance }));
+    /// Effect `p` (as in `Grade::values`) at `v` on the target the drag
+    /// started on, for the whole of it (`KeyOp::EffectValue`): an edit sets
+    /// the value, it doesn't make a key (user, 2026-11-09).
+    fn set_effect(&mut self, starting: bool, p: usize, v: f64) {
+        let Some((target, _)) = self.pinned(starting) else { return };
+        let on = self.graded(target);
+        self.op(Op::Key(KeyOp::EffectValue { on, param: crate::grade::NAMES[p].to_owned(), value: v }));
     }
 
     /// Sets the selected overlay's place with `change`, at the playhead the
@@ -245,23 +231,6 @@ impl App {
         change(&mut place);
         let (item, tolerance) = (it.id, self.tolerance());
         self.op(Op::Key(KeyOp::Motion { item, t, place, tolerance }));
-    }
-
-    /// The op `make` builds for each key at `t` on `target`: its effect
-    /// key, and an overlay's motion key.
-    fn on_keys_at(&self, target: Target, t: f64, make: impl Fn(Line, f64, f64) -> KeyOp) -> Vec<Op> {
-        let tolerance = self.tolerance();
-        let mut ops = Vec::new();
-        if self.effect_key_at(target, t).is_some() {
-            ops.push(Op::Key(make(Line::Effects(self.graded(target)), t, tolerance)));
-        }
-        if let Target::Overlay(i) = target
-            && self.motion_key_at(i, t).is_some()
-            && let Some(it) = self.edit.item(i)
-        {
-            ops.push(Op::Key(make(Line::Motion(it.id), t, tolerance)));
-        }
-        ops
     }
 
     /// Applies `ops` as one undo step, showing a refusal.
@@ -286,11 +255,7 @@ impl App {
             EffectMsg::Set(p, v) => {
                 let starting = !self.edit.changing();
                 self.edit.begin();
-                self.change_effects(starting, |g| {
-                    let mut values = g.values();
-                    values[p] = v;
-                    *g = Grade::from_values(values);
-                });
+                self.set_effect(starting, p, v);
                 // A shape is a press, not a drag: its own undo step at once.
                 if p == crate::grade::SHAPE {
                     self.edit.commit();
@@ -369,31 +334,7 @@ impl App {
                 }
                 self.op(Op::Item(ItemOp::SetText { item, text }));
             }
-            // On an overlay a keyframe holds both where it is and its look.
-            EffectMsg::Key => {
-                // Both keys one undo step.
-                self.edit.begin();
-                self.change_effects(true, |_| {});
-                self.change_place(true, |_| {});
-                self.edit.commit();
-            }
-            EffectMsg::DeleteKey => {
-                let Some((target, t)) = target else { return };
-                let ops = self.on_keys_at(target, t, |line, t, tolerance| KeyOp::Delete { line, t, tolerance });
-                self.ops(&ops);
-            }
-            EffectMsg::Ease(ease) => {
-                let Some((target, t)) = target else { return };
-                let ops = self.on_keys_at(target, t, |line, t, tolerance| KeyOp::Ease { line, t, ease, tolerance });
-                self.ops(&ops);
-            }
-            EffectMsg::Reset(Some(p)) => {
-                self.change_effects(true, |g| {
-                    let mut values = g.values();
-                    values[p] = crate::grade::NEUTRAL[p];
-                    *g = Grade::from_values(values);
-                });
-            }
+            EffectMsg::Reset(Some(p)) => self.set_effect(true, p, crate::grade::NEUTRAL[p]),
             EffectMsg::ResetPlace(p) => {
                 self.change_place(true, |place| {
                     let mut values = place.values();
@@ -523,10 +464,10 @@ impl App {
         if self.selection.item(&self.edit).is_some() {
             self.selection = Selection::None;
         }
-        self.change_effects(true, |g| {
-            g.temperature = temperature;
-            g.tint = tint;
-        });
+        self.edit.begin();
+        self.set_effect(true, 4, temperature);
+        self.set_effect(false, 5, tint);
+        self.edit.commit();
     }
 
     /// Cut `i`'s LUT, and its strength in `grade` (the effects at the
@@ -598,7 +539,7 @@ impl App {
         ]
         .spacing(4);
         if cut.lut.is_some() {
-            // An effect like the others, keyed at the playhead as it moves.
+            // An effect like the others, for the whole cut.
             let v = grade.lut;
             let reset = button(text("↺").size(13)).padding([0, 5]).style(button::text).on_press_maybe((v != 1.0).then(|| Message::Effect(EffectMsg::Reset(Some(LUT)))));
             col = col.push(tip(
@@ -607,7 +548,7 @@ impl App {
                     slider(0.0..=1.0, v, |v| Message::Effect(EffectMsg::Set(LUT, v))).step(0.01).on_release(Message::Effect(EffectMsg::Done)),
                 ]
                 .spacing(2),
-                text("How much of the LUT: 100 % is all of it, less mixes in the picture as filmed. Keyframed with the effects, so it can fade in or out"),
+                text("How much of the LUT: 100 % is all of it, less mixes in the picture as filmed. For the whole cut"),
                 tooltip::Position::Left,
             ));
         }
@@ -618,12 +559,10 @@ impl App {
         let m = |e: EffectMsg| Message::Effect(e);
         let target = self.effect_target();
         let grade = target.map(|(tg, t)| grade_at(self.effects_of(tg), t)).unwrap_or_default();
-        let key = target.and_then(|(tg, t)| self.effect_key_at(tg, t));
         let overlay = target.and_then(|(tg, t)| match tg {
             Target::Overlay(i) => Some((i, t)),
             Target::Cut(_) => None,
         });
-        let motion_key = overlay.and_then(|(i, t)| self.motion_key_at(i, t));
         let enabled = target.is_some();
         let mut sliders = column![].spacing(6);
         // Bars: their own values; an overlay's place first: where it is is
@@ -670,40 +609,22 @@ impl App {
             },
             None => "No cut".to_owned(),
         };
-        let (keys, tools) = self.effect_tools(target, key, motion_key, overlay);
+        let tools = self.effect_tools(target);
         let close = tip(button(text("✕").size(14)).padding([0, 6]).style(button::text).on_press(m(EffectMsg::Toggle)), text("Close (G)"), tooltip::Position::Bottom);
         let mut body = column![row![text("Effects").size(18).width(Length::Fill), close].align_y(Alignment::Center), text(cut_name).size(13)].spacing(10).padding(12);
         if let Some((Target::Cut(i), _)) = target {
             body = body.push(self.lut_controls(i, &grade));
             body = body.push(self.style_controls(i));
         }
-        let body = body.extend([column![sliders, keys, tools, rule::horizontal(1), self.edit_and_correction()].spacing(10).into()]);
+        let body = body.extend([column![sliders, tools, rule::horizontal(1), self.edit_and_correction()].spacing(10).into()]);
         container(scrollable(body)).width(WIDTH).height(Length::Fill).into()
     }
 
-    /// The effect keyframe's buttons and ease, and the cut's tools (white
-    /// balance, to all cuts, reset).
-    fn effect_tools(&self, target: Option<(Target, f64)>, key: Option<usize>, motion_key: Option<usize>, overlay: Option<(crate::overlay::ItemRef, f64)>) -> (Element<'_, Message>, Element<'_, Message>) {
+    /// The cut's tools: white balance, to all cuts, reset.
+    fn effect_tools(&self, target: Option<(Target, f64)>) -> Element<'_, Message> {
         let m = |e: EffectMsg| Message::Effect(e);
-        let (on_cut, enabled) = (matches!(target, Some((Target::Cut(_), _))), target.is_some());
-        let any_key = key.or(motion_key);
-        let ease = match (key, motion_key, target) {
-            (Some(k), _, Some((tg, _))) => Some(self.effects_of(tg)[k].ease),
-            (None, Some(k), _) => overlay.and_then(|(i, _)| self.edit.item(i)).map(|it| it.motion[k].ease),
-            _ => None,
-        };
-        let keys = row![
-            tip(icon_button(super::KEY_ADD, enabled.then(|| m(EffectMsg::Key))), text("An effect keyframe here, holding the effects as they are; the sliders also make one as they move"), tooltip::Position::Bottom),
-            tip(icon_button(super::KEY_DELETE, any_key.map(|_| m(EffectMsg::DeleteKey))), text("Delete the effect keyframe here"), tooltip::Position::Bottom),
-            tip(
-                pick_list(&Ease::ALL[..], ease, |e| Message::Effect(EffectMsg::Ease(e))).placeholder("Ease").width(96),
-                text("How the effects move on from this keyframe to the next"),
-                tooltip::Position::Bottom,
-            ),
-        ]
-        .spacing(6)
-        .align_y(Alignment::Center);
-        let tools = row![
+        let on_cut = matches!(target, Some((Target::Cut(_), _)));
+        row![
             tip(icon_button(super::PICK, on_cut.then(|| m(EffectMsg::PickWhite))), text("White balance: draw a box over something that should be grey or white (snow, a cloud)"), tooltip::Position::Bottom),
             tip(icon_button(super::TO_ALL_CUTS, on_cut.then(|| m(EffectMsg::ToAll))), text("To all cuts: give every other cut this look (as at the playhead), replacing their effects"), tooltip::Position::Bottom),
             tip(
@@ -718,8 +639,8 @@ impl App {
             ),
         ]
         .spacing(6)
-        .align_y(Alignment::Center);
-        (keys.into(), tools.into())
+        .align_y(Alignment::Center)
+        .into()
     }
 
     /// The edit's fades, and the rolling-shutter correction.

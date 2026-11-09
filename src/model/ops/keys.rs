@@ -57,6 +57,11 @@ pub enum KeyOp {
     /// The look at `t`: the key within `tolerance` set to `grade`, or a new
     /// one there.
     Effects { on: Graded, t: f64, grade: Grade, #[serde(default = "half_a_frame")] tolerance: f64 },
+    /// One effect (`grade::NAMES`: "exposure", "vignette"…) at `value` for
+    /// the whole cut or item: in every key it has, or a key of its own at
+    /// its start if it has none (the user, 2026-11-09: an edit in Effects
+    /// sets the value, it doesn't key it; automation goes on lanes, 39).
+    EffectValue { on: Graded, param: String, value: f64 },
     /// An item's place at `t`, as `Effects`.
     Motion { item: Id, t: f64, place: Place, #[serde(default = "half_a_frame")] tolerance: f64 },
     /// How the key at `t` moves on to the next.
@@ -78,6 +83,26 @@ pub(super) fn apply(p: &mut Project, op: &KeyOp) -> Result<Outcome, OpError> {
             let keys = &mut find_cut(p, *cut)?.keyframes;
             keys.set(*t, *view, *tolerance, &|f, _| aim(aims, f));
             said(format!("cut #{cut}: view keyed at {t:.2} s"))
+        }
+        KeyOp::EffectValue { on, param, value } => {
+            let k = crate::grade::NAMES.iter().position(|n| n == param).ok_or_else(|| OpError::NotFound(format!("effect {param:?}")))?;
+            if !value.is_finite() {
+                return Err(OpError::Invalid(format!("{param} {value} isn't a number")));
+            }
+            let start = match *on {
+                Graded::Cut(id) => find_cut(p, id)?.start,
+                Graded::Item(id) => find_item(p, id)?.start,
+            };
+            let keys = effects(p, *on)?;
+            if keys.is_empty() {
+                keys.push(EffectKey { t: start, grade: Grade::default(), ease: Default::default() });
+            }
+            for key in keys.iter_mut() {
+                let mut values = key.grade.values();
+                values[k] = *value;
+                key.grade = Grade::from_values(values);
+            }
+            said(format!("{}: {param} {value}", name(*on)))
         }
         KeyOp::Follow { cut, t, follow, tolerance, aims } => {
             let keys = &mut find_cut(p, *cut)?.keyframes;
@@ -206,8 +231,7 @@ mod tests {
     use crate::project::Cut;
 
     fn edit() -> Edit {
-        let mut p = Project::default();
-        p.cuts = vec![Cut::new("a.mp4".into(), 1.0, 5.0), Cut::new("b.mp4".into(), 0.0, 3.0)];
+        let mut p = Project { cuts: vec![Cut::new("a.mp4".into(), 1.0, 5.0), Cut::new("b.mp4".into(), 0.0, 3.0)], ..Default::default() };
         p.settle_ids();
         let mut e = Edit::default();
         e.replace(p);
@@ -273,4 +297,22 @@ mod tests {
         e.apply(&key(KeyOp::Clear { on: Graded::Cut(2) })).unwrap();
         assert!(e.cuts[1].effects.is_empty());
     }
+
+    #[test]
+    fn an_effect_value_holds_for_the_whole_cut_and_makes_no_key() {
+        let mut e = edit();
+        let on = Graded::Cut(e.cuts[0].id);
+        let value = |param: &str, value| Op::Key(KeyOp::EffectValue { on, param: param.into(), value });
+        e.apply(&value("exposure", 0.5)).unwrap();
+        e.apply(&value("vignette", 0.3)).unwrap();
+        assert_eq!(e.cuts[0].effects.len(), 1, "one key, at its start, for the whole cut");
+        assert_eq!((e.cuts[0].effects[0].t, e.cuts[0].effects[0].grade.exposure, e.cuts[0].effects[0].grade.vignette), (1.0, 0.5, 0.3));
+        // Keys from before: the value in each, the rest of them kept.
+        e.cuts[0].effects.push(EffectKey { t: 4.0, grade: Grade { exposure: -1.0, contrast: 0.4, ..Default::default() }, ease: Default::default() });
+        e.apply(&value("exposure", 0.2)).unwrap();
+        assert!(e.cuts[0].effects.iter().all(|k| k.grade.exposure == 0.2) && e.cuts[0].effects[1].grade.contrast == 0.4);
+        assert!(e.apply(&value("sparkle", 1.0)).is_err() && e.apply(&value("exposure", f64::NAN)).is_err());
+        check(&e).unwrap();
+    }
+
 }

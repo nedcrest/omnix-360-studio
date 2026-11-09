@@ -97,6 +97,11 @@ fn is_reach(v: &f64) -> bool {
 /// The vignette's shapes, by `Grade::vignette_shape`.
 pub const VIGNETTES: [&str; 4] = ["Round", "Top", "Bottom", "Sides"];
 
+/// Each of `Grade::values` by its name in the project (`KeyOp::EffectValue`).
+pub const NAMES: [&str; 14] = [
+    "exposure", "contrast", "highlights", "shadows", "temperature", "tint", "saturation", "vibrance", "vignette", "opacity", "lut", "vignette_shape", "vignette_reach", "vignette_soft",
+];
+
 /// Where `Grade::values` holds the vignette's amount, and its shape (held,
 /// not blended; its reach and softness follow).
 pub const VIGNETTE: usize = 8;

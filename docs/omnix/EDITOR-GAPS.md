@@ -634,6 +634,20 @@ shape, not only its ends.
 
 ### 37. Object tracking — large (user, 2026-11-01); part of gap 53 (53b) since 2026-11-02
 
+**The contract, built 2026-11-10** (`778c86c`, the user: "a contract for
+objects' motion, for future tracking and tying objects to it"): a
+tracker's output is `automation::ObjectTrack` on its cut (`Cut::tracks`:
+a name, samples of clip time with the object's centre across and down the
+frame as shown, 0..1 as an overlay's place, its size and turn when known,
+a confidence), written by `CutOp::Track` (the tracker, or an agent).
+Tying an overlay or text to it is `AutoOp::Follow`: its place values
+(x, y, size, rotation) get automation clips from the samples where both
+run, an offset added, marked `follows` (cut, track, offset) so they can
+be made again when the cut moves. So a tracker only has to write tracks;
+playing and exporting what follows them is automation already. The
+existing `omnix track` (a coloured subject on a 360 clip, for the view's
+follow) is the other half of this gap, the view's.
+
 User: "object tracking" (recalled with the speed ideas; no detail yet).
 
 What exists: `omnix track` and the colour-track picker follow one
@@ -694,20 +708,27 @@ effect rows of their own: the same there. Old keys are read into clips.
 In the milestone «Ефекти, колір і розумний звук», after the Effects
 panel's layout is sorted (the user's next ask).
 
-**Built 2026-11-10 for cuts, waiting for the check** (`60d1189` core,
-`9491af2` lanes): `automation.rs` (`AutoClip`: the value's name, from..to
-in clip time, eased points; `graded`/`placed` over the set values,
-read through `Cut::grade_at` and `overlay::look`); old effect and motion
-keys read into clips spanning their cut or item (looks the same);
-`Op::Auto` (add flat at the value there, move, trim, delete, point
-set/move, delete, ease), no overlap of one value's clips (`check`),
-in the property run and `describe`. The timeline: the Effects row folds
-open into a lane per moved effect, or one asked for by the ◆ beside its
-slider in the panel (`timeline/auto.rs`); drag over empty lane draws a
-clip, a click in a clip adds a point, drag a point, a clip or its edge,
-Ctrl+click deletes a point, a right-click turns a point's ease or takes
-a clip away. Next: the same on the text and overlay lanes' own rows
-(effects and place); then the View row (framing keys) by the same lanes.
+**Built 2026-11-10, waiting for the check** (`60d1189` core, `9491af2`
+cut lanes, `4203205` values on points and in the sliders, marks on the
+folded row, `29ce7cd` text and overlay lanes): `automation.rs`
+(`AutoClip`: the value's name, from..to in clip or own time, eased
+points, `follows` if made from a track); `graded`/`placed` over the set
+values, read through `Cut::grade_at` and `overlay::look`; old effect and
+motion keys read into clips spanning their cut or item; `Op::Auto` (add
+flat at the value there, move, trim, delete, point set/move, delete,
+ease, follow), no overlap of one value's clips (`check`), in the
+property run and `describe`. The lanes are one piece (`timeline/auto.rs`,
+`Lanes` over owners, a cut or an item, and values, an effect or a place
+value) under the cuts' Effects row and each overlay and text lane's own;
+the ◆ beside a slider in the Effects panel (effects and place) adds one;
+each Effects row folds them and, folded, marks the clips and points. On a
+lane: drag over empty lane draws a clip, a click in a clip adds a point,
+drag a point, a clip or its edge, a point's value tag up or down (Shift
+finer), Ctrl+click deletes a point, a right-click turns a point's ease or
+takes a clip away. The panel's sliders show what plays at the playhead
+and set the clip's point where a clip covers it. Next: the View row
+(framing keys) by the same lanes; a clip made from a track made again
+when its cut moves.
 
 **What it looks like.**
 - «Effects» and «View» stay as one thin row each, with a ▸ to fold open.
@@ -1173,6 +1194,12 @@ Milestone «Ефекти, колір і розумний звук», with gap 14
 
 ### 70. The text and overlay lanes as groups of several lanes — idea (user, 2026-11-04)
 
+The user again, 2026-11-10: "texts and overlays — maybe groups, a Texts
+group and an Overlays group, and inside them 1+ lanes in the editor
+(several texts can be on one frame, several overlays, pictures, GIFs on
+one frame too)." The automation lanes (39) already belong to whichever
+overlay or text lane an item is on, so they carry over to several lanes.
+
 User: "turn a lane into a group of several lanes. Example: we arrive
 somewhere, the place's name and the time slide in at the side, and we
 talk at the same time, so subtitles run alongside. The same for the
@@ -1450,6 +1477,12 @@ cutaways, a program of its own) is another thing: it makes new footage.
   more (8 mm, CRT, duotone). Built as the transitions are: one function
   on the CPU and its WGSL twin, a GPU test; their knobs as `Look::knobs`
   have. The glitch's tearing (`transition::tear`) is a start.
+- **What editors animate on text and pictures** (looked at 2026-11-10:
+  CapCut, Premiere, Final Cut, Filmora, Firefly): position, scale,
+  rotation, opacity (all automatable here now, gap 39), colour; then blur
+  (a «blur in»), letter spacing, shadow, typewriter. To add, each drawn
+  on the GPU and the CPU alike: an overlay's blur, a reveal (typewriter
+  for text, a wipe for a picture), text colour, letter spacing.
 - **Text animation presets**: in and out (type-on, fade by letters,
   slide, pop, wobble), as named sets of the text item's motion keys, so
   they stay editable; perhaps per-letter later.

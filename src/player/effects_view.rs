@@ -68,7 +68,7 @@ impl Group {
     pub fn params(self, item: bool) -> &'static [usize] {
         use crate::grade::{BLUR, REVEAL};
         match self {
-            Group::Light => &[0, 1, 2, 3],
+            Group::Light => &[16, 17, 0, 1, 2, 3],
             Group::Colour => &[4, 5, 6, 7],
             Group::Look => &[LUT],
             Group::Finish if item => &[8, 11, 12, 13],
@@ -123,8 +123,14 @@ impl App {
         let grade = cut.map(|(i, t)| self.shown_grade(Target::Cut(i), t)).unwrap_or_default();
         let enabled = cut.is_some();
         let picker = tip(icon_button(super::PICK, enabled.then_some(Message::Effect(EffectMsg::PickWhite))), text("White balance: draw a box over something that should be grey or white (snow, a cloud)"), tooltip::Position::Left);
+        let auto = tip(
+            button(text("Auto").size(12)).padding([2, 8]).style(button::secondary).on_press_maybe((enabled && self.scope.lock().is_ok_and(|f| f.latest.is_some())).then_some(Message::Effect(EffectMsg::AutoLevels))),
+            text("Black and White from the Scopes' measure: the picture's darkest to black, its brightest to white (open Scopes first)"),
+            tooltip::Position::Left,
+        );
+        let levels = column![row![text("Levels").size(13).width(Length::Fill), auto].align_y(Alignment::Center), self.sliders(&grade, &[16, 17], enabled)].spacing(6);
         let mut groups = vec![
-            self.group(Group::Light, self.sliders(&grade, &[0, 1, 2, 3], enabled)),
+            self.group(Group::Light, column![levels, self.sliders(&grade, &[0, 1, 2, 3], enabled)].spacing(10).into()),
             self.group(Group::Colour, column![row![text("White balance").size(13).width(Length::Fill), picker].align_y(Alignment::Center), self.sliders(&grade, &[4, 5, 6, 7], enabled)].spacing(6).into()),
         ];
         if let Some((i, _)) = cut {
@@ -157,7 +163,7 @@ impl App {
             self.group(Group::Show, self.sliders(&grade, &[9, crate::grade::REVEAL, crate::grade::BLUR], true)),
             self.group(Group::Animate, self.animate_controls(i)),
             self.group(Group::Look, self.style_tiles(Target::Overlay(i))),
-            self.group(Group::Light, self.sliders(&grade, &[0, 1, 2, 3], true)),
+            self.group(Group::Light, self.sliders(&grade, &[16, 17, 0, 1, 2, 3], true)),
             self.group(Group::Colour, self.sliders(&grade, &[4, 5, 6, 7], true)),
             self.group(Group::Finish, self.vignette_row(&grade, true)),
         ]);

@@ -21,6 +21,9 @@ use iced::{Alignment, Element, Length};
 pub enum EffectMsg {
     /// Open or close the panel.
     Toggle,
+    /// Levels set from the scopes' measure (gap 14): the picture's darkest
+    /// to black, its brightest to white.
+    AutoLevels,
     /// The playhead onto the selected clip, the panel's to edit (gap 93).
     GoToSelected,
     /// Effect `i` (as in `PARAMS`) moved to this value.
@@ -106,7 +109,7 @@ impl std::fmt::Display for LutChoice {
 
 /// Each effect as the panel shows it: its name and what it does (the first
 /// eleven of `Grade::values`; their ranges `grade::RANGES`).
-pub(super) const PARAMS: [(&str, &str); 16] = [
+pub(super) const PARAMS: [(&str, &str); 18] = [
     ("Exposure", "Brighter or darker, in stops, like the camera's EV"),
     ("Contrast", "More or less contrast, around mid-grey"),
     ("Highlights", "Pull back (−) or lift the bright parts, such as the sky"),
@@ -123,6 +126,8 @@ pub(super) const PARAMS: [(&str, &str); 16] = [
     ("Softness", "How soft the vignette's inner edge is"),
     ("Blur", "How soft it's drawn; at 100 % past reading"),
     ("Reveal", "How much has come on: a picture wiped in from the left, text typed letter by letter"),
+    ("Black", "The level that becomes black, of 255: the picture's darkest (Scopes' Black) makes its black black"),
+    ("White", "The level that becomes white, of 255: the picture's brightest makes its white white"),
 ];
 
 /// The LUT's strength among `Grade::values` (a row of `PARAMS`), drawn
@@ -138,6 +143,7 @@ pub(super) fn label(i: usize, v: f64) -> String {
         0 => format!("{v:+.2} EV"),
         8 => format!("{v:.2}"),
         9 | 10 | 14 | 15 => format!("{:.0} %", v * 100.0),
+        16 | 17 => format!("{:.0}", v * 255.0),
         _ => format!("{v:+.2}"),
     }
 }
@@ -357,6 +363,7 @@ impl App {
         let target = self.effect_target();
         match m {
             EffectMsg::Toggle => self.toggle_side(super::Side::Effects),
+            EffectMsg::AutoLevels => self.auto_levels(),
             EffectMsg::GoToSelected => {
                 if let Focus::Apart(target) = self.effect_focus() {
                     self.go_to(target);
@@ -641,6 +648,23 @@ impl App {
         if self.automation_of(target).iter().any(|c| names.contains(&c.param)) {
             self.op(Op::Auto(crate::model::ops::auto::AutoOp::Clear { on, params: names }));
         }
+    }
+
+    /// The cut's levels from what the scopes measured of it: its darkest
+    /// to black, its brightest to white. The measure is of the picture as
+    /// graded, so the levels it already has are undone first; pressed
+    /// again, it settles.
+    fn auto_levels(&mut self) {
+        use crate::grade::{BLACK_IN, WHITE_IN};
+        let Some((target @ Target::Cut(_), t)) = self.effect_target() else { return };
+        let Some(s) = self.scope.lock().ok().and_then(|f| f.latest.clone()) else { return };
+        let g = self.shown_grade(target, t);
+        let (b, span) = (g.black_in, g.white_in - g.black_in);
+        let at = |level: u8| b + level as f64 / 255.0 * span;
+        self.edit.begin();
+        self.set_effect(true, BLACK_IN, at(s.black).clamp(0.0, 0.5));
+        self.set_effect(false, WHITE_IN, at(s.white).clamp(0.5, 1.0));
+        self.edit.commit();
     }
 
     /// The selected picture dressed as `kind`, or plain.

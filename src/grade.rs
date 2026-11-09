@@ -69,6 +69,13 @@ pub struct Grade {
     /// (`overlay::revealed`).
     #[serde(default = "one", skip_serializing_if = "is_one")]
     pub reveal: f64,
+    /// 0..0.5: the level that becomes black (gap 14, input levels): a
+    /// picture whose darkest is 14 of 255 gets black at about 0.055.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub black_in: f64,
+    /// 0.5..1: the level that becomes white.
+    #[serde(default = "one", skip_serializing_if = "is_one")]
+    pub white_in: f64,
     /// 0..1: how far faded to black, from the edit's fades; not keyframed.
     #[serde(skip)]
     pub black: f64,
@@ -108,13 +115,13 @@ pub const VIGNETTES: [&str; 4] = ["Round", "Top", "Bottom", "Sides"];
 
 /// The range of each of `Grade::values`: the panel's sliders, an
 /// automation lane's height.
-pub const RANGES: [(f64, f64); 16] = [
-    (-3.0, 3.0), (-1.0, 1.0), (-1.0, 1.0), (-1.0, 1.0), (-1.0, 1.0), (-1.0, 1.0), (-1.0, 1.0), (-1.0, 1.0), (0.0, 1.0), (0.0, 1.0), (0.0, 1.0), (0.0, 3.0), (0.0, 1.0), (0.0, 1.0), (0.0, 1.0), (0.0, 1.0),
+pub const RANGES: [(f64, f64); 18] = [
+    (-3.0, 3.0), (-1.0, 1.0), (-1.0, 1.0), (-1.0, 1.0), (-1.0, 1.0), (-1.0, 1.0), (-1.0, 1.0), (-1.0, 1.0), (0.0, 1.0), (0.0, 1.0), (0.0, 1.0), (0.0, 3.0), (0.0, 1.0), (0.0, 1.0), (0.0, 1.0), (0.0, 1.0), (0.0, 0.5), (0.5, 1.0),
 ];
 
 /// Each of `Grade::values` by its name in the project (`KeyOp::EffectValue`).
-pub const NAMES: [&str; 16] = [
-    "exposure", "contrast", "highlights", "shadows", "temperature", "tint", "saturation", "vibrance", "vignette", "opacity", "lut", "vignette_shape", "vignette_reach", "vignette_soft", "blur", "reveal",
+pub const NAMES: [&str; 18] = [
+    "exposure", "contrast", "highlights", "shadows", "temperature", "tint", "saturation", "vibrance", "vignette", "opacity", "lut", "vignette_shape", "vignette_reach", "vignette_soft", "blur", "reveal", "black_in", "white_in",
 ];
 
 /// Where `Grade::values` holds the blur and the reveal: a text's or a
@@ -122,6 +129,9 @@ pub const NAMES: [&str; 16] = [
 pub const BLUR: usize = 14;
 pub const REVEAL: usize = 15;
 pub const ITEM_ONLY: [usize; 2] = [BLUR, REVEAL];
+/// Where `Grade::values` holds the input levels (gap 14).
+pub const BLACK_IN: usize = 16;
+pub const WHITE_IN: usize = 17;
 
 /// Where `Grade::values` holds the vignette's amount, and its shape (held,
 /// not blended; its reach and softness follow).
@@ -129,7 +139,7 @@ pub const VIGNETTE: usize = 8;
 pub const SHAPE: usize = 11;
 
 /// `Grade::values` of the picture untouched.
-pub const NEUTRAL: [f64; 16] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0, REACH, 1.0, 0.0, 1.0];
+pub const NEUTRAL: [f64; 18] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0, REACH, 1.0, 0.0, 1.0, 0.0, 1.0];
 
 /// Stops of colour per unit of temperature or tint: at ±1, red and blue
 /// are four times apart, enough to neutralise shade or low sun.
@@ -141,7 +151,7 @@ impl Grade {
     }
 
     /// The fields as a list, for blending and the panel.
-    pub fn values(&self) -> [f64; 16] {
+    pub fn values(&self) -> [f64; 18] {
         [
             self.exposure,
             self.contrast,
@@ -159,12 +169,14 @@ impl Grade {
             self.vignette_soft,
             self.blur,
             self.reveal,
+            self.black_in,
+            self.white_in,
         ]
     }
 
-    pub fn from_values(v: [f64; 16]) -> Grade {
-        let [exposure, contrast, highlights, shadows, temperature, tint, saturation, vibrance, vignette, opacity, lut, vignette_shape, vignette_reach, vignette_soft, blur, reveal] = v;
-        Grade { exposure, contrast, highlights, shadows, temperature, tint, saturation, vibrance, vignette, vignette_shape, vignette_reach, vignette_soft, opacity, lut, blur, reveal, black: 0.0 }
+    pub fn from_values(v: [f64; 18]) -> Grade {
+        let [exposure, contrast, highlights, shadows, temperature, tint, saturation, vibrance, vignette, opacity, lut, vignette_shape, vignette_reach, vignette_soft, blur, reveal, black_in, white_in] = v;
+        Grade { exposure, contrast, highlights, shadows, temperature, tint, saturation, vibrance, vignette, vignette_shape, vignette_reach, vignette_soft, opacity, lut, blur, reveal, black_in, white_in, black: 0.0 }
     }
 
     /// What colours an overlay's pixels: its opacity, fade, blur and
@@ -192,6 +204,10 @@ impl Grade {
     /// way) of a picture `aspect` wide to its height.
     pub fn apply(&self, rgb: [f64; 3], at: [f64; 2], aspect: f64) -> [f64; 3] {
         let luma = |c: [f64; 3]| 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+        // Levels first (gap 14): `black_in` to black, `white_in` to white,
+        // on the display values, as an editor's input levels.
+        let span = (self.white_in - self.black_in).max(1e-3);
+        let rgb = rgb.map(|v| ((v - self.black_in) / span).clamp(0.0, 1.0));
         // Light: exposure and white balance.
         let gain = 2f64.powf(self.exposure);
         let wb = [2f64.powf(WB_STOPS * self.temperature), 2f64.powf(-WB_STOPS * self.tint), 2f64.powf(-WB_STOPS * self.temperature)];
@@ -237,7 +253,7 @@ impl Grade {
     /// contrast gain),
     /// (highlights, shadows, saturation, vibrance), (vignette, black, 1 if
     /// it does anything, opacity), the vignette's (shape, from, to, 0).
-    pub fn uniforms(&self) -> [[f32; 4]; 4] {
+    pub fn uniforms(&self) -> [[f32; 4]; 5] {
         let f = |v: f64| v as f32;
         [
             [f(2f64.powf(self.exposure)), f(WB_STOPS * self.temperature), f(WB_STOPS * self.tint), f(2f64.powf(self.contrast))],
@@ -247,6 +263,7 @@ impl Grade {
                 let from = 1.0 - self.vignette_reach;
                 [self.vignette_shape.round() as f32, f(from), f(from + (1.0 - from) * self.vignette_soft.max(0.05)), 0.0]
             },
+            [f(self.black_in), f((self.white_in - self.black_in).max(1e-3)), 0.0, 0.0],
         ]
     }
 }
@@ -322,6 +339,16 @@ pub fn grade_at(keys: &[EffectKey], t: f64) -> Grade {
 mod tests {
     /// Exposure up rolls the highlights off instead of clipping them, and
     /// leaves everything else as the plain gain did.
+    #[test]
+    fn levels_make_their_black_black_and_their_white_white() {
+        let g = Grade { black_in: 14.0 / 255.0, white_in: 0.9, ..Grade::default() };
+        let at = |v: f64| g.apply([v; 3], [0.0, 0.0], 1.0)[0];
+        assert!(at(14.0 / 255.0) < 1e-9 && at(0.02) == 0.0, "the darkest is black");
+        assert!((at(0.9) - 1.0).abs() < 1e-9 && at(0.97) == 1.0, "the white point is white");
+        assert!(at(0.5) > 0.5, "the middle opens up");
+        assert_eq!(Grade::default().apply([0.3; 3], [0.0, 0.0], 1.0), [0.3; 3].map(|v: f64| v.powf(2.2).powf(1.0 / 2.2)), "none: as it was");
+    }
+
     #[test]
     fn exposure_rolls_highlights_off() {
         for gain in [0.5, 1.0] {

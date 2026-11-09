@@ -505,6 +505,24 @@ mod tests {
         }
     }
 
+    /// Levels (gap 14) move black and white where `Grade::apply` does: a
+    /// dark grey, a mid one and a light one, with exposure after them.
+    #[test]
+    fn gpu_levels_match_the_cpu() {
+        let Ok(mut gpu) = Gpu::new(false) else { return };
+        let (w, h) = (64, 32);
+        let mut camera = crate::view::View::home(crate::view::Projection::Perspective).camera();
+        camera.grade = crate::grade::Grade { black_in: 0.06, white_in: 0.9, exposure: 0.3, ..Default::default() };
+        for code in [120, 470, 880] {
+            let got = draw_flat_as(&mut gpu, p010(w, h, |_| code, 512, 512), crate::hdr::Hdr::None, (w, h), camera);
+            let grey = ((code as f64 - 64.0) / 876.0).clamp(0.0, 1.0);
+            let at = [(32.5 / w as f64) * 2.0 - 1.0, (16.5 / h as f64) * 2.0 - 1.0];
+            let want = (camera.grade.apply([grey; 3], at, w as f64 / h as f64)[0] * 255.0).round() as i32;
+            let px = got.rgb[(16 * w + 32) * 3] as i32;
+            assert!((px - want).abs() <= 2, "code {code}: GPU {px}, CPU {want}");
+        }
+    }
+
     /// The shader brings a 10-bit HLG picture to SDR as `hdr::to_sdr` does.
     #[test]
     fn gpu_hdr_matches_the_cpu() {

@@ -46,7 +46,7 @@ struct Uniforms {
     // Disagreement cut strength per azimuth bin (align.rs), four per vector.
     cut: array<vec4f, 32>,
     // Colour effects (grade.rs, `Grade::uniforms`).
-    grade: array<vec4f, 4>,
+    grade: array<vec4f, 5>,
     // An ordinary video: .x 1 if it is one, .y its picture's width over
     // height, .z 1 if it came as 10-bit, .w HDR (1 HLG, 2 PQ); then its crop (view.rs `Crop`): centre x, y, half height, roll.
     flat: vec4f,
@@ -331,7 +331,7 @@ fn exposure_gain(lens: u32, d: vec3f, theta: f32) -> vec3f {
 // The colour effects (`grade_by` in grade.wgsl, appended to this source)
 // with this picture's values.
 fn grade(rgb: vec3f, at: vec2f, aspect: f32) -> vec3f {
-    return grade_by(u.grade[0], u.grade[1], u.grade[2], u.grade[3], rgb, at, aspect);
+    return grade_by(u.grade[0], u.grade[1], u.grade[2], u.grade[3], u.grade[4], rgb, at, aspect);
 }
 
 // Mirrors `Camera::flat_uv` in view.rs: where a screen pixel falls in an

@@ -1450,8 +1450,9 @@ The card «Osmo 360 II» (milestone «Якість 360») had no number. The use
 360 camera will be an Osmo 360 or Osmo 360 II, not before ~2027-02. With
 it: its lens calibration read as the Osmo 360's is, and decoding 8K50
 fast enough (about twice the Osmo 360's frames; `CONTEXT.md` «Machine»
-measured ~2× headroom on the 3060, unverified). Nothing to do before
-there's footage.
+measured ~2× headroom on the 3060, unverified). A raw Osmo 360 II sample
+exists (found 2026-11-09, `CONTEXT.md` «Samples»): its calibration and
+decoding can be tried on it before the camera comes.
 
 ### 89. Auto colour: exposure and white balance from the picture — idea (user, 2026-11-09)
 

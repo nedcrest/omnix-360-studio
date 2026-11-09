@@ -109,6 +109,7 @@ done in part stays here until its last card is done.
 | 87 | Style looks (old film, VHS, neo-cyberpunk) for a video, an overlay picture or text; animation presets for text and pictures | [done](EDITOR-GAPS-DONE.md) |
 | 88 | The Osmo 360 II: its calibration and 8K50 decoding | below |
 | 89 | Auto colour: exposure and white balance set from the picture (or by an AI), keyed where the camera misses | below |
+| 96 | A timeline that scrolls up and down: a «Scrollable» switch keeps the lanes' sizes, a vertical scroller, Alt+wheel | below |
 | 95 | Text: a colour of its own, letter spacing, a box behind it; its colour automatable | below |
 | 94 | The Effects and Text panels tidied: text's look in Effects, groups for items (Place, Show, Animate), the film's fades to Transitions, consistent controls | [done](EDITOR-GAPS-DONE.md) |
 | 93 | Effects edit the selected clip only, with the playhead on it; a clear notice when they're apart | [done](EDITOR-GAPS-DONE.md) |
@@ -1540,6 +1541,21 @@ swatches (no colour of its own); no letter or line spacing; no box
 behind it (a caption's plate), common in editors. Its colour could be
 automatable as the effects are. Milestone «Ефекти, колір і розумний
 звук».
+
+### 96. A timeline that scrolls up and down — idea (user, 2026-11-10)
+
+The user: with many lanes of clips and automation the timeline outgrows
+its place. A switch on the panel, «Scrollable»: while on, the lanes keep
+the size they had when it was switched on, however the window grows,
+and a scroller appears for up and down (Alt + the wheel too). Off, the
+lanes fit the place as today.
+
+- Today the rows scale with the timeline's height (`Rows::new`'s
+  scale); the switch freezes that scale and lets the content run taller
+  than the place.
+- The header column scrolls with the lanes; the ruler stays on top.
+- Alt + wheel scrolls; the wheel alone keeps what it does now.
+- Milestone «Зручний таймлайн».
 
 ## Format rule for all of these
 

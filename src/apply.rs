@@ -160,6 +160,8 @@ pub fn looks(template: Option<&str>) -> Result<String> {
             }
         }
     }
+    let anims: Vec<String> = crate::animate::Anim::ALL.iter().map(|a| serde_json::to_string(a).expect("an animation is JSON").trim_matches('"').to_owned()).collect();
+    out += &format!("ins and outs of text and pictures (op auto `animate`, edge in or out, seconds): {}\n", anims.join(", "));
     let names = crate::template::names();
     let dir = crate::template::library().map_or_else(|| "none".to_owned(), |d| d.display().to_string());
     out += &format!("templates in {dir}: {}\n", if names.is_empty() { "none".to_owned() } else { names.join(", ") });
@@ -184,7 +186,7 @@ mod tests {
         c.automation.push(crate::automation::AutoClip { param: "exposure".into(), from: 0.0, to: 2.0, points: vec![crate::automation::AutoPoint { t: 1.0, v: 0.5, ease: Default::default() }], follows: None, animation: None });
         assert_eq!(super::look_lines(&c).last().unwrap(), "automation exposure 0.00-2.00 s: 1.00 s 0.5");
         let list = super::looks(None).unwrap();
-        for word in ["whip_pan", "streak = 1", "edge_zoom", "0 In, 1 Out", "sphere_whip", "not built yet", "old_film", "grain = 0.5", "templates in"] {
+        for word in ["slide_left", "whip_pan", "streak = 1", "edge_zoom", "0 In, 1 Out", "sphere_whip", "not built yet", "old_film", "grain = 0.5", "templates in"] {
             assert!(list.contains(word), "{word} missing:\n{list}");
         }
     }

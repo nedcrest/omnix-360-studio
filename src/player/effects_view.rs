@@ -22,6 +22,7 @@ const EXTRA_WIDTH: f32 = 220.0;
 pub enum Group {
     Kind,
     Place,
+    Show,
     Animate,
     Bars,
     Light,
@@ -37,6 +38,7 @@ impl Group {
         match self {
             Group::Kind => "Kind",
             Group::Place => "Place",
+            Group::Show => "Show",
             Group::Animate => "Animate",
             Group::Bars => "Bars",
             Group::Light => "Light",
@@ -47,15 +49,27 @@ impl Group {
         }
     }
 
-    /// The effects its ↺ sets back (`Grade::values`).
-    pub fn params(self) -> &'static [usize] {
+    /// The effects its ↺ sets back (`Grade::values`), on a text or
+    /// picture if `item`: there opacity is in Show, not Finish.
+    pub fn params(self, item: bool) -> &'static [usize] {
+        use crate::grade::{BLUR, REVEAL};
         match self {
             Group::Light => &[0, 1, 2, 3],
             Group::Colour => &[4, 5, 6, 7],
             Group::Look => &[LUT],
+            Group::Finish if item => &[8, 11, 12, 13],
             Group::Finish => &[8, 9, 11, 12, 13],
-            Group::Animate => &crate::grade::ITEM_ONLY,
-            Group::Kind | Group::Place | Group::Bars | Group::WholeEdit => &[],
+            Group::Show => &[9, REVEAL, BLUR],
+            Group::Kind | Group::Place | Group::Animate | Group::Bars | Group::WholeEdit => &[],
+        }
+    }
+
+    /// Where its folding is kept, and whether it starts folded: on a text
+    /// or picture, Light and Colour do (rarely set there).
+    pub fn fold_key(self, item: bool) -> (String, bool) {
+        match self {
+            Group::Light | Group::Colour if item => (format!("{} on items", self.name()), true),
+            _ => (self.name().to_owned(), false),
         }
     }
 }
@@ -71,42 +85,66 @@ pub enum Extra {
 impl App {
     pub(super) fn effects_panel(&self) -> Element<'_, Message> {
         let target = self.effect_target();
-        let grade = target.map(|(tg, t)| self.shown_grade(tg, t)).unwrap_or_default();
-        let enabled = target.is_some();
-        let sliders = |ps: &[usize]| column(ps.iter().map(|&p| self.param_row(p, grade.values()[p], enabled))).spacing(6).into();
         let mut body = column![self.effects_header(target)].spacing(12).padding(12);
         if let Focus::Apart(selected) = self.effect_focus() {
             body = body.push(self.apart_notice(selected));
         }
-        match target {
-            Some((Target::Overlay(i), t)) => match self.edit.item(i).and_then(|it| it.bars) {
-                Some(b) => body = body.push(self.group(Group::Bars, bars_controls(b))),
-                None => {
-                    if self.edit.item(i).is_some_and(|it| it.file().is_some()) {
-                        body = body.push(self.group(Group::Kind, self.kind_tiles(i)));
-                    }
-                    body = body.push(self.group(Group::Place, self.place_sliders(i, t)));
-                    let shown = column(crate::grade::ITEM_ONLY.map(|p| self.param_row(p, grade.values()[p], enabled))).spacing(6);
-                    body = body.push(self.group(Group::Animate, column![shown, self.animate_controls(i)].spacing(12).into()));
-                }
-            },
-            Some((Target::Cut(_), _)) | None => {}
-        }
-        let on_cut = matches!(target, Some((Target::Cut(_), _)));
-        body = body.push(self.group(Group::Light, sliders(&[0, 1, 2, 3])));
-        let picker = tip(icon_button(super::PICK, on_cut.then(|| Message::Effect(EffectMsg::PickWhite))), text("White balance: draw a box over something that should be grey or white (snow, a cloud)"), tooltip::Position::Left);
-        body = body.push(self.group(Group::Colour, column![row![text("White balance").size(13).width(Length::Fill), picker].align_y(Alignment::Center), sliders(&[4, 5, 6, 7])].spacing(6).into()));
-        match target {
-            Some((tg @ Target::Cut(i), _)) => body = body.push(self.group(Group::Look, column![self.lut_controls(i, &grade), self.style_tiles(tg)].spacing(10).into())),
-            Some((tg @ Target::Overlay(i), _)) if self.edit.item(i).is_some_and(|it| it.bars.is_none()) => body = body.push(self.group(Group::Look, self.style_tiles(tg))),
-            _ => {}
-        }
-        // An overlay's opacity is what's set most on it.
-        let finish = if on_cut { [8, 9] } else { [9, 8] };
-        let finish = column(finish.map(|p| if p == 8 { self.vignette_row(&grade, enabled) } else { self.param_row(p, grade.values()[p], enabled) })).spacing(6);
-        body = body.push(self.group(Group::Finish, finish.into()));
-        body = body.push(self.group(Group::WholeEdit, self.whole_edit()));
+        let groups = match target {
+            Some((Target::Overlay(i), t)) => self.item_groups(i, t),
+            Some((Target::Cut(i), t)) => self.cut_groups(Some((i, t))),
+            None => self.cut_groups(None),
+        };
+        body = body.extend(groups).push(self.group(Group::WholeEdit, self.whole_edit()));
         container(scrollable(body)).width(WIDTH).height(Length::Fill).into()
+    }
+
+    /// A cut's groups (none: greyed, nothing to edit): Light, Colour (with
+    /// the white-balance picker), Look (LUT and style), Finish (vignette,
+    /// opacity).
+    fn cut_groups(&self, cut: Option<(usize, f64)>) -> Vec<Element<'_, Message>> {
+        let grade = cut.map(|(i, t)| self.shown_grade(Target::Cut(i), t)).unwrap_or_default();
+        let enabled = cut.is_some();
+        let picker = tip(icon_button(super::PICK, enabled.then_some(Message::Effect(EffectMsg::PickWhite))), text("White balance: draw a box over something that should be grey or white (snow, a cloud)"), tooltip::Position::Left);
+        let mut groups = vec![
+            self.group(Group::Light, self.sliders(&grade, &[0, 1, 2, 3], enabled)),
+            self.group(Group::Colour, column![row![text("White balance").size(13).width(Length::Fill), picker].align_y(Alignment::Center), self.sliders(&grade, &[4, 5, 6, 7], enabled)].spacing(6).into()),
+        ];
+        if let Some((i, _)) = cut {
+            groups.push(self.group(Group::Look, column![self.lut_controls(i, &grade), self.style_tiles(Target::Cut(i))].spacing(10).into()));
+        }
+        let finish = column![self.vignette_row(&grade, enabled), self.param_row(9, grade.opacity, enabled)].spacing(6);
+        groups.push(self.group(Group::Finish, finish.into()));
+        groups
+    }
+
+    /// A text's or picture's groups (gap 94): Kind (a picture's), Place,
+    /// Show (opacity, reveal, blur), Animate (ins and outs), Look (style),
+    /// Light and Colour, Finish (the vignette); bars have their own.
+    fn item_groups(&self, i: crate::overlay::ItemRef, t: f64) -> Vec<Element<'_, Message>> {
+        let Some(it) = self.edit.item(i) else { return Vec::new() };
+        let grade = self.shown_grade(Target::Overlay(i), t);
+        if let Some(b) = it.bars {
+            return vec![self.group(Group::Bars, bars_controls(b)), self.group(Group::Show, self.sliders(&grade, &[9], true))];
+        }
+        let mut groups = Vec::new();
+        if it.file().is_some() {
+            groups.push(self.group(Group::Kind, self.kind_tiles(i)));
+        }
+        groups.extend([
+            self.group(Group::Place, self.place_sliders(i, t)),
+            self.group(Group::Show, self.sliders(&grade, &[9, crate::grade::REVEAL, crate::grade::BLUR], true)),
+            self.group(Group::Animate, self.animate_controls(i)),
+            self.group(Group::Look, self.style_tiles(Target::Overlay(i))),
+            self.group(Group::Light, self.sliders(&grade, &[0, 1, 2, 3], true)),
+            self.group(Group::Colour, self.sliders(&grade, &[4, 5, 6, 7], true)),
+            self.group(Group::Finish, self.vignette_row(&grade, true)),
+        ]);
+        groups
+    }
+
+    /// Effects `ps`' rows at their values in `grade`.
+    fn sliders(&self, grade: &Grade, ps: &[usize], enabled: bool) -> Element<'static, Message> {
+        column(ps.iter().map(|&p| self.param_row(p, grade.values()[p], enabled))).spacing(6).into()
     }
 
     /// The title, what the panel works on, and its tools: to all cuts,
@@ -120,10 +158,10 @@ impl App {
             Focus::Nothing => "No cut".to_owned(),
         };
         let close = tip(button(text("✕").size(14)).padding([0, 6]).style(button::text).on_press(m(EffectMsg::Toggle)), text("Close (G)"), tooltip::Position::Bottom);
-        let to_all = tip(icon_button(super::TO_ALL_CUTS, on_cut.then(|| m(EffectMsg::ToAll))), text("To all cuts: give every other cut this look, replacing their effects"), tooltip::Position::Bottom);
+        let to_all = on_cut.then(|| tip(icon_button(super::TO_ALL_CUTS, Some(m(EffectMsg::ToAll))), text("To all cuts: give every other cut this look, replacing their effects"), tooltip::Position::Bottom));
         let any = target.filter(|&(tg, _)| !self.effects_of(tg).is_empty() || !self.automation_of(tg).is_empty() || matches!(tg, Target::Overlay(i) if self.edit.item(i).is_some_and(|it| !it.motion.is_empty())));
-        let reset = tip(icon_button(super::RESET_VIEW, any.map(|_| m(EffectMsg::Reset(None)))), text(if on_cut { "Reset: remove this cut's effects and automation" } else { "Reset: remove this item's effects, place, automation and ins and outs" }), tooltip::Position::Bottom);
-        column![row![text("Effects").size(18).width(Length::Fill), close].align_y(Alignment::Center), row![text(name).size(13).width(Length::Fill), to_all, reset].spacing(6).align_y(Alignment::Center)].spacing(6).into()
+        let reset = tip(button(text("↺ All").size(13)).padding([2, 8]).style(button::secondary).on_press_maybe(any.map(|_| m(EffectMsg::Reset(None)))), text(if on_cut { "Reset: remove this cut's effects and automation" } else { "Reset: remove this item's effects, place, automation and ins and outs" }), tooltip::Position::Bottom);
+        column![row![text("Effects").size(18).width(Length::Fill), close].align_y(Alignment::Center), row![text(name).size(13).width(Length::Fill)].push(to_all).push(reset).spacing(6).align_y(Alignment::Center)].spacing(6).into()
     }
 
     /// What `target` is called in the panel: «Cut 3 · name», «Text · words».
@@ -158,9 +196,11 @@ impl App {
     /// A group: its name folding it open or shut, its ↺, and `content`
     /// while it's open.
     fn group<'a>(&self, g: Group, content: Element<'a, Message>) -> Element<'a, Message> {
-        let folded = self.effects_folded.iter().any(|n| n == g.name());
-        let fold = button(text(format!("{} {}", if folded { "▸" } else { "▾" }, g.name())).size(15)).padding([2, 0]).style(button::text).on_press(Message::Effect(EffectMsg::Fold(g)));
-        let resets = !g.params().is_empty() || matches!(g, Group::Kind | Group::Place | Group::Animate);
+        let item = matches!(self.effect_target(), Some((Target::Overlay(_), _)));
+        let (key, at_first) = g.fold_key(item);
+        let folded = self.effects_folded.contains(&key) != at_first;
+        let fold = button(text(format!("{} {}", if folded { "▸" } else { "▾" }, g.name())).size(15)).padding([2, 0]).style(button::text).on_press(Message::Effect(EffectMsg::Fold(key.clone())));
+        let resets = !g.params(item).is_empty() || matches!(g, Group::Kind | Group::Place | Group::Animate | Group::Look);
         let reset = tip(button(text("↺").size(13)).padding([0, 5]).style(button::text).on_press_maybe(resets.then_some(Message::Effect(EffectMsg::ResetGroup(g)))), text(format!("{} back to none", g.name())), tooltip::Position::Left);
         let head = row![fold, space().width(Length::Fill), reset].align_y(Alignment::Center);
         if folded { head.into() } else { column![head, content].spacing(8).into() }

@@ -58,8 +58,8 @@ pub enum EffectMsg {
     KeyMove(usize, usize, f64),
     /// The cut's LUT (how much of it is effect `LUT`).
     Lut(LutChoice),
-    /// A group of the panel folded or opened; set back to none.
-    Fold(super::effects_view::Group),
+    /// A group of the panel folded or opened, by its key (`Group::fold_key`).
+    Fold(String),
     ResetGroup(super::effects_view::Group),
     /// A complex control's knobs out beside the panel, or put away.
     Extra(Option<super::effects_view::Extra>),
@@ -388,8 +388,7 @@ impl App {
                 }
             }
             EffectMsg::Done => self.edit.commit(),
-            EffectMsg::Fold(g) => {
-                let name = g.name().to_owned();
+            EffectMsg::Fold(name) => {
                 if self.effects_folded.contains(&name) {
                     self.effects_folded.retain(|n| *n != name);
                 } else {
@@ -666,9 +665,10 @@ impl App {
     fn reset_group(&mut self, g: super::effects_view::Group) {
         use super::effects_view::Group;
         let Some((target, _)) = self.effect_target() else { return };
+        let params = g.params(matches!(target, Target::Overlay(_)));
         self.edit.begin();
-        self.unautomate(g.params().iter().map(|&p| crate::grade::NAMES[p].to_owned()).collect());
-        for &p in g.params() {
+        self.unautomate(params.iter().map(|&p| crate::grade::NAMES[p].to_owned()).collect());
+        for &p in params {
             self.set_effect(true, p, crate::grade::NEUTRAL[p]);
         }
         if g == Group::Place {

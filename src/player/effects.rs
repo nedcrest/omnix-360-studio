@@ -713,12 +713,11 @@ impl App {
     fn on_style(&mut self, target: Target, message: EffectMsg) {
         let style = self.style_of(target).cloned();
         match message {
-            // A press on the chosen one again brings its knobs out or puts
-            // them away; another is chosen with its knobs out.
+            // A style chosen comes with its knobs out (its «Name ▸» button
+            // puts them away and back); the chosen one again changes nothing.
             EffectMsg::Style(look) => {
                 use super::effects_view::Extra;
                 if look.is_some() && look == style.as_ref().map(|s| s.look) {
-                    self.effect_extra = (self.effect_extra != Some(Extra::Style)).then_some(Extra::Style);
                     return;
                 }
                 self.op(self.style_op(target, look));

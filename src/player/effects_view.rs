@@ -16,6 +16,16 @@ use crate::overlay::{Place, place_at};
 use iced::widget::{button, column, container, pick_list, row, scrollable, slider, space, text, tooltip};
 use iced::{Alignment, Element, Length};
 
+/// An in or an out in its list, by name.
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct AnimChoice(crate::animate::Anim);
+
+impl std::fmt::Display for AnimChoice {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.0.name())
+    }
+}
+
 /// The side panel's width.
 const EXTRA_WIDTH: f32 = 220.0;
 
@@ -271,7 +281,7 @@ impl App {
         )
     }
 
-    /// The item's in and out (gap 87, step 2a): a tile each, ✕, how long.
+    /// The item's in and out (gap 87, step 2a): a list each (gap 94), ✕, how long.
     fn animate_controls(&self, i: crate::overlay::ItemRef) -> Element<'static, Message> {
         use crate::animate::Anim;
         use crate::model::ops::End;
@@ -280,11 +290,8 @@ impl App {
         let side = |edge: End, title: &'static str| {
             let now = made(edge);
             let off = button(text("✕").size(12)).padding([1, 6]).style(button::text).on_press_maybe(now.map(|_| m(EffectMsg::Animate(edge, None))));
-            let tiles = Anim::ALL.iter().map(|&a| {
-                let on = now.is_some_and(|x| x.anim == a);
-                button(text(a.name()).size(12)).padding([3, 7]).style(if on { button::primary } else { button::secondary }).on_press(m(EffectMsg::Animate(edge, Some(a)))).into()
-            });
-            let mut col = column![row![text(title).width(Length::Fill), off].align_y(Alignment::Center), iced::widget::row(tiles).spacing(4).wrap().vertical_spacing(4)].spacing(6);
+            let list = pick_list(Anim::ALL.map(AnimChoice).to_vec(), now.map(|a| AnimChoice(a.anim)), move |c: AnimChoice| m(EffectMsg::Animate(edge, Some(c.0)))).placeholder("None").text_size(13).width(Length::Fill);
+            let mut col = column![row![text(title).width(36), list, off].spacing(6).align_y(Alignment::Center)].spacing(4);
             if let Some(a) = now {
                 col = col.push(column![
                     row![text("Length").size(13).width(Length::Fill), text(format!("{:.1} s", a.seconds)).size(13)],
@@ -335,7 +342,14 @@ impl App {
         let m = |e: EffectMsg| Message::Effect(e);
         let off = tip(button(text("✕").size(12)).padding([1, 6]).style(button::text).on_press_maybe(style.map(|_| m(EffectMsg::Style(None)))), text("No style"), tooltip::Position::Left);
         let looks = Look::STYLES.into_iter().map(|l| (l, m(EffectMsg::Style(Some(l)))));
-        column![row![text("Style").width(Length::Fill), off].align_y(Alignment::Center), super::transitions_panel::tiles(looks, style)].spacing(6).into()
+        let mut col = column![row![text("Style").width(Length::Fill), off].align_y(Alignment::Center), super::transitions_panel::tiles(looks, style)].spacing(6);
+        // Its settings beside, as the vignette's shape opens its own.
+        if let Some(look) = style {
+            let out = self.effect_extra == Some(Extra::Style);
+            let more = button(text(format!("{} ▸", look.name())).size(12)).padding([3, 8]).style(if out { button::primary } else { button::secondary });
+            col = col.push(tip(more.on_press(m(EffectMsg::Extra((!out).then_some(Extra::Style)))), text("Its settings, beside"), tooltip::Position::Left));
+        }
+        col.into()
     }
 
     /// The film's fades (in the Transitions panel).

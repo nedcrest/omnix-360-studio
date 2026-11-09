@@ -1411,6 +1411,53 @@ and brightest, the levels already there undone). Milestone «Ефекти,
 one value for the cut; a measure over the whole cut, or levels moving
 with the light, is for later (the user asked, 2026-11-10; gap 89).
 
+### 70. The text and overlay lanes as groups of several lanes — done, checked by the user 2026-11-10 (user, 2026-11-04)
+
+The user again, 2026-11-10: "texts and overlays — maybe groups, a Texts
+group and an Overlays group, and inside them 1+ lanes in the editor
+(several texts can be on one frame, several overlays, pictures, GIFs on
+one frame too)." The automation lanes (39) already belong to whichever
+overlay or text lane an item is on, so they carry over to several lanes.
+
+User: "turn a lane into a group of several lanes. Example: we arrive
+somewhere, the place's name and the time slide in at the side, and we
+talk at the same time, so subtitles run alongside. The same for the
+picture (overlay) lane."
+
+What's there: the project already keeps a list of lanes for each
+(`Project::overlays`, `Project::text`: `Vec<Lane>`, one item at a time per
+lane), and export burns them all in order; the player shows and edits
+only the first lane of each (`Edit::lane`, the timeline's one row each).
+
+Proposed: the Text row and the Overlay row each become a folding group
+(the header column's cell, gap 54: ▸ Text (3) / ▾ Text) holding its
+lanes, each with a header of its own (a name the user gives: «Titles»,
+«Subtitles», «Place and time»), S-like show / hide while editing, and
+«Add a lane» / «Remove the lane» in the group's header menu. Items move
+between lanes of the group by dragging up or down (or the menu); new
+items go to the lane under the selection, else the first with room at
+the playhead. Order is drawing order: the lane higher in the group on
+top. Subtitles (gap 16) get a lane of their own by default. No format
+change: lanes gain an optional `name`. Milestone «Ефекти, колір і розумний звук» (text
+and titles), and the overlay side with «B-roll і групи».
+
+**Built and checked 2026-11-10** (`f544cc9`, `c3a241d`,
+`04a4368`; the user: «not changing what's there, just groups, so
+subtitles and titles can have lanes of their own; what's above is on
+top»):
+- Model: `ItemRef` is (track, lane, place), 0 the lowest lane (drawn
+  first). Ops: `add_text` / `add_pictures` / `add_bars` take `lane` (0
+  when left out), `add_lane` on top, `remove_lane` (empty, not the last),
+  `move` takes `lane`. `describe` says the lanes.
+- Timeline: a track is its lanes, the top one first, each with its
+  items, Effects and Motion rows and automation lanes; the top lane
+  carries «▾ Text 2» (the fold) and «+»; an empty lane of several has
+  «×»; folded, one thin row of every lane's items.
+- Alt+↑ / Alt+↓ move the selected item a lane up or down (a new lane
+  from the top one); new things go on the track's active lane (clicked,
+  an item selected on it, or just added), marked at its head's edge.
+- Left for gap 97: lane names, dragging between lanes, hiding a lane.
+
 ### 69. Scopes: a histogram and a waveform of the picture — done, checked by the user 2026-11-10 (user, 2026-11-04)
 
 To see whether the picture is clipped and whether its black is black (the

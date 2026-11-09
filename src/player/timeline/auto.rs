@@ -18,9 +18,12 @@ const TAG_H: f32 = 12.0;
 pub(super) struct Lanes<'a> {
     pub t: &'a Timeline,
     pub params: Vec<Param>,
-    /// The Effects row's top (where its marks go while folded), and the
-    /// first lane's.
+    /// The row they fold under («Effects», «Motion»): its name, its top
+    /// and height (where its marks go while folded), and the first lane's
+    /// top.
+    pub name: &'static str,
     pub row_top: f32,
+    pub row_h: f32,
     pub top: f32,
     pub folded: bool,
     pub owners: Vec<Owner<'a>>,
@@ -77,13 +80,13 @@ impl Lanes<'_> {
         if self.folded { 0.0 } else { self.params.len() as f32 * AUTO }
     }
 
-    /// The Effects row's name: «▾ Effects» open, «▸ Effects (2)» folded
-    /// with two lanes under it.
+    /// Their row's name: «▾ Effects» open, «▸ Effects (2)» folded with two
+    /// lanes under it.
     pub(super) fn tag(&self) -> String {
         match (self.folded, self.params.len()) {
-            (_, 0) => "Effects".to_owned(),
-            (true, n) => format!("▸ Effects ({n})"),
-            (false, _) => "▾ Effects".to_owned(),
+            (_, 0) => self.name.to_owned(),
+            (true, n) => format!("▸ {} ({n})", self.name),
+            (false, _) => format!("▾ {}", self.name),
         }
     }
 
@@ -326,7 +329,7 @@ impl Lanes<'_> {
     /// Folded, the Effects row marks where clips move a value and where
     /// their points are (the user, 2026-11-10: it was empty).
     fn draw_folded(&self, frame: &mut Frame, b: Rectangle) {
-        let mid = self.row_top + EFFECTS / 2.0;
+        let mid = self.row_top + self.row_h / 2.0;
         for o in &self.owners {
             for i in 0..self.params.len() {
                 for (clip, l, r) in self.clips(i, o, b) {
@@ -358,7 +361,7 @@ impl Lanes<'_> {
     /// Whether `p` is on the Effects row's name, folding the lanes (while
     /// there are any).
     pub(super) fn on_tag(&self, p: Point) -> bool {
-        !self.params.is_empty() && p.x < HEAD && fold_tag(&self.tag(), self.row_top + EFFECTS / 2.0).contains(p)
+        !self.params.is_empty() && p.x < HEAD && fold_tag(&self.tag(), self.row_top + self.row_h / 2.0).contains(p)
     }
 }
 
@@ -366,6 +369,6 @@ impl Timeline {
     /// The cuts' automation lanes, under their Effects row.
     pub(super) fn cut_lanes(&self) -> Lanes<'_> {
         let owners = self.blocks.iter().enumerate().map(|(i, c)| Owner { on: AutoOn::Cut(i), from: c.from, start: c.cut.start, len: c.len(), clips: &c.cut.automation }).collect();
-        Lanes { t: self, params: self.auto_lanes.clone(), row_top: self.rows.effects_top, top: self.rows.auto_top, folded: self.folds.effects, owners }
+        Lanes { t: self, params: self.auto_lanes.clone(), name: "Effects", row_top: self.rows.effects_top, row_h: EFFECTS, top: self.rows.auto_top, folded: self.folds.effects, owners }
     }
 }

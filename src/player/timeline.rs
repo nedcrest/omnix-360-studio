@@ -1369,8 +1369,8 @@ enum OverlayDrag {
     /// A keyframe mark: item `item`'s effect keyframe `key` (`effects`) or
     /// motion keyframe, to another time.
     Key { item: usize, effects: bool, key: usize },
-    /// On its automation lanes.
-    Auto(auto::LaneDrag),
+    /// On its automation lanes (its Motion row's if `true`).
+    Auto(bool, auto::LaneDrag),
 }
 
 /// What's under the pointer on an overlay lane, read by a press and by
@@ -1390,9 +1390,10 @@ enum OverlayHit {
     Item(usize),
     /// The lane away from its items: nothing selected.
     Empty,
-    /// Its automation lanes (gap 39), and the Effects row's name folding them.
-    Auto(auto::LaneHit),
-    EffectsFold,
+    /// Its automation lanes (gap 39), its Motion row's if `true`, and that
+    /// row's name folding them.
+    Auto(bool, auto::LaneHit),
+    LanesFold(bool),
 }
 
 impl OverlayHit {
@@ -1401,8 +1402,8 @@ impl OverlayHit {
         use mouse::Interaction as I;
         match self {
             OverlayHit::Nothing | OverlayHit::Empty => I::default(),
-            OverlayHit::Fold | OverlayHit::Seek | OverlayHit::EffectsFold => I::Pointer,
-            OverlayHit::Auto(h) => h.pointer(),
+            OverlayHit::Fold | OverlayHit::Seek | OverlayHit::LanesFold(_) => I::Pointer,
+            OverlayHit::Auto(_, h) => h.pointer(),
             OverlayHit::Key { .. } | OverlayHit::Item(_) => I::Grab,
             OverlayHit::Edge { .. } => I::ResizingHorizontally,
         }
@@ -1447,26 +1448,39 @@ impl OverlayLane {
         } else if self.blocks().is_empty() {
             self.0.rows.overlay
         } else {
-            self.0.rows.overlay + EFFECTS + KEYS + self.lanes().height()
+            self.motion_top() + KEYS + self.lanes(true).height()
         }
     }
 
-    /// Its own automation lanes, under its Effects and Motion rows.
-    fn lanes(&self) -> auto::Lanes<'_> {
-        use super::automation_ui::AutoOn;
+    /// Its own automation lanes: its effects' under its Effects row, its
+    /// place's (across, down, size, rotation) under its Motion row.
+    fn lanes(&self, motion: bool) -> auto::Lanes<'_> {
+        use super::automation_ui::{AutoOn, Param};
         let t = &self.0;
-        let (params, folded) = match self.1 {
-            Track::Overlay => (t.overlay_auto.clone(), t.folds.overlay_effects),
-            Track::Text => (t.text_auto.clone(), t.folds.text_effects),
+        let (all, folded) = match (self.1, motion) {
+            (Track::Overlay, false) => (&t.overlay_auto, t.folds.overlay_effects),
+            (Track::Overlay, true) => (&t.overlay_auto, t.folds.overlay_motion),
+            (Track::Text, false) => (&t.text_auto, t.folds.text_effects),
+            (Track::Text, true) => (&t.text_auto, t.folds.text_motion),
         };
+        let params = all.iter().copied().filter(|p| matches!(p, Param::Place(_)) == motion).collect();
         let owners = self.blocks().iter().map(|o| auto::Owner { on: AutoOn::Item(o.item.id), from: o.item.at, start: o.item.start, len: o.len(), clips: &o.item.automation }).collect();
-        auto::Lanes { t, params, row_top: t.rows.overlay, top: t.rows.overlay + EFFECTS + KEYS, folded, owners }
+        let (name, row_top, row_h) = if motion { ("Motion", self.motion_top(), KEYS) } else { ("Effects", t.rows.overlay, EFFECTS) };
+        auto::Lanes { t, params, name, row_top, row_h, top: row_top + row_h, folded, owners }
     }
 
-    fn effects_fold(&self) -> FoldLane {
-        match self.1 {
-            Track::Overlay => FoldLane::OverlayEffects,
-            Track::Text => FoldLane::TextEffects,
+    /// Where its Motion row starts: under its Effects row and lanes.
+    fn motion_top(&self) -> f32 {
+        self.0.rows.overlay + EFFECTS + self.lanes(false).height()
+    }
+
+    /// The row whose lanes a fold tag or a lane hit is in.
+    fn fold_of(&self, motion: bool) -> FoldLane {
+        match (self.1, motion) {
+            (Track::Overlay, false) => FoldLane::OverlayEffects,
+            (Track::Overlay, true) => FoldLane::OverlayMotion,
+            (Track::Text, false) => FoldLane::TextEffects,
+            (Track::Text, true) => FoldLane::TextMotion,
         }
     }
 
@@ -1481,17 +1495,20 @@ impl OverlayLane {
         if p.x < HEAD {
             return OverlayHit::Nothing;
         }
-        let lanes = self.lanes();
-        if !self.blocks().is_empty() && lanes.on_tag(p) {
-            return OverlayHit::EffectsFold;
-        }
-        if let Some(h) = lanes.hit(p, b) {
-            return OverlayHit::Auto(h);
+        for motion in [false, true] {
+            let lanes = self.lanes(motion);
+            if !self.blocks().is_empty() && lanes.on_tag(p) {
+                return OverlayHit::LanesFold(motion);
+            }
+            if let Some(h) = lanes.hit(p, b) {
+                return OverlayHit::Auto(motion, h);
+            }
         }
         if let Some((item, effects, key, at)) = self.key_at(p, b) {
             return OverlayHit::Key { item, effects, key, at };
         }
-        if p.y >= self.0.rows.overlay && p.y < self.0.rows.overlay + EFFECTS + KEYS {
+        let rows = |y: f32| (self.0.rows.overlay..self.0.rows.overlay + EFFECTS).contains(&y) || (self.motion_top()..self.motion_top() + KEYS).contains(&y);
+        if rows(p.y) {
             return OverlayHit::Seek;
         }
         if p.y >= self.0.rows.overlay {
@@ -1510,7 +1527,7 @@ impl OverlayLane {
     /// the effects row, the keyframe and its edit time.
     fn key_at(&self, p: Point, b: Rectangle) -> Option<(usize, bool, usize, f64)> {
         let effects = (self.0.rows.overlay..self.0.rows.overlay + EFFECTS).contains(&p.y);
-        if !effects && !(self.0.rows.overlay + EFFECTS..self.0.rows.overlay + EFFECTS + KEYS).contains(&p.y) {
+        if !effects && !(self.motion_top()..self.motion_top() + KEYS).contains(&p.y) {
             return None;
         }
         self.blocks().iter().enumerate().find_map(|(item, o)| {
@@ -1572,8 +1589,9 @@ impl canvas::Program<Message> for OverlayLane {
         match event {
             Mouse(mouse::Event::WheelScrolled { delta }) => wheel(delta, t, cursor, bounds),
             // Right-click on its automation lanes: a point's ease, a clip gone.
-            Mouse(mouse::Event::ButtonPressed(mouse::Button::Right)) if cursor.position_in(bounds).is_some_and(|p| p.x >= HEAD && self.lanes().lane_at(p.y).is_some()) => {
-                let message = self.lanes().right(cursor.position_in(bounds)?, bounds)?;
+            Mouse(mouse::Event::ButtonPressed(mouse::Button::Right)) if cursor.position_in(bounds).is_some_and(|p| p.x >= HEAD && [false, true].iter().any(|&m| self.lanes(m).lane_at(p.y).is_some())) => {
+                let p = cursor.position_in(bounds)?;
+                let message = [false, true].into_iter().find_map(|m| Some(self.lanes(m)).filter(|l| l.lane_at(p.y).is_some())?.right(p, bounds))?;
                 Some(canvas::Action::publish(message).and_capture())
             }
             // Right-click an overlay picture: what file it is (text has none).
@@ -1588,10 +1606,10 @@ impl canvas::Program<Message> for OverlayLane {
                 let message = match self.hit(p, bounds) {
                     OverlayHit::Nothing => return None,
                     OverlayHit::Fold => Message::Fold(self.fold_lane(), !self.folded()),
-                    OverlayHit::EffectsFold => Message::Fold(self.effects_fold(), !self.lanes().folded),
-                    OverlayHit::Auto(h) => match self.lanes().press(h, p, t.held.command()) {
+                    OverlayHit::LanesFold(motion) => Message::Fold(self.fold_of(motion), !self.lanes(motion).folded),
+                    OverlayHit::Auto(motion, h) => match self.lanes(motion).press(h, p, t.held.command()) {
                         Ok(d) => {
-                            *drag = OverlayDrag::Auto(d);
+                            *drag = OverlayDrag::Auto(motion, d);
                             return Some(canvas::Action::request_redraw().and_capture());
                         }
                         Err(message) => message,
@@ -1636,8 +1654,8 @@ impl canvas::Program<Message> for OverlayLane {
                         let at = self.0.t(x, bounds).clamp(o.item.at, o.item.at + o.len());
                         Message::OverlayKeyMove((self.1, *item), *effects, *key, o.item.start + at - o.item.at)
                     }
-                    OverlayDrag::Auto(d) => {
-                        let message = self.lanes().drag(d, Point::new(x, position.y - bounds.y), bounds, t.held.shift());
+                    OverlayDrag::Auto(motion, d) => {
+                        let message = self.lanes(*motion).drag(d, Point::new(x, position.y - bounds.y), bounds, t.held.shift());
                         return Some(message.map_or_else(canvas::Action::request_redraw, canvas::Action::publish).and_capture());
                     }
                 };
@@ -1645,7 +1663,7 @@ impl canvas::Program<Message> for OverlayLane {
             }
             Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => match std::mem::take(drag) {
                 OverlayDrag::None => None,
-                OverlayDrag::Auto(d) => Some(self.lanes().release(d, bounds).map_or_else(canvas::Action::request_redraw, canvas::Action::publish).and_capture()),
+                OverlayDrag::Auto(motion, d) => Some(self.lanes(motion).release(d, bounds).map_or_else(canvas::Action::request_redraw, canvas::Action::publish).and_capture()),
                 _ => Some(canvas::Action::publish(Message::ScrubDone).and_capture()),
             },
             _ => None,
@@ -1706,15 +1724,20 @@ impl canvas::Program<Message> for OverlayLane {
             }
         }
         if !self.blocks().is_empty() {
-            draw_rows(&mut frame, theme, t, bounds, self.0.rows.overlay, Some(self.0.rows.overlay + EFFECTS));
-            self.lanes().draw(&mut frame, theme, bounds, if let OverlayDrag::Auto(d) = drag { Some(d) } else { None });
+            draw_rows(&mut frame, theme, t, bounds, self.0.rows.overlay, Some(self.motion_top()));
+            for motion in [false, true] {
+                self.lanes(motion).draw(&mut frame, theme, bounds, match drag {
+                    OverlayDrag::Auto(m, d) if *m == motion => Some(d),
+                    _ => None,
+                });
+            }
             let inside = |o: &OverlayBlock, k: f64| k >= o.item.start && k <= o.item.start + o.len();
             for o in self.blocks() {
                 for k in o.item.effects.iter().map(|k| k.t).filter(|&k| inside(o, k)) {
                     effect_mark(&mut frame, t.x(o.item.at + k - o.item.start, bounds), self.0.rows.overlay + EFFECTS / 2.0);
                 }
                 for (k, ease) in o.item.motion.iter().map(|k| (k.t, k.ease)).filter(|&(k, _)| inside(o, k)) {
-                    let mark = key_mark(t.x(o.item.at + k - o.item.start, bounds), self.0.rows.overlay + EFFECTS + KEYS / 2.0, ease);
+                    let mark = key_mark(t.x(o.item.at + k - o.item.start, bounds), self.motion_top() + KEYS / 2.0, ease);
                     frame.fill(&mark, colour);
                     frame.stroke(&mark, Stroke::default().with_width(1.5).with_color(palette.background.base.color));
                 }
@@ -1726,9 +1749,10 @@ impl canvas::Program<Message> for OverlayLane {
         head_cell(&mut frame, 0.0, self.height(), colour);
         lane_tag(&mut frame, &self.tag_name(name), colour, top + h / 2.0);
         if !self.blocks().is_empty() {
-            let lanes = self.lanes();
-            head_rows(&mut frame, theme, (self.0.rows.overlay, &lanes.tag()), Some((self.0.rows.overlay + EFFECTS, "Motion")));
-            lanes.draw_heads(&mut frame, theme);
+            let (effects, motion) = (self.lanes(false), self.lanes(true));
+            head_rows(&mut frame, theme, (self.0.rows.overlay, &effects.tag()), Some((self.motion_top(), &motion.tag())));
+            effects.draw_heads(&mut frame, theme);
+            motion.draw_heads(&mut frame, theme);
         }
         // What the drag has done so far, by the pointer.
         let said = match *drag {
@@ -1749,7 +1773,7 @@ impl canvas::Program<Message> for OverlayLane {
     fn mouse_interaction(&self, (drag, _): &(OverlayDrag, u64), bounds: Rectangle, cursor: mouse::Cursor) -> mouse::Interaction {
         match drag {
             OverlayDrag::Trim { .. } => mouse::Interaction::ResizingHorizontally,
-            OverlayDrag::Move { .. } | OverlayDrag::Key { .. } | OverlayDrag::Auto(_) => mouse::Interaction::Grabbing,
+            OverlayDrag::Move { .. } | OverlayDrag::Key { .. } | OverlayDrag::Auto(..) => mouse::Interaction::Grabbing,
             OverlayDrag::None => cursor.position_in(bounds).map_or_else(mouse::Interaction::default, |p| self.hit(p, bounds).pointer()),
         }
     }
@@ -2830,18 +2854,27 @@ mod tests {
         use super::auto::LaneHit;
         use super::super::automation_ui::{AutoOn, Param};
         use crate::automation::{AutoClip, AutoPoint};
-        let (mut t, b) = timeline();
-        let item = crate::overlay::Item { id: 9, input: "logo.png".into(), text: None, at: 2.0, start: 0.0, end: 4.0, motion: vec![], effects: vec![], bars: None, automation: vec![AutoClip { param: "x".into(), from: 0.0, to: 4.0, points: vec![AutoPoint { t: 1.0, v: 0.25, ease: Default::default() }], follows: None }] };
-        t.overlays = vec![OverlayBlock { item, label: "logo".into(), thumb: None }];
-        (t.overlay_auto, t.folds.overlay, t.folds.overlay_effects) = (vec![Param::Place(0)], false, false);
-        let lane = OverlayLane(Arc::new(t), Track::Overlay);
-        let lanes = lane.lanes();
-        assert_eq!(lane.height(), lane.0.rows.overlay + EFFECTS + KEYS + AUTO, "one lane under its rows");
+        let (_, b) = timeline();
+        let lane_with = |params: Vec<Param>, effects_open: bool| {
+            let (mut t, _) = timeline();
+            let x = AutoClip { param: "x".into(), from: 0.0, to: 4.0, points: vec![AutoPoint { t: 1.0, v: 0.25, ease: Default::default() }], follows: None };
+            let item = crate::overlay::Item { id: 9, input: "logo.png".into(), text: None, at: 2.0, start: 0.0, end: 4.0, motion: vec![], effects: vec![], bars: None, automation: vec![x] };
+            t.overlays = vec![OverlayBlock { item, label: "logo".into(), thumb: None }];
+            (t.overlay_auto, t.folds.overlay, t.folds.overlay_motion, t.folds.overlay_effects) = (params, false, false, !effects_open);
+            OverlayLane(Arc::new(t), Track::Overlay)
+        };
+        let lane = lane_with(vec![Param::Place(0)], false);
+        let lanes = lane.lanes(true);
+        assert_eq!((lane.lanes(false).params.len(), lane.height()), (0, lane.0.rows.overlay + EFFECTS + KEYS + AUTO), "its place's lane under its Motion row");
         // The point at its own 1 s, edit 3 s, a quarter across.
         let p = Point::new(lane.0.x(3.0, b), lanes.y(0, 0.25));
-        assert!(matches!(lane.hit(p, b), OverlayHit::Auto(LaneHit::Point { lane: 0, owner: 0, t }) if t == 1.0));
+        assert!(matches!(lane.hit(p, b), OverlayHit::Auto(true, LaneHit::Point { lane: 0, owner: 0, t }) if t == 1.0));
         assert_eq!(lanes.owners[0].on, AutoOn::Item(9));
         assert_eq!(Param::Place(0).label(0.25), "0.25");
+        // An effect's lane open too: Motion moves down under it.
+        let lane2 = lane_with(vec![Param::Grade(9), Param::Place(0)], true);
+        assert_eq!(lane2.motion_top(), lane2.0.rows.overlay + EFFECTS + AUTO);
+        assert_eq!((lane2.lanes(false).tag(), lane2.lanes(true).tag()), ("▾ Effects".to_owned(), "▾ Motion".to_owned()));
     }
 
     #[test]
@@ -3331,6 +3364,9 @@ pub enum FoldLane {
     Effects,
     OverlayEffects,
     TextEffects,
+    /// Their Motion rows' lanes (place).
+    OverlayMotion,
+    TextMotion,
 }
 
 /// Which of them are folded.
@@ -3344,11 +3380,13 @@ pub struct Folds {
     pub effects: bool,
     pub overlay_effects: bool,
     pub text_effects: bool,
+    pub overlay_motion: bool,
+    pub text_motion: bool,
 }
 
 impl Default for Folds {
     fn default() -> Self {
-        Folds { text: true, overlay: true, sfx2: true, marks: false, transitions: false, effects: true, overlay_effects: true, text_effects: true }
+        Folds { text: true, overlay: true, sfx2: true, marks: false, transitions: false, effects: true, overlay_effects: true, text_effects: true, overlay_motion: true, text_motion: true }
     }
 }
 
@@ -3363,6 +3401,8 @@ impl Folds {
             FoldLane::Effects => &mut self.effects,
             FoldLane::OverlayEffects => &mut self.overlay_effects,
             FoldLane::TextEffects => &mut self.text_effects,
+            FoldLane::OverlayMotion => &mut self.overlay_motion,
+            FoldLane::TextMotion => &mut self.text_motion,
         } = folded;
     }
 }

@@ -327,10 +327,14 @@ impl App {
                     self.extra_lanes.retain(|&q| q != (of, p));
                 } else {
                     self.extra_lanes.push((of, p));
-                    *match of {
-                        LaneOf::Cuts => &mut self.folds.effects,
-                        LaneOf::Track(crate::overlay::Track::Overlay) => &mut self.folds.overlay_effects,
-                        LaneOf::Track(crate::overlay::Track::Text) => &mut self.folds.text_effects,
+                    // Its row opened: a place value's is the Motion row.
+                    let motion = matches!(p, super::automation_ui::Param::Place(_));
+                    *match (of, motion) {
+                        (LaneOf::Cuts, _) => &mut self.folds.effects,
+                        (LaneOf::Track(crate::overlay::Track::Overlay), false) => &mut self.folds.overlay_effects,
+                        (LaneOf::Track(crate::overlay::Track::Overlay), true) => &mut self.folds.overlay_motion,
+                        (LaneOf::Track(crate::overlay::Track::Text), false) => &mut self.folds.text_effects,
+                        (LaneOf::Track(crate::overlay::Track::Text), true) => &mut self.folds.text_motion,
                     } = false;
                 }
             }

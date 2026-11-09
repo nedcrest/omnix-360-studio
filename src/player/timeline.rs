@@ -1491,16 +1491,18 @@ impl OverlayLane {
         if self.folded() || fold_tag(&self.tag_name(name), (self.0.rows.overlay - 4.0) / 2.0 + 2.0).contains(p) {
             return OverlayHit::Fold;
         }
+        // Its Effects and Motion rows' names, in the header column too.
+        for motion in [false, true] {
+            if !self.blocks().is_empty() && self.lanes(motion).on_tag(p) {
+                return OverlayHit::LanesFold(motion);
+            }
+        }
         // The rest of the header column: nothing there.
         if p.x < HEAD {
             return OverlayHit::Nothing;
         }
         for motion in [false, true] {
-            let lanes = self.lanes(motion);
-            if !self.blocks().is_empty() && lanes.on_tag(p) {
-                return OverlayHit::LanesFold(motion);
-            }
-            if let Some(h) = lanes.hit(p, b) {
+            if let Some(h) = self.lanes(motion).hit(p, b) {
                 return OverlayHit::Auto(motion, h);
             }
         }
@@ -2875,6 +2877,13 @@ mod tests {
         let lane2 = lane_with(vec![Param::Grade(9), Param::Place(0)], true);
         assert_eq!(lane2.motion_top(), lane2.0.rows.overlay + EFFECTS + AUTO);
         assert_eq!((lane2.lanes(false).tag(), lane2.lanes(true).tag()), ("▾ Effects".to_owned(), "▾ Motion".to_owned()));
+        // Each row's name folds its lanes.
+        for motion in [false, true] {
+            let lanes = lane2.lanes(motion);
+            let p = Point::new(HEAD / 2.0, lanes.row_top + lanes.row_h / 2.0);
+            assert!(lanes.on_tag(p), "{motion}: on its tag");
+            assert_eq!(lane2.hit(p, b), OverlayHit::LanesFold(motion), "{motion}");
+        }
     }
 
     #[test]

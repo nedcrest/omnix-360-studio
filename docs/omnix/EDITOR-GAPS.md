@@ -109,6 +109,7 @@ done in part stays here until its last card is done.
 | 87 | Style looks (old film, VHS, neo-cyberpunk) for a video, an overlay picture or text; animation presets for text and pictures | [done](EDITOR-GAPS-DONE.md) |
 | 88 | The Osmo 360 II: its calibration and 8K50 decoding | below |
 | 89 | Auto colour: exposure and white balance set from the picture (or by an AI), keyed where the camera misses | below |
+| 93 | Effects edit the selected clip only, with the playhead on it; a clear notice when they're apart | below |
 | 92 | Play a stretch: drag a range on the ruler, Shift+Space plays it once and comes back to its start, paused; a button beside Play | below |
 | 91 | Pictures from the bin or the file manager dragged onto the overlay lane; a «Pictures» folder in every project | below |
 | 90 | The Effects panel sorted: groups, a side panel for complex controls, one scope | [done](EDITOR-GAPS-DONE.md) |
@@ -1529,6 +1530,28 @@ this beside our Play."
 - «Play the join» (transitions) already plays a stretch and stops: share
   its stop-and-return.
 - Milestone «Зручний таймлайн».
+
+### 93. Effects edit the selected clip, the playhead on it — idea (user, 2026-11-10)
+
+The user: the Effects sliders work on the selected clip only while the
+playhead is on it; when the playhead and the selected clip are apart,
+show a notice at the top that can't be missed ("the playhead isn't on
+the selected clip: make sure which clip you're editing"). A good
+constraint: no misclick edits another clip, and an edit happens only
+with the playhead on the clip (its start or end counting).
+
+Today (`App::effect_target`): a selected text or picture is the target
+while the playhead is on it; otherwise the panel quietly works on the
+cut under the playhead, a selected cut or not (a selected cut is
+ignored). The header names the target in small print.
+
+- With a selection: the panel is locked to it. Playhead off it → a
+  notice at the top (a warning colour), the controls greyed, and a
+  button «Go to it» (the playhead to its nearest end).
+- With no selection: the cut under the playhead, as today, said plainly.
+- The same notice wherever a panel edits a clip in time (the Text
+  panel's look isn't timed; it may stay free).
+- Milestone «Ефекти, колір і розумний звук».
 
 ## Format rule for all of these
 

@@ -1510,8 +1510,15 @@ cutaways, a program of its own) is another thing: it makes new footage.
   PNG's outline too), so the player and the export draw the same;
   `ItemOp::Kind` (pictures only); the Effects panel's Kind group;
   `describe` and `looks` say it. Limit: overlays are still pictures, so
-  picture in picture holds a picture, not a playing video. Next: 2d
-  styles on text and pictures.
+  picture in picture holds a picture, not a playing video.
+- **Step 2d built 2026-11-10, waiting for the check** (`efd2af5`,
+  `c3ee0a7`, `deeeb5a`): `Item::style` (as a cut's), `ItemOp::Style` and
+  `StyleKnob` sharing the cut's checks; the item's picture styled first
+  (CPU `Picture::styled`; the player runs the style pass on it into a
+  picture of its own, `StyledSlot`, the see-through kept), then laid on
+  the frame; GPU test on a living and a blurring look; the Effects
+  panel's Look group and side panel for items. With it, step 2 is built
+  whole.
 - **What editors animate on text and pictures** (looked at 2026-11-10:
   CapCut, Premiere, Final Cut, Filmora, Firefly): position, scale,
   rotation, opacity (all automatable here now, gap 39), colour; then blur

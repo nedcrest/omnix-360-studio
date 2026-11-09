@@ -67,6 +67,11 @@ pub enum CutOp {
     Style { cut: Id, look: Option<crate::transition::Look> },
     /// One of its style's own settings, as `TransitionKnob`.
     StyleKnob { cut: Id, key: String, value: Option<f32> },
+    /// An object followed through its footage (a tracker's, or written by
+    /// hand), replacing one of that name (gap 37's contract).
+    Track { cut: Id, track: crate::automation::ObjectTrack },
+    /// Its track named `name` taken away (clips made from it stay).
+    Untrack { cut: Id, name: String },
     Stabilize { cut: Id, mode: Option<Mode> },
     Lut { cut: Id, lut: Option<String> },
     Delete { cut: Id },
@@ -206,6 +211,25 @@ pub(super) fn apply(p: &mut Project, op: &CutOp) -> Result<Outcome, OpError> {
             let params = c.style.take().filter(|s| Some(s.look) == look).map(|s| s.params).unwrap_or_default();
             c.style = look.map(|look| crate::project::Style { look, params });
             said(format!("cut #{cut}: style {}", look.map_or("none", |l| l.name())))
+        }
+        CutOp::Track { cut, track } => {
+            let i = find(p, *cut)?;
+            if track.name.trim().is_empty() || track.samples.iter().any(|s| ![s.t, s.x, s.y].iter().all(|v| v.is_finite())) || track.samples.windows(2).any(|w| w[0].t > w[1].t) {
+                return Err(OpError::Invalid("a track needs a name and samples that are numbers in time order".into()));
+            }
+            let tracks = &mut p.cuts[i].tracks;
+            tracks.retain(|t| t.name != track.name);
+            tracks.push(track.clone());
+            said(format!("cut #{cut}: track «{}», {} samples", track.name, track.samples.len()))
+        }
+        CutOp::Untrack { cut, name } => {
+            let i = find(p, *cut)?;
+            let before = p.cuts[i].tracks.len();
+            p.cuts[i].tracks.retain(|t| t.name != *name);
+            if p.cuts[i].tracks.len() == before {
+                return Err(OpError::NotFound(format!("track «{name}» on cut #{cut}")));
+            }
+            said(format!("cut #{cut}: track «{name}» gone"))
         }
         CutOp::StyleKnob { cut, key, value } => {
             let i = find(p, *cut)?;

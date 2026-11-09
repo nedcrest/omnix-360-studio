@@ -29,6 +29,74 @@ pub struct AutoClip {
     /// Its curve, in time order: held before the first point and after the
     /// last, eased from each to the next.
     pub points: Vec<AutoPoint>,
+    /// The tracked object it was made from (`AutoOp::Follow`), so it can be
+    /// made again when its cut moves; none: drawn by hand.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub follows: Option<Follows>,
+}
+
+/// Where a clip that follows an object came from: cut `cut`'s track
+/// `track`, and what was added to it.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Follows {
+    pub cut: crate::project::Id,
+    pub track: String,
+    #[serde(default)]
+    pub offset: f64,
+}
+
+/// An object followed through a cut's footage (the tracking contract, gap
+/// 37): its name and where it is over time. A tracker writes it (or an
+/// agent, `CutOp::Track`); an overlay or text is tied to it by
+/// `AutoOp::Follow`, which makes its place's automation clips from it.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ObjectTrack {
+    /// Unique within its cut («ball», «face 1»).
+    pub name: String,
+    /// In clip time order.
+    pub samples: Vec<TrackSample>,
+}
+
+/// Where a tracked object is at clip time `t`: its centre across and down
+/// the cut's frame as it's shown (0..1, as an overlay's place), its size
+/// (the share of the frame's height) and turn (degrees) when the tracker
+/// knows them, and how sure it is (0..1).
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct TrackSample {
+    pub t: f64,
+    pub x: f64,
+    pub y: f64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub size: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rotation: Option<f64>,
+    #[serde(default = "sure", skip_serializing_if = "is_sure")]
+    pub confidence: f64,
+}
+
+fn sure() -> f64 {
+    1.0
+}
+
+fn is_sure(v: &f64) -> bool {
+    *v == 1.0
+}
+
+impl TrackSample {
+    /// Its value for an overlay's place value `name` (`Place::NAMES`), if
+    /// the tracker gave one.
+    pub fn value(&self, name: &str) -> Option<f64> {
+        match name {
+            "x" => Some(self.x),
+            "y" => Some(self.y),
+            "size" => self.size,
+            "rotation" => self.rotation,
+            _ => None,
+        }
+    }
 }
 
 /// A point of a clip's curve: clip time, the value, how it moves on.
@@ -113,7 +181,7 @@ pub fn from_keys<K: Keyed>(keys: &mut Vec<K>, from: f64, to: f64) -> Vec<AutoCli
             continue;
         }
         let points = keys.iter().map(|key| AutoPoint { t: key.time(), v: key.values()[k], ease: key.ease() }).collect();
-        clips.push(AutoClip { param: name.to_owned(), from, to, points });
+        clips.push(AutoClip { param: name.to_owned(), from, to, points, follows: None });
     }
     keys.truncate(1);
     clips
@@ -167,7 +235,7 @@ mod tests {
     use super::*;
 
     fn clip(param: &str, from: f64, to: f64, points: &[(f64, f64)]) -> AutoClip {
-        AutoClip { param: param.into(), from, to, points: points.iter().map(|&(t, v)| AutoPoint { t, v, ease: Ease::Linear }).collect() }
+        AutoClip { param: param.into(), from, to, points: points.iter().map(|&(t, v)| AutoPoint { t, v, ease: Ease::Linear }).collect(), follows: None }
     }
 
     #[test]

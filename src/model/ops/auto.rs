@@ -6,7 +6,7 @@
 use super::keys::Graded;
 use super::{End, OpError, Outcome, said};
 use crate::automation::{AutoClip, AutoPoint};
-use crate::project::Project;
+use crate::project::{Id, Project};
 use crate::view::Ease;
 use serde::{Deserialize, Serialize};
 
@@ -38,6 +38,12 @@ pub enum AutoOp {
     PointDelete { on: Graded, param: String, t: f64, #[serde(default = "half_a_frame")] tolerance: f64 },
     /// How the point at `t` moves on to the next.
     PointEase { on: Graded, param: String, t: f64, ease: Ease, #[serde(default = "half_a_frame")] tolerance: f64 },
+    /// Item `item`'s place values `params` ("x", "y", "size", "rotation")
+    /// made to follow cut `cut`'s track `track` where the two run at once,
+    /// `offsets` added (one each, 0 if left out): a clip each, its points
+    /// the track's samples, marked as following it; clips of those values
+    /// there before are replaced (gap 37's contract).
+    Follow { item: Id, cut: Id, track: String, params: Vec<String>, #[serde(default)] offsets: Vec<f64> },
 }
 
 /// What an operation works on: the clips, the stretch they live in, the
@@ -115,7 +121,7 @@ pub(super) fn apply(p: &mut Project, op: &AutoOp) -> Result<Outcome, OpError> {
             clear(o.clips, param, from, to, None)?;
             let points = [from, to].map(|t| AutoPoint { t, v: (o.base)(param, t), ease: Ease::Smooth }).to_vec();
             let i = o.clips.partition_point(|c| c.from <= from);
-            o.clips.insert(i, AutoClip { param: param.clone(), from, to, points });
+            o.clips.insert(i, AutoClip { param: param.clone(), from, to, points, follows: None });
             said(format!("{}: {param} automated {from:.2}-{to:.2} s", name(*on)))
         }
         AutoOp::Move { on, param, at, from } => {
@@ -173,6 +179,7 @@ pub(super) fn apply(p: &mut Project, op: &AutoOp) -> Result<Outcome, OpError> {
             c.points.remove(k);
             said(format!("{}: {param} point at {t:.2} s gone", name(*on)))
         }
+        AutoOp::Follow { item, cut, track, params, offsets } => follow(p, *item, *cut, track, params, offsets),
         AutoOp::PointEase { on, param, t, ease, tolerance } => {
             let o = owner(p, *on)?;
             let i = clip_at(o.clips, param, *t)?;
@@ -182,6 +189,40 @@ pub(super) fn apply(p: &mut Project, op: &AutoOp) -> Result<Outcome, OpError> {
             said(format!("{}: {param} point at {t:.2} s eases {ease}", name(*on)))
         }
     }
+}
+
+/// `AutoOp::Follow`: the track's samples where both run, in the item's
+/// own time, made into its place's clips.
+fn follow(p: &mut Project, item: Id, cut: Id, track: &str, params: &[String], offsets: &[f64]) -> Result<Outcome, OpError> {
+    let ci = p.cut_index(cut).ok_or_else(|| OpError::NotFound(format!("cut #{cut}")))?;
+    let at = crate::project::offsets(&p.cuts)[ci];
+    let c = &p.cuts[ci];
+    let tr = c.tracks.iter().find(|t| t.name == track).ok_or_else(|| OpError::NotFound(format!("track «{track}» on cut #{cut}")))?;
+    let samples: Vec<(f64, crate::automation::TrackSample)> = tr.samples.iter().filter(|s| s.t >= c.start && s.t <= c.end).map(|s| (at + s.t - c.start, *s)).collect();
+    let (track_at, l, i) = p.item_index(item).ok_or_else(|| OpError::NotFound(format!("item #{item}")))?;
+    let lanes = match track_at {
+        crate::overlay::Track::Overlay => &mut p.overlays,
+        crate::overlay::Track::Text => &mut p.text,
+    };
+    let it = &mut lanes[l].items[i];
+    let own = |edit: f64| it.start + edit - it.at;
+    let within: Vec<(f64, crate::automation::TrackSample)> = samples.into_iter().map(|(e, s)| (own(e), s)).filter(|(t, _)| *t >= it.start && *t <= it.end).collect();
+    for (k, param) in params.iter().enumerate() {
+        if !crate::overlay::Place::NAMES.contains(&param.as_str()) {
+            return Err(OpError::NotFound(format!("place value {param:?} to follow with")));
+        }
+        let offset = offsets.get(k).copied().unwrap_or(0.0);
+        let points: Vec<AutoPoint> = within.iter().filter_map(|(t, s)| Some(AutoPoint { t: *t, v: s.value(param)? + offset, ease: Ease::Linear })).collect();
+        let (Some(first), Some(last)) = (points.first(), points.last()) else {
+            return Err(OpError::Invalid(format!("track «{track}» has no {param} while item #{item} runs")));
+        };
+        let (from, to) = (first.t, last.t.max(first.t + SHORTEST));
+        it.automation.retain(|a| !(a.param == *param && a.from < to && a.to > from));
+        let follows = Some(crate::automation::Follows { cut, track: track.to_owned(), offset });
+        it.automation.push(AutoClip { param: param.clone(), from, to, points, follows });
+    }
+    it.automation.sort_by(|a, b| a.from.total_cmp(&b.from));
+    said(format!("item #{item} follows «{track}» on cut #{cut}: {}", params.join(", ")))
 }
 
 fn name(on: Graded) -> String {
@@ -223,4 +264,28 @@ mod tests {
         assert_eq!(e.cuts[0].automation.len(), 1);
         check(&e).unwrap();
     }
+
+    #[test]
+    fn an_item_follows_a_tracked_object_where_both_run() {
+        use crate::automation::{ObjectTrack, TrackSample};
+        // Cut 0..4 s of its clip 10..14; the item at edit 1..3 s.
+        let mut p = Project { cuts: vec![Cut::new("a.mp4".into(), 10.0, 14.0)], ..Default::default() };
+        p.settle_ids();
+        let mut e = Edit::default();
+        e.replace(p);
+        let cut = e.cuts[0].id;
+        let item = e.apply(&Op::Item(crate::model::ops::items::ItemOp::AddText { text: Default::default(), at: 1.0, len: 2.0 })).unwrap().made.unwrap();
+        let samples = (0..=8).map(|k| TrackSample { t: 10.0 + k as f64 * 0.5, x: 0.1 * k as f64, y: 0.5, size: None, rotation: None, confidence: 1.0 }).collect();
+        e.apply(&Op::Cut(crate::model::ops::cuts::CutOp::Track { cut, track: ObjectTrack { name: "ball".into(), samples } })).unwrap();
+        e.apply(&Op::Auto(AutoOp::Follow { item, cut, track: "ball".into(), params: vec!["x".into(), "y".into()], offsets: vec![0.0, -0.1] })).unwrap();
+        let it = &e.text[0].items[0];
+        let x = it.automation.iter().find(|a| a.param == "x").unwrap();
+        // Edit 1..3 s is the clip's 11..13 s: samples 2..6, x 0.2..0.6.
+        assert_eq!((x.points.len(), x.from, x.to), (5, 0.0, 2.0));
+        assert!((x.value_at(1.0) - 0.4).abs() < 1e-9 && x.follows.as_ref().is_some_and(|f| f.track == "ball"));
+        assert!((it.automation.iter().find(|a| a.param == "y").unwrap().value_at(1.0) - 0.4).abs() < 1e-9, "the offset added");
+        assert!(e.apply(&Op::Auto(AutoOp::Follow { item, cut, track: "ball".into(), params: vec!["size".into()], offsets: vec![] })).is_err(), "no size tracked");
+        check(&e).unwrap();
+    }
+
 }

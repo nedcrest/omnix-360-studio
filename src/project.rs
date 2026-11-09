@@ -622,6 +622,10 @@ pub struct Cut {
     /// Its effects moved over time (`automation::AutoClip`), clip time.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub automation: Vec<crate::automation::AutoClip>,
+    /// Objects followed through its footage (`automation::ObjectTrack`),
+    /// for overlays and text to follow (gap 37's contract).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tracks: Vec<crate::automation::ObjectTrack>,
     /// Its colour effects' keyframes, clip time, apart from the camera's.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub effects: Vec<crate::grade::EffectKey>,
@@ -708,6 +712,7 @@ impl Cut {
             edge_out: None,
             style: None,
             automation: Vec::new(),
+            tracks: Vec::new(),
             effects: Vec::new(),
             marks: Vec::new(),
             lut: None,

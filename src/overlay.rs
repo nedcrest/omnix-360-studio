@@ -70,6 +70,10 @@ pub struct Item {
     /// Cinematic bars instead of a picture (gap 15).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bars: Option<Bars>,
+    /// Its effects and place moved over time (`automation::AutoClip`),
+    /// its own time.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub automation: Vec<crate::automation::AutoClip>,
 }
 
 /// Cinematic bars (gap 15, the user's route, 2026-11-04): an item on the
@@ -482,7 +486,8 @@ pub fn composite(frame: &mut Frame, picture: &Picture, quad: &Quad, grade: &Grad
 /// What an item looks like at edit time `t`: its place and effects.
 pub fn look(item: &Item, t: f64) -> (Place, Grade) {
     let local = item.local(t);
-    (place_at(&item.motion, local), grade_at(&item.effects, local))
+    let (place, grade) = (place_at(&item.motion, local), grade_at(&item.effects, local));
+    (crate::automation::placed(place, &item.automation, local), crate::automation::graded(grade, &item.automation, local))
 }
 
 /// The overlays of an edit, their pictures loaded, to draw over frames at
@@ -568,7 +573,7 @@ mod tests {
 
     #[test]
     fn bars_slide_in_to_the_ratio_and_out() {
-        let item = Item { id: 0, input: PathBuf::new(), text: None, at: 10.0, start: 0.0, end: 6.0, motion: vec![], effects: vec![], bars: Some(Bars::default()) };
+        let item = Item { id: 0, input: PathBuf::new(), text: None, at: 10.0, start: 0.0, end: 6.0, motion: vec![], effects: vec![], bars: Some(Bars::default()), automation: Vec::new() };
         let pic = item.picture(0, 1080).unwrap().0;
         let band = |t: f64, top: bool| spots(&item, t).into_iter().find(|(s, _)| matches!(s, Spot::Band { top: tp, .. } if *tp == top)).unwrap().0.quad(&pic, (1920, 1080));
         // 16:9 to 2.39:1: about 138 px each, top and bottom.
@@ -584,7 +589,7 @@ mod tests {
     }
 
     fn item(at: f64, len: f64) -> Item {
-        Item { id: 0, input: "a.png".into(), text: None, at, start: 0.0, end: len, motion: Vec::new(), effects: Vec::new(), bars: None }
+        Item { id: 0, input: "a.png".into(), text: None, at, start: 0.0, end: len, motion: Vec::new(), effects: Vec::new(), bars: None, automation: Vec::new() }
     }
 
     #[test]

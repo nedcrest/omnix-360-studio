@@ -131,7 +131,7 @@ impl App {
     /// edit's fades are.
     pub(super) fn grade(&self, i: usize, t: f64) -> crate::grade::Grade {
         let Some(cut) = self.edit.cuts.get(i) else { return Default::default() };
-        let mut grade = crate::grade::grade_at(&cut.effects, t);
+        let mut grade = cut.grade_at(t);
         grade.black = self.edit.fades.black(self.edit.edit_time(i, t), self.edit.duration());
         grade
     }

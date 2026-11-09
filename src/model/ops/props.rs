@@ -21,7 +21,7 @@ fn project() -> Project {
     let mut p = Project { cuts: vec![Cut::new("a.mp4".into(), 0.0, 4.0), Cut::new("b.mp4".into(), 1.0, 4.0), Cut::new("c.mp4".into(), 0.0, 2.0)], ..Default::default() };
     p.music.clips.push(MusicClip { input: "song.wav".into(), at: 0.0, start: 0.0, end: 9.0, ..Default::default() });
     p.sfx.clips.push(MusicClip { input: "bell.wav".into(), at: 2.0, start: 0.0, end: 1.0, ..Default::default() });
-    let item = |text: bool, at: f64| Item { id: 0, input: if text { "".into() } else { "logo.png".into() }, text: text.then(Default::default), at, start: 0.0, end: 3.0, motion: Vec::new(), effects: Vec::new(), bars: None };
+    let item = |text: bool, at: f64| Item { id: 0, input: if text { "".into() } else { "logo.png".into() }, text: text.then(Default::default), at, start: 0.0, end: 3.0, motion: Vec::new(), effects: Vec::new(), bars: None, automation: Vec::new() };
     p.overlays.push(Lane { items: vec![item(false, 0.0)] });
     p.text.push(Lane { items: vec![item(true, 1.0)] });
     p.settle_ids();
@@ -137,8 +137,21 @@ fn key_op() -> impl Strategy<Value = KeyOp> {
     ]
 }
 
+fn auto_op() -> impl Strategy<Value = super::auto::AutoOp> {
+    use super::auto::AutoOp;
+    let param = prop::sample::select(vec!["exposure".to_owned(), "vignette".to_owned(), "x".to_owned()]);
+    prop_oneof![
+        (graded(), param.clone(), time(), time()).prop_map(|(on, param, from, to)| AutoOp::Add { on, param, from, to }),
+        (graded(), param.clone(), time(), time()).prop_map(|(on, param, at, from)| AutoOp::Move { on, param, at, from }),
+        (graded(), param.clone(), time(), end(), time()).prop_map(|(on, param, at, end, t)| AutoOp::Trim { on, param, at, end, t }),
+        (graded(), param.clone(), time(), -1.0..1.0f64).prop_map(|(on, param, t, v)| AutoOp::Point { on, param, t, v, from: None, tolerance: 0.02 }),
+        (graded(), param.clone(), time()).prop_map(|(on, param, t)| AutoOp::PointDelete { on, param, t, tolerance: 0.02 }),
+        (graded(), param, time()).prop_map(|(on, param, at)| AutoOp::Delete { on, param, at }),
+    ]
+}
+
 fn op() -> impl Strategy<Value = Op> {
-    prop_oneof![cut_op().prop_map(Op::Cut), clip_op().prop_map(Op::Clip), sound_op().prop_map(Op::Sound), item_op().prop_map(Op::Item), key_op().prop_map(Op::Key)]
+    prop_oneof![cut_op().prop_map(Op::Cut), clip_op().prop_map(Op::Clip), sound_op().prop_map(Op::Sound), item_op().prop_map(Op::Item), key_op().prop_map(Op::Key), auto_op().prop_map(Op::Auto)]
 }
 
 proptest! {

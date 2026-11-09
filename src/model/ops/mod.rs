@@ -8,6 +8,7 @@
 //! are absolute, and ops derived from the sound start from the original,
 //! so applying one twice is applying it once.
 
+pub mod auto;
 pub mod clips;
 pub mod cuts;
 pub mod items;
@@ -29,6 +30,8 @@ pub enum Op {
     Item(items::ItemOp),
     Key(keys::KeyOp),
     Sound(sound::SoundOp),
+    /// Automation clips (gap 39).
+    Auto(auto::AutoOp),
 }
 
 /// A sound that has its own level, line and fades: a cut's or a sound
@@ -118,6 +121,7 @@ fn apply(p: &mut Project, op: &Op) -> Result<Outcome, OpError> {
         Op::Item(op) => items::apply(p, op),
         Op::Key(op) => keys::apply(p, op),
         Op::Sound(op) => sound::apply(p, op),
+        Op::Auto(op) => auto::apply(p, op),
     }
 }
 
@@ -164,6 +168,20 @@ impl Edit {
 /// What must hold in any project an op leaves: ids given and unique,
 /// stretches the right way round, volume points in time order and
 /// numbers. The tests run it after every op, undo and redo.
+/// Automation clips that have a length and a point, points in time order,
+/// and no two of one value overlapping.
+fn automation(what: &str, clips: &[crate::automation::AutoClip]) -> Result<(), String> {
+    for (i, c) in clips.iter().enumerate() {
+        if c.to.partial_cmp(&c.from) != Some(std::cmp::Ordering::Greater) || c.points.is_empty() || c.points.windows(2).any(|w| w[0].t > w[1].t) || c.points.iter().any(|q| !q.v.is_finite()) {
+            return Err(format!("{what}'s {} clip {:.2}-{:.2} s is empty or out of order", c.param, c.from, c.to));
+        }
+        if clips[..i].iter().any(|o| o.param == c.param && c.from < o.to && c.to > o.from) {
+            return Err(format!("{what}'s {} clips overlap", c.param));
+        }
+    }
+    Ok(())
+}
+
 pub fn check(p: &Project) -> Result<(), String> {
     let mut ids = std::collections::HashSet::new();
     let mut id = |what: &str, id: Id| if id == 0 || !ids.insert(id) { Err(format!("{what} has id {id}, not given or taken")) } else { Ok(()) };
@@ -183,6 +201,7 @@ pub fn check(p: &Project) -> Result<(), String> {
         if c.marks.iter().any(|m| !m.t.is_finite()) || c.marks.windows(2).any(|w| w[0].t > w[1].t) {
             return Err(format!("cut #{}'s markers aren't numbers in time order", c.id));
         }
+        automation(&format!("cut #{}", c.id), &c.automation)?;
     }
     for w in SoundTrack::ALL {
         for c in &p.track(w).clips {
@@ -195,6 +214,7 @@ pub fn check(p: &Project) -> Result<(), String> {
     }
     for i in p.overlays.iter().chain(&p.text).flat_map(|l| &l.items) {
         id("an overlay", i.id)?;
+        automation(&format!("item #{}", i.id), &i.automation)?;
         if i.end <= i.start {
             return Err(format!("overlay #{} ends before it starts", i.id));
         }

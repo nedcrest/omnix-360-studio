@@ -1,0 +1,226 @@
+//! Automation clips' operations (gap 39): a clip on a value's lane of a
+//! cut or an item, moved, trimmed, taken away, and the points of its
+//! curve. A clip is found by its value's name and a time inside it, as
+//! keys are by their time.
+
+use super::keys::Graded;
+use super::{End, OpError, Outcome, said};
+use crate::automation::{AutoClip, AutoPoint};
+use crate::project::Project;
+use crate::view::Ease;
+use serde::{Deserialize, Serialize};
+
+/// The shortest clip, seconds.
+pub const SHORTEST: f64 = 0.1;
+
+fn half_a_frame() -> f64 {
+    1.0 / 60.0
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(tag = "op", rename_all = "snake_case", deny_unknown_fields)]
+pub enum AutoOp {
+    /// A clip moving `param` (an effect, `grade::NAMES`; on an item also
+    /// its place, `Place::NAMES`) over `from`..`to` (clip or own time,
+    /// kept within the cut or item), flat at the value it has there; it
+    /// mustn't overlap another of that value.
+    Add { on: Graded, param: String, from: f64, to: f64 },
+    /// The clip of `param` at `at` to start at `from`, its points with it.
+    Move { on: Graded, param: String, at: f64, from: f64 },
+    /// Its start (`In`) or end (`Out`) to `t`; its points stay where they
+    /// are in time.
+    Trim { on: Graded, param: String, at: f64, end: End, t: f64 },
+    Delete { on: Graded, param: String, at: f64 },
+    /// A point of the clip of `param` covering `t`: the one at `from` (or,
+    /// without it, at `t`) to `t` and value `v`, or a new one there.
+    Point { on: Graded, param: String, t: f64, v: f64, #[serde(default)] from: Option<f64>, #[serde(default = "half_a_frame")] tolerance: f64 },
+    /// The point at `t` taken away (a clip keeps one at least).
+    PointDelete { on: Graded, param: String, t: f64, #[serde(default = "half_a_frame")] tolerance: f64 },
+    /// How the point at `t` moves on to the next.
+    PointEase { on: Graded, param: String, t: f64, ease: Ease, #[serde(default = "half_a_frame")] tolerance: f64 },
+}
+
+/// What an operation works on: the clips, the stretch they live in, the
+/// values they can move, the value each has where no clip is.
+struct Owner<'a> {
+    clips: &'a mut Vec<AutoClip>,
+    range: (f64, f64),
+    base: Base<'a>,
+    item: bool,
+}
+
+/// A value's value where no clip is, by its name and a time.
+type Base<'a> = Box<dyn Fn(&str, f64) -> f64 + 'a>;
+
+fn owner(p: &mut Project, on: Graded) -> Result<Owner<'_>, OpError> {
+    match on {
+        Graded::Cut(id) => {
+            let i = p.cut_index(id).ok_or_else(|| OpError::NotFound(format!("cut #{id}")))?;
+            let c = &mut p.cuts[i];
+            let (effects, range) = (c.effects.clone(), (c.start, c.end));
+            Ok(Owner { clips: &mut c.automation, range, base: Box::new(move |param, t| grade_value(&effects, param, t)), item: false })
+        }
+        Graded::Item(id) => {
+            let (track, l, i) = p.item_index(id).ok_or_else(|| OpError::NotFound(format!("item #{id}")))?;
+            let lanes = match track {
+                crate::overlay::Track::Overlay => &mut p.overlays,
+                crate::overlay::Track::Text => &mut p.text,
+            };
+            let it = &mut lanes[l].items[i];
+            let (effects, motion, range) = (it.effects.clone(), it.motion.clone(), (it.start, it.end));
+            let base = move |param: &str, t: f64| match crate::overlay::Place::NAMES.iter().position(|n| *n == param) {
+                Some(k) => crate::overlay::place_at(&motion, t).values()[k],
+                None => grade_value(&effects, param, t),
+            };
+            Ok(Owner { clips: &mut it.automation, range, base: Box::new(base), item: true })
+        }
+    }
+}
+
+fn grade_value(effects: &[crate::grade::EffectKey], param: &str, t: f64) -> f64 {
+    let k = crate::grade::NAMES.iter().position(|n| *n == param).unwrap_or(0);
+    crate::grade::grade_at(effects, t).values()[k]
+}
+
+/// `param` names something `o` can move.
+fn check_param(o: &Owner, param: &str) -> Result<(), OpError> {
+    let place = o.item && crate::overlay::Place::NAMES.contains(&param);
+    if crate::grade::NAMES.contains(&param) || place {
+        Ok(())
+    } else {
+        Err(OpError::NotFound(format!("value {param:?} to automate")))
+    }
+}
+
+/// The clip of `param` covering `at`.
+fn clip_at(clips: &[AutoClip], param: &str, at: f64) -> Result<usize, OpError> {
+    clips.iter().position(|c| c.param == param && c.covers(at)).ok_or_else(|| OpError::NotFound(format!("{param} clip at {at:.2} s")))
+}
+
+/// `from`..`to` clear of `param`'s other clips (all but `but`).
+fn clear(clips: &[AutoClip], param: &str, from: f64, to: f64, but: Option<usize>) -> Result<(), OpError> {
+    let hit = clips.iter().enumerate().any(|(i, c)| Some(i) != but && c.param == param && from < c.to && to > c.from);
+    if hit { Err(OpError::Invalid(format!("another {param} clip is there"))) } else { Ok(()) }
+}
+
+pub(super) fn apply(p: &mut Project, op: &AutoOp) -> Result<Outcome, OpError> {
+    match op {
+        AutoOp::Add { on, param, from, to } => {
+            let o = owner(p, *on)?;
+            check_param(&o, param)?;
+            let (from, to) = (from.min(*to).max(o.range.0), from.max(*to).min(o.range.1));
+            if (to - from).partial_cmp(&SHORTEST) == Some(std::cmp::Ordering::Less) || (to - from).is_nan() {
+                return Err(OpError::Invalid(format!("an automation clip runs {SHORTEST} s at least, within its own")));
+            }
+            clear(o.clips, param, from, to, None)?;
+            let points = [from, to].map(|t| AutoPoint { t, v: (o.base)(param, t), ease: Ease::Smooth }).to_vec();
+            let i = o.clips.partition_point(|c| c.from <= from);
+            o.clips.insert(i, AutoClip { param: param.clone(), from, to, points });
+            said(format!("{}: {param} automated {from:.2}-{to:.2} s", name(*on)))
+        }
+        AutoOp::Move { on, param, at, from } => {
+            let o = owner(p, *on)?;
+            let i = clip_at(o.clips, param, *at)?;
+            let len = o.clips[i].to - o.clips[i].from;
+            let from = from.clamp(o.range.0, (o.range.1 - len).max(o.range.0));
+            clear(o.clips, param, from, from + len, Some(i))?;
+            let c = &mut o.clips[i];
+            let by = from - c.from;
+            (c.from, c.to) = (from, from + len);
+            c.points.iter_mut().for_each(|q| q.t += by);
+            o.clips.sort_by(|a, b| a.from.total_cmp(&b.from));
+            said(format!("{}: {param} clip to {from:.2} s", name(*on)))
+        }
+        AutoOp::Trim { on, param, at, end, t } => {
+            let o = owner(p, *on)?;
+            let i = clip_at(o.clips, param, *at)?;
+            let (from, to) = (o.clips[i].from, o.clips[i].to);
+            let (from, to) = if *end == End::In { (t.clamp(o.range.0, to - SHORTEST), to) } else { (from, t.clamp(from + SHORTEST, o.range.1)) };
+            clear(o.clips, param, from, to, Some(i))?;
+            (o.clips[i].from, o.clips[i].to) = (from, to);
+            said(format!("{}: {param} clip {from:.2}-{to:.2} s", name(*on)))
+        }
+        AutoOp::Delete { on, param, at } => {
+            let o = owner(p, *on)?;
+            let i = clip_at(o.clips, param, *at)?;
+            o.clips.remove(i);
+            said(format!("{}: {param} clip at {at:.2} s gone", name(*on)))
+        }
+        AutoOp::Point { on, param, t, v, from, tolerance } => {
+            if !v.is_finite() {
+                return Err(OpError::Invalid(format!("{param} {v} isn't a number")));
+            }
+            let o = owner(p, *on)?;
+            let i = clip_at(o.clips, param, from.unwrap_or(*t))?;
+            let c = &mut o.clips[i];
+            let t = t.clamp(c.from, c.to);
+            let near = |at: f64| c.points.iter().position(|q| (q.t - at).abs() <= *tolerance);
+            match near(from.unwrap_or(t)) {
+                Some(k) => (c.points[k].t, c.points[k].v) = (t, *v),
+                None => c.points.push(AutoPoint { t, v: *v, ease: Ease::Smooth }),
+            }
+            c.points.sort_by(|a, b| a.t.total_cmp(&b.t));
+            said(format!("{}: {param} {v} at {t:.2} s", name(*on)))
+        }
+        AutoOp::PointDelete { on, param, t, tolerance } => {
+            let o = owner(p, *on)?;
+            let i = clip_at(o.clips, param, *t)?;
+            let c = &mut o.clips[i];
+            let k = c.points.iter().position(|q| (q.t - t).abs() <= *tolerance).ok_or_else(|| OpError::NotFound(format!("{param} point at {t:.2} s")))?;
+            if c.points.len() == 1 {
+                return Err(OpError::Invalid("a clip keeps one point at least: delete the clip instead".into()));
+            }
+            c.points.remove(k);
+            said(format!("{}: {param} point at {t:.2} s gone", name(*on)))
+        }
+        AutoOp::PointEase { on, param, t, ease, tolerance } => {
+            let o = owner(p, *on)?;
+            let i = clip_at(o.clips, param, *t)?;
+            let c = &mut o.clips[i];
+            let q = c.points.iter_mut().find(|q| (q.t - t).abs() <= *tolerance).ok_or_else(|| OpError::NotFound(format!("{param} point at {t:.2} s")))?;
+            q.ease = *ease;
+            said(format!("{}: {param} point at {t:.2} s eases {ease}", name(*on)))
+        }
+    }
+}
+
+fn name(on: Graded) -> String {
+    match on {
+        Graded::Cut(id) => format!("cut #{id}"),
+        Graded::Item(id) => format!("item #{id}"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::{Op, check};
+    use super::*;
+    use crate::model::edit::Edit;
+    use crate::project::Cut;
+
+    #[test]
+    fn a_clip_is_added_flat_shaped_by_points_moved_trimmed_and_kept_apart() {
+        let mut p = Project { cuts: vec![Cut::new("a.mp4".into(), 1.0, 9.0)], ..Default::default() };
+        p.settle_ids();
+        let mut e = Edit::default();
+        e.replace(p);
+        let on = Graded::Cut(e.cuts[0].id);
+        let op = |op| Op::Auto(op);
+        e.apply(&op(AutoOp::Add { on, param: "exposure".into(), from: 2.0, to: 4.0 })).unwrap();
+        assert_eq!(e.cuts[0].automation[0].points.iter().map(|q| (q.t, q.v)).collect::<Vec<_>>(), [(2.0, 0.0), (4.0, 0.0)], "flat at the value there");
+        e.apply(&op(AutoOp::Point { on, param: "exposure".into(), t: 3.0, v: 1.0, from: None, tolerance: 0.01 })).unwrap();
+        assert!((e.cuts[0].grade_at(3.0).exposure - 1.0).abs() < 1e-9 && e.cuts[0].grade_at(5.0).exposure == 0.0);
+        assert!(e.apply(&op(AutoOp::Add { on, param: "exposure".into(), from: 3.5, to: 6.0 })).is_err(), "no overlap with its own");
+        e.apply(&op(AutoOp::Add { on, param: "vignette".into(), from: 3.5, to: 6.0 })).unwrap();
+        e.apply(&op(AutoOp::Move { on, param: "exposure".into(), at: 3.0, from: 6.0 })).unwrap();
+        let c = e.cuts[0].automation.iter().find(|c| c.param == "exposure").unwrap();
+        assert_eq!((c.from, c.to, c.points[1].t), (6.0, 8.0, 7.0), "its points with it");
+        e.apply(&op(AutoOp::Trim { on, param: "exposure".into(), at: 7.0, end: End::Out, t: 20.0 })).unwrap();
+        assert_eq!(e.cuts[0].automation.iter().find(|c| c.param == "exposure").unwrap().to, 9.0, "within the cut");
+        assert!(e.apply(&op(AutoOp::Add { on, param: "sparkle".into(), from: 1.0, to: 2.0 })).is_err());
+        assert!(e.apply(&op(AutoOp::Add { on, param: "x".into(), from: 1.0, to: 2.0 })).is_err(), "a cut has no place to move");
+        e.apply(&op(AutoOp::Delete { on, param: "vignette".into(), at: 4.0 })).unwrap();
+        assert_eq!(e.cuts[0].automation.len(), 1);
+        check(&e).unwrap();
+    }
+}

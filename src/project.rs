@@ -619,6 +619,9 @@ pub struct Cut {
     /// A style look over its whole picture, after its grade.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub style: Option<Style>,
+    /// Its effects moved over time (`automation::AutoClip`), clip time.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub automation: Vec<crate::automation::AutoClip>,
     /// Its colour effects' keyframes, clip time, apart from the camera's.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub effects: Vec<crate::grade::EffectKey>,
@@ -704,6 +707,7 @@ impl Cut {
             edge_in: None,
             edge_out: None,
             style: None,
+            automation: Vec::new(),
             effects: Vec::new(),
             marks: Vec::new(),
             lut: None,
@@ -831,6 +835,12 @@ impl Cut {
 
     pub fn len(&self) -> f64 {
         self.end - self.start
+    }
+
+    /// Its colour effects at clip time `t`: the values set, its automation
+    /// over them (the one answer the player and the export read).
+    pub fn grade_at(&self, t: f64) -> crate::grade::Grade {
+        crate::automation::graded(crate::grade::grade_at(&self.effects, t), &self.automation, t)
     }
 
     /// Its join's transition, as the player and the export draw it.
@@ -1023,6 +1033,10 @@ impl Project {
                     key.grade.lut = strength.clamp(0.0, 1.0);
                 }
             }
+            // Effect keys from before automation clips become clips (gap 39).
+            cut.effects.sort_by(|a, b| a.t.total_cmp(&b.t));
+            let clips = crate::automation::from_keys(&mut cut.effects, cut.start, cut.end);
+            crate::automation::adopt(&mut cut.automation, clips);
         }
         for which in SoundTrack::ALL {
             for (n, clip) in project.track_mut(which).clips.iter_mut().enumerate() {
@@ -1052,6 +1066,9 @@ impl Project {
             }
             item.motion.sort_by(|a, b| a.t.total_cmp(&b.t));
             item.effects.sort_by(|a, b| a.t.total_cmp(&b.t));
+            // And an item's effect and motion keys.
+            let clips = [crate::automation::from_keys(&mut item.effects, item.start, item.end), crate::automation::from_keys(&mut item.motion, item.start, item.end)].concat();
+            crate::automation::adopt(&mut item.automation, clips);
         }
         if project.cuts.iter().any(|c| !c.crossfade.is_finite()) {
             bail!("a crossfade isn't a number");
@@ -1393,7 +1410,7 @@ pub fn keyframed(cuts: &[Cut], n: usize, t: f64) -> Option<(&Keyframes, f64)> {
 /// goes on following in its own footage.
 pub fn camera_at(cuts: &[Cut], n: usize, t: f64, aim: Aim) -> Camera {
     let camera = keyframed(cuts, n, t).and_then(|(k, at)| k.camera_at(at, &held(aim, at == t, t))).unwrap_or_else(|| View::home(Projection::Perspective).camera());
-    Camera { grade: crate::grade::grade_at(&cuts[n].effects, t), lut: cuts[n].lut_applied, ..camera }
+    Camera { grade: cuts[n].grade_at(t), lut: cuts[n].lut_applied, ..camera }
 }
 
 /// `aim` for reading keyframes from `keyframed`: as asked in the cut's own
@@ -1426,7 +1443,7 @@ mod tests {
         let mut p = Project { cuts: vec![Cut::new("a.mp4".into(), 0.0, 4.0), Cut { audio: Some("voice.flac".into()), ..Cut::new("b.mp4".into(), 0.0, 3.0) }, Cut { audio: Some("voice.flac".into()), ..Cut::new("b.mp4".into(), 3.0, 5.0) }], ..Default::default() };
         p.music.append_part("song.wav".into(), 0.0, 0.0, 10.0);
         p.sfx.append_part("bang.wav".into(), 0.0, 0.0, 1.0);
-        let item = |input: &str, text| crate::overlay::Item { id: 0, input: input.into(), text, at: 0.0, start: 0.0, end: 5.0, motion: Vec::new(), effects: Vec::new(), bars: None };
+        let item = |input: &str, text| crate::overlay::Item { id: 0, input: input.into(), text, at: 0.0, start: 0.0, end: 5.0, motion: Vec::new(), effects: Vec::new(), bars: None, automation: Vec::new() };
         p.overlays.push(crate::overlay::Lane::default());
         let bars = crate::overlay::Item { bars: Some(Default::default()), ..item("", None) };
         p.overlays[0].items = vec![item("logo.png", None), item("", Some(Default::default())), bars];
@@ -1450,7 +1467,7 @@ mod tests {
         let mut p = Project { cuts: vec![Cut::new("a.mp4".into(), 0.0, 4.0), Cut { id: 7, ..Cut::new("b.mp4".into(), 0.0, 3.0) }], ..Default::default() };
         p.music.append_part("song.wav".into(), 0.0, 0.0, 10.0);
         p.text.push(crate::overlay::Lane::default());
-        p.text[0].items.push(crate::overlay::Item { id: 0, input: PathBuf::new(), text: Some(Default::default()), at: 0.0, start: 0.0, end: 5.0, motion: Vec::new(), effects: Vec::new(), bars: None });
+        p.text[0].items.push(crate::overlay::Item { id: 0, input: PathBuf::new(), text: Some(Default::default()), at: 0.0, start: 0.0, end: 5.0, motion: Vec::new(), effects: Vec::new(), bars: None, automation: Vec::new() });
         p.settle_ids();
         assert_eq!(p.cuts[1].id, 7, "an id given stays");
         assert_eq!((p.cuts[0].id, p.music.clips[0].id, p.text[0].items[0].id), (8, 9, 10), "past the highest, in order");
@@ -1540,7 +1557,10 @@ mod tests {
         .unwrap();
         let p = Project::load(&path).unwrap();
         assert_eq!(p.cuts[0].effects.iter().map(|k| (k.t, k.grade.lut)).collect::<Vec<_>>(), [(2.0, 0.84)]);
-        assert_eq!(p.cuts[1].effects.iter().map(|k| (k.grade.exposure, k.grade.lut)).collect::<Vec<_>>(), [(1.0, 0.5), (0.0, 0.5)]);
+        // Its two keys read as one and an exposure clip (gap 39), looking the same.
+        assert_eq!(p.cuts[1].effects.iter().map(|k| (k.grade.exposure, k.grade.lut)).collect::<Vec<_>>(), [(1.0, 0.5)]);
+        assert_eq!(p.cuts[1].automation.iter().map(|c| (c.param.as_str(), c.points.len())).collect::<Vec<_>>(), [("exposure", 2)]);
+        assert_eq!((p.cuts[1].grade_at(7.0).exposure, p.cuts[1].grade_at(8.5).exposure, p.cuts[1].grade_at(8.5).lut), (1.0, 0.0, 0.5));
         p.save(&path).unwrap();
         let text = std::fs::read_to_string(&path).unwrap();
         assert!(!text.contains("lut_strength") && text.contains(r#""lut": 0.84"#));

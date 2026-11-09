@@ -50,6 +50,7 @@ pub mod sibling;
 pub mod transition;
 mod template;
 mod style;
+mod automation;
 mod fsutil;
 mod pipeline;
 mod preview;

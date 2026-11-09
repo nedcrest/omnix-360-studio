@@ -56,7 +56,7 @@ pub(super) fn apply(p: &mut Project, op: &ItemOp) -> Result<Outcome, OpError> {
             let mut last = None;
             for input in inputs {
                 let id = p.next_id();
-                at = add(p, Track::Overlay, Item { id, input: input.clone(), text: None, at, start: 0.0, end: *len, motion: Vec::new(), effects: Vec::new(), bars: None });
+                at = add(p, Track::Overlay, Item { id, input: input.clone(), text: None, at, start: 0.0, end: *len, motion: Vec::new(), effects: Vec::new(), bars: None, automation: Vec::new() });
                 last = Some(id);
             }
             let Some(id) = last else { return Err(OpError::Invalid("no pictures to add".into())) };
@@ -65,14 +65,14 @@ pub(super) fn apply(p: &mut Project, op: &ItemOp) -> Result<Outcome, OpError> {
         ItemOp::AddText { text, at, len } => {
             positive(*len)?;
             let id = p.next_id();
-            add(p, Track::Text, Item { id, input: PathBuf::new(), text: Some(text.clone()), at: *at, start: 0.0, end: *len, motion: Vec::new(), effects: Vec::new(), bars: None });
+            add(p, Track::Text, Item { id, input: PathBuf::new(), text: Some(text.clone()), at: *at, start: 0.0, end: *len, motion: Vec::new(), effects: Vec::new(), bars: None, automation: Vec::new() });
             Ok(Outcome { summary: format!("text item #{id} added"), made: Some(id) })
         }
         ItemOp::AddBars { bars, at, len } => {
             positive(*len)?;
             check_bars(bars)?;
             let id = p.next_id();
-            add(p, Track::Overlay, Item { id, input: PathBuf::new(), text: None, at: *at, start: 0.0, end: *len, motion: Vec::new(), effects: Vec::new(), bars: Some(*bars) });
+            add(p, Track::Overlay, Item { id, input: PathBuf::new(), text: None, at: *at, start: 0.0, end: *len, motion: Vec::new(), effects: Vec::new(), bars: Some(*bars), automation: Vec::new() });
             Ok(Outcome { summary: format!("bars {:.2}:1, item #{id}", bars.ratio), made: Some(id) })
         }
         ItemOp::SetBars { item, bars } => {

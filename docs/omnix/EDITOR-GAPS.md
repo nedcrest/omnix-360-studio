@@ -343,6 +343,14 @@ and `white_in` to the effect key, mirrored in `grade.rs` and `grade.wgsl`
 with a GPU-vs-CPU test. "To all cuts" already applies a look to the whole
 film. The name `black` is taken by the fades, so pick another.
 
+**Built 2026-11-10, waiting for the check** (`5c4e3f4`): `black_in` (0..0.5)
+and `white_in` (0.5..1), applied first in `Grade::apply` and
+`grade.wgsl` (a fifth uniform row), tested GPU against CPU. The Light
+group's Levels: Black and White as levels of 255 (as Scopes say them)
+and «Auto» from the Scopes' measure (`App::auto_levels`: their darkest
+and brightest, the levels already there undone). Milestone «Ефекти,
+колір і розумний звук»; curves (68) next.
+
 ### 16. Subtitles from speech — medium (Kos TODO, 2026-10-23)
 
 Mar'yana can't be heard even cleaned (action-cam mic, distance). Run

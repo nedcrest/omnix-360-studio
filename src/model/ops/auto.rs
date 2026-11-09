@@ -48,6 +48,9 @@ pub enum AutoOp {
     /// `seconds` long, made into clips on that edge (those of the one
     /// before, and hand clips of the same values there, replaced), or none.
     Animate { item: Id, edge: End, anim: Option<crate::animate::Anim>, seconds: f64 },
+    /// Every clip moving `params` taken away (a reset: ins and outs among
+    /// them).
+    Clear { on: Graded, params: Vec<String> },
 }
 
 /// What an operation works on: the clips, the stretch they live in, the
@@ -185,6 +188,11 @@ pub(super) fn apply(p: &mut Project, op: &AutoOp) -> Result<Outcome, OpError> {
         }
         AutoOp::Follow { item, cut, track, params, offsets } => follow(p, *item, *cut, track, params, offsets),
         &AutoOp::Animate { item, edge, anim, seconds } => animate(p, item, edge, anim, seconds),
+        AutoOp::Clear { on, params } => {
+            let o = owner(p, *on)?;
+            o.clips.retain(|c| !params.contains(&c.param));
+            said(format!("{}: {} no longer automated", name(*on), params.join(", ")))
+        }
         AutoOp::PointEase { on, param, t, ease, tolerance } => {
             let o = owner(p, *on)?;
             let i = clip_at(o.clips, param, *t)?;
@@ -293,6 +301,22 @@ mod tests {
         e.apply(&op(AutoOp::Delete { on, param: "vignette".into(), at: 4.0 })).unwrap();
         assert_eq!(e.cuts[0].automation.len(), 1);
         check(&e).unwrap();
+    }
+
+    #[test]
+    fn a_reset_takes_its_values_clips_away_and_clear_takes_them_all() {
+        let mut p = Project { cuts: vec![Cut::new("a.mp4".into(), 1.0, 9.0)], ..Default::default() };
+        p.settle_ids();
+        let mut e = Edit::default();
+        e.replace(p);
+        let on = Graded::Cut(e.cuts[0].id);
+        for param in ["exposure", "vignette"] {
+            e.apply(&Op::Auto(AutoOp::Add { on, param: param.into(), from: 2.0, to: 4.0 })).unwrap();
+        }
+        e.apply(&Op::Auto(AutoOp::Clear { on, params: vec!["exposure".into()] })).unwrap();
+        assert_eq!(e.cuts[0].automation.iter().map(|c| c.param.as_str()).collect::<Vec<_>>(), ["vignette"]);
+        e.apply(&Op::Key(crate::model::ops::keys::KeyOp::Clear { on })).unwrap();
+        assert!(e.cuts[0].automation.is_empty(), "the whole reset clears automation too");
     }
 
     #[test]

@@ -74,7 +74,8 @@ pub enum KeyOp {
     /// (order kept).
     Retime { line: Line, from: f64, t: f64, gap: f64, #[serde(default = "half_a_frame")] tolerance: f64 },
     Delete { line: Line, t: f64, #[serde(default = "half_a_frame")] tolerance: f64 },
-    /// Every key gone: a cut's or item's effects, and an item's motion.
+    /// Every key gone: a cut's or item's effects, an item's motion, and
+    /// their automation (its ins and outs too).
     Clear { on: Graded },
     /// The look cut `cut` has at `t`, held by every other cut from its
     /// start.
@@ -171,10 +172,15 @@ pub(super) fn apply(p: &mut Project, op: &KeyOp) -> Result<Outcome, OpError> {
         }
         &KeyOp::Clear { on } => {
             effects(p, on)?.clear();
-            if let Graded::Item(item) = on {
-                find_item(p, item)?.motion.clear();
+            match on {
+                Graded::Item(item) => {
+                    let it = find_item(p, item)?;
+                    it.motion.clear();
+                    it.automation.clear();
+                }
+                Graded::Cut(cut) => find_cut(p, cut)?.automation.clear(),
             }
-            said(format!("{}: keys cleared", name(on)))
+            said(format!("{}: keys and automation cleared", name(on)))
         }
         &KeyOp::LookToAll { cut, t } => {
             let grade = grade_at(effects(p, Graded::Cut(cut))?, t);

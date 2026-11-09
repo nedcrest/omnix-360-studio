@@ -405,8 +405,18 @@ impl App {
                 }
                 self.op(Op::Item(ItemOp::SetText { item, text }));
             }
-            EffectMsg::Reset(Some(p)) => self.set_effect(true, p, crate::grade::NEUTRAL[p]),
-            EffectMsg::ResetPlace(p) => self.set_place(true, p, Place::default().values()[p]),
+            EffectMsg::Reset(Some(p)) => {
+                self.edit.begin();
+                self.unautomate(vec![crate::grade::NAMES[p].to_owned()]);
+                self.set_effect(true, p, crate::grade::NEUTRAL[p]);
+                self.edit.commit();
+            }
+            EffectMsg::ResetPlace(p) => {
+                self.edit.begin();
+                self.unautomate(vec![Place::NAMES[p].to_owned()]);
+                self.set_place(true, p, Place::default().values()[p]);
+                self.edit.commit();
+            }
             EffectMsg::Reset(None) => {
                 let Some((target, _)) = target else { return };
                 let on = self.graded(target);
@@ -557,16 +567,28 @@ impl App {
         self.op(Op::Auto(crate::model::ops::auto::AutoOp::Animate { item, edge, anim, seconds }));
     }
 
-    /// Group `g`'s effects back to none (an overlay's place, the Look's
-    /// style off too): one undo step.
+    /// `names`' automation clips on the panel's target taken away, so a
+    /// reset sets the value itself (ins and outs among them).
+    fn unautomate(&mut self, names: Vec<String>) {
+        let Some((target, _)) = self.effect_target() else { return };
+        let on = self.graded(target);
+        if self.automation_of(target).iter().any(|c| names.contains(&c.param)) {
+            self.op(Op::Auto(crate::model::ops::auto::AutoOp::Clear { on, params: names }));
+        }
+    }
+
+    /// Group `g`'s effects back to none, their automation gone (an
+    /// overlay's place, the Look's style off too): one undo step.
     fn reset_group(&mut self, g: super::effects_view::Group) {
         use super::effects_view::Group;
         let Some((target, _)) = self.effect_target() else { return };
         self.edit.begin();
+        self.unautomate(g.params().iter().map(|&p| crate::grade::NAMES[p].to_owned()).collect());
         for &p in g.params() {
             self.set_effect(true, p, crate::grade::NEUTRAL[p]);
         }
         if g == Group::Place {
+            self.unautomate(Place::NAMES.iter().map(|n| n.to_string()).collect());
             for p in 0..4 {
                 self.set_place(true, p, Place::default().values()[p]);
             }

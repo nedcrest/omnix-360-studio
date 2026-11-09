@@ -113,8 +113,8 @@ impl App {
         };
         let close = tip(button(text("✕").size(14)).padding([0, 6]).style(button::text).on_press(m(EffectMsg::Toggle)), text("Close (G)"), tooltip::Position::Bottom);
         let to_all = tip(icon_button(super::TO_ALL_CUTS, on_cut.then(|| m(EffectMsg::ToAll))), text("To all cuts: give every other cut this look, replacing their effects"), tooltip::Position::Bottom);
-        let any = target.filter(|&(tg, _)| !self.effects_of(tg).is_empty() || matches!(tg, Target::Overlay(i) if self.edit.item(i).is_some_and(|it| !it.motion.is_empty())));
-        let reset = tip(icon_button(super::RESET_VIEW, any.map(|_| m(EffectMsg::Reset(None)))), text(if on_cut { "Reset: remove this cut's effects" } else { "Reset: remove this item's effects and place" }), tooltip::Position::Bottom);
+        let any = target.filter(|&(tg, _)| !self.effects_of(tg).is_empty() || !self.automation_of(tg).is_empty() || matches!(tg, Target::Overlay(i) if self.edit.item(i).is_some_and(|it| !it.motion.is_empty())));
+        let reset = tip(icon_button(super::RESET_VIEW, any.map(|_| m(EffectMsg::Reset(None)))), text(if on_cut { "Reset: remove this cut's effects and automation" } else { "Reset: remove this item's effects, place, automation and ins and outs" }), tooltip::Position::Bottom);
         column![row![text("Effects").size(18).width(Length::Fill), close].align_y(Alignment::Center), row![text(name).size(13).width(Length::Fill), to_all, reset].spacing(6).align_y(Alignment::Center)].spacing(6).into()
     }
 

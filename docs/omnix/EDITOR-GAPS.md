@@ -109,6 +109,7 @@ done in part stays here until its last card is done.
 | 87 | Style looks (old film, VHS, neo-cyberpunk) for a video, an overlay picture or text; animation presets for text and pictures | [done](EDITOR-GAPS-DONE.md) |
 | 88 | The Osmo 360 II: its calibration and 8K50 decoding | below |
 | 89 | Auto colour: exposure and white balance set from the picture (or by an AI), keyed where the camera misses | below |
+| 94 | The Effects and Text panels tidied: text's look in Effects, groups for items (Place, Show, Animate), the film's fades to Transitions, consistent controls | below |
 | 93 | Effects edit the selected clip only, with the playhead on it; a clear notice when they're apart | below |
 | 92 | Play a stretch: drag a range on the ruler, Shift+Space plays it once and comes back to its start, paused; a button beside Play | below |
 | 91 | Pictures from the bin or the file manager dragged onto the overlay lane; a «Pictures» folder in every project | below |
@@ -1552,6 +1553,30 @@ ignored). The header names the target in small print.
 - The same notice wherever a panel edits a clip in time (the Text
   panel's look isn't timed; it may stay free).
 - Milestone «Ефекти, колір і розумний звук».
+
+### 94. The Effects and Text panels tidied — agreed (Claude's UI review, user, 2026-11-10)
+
+A review of the Effects panel, its side panel and the Text panel, agreed
+to do at once with gap 93:
+
+1. **Text in one place.** A text item's look (words, font, bold, size,
+   align, colour, outline, shadow) becomes the first group «Text» of the
+   Effects panel; the left Text panel goes. «Lines» reads «Align».
+   Later, separate cards: a custom colour, a box behind the text.
+2. **Groups for a text or a picture**: Place (across, down, size,
+   turn), Show (opacity, reveal, blur: how much of it shows), Animate
+   (ins and outs only), Kind (pictures), Look (style); Light and Colour
+   folded at first on items; the vignette in Finish.
+3. **The film's fades out of a clip's panel**: Whole edit moves to the
+   Transitions panel (the film's start and end are edges too).
+4. **No dead controls**: the white-balance picker and «To all cuts»
+   hidden for items, not greyed.
+5. **Consistent controls**: a style's settings open by a «VHS ▸»
+   button, as the vignette's «Round ▸» (not by pressing the chosen tile
+   again); ins and outs as «In: Fade ▾ 0.5 s» (a list and a length),
+   not 20 tiles; the header's reset says «↺ All».
+
+Milestone «Ефекти, колір і розумний звук».
 
 ## Format rule for all of these
 

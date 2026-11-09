@@ -359,6 +359,15 @@ film. The name `black` is taken by the fades, so pick another.
 
 ### 15. Cinematic bars — small (Kos TODO, 2026-10-23)
 
+Built 2026-11-09 (`0cdce6c`), waiting for the check, on the user's route:
+an overlay item with `Bars` (ratio, slide, colour), drawn as two bands
+(`overlay::Spot::Band`) by the overlays' pass and the export's burn, so
+over the finished picture (after a transition) and under text; eased in
+over the slide at its start and out at its end, not keyframed (the
+automation lanes, 39, will key «how far in»); opacity from its effects.
+`ItemOp::AddBars`/`SetBars`, a button beside text's, the Effects panel's
+Bars section; `Item::file` tells a picture from text and bars.
+
 The TODO's plan: on 30 s of forest B-roll, black bars slide in from top and
 bottom (2.39:1, 194 px each at 2688×1512), a colour shift and a vignette,
 then back. Possible today by hand: two black PNGs on the overlay lane with

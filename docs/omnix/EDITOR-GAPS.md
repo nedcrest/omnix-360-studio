@@ -1370,6 +1370,17 @@ which one the edit uses. Dailix needs the same, as its parity step 4
   the web sheet stay valid.
 Milestone «Ефекти, колір і розумний звук».
 
+**Started 2026-11-10 with gap 83; the user's choices:** `deep-filter`
+found on PATH, then in Dailix's own tools folder (the binary copied
+there from footage-agent's `tools/`); loudness measured once per variant
+(LUFS in `_recipes.json`) and Omnix sets the cut's voice level from it,
+nothing re-rendered or stacked; speech found on the cleaned voice with
+Omnix's own finder (`duck::speech`), no new model, measured on Kos first.
+Steps: 1 the recipes in the sheet core (pure: table, paths, stamps) and
+the runner plus `dailix voice` in the app; 2 the sheet's Voice row
+(variants, make, listen against the original at equal loudness,
+choose); 3 the loudness; 4 the speech strip (gap 83).
+
 ### 78. A vertical video in a wide edit: its sides filled from itself, not black — idea (user, 2026-11-05)
 
 Phone clips are often vertical; in a 16:9 edit they stand between two

@@ -37,6 +37,7 @@ pub use player::viewer;
 mod project;
 mod ring;
 mod sheet;
+mod scopes;
 mod sky;
 mod stab;
 mod stitch;

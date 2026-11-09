@@ -606,6 +606,44 @@ mod tests {
         assert!(worst < 0.1, "{worst}");
     }
 
+    /// The scopes read the cut's picture back and measure it (gap 69).
+    #[test]
+    fn the_scopes_measure_the_cuts_picture() {
+        let Ok(mut gpu) = Gpu::new(false) else { return };
+        let (w, h) = (160usize, 90usize);
+        // An even grey video frame (limited-range NV12).
+        let mut data = vec![126u8; w * h];
+        data.extend(vec![128u8; w * h / 2]);
+        let frame = Frame { pts: 0.0, layout: source::Layout::PerTrack, pictures: vec![source::Picture { width: w as u32, height: h as u32, deep: false, data }] };
+        let shown = Shown::new(frame, SeamFix::default());
+        let rig = Rig::flat(0, crate::hdr::Hdr::None);
+        let camera = crate::view::View::home(crate::view::Projection::Perspective).camera();
+        let feed = gpu::Scope::default();
+        let size = [w as f32, h as f32];
+        let p = &mut gpu.stitcher;
+        assert!(p.scope_due(&gpu.device, &feed), "a picture asked for at once");
+        p.scope_ready(&gpu.device, size);
+        p.prepare_frame(&gpu.device, &gpu.queue, &rig, &shown, &camera, &[stitch::IDENTITY], size, [0.0, 0.0]);
+        p.prepare_styled(&gpu.device, &gpu.queue, size, [0.0, 0.0]);
+        let target = gpu.make_target(w, h);
+        let mut encoder = gpu.device.create_command_encoder(&Default::default());
+        let p = &gpu.stitcher;
+        p.draw(&mut encoder, &target.view, &Rectangle { x: 0, y: 0, width: w as u32, height: h as u32 });
+        p.scope_copy(&mut encoder);
+        gpu.queue.submit([encoder.finish()]);
+        // Mapped on the next turn, measured once the GPU has it.
+        for _ in 0..200 {
+            gpu.stitcher.scope_due(&gpu.device, &feed);
+            if feed.lock().unwrap().latest.is_some() {
+                break;
+            }
+            let _ = gpu.device.poll(wgpu::PollType::wait_indefinitely());
+        }
+        let s = feed.lock().unwrap().latest.clone().expect("measured");
+        eprintln!("grey reads {}..{}", s.black, s.white);
+        assert!(s.pixels > 0 && s.white - s.black <= 2 && s.black > 90 && s.white < 140, "{} {}", s.black, s.white);
+    }
+
     /// The player's overlay pass draws what `overlay::composite` does.
     #[test]
     fn gpu_overlays_match_the_cpu() {

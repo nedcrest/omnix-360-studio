@@ -23,6 +23,8 @@ pub(super) struct Sphere {
     /// The cut's style at its clip time.
     pub(super) style: Option<(crate::transition::Spec, f32)>,
     pub(super) overlays: Vec<gpu::OverlayDraw>,
+    /// The scopes, while they show (gap 69).
+    pub(super) scope: Option<gpu::Scope>,
 }
 
 #[derive(Default)]
@@ -124,6 +126,7 @@ impl shader::Program<Message> for Sphere {
             edge: self.edge,
             style: self.style,
             overlays: self.overlays.clone(),
+            scope: self.scope.clone(),
         }
     }
 

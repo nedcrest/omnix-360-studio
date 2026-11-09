@@ -377,7 +377,7 @@ impl App {
                     self.error = Some(format!("Saving the project failed: {e:#}"));
                 }
             },
-            Message::LoadingTick => {}
+            Message::LoadingTick | Message::ScopesTick => {}
             Message::Thumb(input, t, handle) => {
                 let thumbs = self.thumbs.entry(input).or_default();
                 let i = thumbs.partition_point(|(at, _)| *at < t);

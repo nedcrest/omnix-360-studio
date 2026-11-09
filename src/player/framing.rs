@@ -287,6 +287,7 @@ impl App {
             edge: self.clip_now().and_then(|(cut, t)| cut.edge_at(t)),
             style: self.clip_now().and_then(|(cut, t)| Some((cut.style.as_ref()?.spec(), t as f32))),
             overlays: self.overlay_draws(),
+            scope: self.scopes_on().then(|| self.scope.clone()),
         })
     }
 }

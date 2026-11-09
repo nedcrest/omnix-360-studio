@@ -238,6 +238,41 @@ pub struct Primitive {
     pub style: Option<(crate::transition::Spec, f32)>,
     /// The overlays showing, lowest first.
     pub overlays: Vec<OverlayDraw>,
+    /// The scopes, while they show: fed the cut's picture (gap 69).
+    pub scope: Option<Scope>,
+}
+
+/// The scopes' feed (gap 69): the latest measure of the cut's picture,
+/// and when one was last asked for.
+#[derive(Default)]
+pub struct ScopeFeed {
+    pub latest: Option<Arc<crate::scopes::Scopes>>,
+    /// The waveform drawn from `latest`, made once by the panel.
+    pub waveform: Option<iced::widget::image::Handle>,
+    asked: Option<std::time::Instant>,
+}
+
+pub type Scope = Arc<std::sync::Mutex<ScopeFeed>>;
+
+/// How often the scopes take a picture.
+const SCOPE_EVERY: std::time::Duration = std::time::Duration::from_millis(250);
+
+/// The scopes' readback: idle, copied this frame (mapped next, once the
+/// copy is submitted), or being mapped.
+#[derive(Default)]
+enum ScopeRead {
+    #[default]
+    Idle,
+    Copied,
+    Mapping(Arc<std::sync::atomic::AtomicBool>),
+}
+
+/// Where the scopes read the cut's picture back: the buffer, the
+/// picture's size and its rows' bytes.
+struct ScopeBuffer {
+    buffer: wgpu::Buffer,
+    size: (u32, u32),
+    row: u32,
 }
 
 /// The cut crossfading in: its own picture and framing, how far in it is
@@ -290,6 +325,10 @@ pub struct Pipeline {
     /// The player's target is the screen's, sRGB-encoded by the GPU after
     /// the shader, so it isn't dithered there.
     pub dither: Option<u32>,
+    /// The scopes' readback (gap 69); a picture taken this frame.
+    scope_buffer: Option<ScopeBuffer>,
+    scope_read: std::sync::Mutex<ScopeRead>,
+    scope_tap: bool,
 }
 
 /// One picture's resources: uniforms, textures and what they hold.
@@ -428,7 +467,7 @@ impl Pipeline {
         });
         let (overlay, overlay_layout) = overlay_pipeline(device, format);
         let transition = Transition::new(device, format);
-        Pipeline { pipeline, layout, sampler, srgb: format.is_srgb(), format, layers, transition, mixing: 0, styled: [false; 2], overlay, overlay_layout, overlay_slots: Vec::new(), overlays: 0, dither: None }
+        Pipeline { pipeline, layout, sampler, srgb: format.is_srgb(), format, layers, transition, mixing: 0, styled: [false; 2], overlay, overlay_layout, overlay_slots: Vec::new(), overlays: 0, dither: None, scope_buffer: None, scope_read: Default::default(), scope_tap: false }
     }
 
     /// Gets `overlays` ready to draw over the view (`size` pixels at
@@ -623,6 +662,75 @@ impl Pipeline {
         queue.write_buffer(&l.uniforms, 0, bytemuck::bytes_of(&u));
     }
 
+    /// The scopes' turn (gap 69), before the frame is prepared: a picture
+    /// copied last frame is mapped, a mapped one measured into `feed`;
+    /// whether to take a picture this frame (idle, and `SCOPE_EVERY` since
+    /// the last).
+    pub(super) fn scope_due(&mut self, device: &wgpu::Device, feed: &Scope) -> bool {
+        let read = std::mem::take(&mut *self.scope_read.lock().expect("the scope's state"));
+        let Some(b) = &self.scope_buffer else { return self.ask(feed) };
+        let next = match read {
+            ScopeRead::Copied => {
+                let done = Arc::new(std::sync::atomic::AtomicBool::new(false));
+                let flag = done.clone();
+                b.buffer.slice(..).map_async(wgpu::MapMode::Read, move |r| flag.store(r.is_ok(), Ordering::Release));
+                ScopeRead::Mapping(done)
+            }
+            ScopeRead::Mapping(done) => {
+                let _ = device.poll(wgpu::PollType::Poll);
+                if !done.load(Ordering::Acquire) {
+                    ScopeRead::Mapping(done)
+                } else {
+                    let bgra = matches!(self.format, wgpu::TextureFormat::Bgra8Unorm | wgpu::TextureFormat::Bgra8UnormSrgb);
+                    let measured = crate::scopes::measure(&b.buffer.slice(..).get_mapped_range(), (b.size.0 as usize, b.size.1 as usize), b.row as usize, bgra, 2);
+                    b.buffer.unmap();
+                    let mut f = feed.lock().expect("the scopes' feed");
+                    (f.latest, f.waveform) = (Some(Arc::new(measured)), None);
+                    ScopeRead::Idle
+                }
+            }
+            ScopeRead::Idle => return self.ask(feed),
+        };
+        *self.scope_read.lock().expect("the scope's state") = next;
+        false
+    }
+
+    /// Whether the scopes want a picture now; if so, asked.
+    fn ask(&self, feed: &Scope) -> bool {
+        let mut f = feed.lock().expect("the scopes' feed");
+        let due = f.asked.is_none_or(|t| t.elapsed() >= SCOPE_EVERY);
+        if due {
+            f.asked = Some(std::time::Instant::now());
+        }
+        due
+    }
+
+    /// A buffer to read a `size` picture back into.
+    pub(super) fn scope_ready(&mut self, device: &wgpu::Device, size: [f32; 2]) {
+        let (w, h) = (size[0].round().max(1.0) as u32, size[1].round().max(1.0) as u32);
+        if self.scope_buffer.as_ref().is_some_and(|b| b.size == (w, h)) {
+            return;
+        }
+        let row = (w * 4).div_ceil(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT) * wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
+        let buffer = device.create_buffer(&wgpu::BufferDescriptor { label: Some("scopes"), size: (row * h) as u64, usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ, mapped_at_creation: false });
+        self.scope_buffer = Some(ScopeBuffer { buffer, size: (w, h), row });
+    }
+
+    /// The cut's picture (styled, if it is) copied for the scopes.
+    pub(super) fn scope_copy(&self, encoder: &mut wgpu::CommandEncoder) {
+        let (Some(b), Some(pics)) = (&self.scope_buffer, &self.transition.pictures) else { return };
+        if pics.size != b.size {
+            return;
+        }
+        let from = if self.styled[0] { &pics.styled[0] } else { &pics.from };
+        encoder.copy_texture_to_buffer(
+            wgpu::TexelCopyTextureInfo { texture: &from.texture, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
+            wgpu::TexelCopyBufferInfo { buffer: &b.buffer, layout: wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(b.row), rows_per_image: Some(b.size.1) } },
+            wgpu::Extent3d { width: b.size.0, height: b.size.1, depth_or_array_layers: 1 },
+        );
+        *self.scope_read.lock().expect("the scope's state") = ScopeRead::Copied;
+    }
+
     /// Draws the prepared frame into `target`, within `clip`.
     pub fn draw(&self, encoder: &mut wgpu::CommandEncoder, target: &wgpu::TextureView, clip: &Rectangle<u32>) {
         // A join, an edge look or a style: each cut into its picture first,
@@ -763,7 +871,13 @@ impl shader::Primitive for Primitive {
         let (size, origin) = ([px.width, px.height], [px.x, px.y]);
         // Through a join both cuts are drawn into pictures of their own, at
         // their corner; the transition's pass puts them in the view.
-        let corner = if self.incoming.is_some() || self.edge.is_some() || self.style.is_some() { [0.0, 0.0] } else { origin };
+        // The scopes read the cut's picture: drawn into one, as a style's.
+        let tap = self.scope.as_ref().is_some_and(|feed| p.scope_due(device, feed));
+        p.scope_tap = tap;
+        if tap {
+            p.scope_ready(device, size);
+        }
+        let corner = if self.incoming.is_some() || self.edge.is_some() || self.style.is_some() || tap { [0.0, 0.0] } else { origin };
         p.prepare_frame(device, queue, &self.rig, &self.shown, &self.camera, &self.rig_from_view, size, corner);
         if let Some(i) = &self.incoming {
             p.prepare_incoming(device, queue, &i.rig, &i.shown, &i.camera, &i.rig_from_view, size, origin, &i.transition, i.mix);
@@ -772,7 +886,7 @@ impl shader::Primitive for Primitive {
             }
         } else if let Some((spec, q)) = &self.edge {
             p.prepare_edge(device, queue, size, origin, spec, *q);
-        } else if self.style.is_some() {
+        } else if self.style.is_some() || tap {
             p.prepare_styled(device, queue, size, origin);
         }
         if let Some((spec, t)) = &self.style {
@@ -784,6 +898,9 @@ impl shader::Primitive for Primitive {
 
     fn render(&self, p: &Pipeline, encoder: &mut wgpu::CommandEncoder, target: &wgpu::TextureView, clip: &Rectangle<u32>) {
         p.draw(encoder, target, clip);
+        if p.scope_tap {
+            p.scope_copy(encoder);
+        }
     }
 }
 
@@ -916,7 +1033,8 @@ fn render_target(device: &wgpu::Device, w: u32, h: u32, format: wgpu::TextureFor
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
         format,
-        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
+        // Copied out too: the scopes read the cut's picture (gap 69).
+        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
     });
     let view = texture.create_view(&Default::default());

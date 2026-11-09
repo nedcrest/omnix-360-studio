@@ -32,6 +32,7 @@ const EXTRA_WIDTH: f32 = 220.0;
 /// The panel's folding groups, top to bottom.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Group {
+    Scopes,
     Text,
     Kind,
     Place,
@@ -48,6 +49,7 @@ impl Group {
     /// Its name, shown and kept in the settings while folded.
     pub fn name(self) -> &'static str {
         match self {
+            Group::Scopes => "Scopes",
             Group::Text => "Text",
             Group::Kind => "Kind",
             Group::Place => "Place",
@@ -72,7 +74,7 @@ impl Group {
             Group::Finish if item => &[8, 11, 12, 13],
             Group::Finish => &[8, 9, 11, 12, 13],
             Group::Show => &[9, REVEAL, BLUR],
-            Group::Text | Group::Kind | Group::Place | Group::Animate | Group::Bars => &[],
+            Group::Scopes | Group::Text | Group::Kind | Group::Place | Group::Animate | Group::Bars => &[],
         }
     }
 
@@ -81,6 +83,9 @@ impl Group {
     pub fn fold_key(self, item: bool) -> (String, bool) {
         match self {
             Group::Light | Group::Colour if item => (format!("{} on items", self.name()), true),
+            // Folded at first: open, they read the picture back a few
+            // times a second.
+            Group::Scopes => (self.name().to_owned(), true),
             _ => (self.name().to_owned(), false),
         }
     }
@@ -101,6 +106,7 @@ impl App {
         if let Focus::Apart(selected) = self.effect_focus() {
             body = body.push(self.apart_notice(selected));
         }
+        body = body.push(self.group(Group::Scopes, self.scopes_view()));
         let groups = match target {
             Some((Target::Overlay(i), t)) => self.item_groups(i, t),
             Some((Target::Cut(i), t)) => self.cut_groups(Some((i, t))),
@@ -434,4 +440,76 @@ fn vignette_controls(grade: &Grade) -> Element<'static, Message> {
         text("Round, or from the top (a graduated filter on a bright sky), the bottom or the sides; how far in it reaches, how soft its edge"),
         tooltip::Position::Left,
     )
+}
+
+impl App {
+    /// Whether the scopes show (gap 69): the Effects panel open, their
+    /// group unfolded.
+    pub(super) fn scopes_on(&self) -> bool {
+        let (key, at_first) = Group::Scopes.fold_key(false);
+        self.side == Some(super::Side::Effects) && self.effects_folded.contains(&key) == at_first
+    }
+
+    /// The scopes: a histogram (red, green, blue, and luma in white) over a
+    /// luma waveform, and the picture's darkest and brightest.
+    fn scopes_view(&self) -> Element<'static, Message> {
+        let Ok(mut feed) = self.scope.lock() else { return text("…").into() };
+        let Some(s) = feed.latest.clone() else {
+            return text("…").size(12).into();
+        };
+        let image = feed.waveform.get_or_insert_with(|| waveform_image(&s)).clone();
+        drop(feed);
+        let wave = iced::widget::image(image).width(Length::Fill).height(110).content_fit(iced::ContentFit::Fill);
+        let pct = |v: f64| format!("{:.1} %", v * 100.0);
+        let said = text(format!("Black {} · White {} · crushed {} · blown {}", s.black, s.white, pct(s.crushed), pct(s.blown))).size(12);
+        let hint = "The cut's picture as graded (its LUT and style on, overlays apart). Black and White: its darkest and brightest of 255, specks aside; crushed at 2 and under, blown at 253 and over";
+        tip(column![iced::widget::canvas(Histogram(s.clone())).width(Length::Fill).height(80), wave, said].spacing(4), text(hint), tooltip::Position::Left)
+    }
+}
+
+/// The waveform as a picture: a column per stretch across the frame, luma
+/// up, brighter where more pixels are.
+fn waveform_image(s: &crate::scopes::Scopes) -> iced::widget::image::Handle {
+    use crate::scopes::{COLUMNS, LEVELS};
+    let most = s.waveform.iter().copied().max().unwrap_or(1).max(1) as f32;
+    let mut rgba = vec![0u8; COLUMNS * LEVELS * 4];
+    for c in 0..COLUMNS {
+        for l in 0..LEVELS {
+            let n = s.waveform[c * LEVELS + l];
+            // A square root: a few pixels show, a crowd doesn't drown them.
+            let a = if n == 0 { 0.0 } else { (n as f32 / most).sqrt().max(0.15) };
+            let i = ((LEVELS - 1 - l) * COLUMNS + c) * 4;
+            rgba[i..i + 4].copy_from_slice(&[(120.0 + 135.0 * a) as u8, 255, (120.0 + 135.0 * a) as u8, (a * 255.0) as u8]);
+        }
+    }
+    iced::widget::image::Handle::from_rgba(COLUMNS as u32, LEVELS as u32, rgba)
+}
+
+/// The histogram's drawing.
+struct Histogram(std::sync::Arc<crate::scopes::Scopes>);
+
+impl iced::widget::canvas::Program<Message> for Histogram {
+    type State = ();
+
+    fn draw(&self, _: &(), renderer: &iced::Renderer, _: &iced::Theme, bounds: iced::Rectangle, _: iced::mouse::Cursor) -> Vec<iced::widget::canvas::Geometry> {
+        use iced::widget::canvas::{Frame, Path, Stroke};
+        use iced::{Color, Point};
+        let mut frame = Frame::new(renderer, bounds.size());
+        let (w, h) = (bounds.width, bounds.height);
+        frame.fill(&Path::rectangle(Point::ORIGIN, bounds.size()), Color::from_rgba(0.0, 0.0, 0.0, 0.35));
+        let s = &self.0;
+        // Each scaled to the busiest level of any, by square root.
+        let most = s.histogram.iter().flat_map(|c| c.iter()).copied().max().unwrap_or(1).max(1) as f32;
+        let colours = [Color::from_rgb(1.0, 0.3, 0.3), Color::from_rgb(0.3, 1.0, 0.3), Color::from_rgb(0.4, 0.6, 1.0), Color::WHITE];
+        for (channel, colour) in s.histogram.iter().zip(colours) {
+            let line = Path::new(|p| {
+                for (l, &n) in channel.iter().enumerate() {
+                    let pt = Point::new(l as f32 / 255.0 * w, h - (n as f32 / most).sqrt() * (h - 2.0));
+                    if l == 0 { p.move_to(pt) } else { p.line_to(pt) }
+                }
+            });
+            frame.stroke(&line, Stroke::default().with_width(1.0).with_color(Color { a: 0.8, ..colour }));
+        }
+        vec![frame.into_geometry()]
+    }
 }

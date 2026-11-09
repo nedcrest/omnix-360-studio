@@ -416,6 +416,8 @@ enum Message {
     NewTripInDailix,
     /// A redraw while clips load, for the loading bar.
     LoadingTick,
+    /// A redraw while the scopes show, for their newest measure.
+    ScopesTick,
     /// The box being drawn, in fractions of the view.
     PickArea(Rectangle),
     /// The box drawn, and the view's width over its height.
@@ -750,6 +752,8 @@ struct App {
     /// The Effects panel's groups folded (kept in the settings), and the
     /// complex control whose knobs are out beside it.
     effects_folded: Vec<String>,
+    /// The scopes' feed, read by the Effects panel (gap 69).
+    scope: gpu::Scope,
     effect_extra: Option<effects_view::Extra>,
     /// Automation lanes asked for in the Effects panel (◆), beside those
     /// the clips already move.
@@ -927,6 +931,7 @@ impl App {
             template_name: String::new(),
             last_overlap: crate::transition::Look::WhipPan,
             effects_folded: saved.effects_folded.clone(),
+            scope: Default::default(),
             effect_extra: None,
             extra_lanes: Vec::new(),
             last_edge: crate::transition::Look::EdgeFade,
@@ -1015,7 +1020,7 @@ impl App {
             message,
             Message::Look { .. } | Message::Zoom(_) | Message::Fov(_) | Message::ResetView | Message::Key(..) | Message::AngleInput(..) | Message::AngleNudge(..) | Message::AngleArrow(..) | Message::AngleScrub(..)
         );
-        let quiet = matches!(message, Message::Tick | Message::LoadingTick | Message::ViewSize(_) | Message::Modifiers(_) | Message::Record(record_ui::RecordMsg::Tick));
+        let quiet = matches!(message, Message::Tick | Message::LoadingTick | Message::ScopesTick | Message::ViewSize(_) | Message::Modifiers(_) | Message::Record(record_ui::RecordMsg::Tick));
         // A look-around keyed by Auto keyframe ends: its undo step closes.
         if !looking && !quiet && self.auto_key_at.take().is_some() {
             self.edit.commit();
@@ -1106,6 +1111,9 @@ impl App {
         };
         // The Record panel's meter and countdown, every screen frame.
         let keys = if self.side == Some(Side::Record) { Subscription::batch([keys, window::frames().map(|_| Message::Record(record_ui::RecordMsg::Tick))]) } else { keys };
+        // The scopes measure a few times a second, playing or not: the
+        // view drawn on, their picture made once per measure.
+        let keys = if self.scopes_on() { Subscription::batch([keys, window::frames().map(|_| Message::ScopesTick)]) } else { keys };
         if busy {
             Subscription::batch([keys, close, window::frames().map(|_| Message::Tick)])
         } else if self.loading.is_some() {
@@ -1134,7 +1142,7 @@ impl App {
                 Task::none()
             }
             m @ (Message::NewMenuClose | Message::NewVideoTrip(_) | Message::NewVideoName(_) | Message::NewVideoMake | Message::NewTripInDailix) => self.on_new_menu(m),
-            m @ (Message::Open | Message::Picked { .. } | Message::Loaded { .. } | Message::OpenProject | Message::NewProject | Message::NewMenu | Message::CloseRequested | Message::StopAndClose { .. } | Message::Confirmed { .. } | Message::ProjectPicked { .. } | Message::SaveProjectTo { .. } | Message::SaveProject { .. } | Message::LoadingTick | Message::Thumb { .. }) => self.on_file(m),
+            m @ (Message::Open | Message::Picked { .. } | Message::Loaded { .. } | Message::OpenProject | Message::NewProject | Message::NewMenu | Message::CloseRequested | Message::StopAndClose { .. } | Message::Confirmed { .. } | Message::ProjectPicked { .. } | Message::SaveProjectTo { .. } | Message::SaveProject { .. } | Message::LoadingTick | Message::ScopesTick | Message::Thumb { .. }) => self.on_file(m),
             m @ (Message::Export | Message::ExportTo { .. } | Message::ExportProgress { .. } | Message::ExportCancel | Message::PickColour | Message::PickArea { .. } | Message::AreaPicked { .. } | Message::TrackProgress { .. } | Message::TrackCancel | Message::Tracked { .. } | Message::ExportDone { .. } | Message::Save { .. } | Message::SaveTo { .. } | Message::Saved { .. }) => self.on_jobs(m),
             m @ (Message::Resolution { .. } | Message::ExportClips { .. } | Message::ExportGraded { .. } | Message::ExportFormat { .. } | Message::ExportLoudness { .. } | Message::Info { .. } | Message::InfoRead { .. } | Message::InfoClose | Message::Reveal { .. } | Message::CopyPath { .. } | Message::ExportPanel | Message::AudioPanel | Message::SettingsPanel | Message::SettingsGroup(_) | Message::Shortcuts | Message::AutoKey { .. } | Message::SplitDrag { .. } | Message::SplitDone | Message::SplitReset | Message::TenBit { .. } | Message::AddLut | Message::LutPicked { .. } | Message::RemoveLut { .. } | Message::DlogMLut { .. } | Message::UiScale { .. } | Message::ShowAngles { .. } | Message::RulerLarge { .. } | Message::ProjectsChoose | Message::ProjectsPicked { .. } | Message::ProjectsFromDailix | Message::Browse(_) | Message::BarLabels | Message::Snapping | Message::Fold { .. } | Message::Modifiers { .. } | Message::ViewSize { .. } | Message::Aspect { .. } | Message::Theme { .. } | Message::Mute | Message::Volume { .. } | Message::Fullscreen) => self.on_panels(m),
             m @ (Message::BinPanel | Message::BinPin | Message::BinRefresh | Message::BinPreview { .. } | Message::BinStop | Message::BinMeta { .. } | Message::BinFrames { .. } | Message::BinAdd { .. }) => self.on_bin(m),

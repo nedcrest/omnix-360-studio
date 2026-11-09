@@ -15,6 +15,7 @@ pub mod marking;
 pub mod ops;
 pub mod project;
 pub mod store;
+pub mod voice;
 
 pub use layout::Layout;
 pub use store::{Store, StoreError};

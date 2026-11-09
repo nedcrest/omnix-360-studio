@@ -122,18 +122,18 @@ impl AutoClip {
         t >= self.from && t <= self.to
     }
 
-    /// Trimmed to `from`..`to`: a point on an edge that moves goes with
-    /// it, points left outside are dropped (the user's find, 2026-11-10:
-    /// they stayed behind).
+    /// Trimmed to `from`..`to`: the outermost point on a side that moves
+    /// goes with its edge, wherever it sat (a point dragged near the edge
+    /// sits a hair inside it); inner points left outside are dropped (the
+    /// user's finds, 2026-11-10: edge points stayed behind, or were
+    /// swallowed).
     pub fn trim(&mut self, from: f64, to: f64) {
-        let on = |q: &AutoPoint, edge: f64| (q.t - edge).abs() < 1e-6;
-        let (was_from, was_to) = (self.from, self.to);
-        for q in &mut self.points {
-            if on(q, was_from) {
-                q.t = from;
-            } else if on(q, was_to) {
-                q.t = to;
-            }
+        let last = self.points.len().saturating_sub(1);
+        if let Some(q) = self.points.first_mut().filter(|_| from != self.from) {
+            q.t = from;
+        }
+        if let Some(q) = self.points.get_mut(last).filter(|_| to != self.to && last > 0) {
+            q.t = to;
         }
         self.points.retain(|q| q.t >= from - 1e-9 && q.t <= to + 1e-9);
         (self.from, self.to) = (from, to);

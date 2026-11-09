@@ -301,6 +301,13 @@ mod tests {
         e.apply(&op(AutoOp::Trim { on, param: "exposure".into(), at: 7.0, end: End::In, t: 7.5 })).unwrap();
         let c = e.cuts[0].automation.iter().find(|c| c.param == "exposure").unwrap();
         assert_eq!(c.points.iter().map(|q| q.t).collect::<Vec<_>>(), [7.5, 9.0], "its start point too; the one left outside gone");
+        // An end point a hair inside its edge still goes with it, shrunk or grown.
+        e.apply(&op(AutoOp::Point { on, param: "exposure".into(), t: 8.98, v: 0.5, from: Some(9.0), tolerance: 0.01 })).unwrap();
+        for t in [8.0, 9.0] {
+            e.apply(&op(AutoOp::Trim { on, param: "exposure".into(), at: 7.6, end: End::Out, t })).unwrap();
+            let c = e.cuts[0].automation.iter().find(|c| c.param == "exposure").unwrap();
+            assert_eq!((c.points.len(), c.points[1].t, c.points[1].v), (2, t, 0.5), "kept on the edge at {t}");
+        }
         assert!(e.apply(&op(AutoOp::Add { on, param: "sparkle".into(), from: 1.0, to: 2.0 })).is_err());
         assert!(e.apply(&op(AutoOp::Add { on, param: "x".into(), from: 1.0, to: 2.0 })).is_err(), "a cut has no place to move");
         assert!(e.apply(&op(AutoOp::Add { on, param: "reveal".into(), from: 1.0, to: 2.0 })).is_err(), "nor a reveal");

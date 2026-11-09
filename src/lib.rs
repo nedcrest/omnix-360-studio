@@ -74,5 +74,14 @@ pub mod sound {
     pub fn loudness(file: &std::path::Path) -> anyhow::Result<Option<f64>> {
         crate::loudness::measure(file, 0.0, 86_400.0, None)
     }
+
+    /// Where a cleaned voice holds speech, seconds into it: the finder the
+    /// auto-duck uses (gap 83), its waveform cached as the timeline's.
+    pub fn speech(file: &std::path::Path) -> anyhow::Result<Vec<(f64, f64)>> {
+        use crate::waveform::{WAVE_STEP, Waveform};
+        let wave = Waveform::read(file, false)?;
+        let whole = crate::duck::Source { file: file.to_owned(), start: 0.0, end: wave.peaks.len() as f64 * WAVE_STEP, at: 0.0 };
+        Ok(crate::duck::speech(&wave.peaks, WAVE_STEP, &whole))
+    }
 }
 pub(crate) use pipeline::{Pipeline, StitchOpts, load_input};

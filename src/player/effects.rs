@@ -7,14 +7,14 @@
 //! Animating an effect is the automation lanes' (gap 39); keys from
 //! before still play, and a slider moved sets its effect in all of them.
 
-use super::{App, Message, Selection, icon_button, tip};
-use crate::grade::{EffectKey, Grade, grade_at};
+use super::{App, Message, Selection, tip};
+use crate::grade::EffectKey;
 use crate::overlay::{Place, place_at};
 use crate::model::ops::keys::{EXACT, Graded, KeyOp, Line};
 use crate::model::ops::sound::SoundOp;
 use crate::model::ops::{End, Op, items::ItemOp};
 use crate::text::{Colour, Outline, Text, TextAlign};
-use iced::widget::{button, column, container, pick_list, row, rule, scrollable, slider, text, tooltip};
+use iced::widget::{button, column, container, pick_list, row, scrollable, slider, text, tooltip};
 use iced::{Alignment, Element, Length};
 
 #[derive(Debug, Clone)]
@@ -56,6 +56,11 @@ pub enum EffectMsg {
     KeyMove(usize, usize, f64),
     /// The cut's LUT (how much of it is effect `LUT`).
     Lut(LutChoice),
+    /// A group of the panel folded or opened; set back to none.
+    Fold(super::effects_view::Group),
+    ResetGroup(super::effects_view::Group),
+    /// A complex control's knobs out beside the panel, or put away.
+    Extra(Option<super::effects_view::Extra>),
 }
 
 /// A LUT in a list: none, or a library name (or a file a project names).
@@ -90,7 +95,7 @@ impl std::fmt::Display for LutChoice {
 
 /// Each effect: its name, range, and what it does. Untouched, each is
 /// `grade::NEUTRAL`'s.
-const PARAMS: [(&str, f64, f64, &str); 10] = [
+pub(super) const PARAMS: [(&str, f64, f64, &str); 10] = [
     ("Exposure", -3.0, 3.0, "Brighter or darker, in stops, like the camera's EV"),
     ("Contrast", -1.0, 1.0, "More or less contrast, around mid-grey"),
     ("Highlights", -1.0, 1.0, "Pull back (−) or lift the bright parts, such as the sky"),
@@ -105,13 +110,13 @@ const PARAMS: [(&str, f64, f64, &str); 10] = [
 
 /// The LUT's strength among `Grade::values` (after `PARAMS`), drawn
 /// beside the LUT picker.
-const LUT: usize = 10;
+pub(super) const LUT: usize = 10;
 
 /// The panel's width.
-const WIDTH: f32 = 300.0;
+pub(super) const WIDTH: f32 = 300.0;
 
 /// A slider's value as shown: stops for exposure, else a signed amount.
-fn label(i: usize, v: f64) -> String {
+pub(super) fn label(i: usize, v: f64) -> String {
     match i {
         0 => format!("{v:+.2} EV"),
         8 => format!("{v:.2}"),
@@ -140,7 +145,7 @@ const SWATCHES: [[u8; 3]; 9] = [[255, 255, 255], [0, 0, 0], [255, 214, 10], [255
 /// What the panel edits: the playing cut, or the overlay selected (in the
 /// lane shown).
 #[derive(Clone, Copy, PartialEq)]
-enum Target {
+pub(super) enum Target {
     Cut(usize),
     Overlay(crate::overlay::ItemRef),
 }
@@ -163,7 +168,7 @@ impl Pin {
 }
 
 /// Where an overlay is, as sliders: its name, range and what it does.
-const PLACE: [(&str, f64, f64, &str); 4] = [
+pub(super) const PLACE: [(&str, f64, f64, &str); 4] = [
     ("Across", 0.0, 1.0, "Where its centre is, from the left edge to the right"),
     ("Down", 0.0, 1.0, "Where its centre is, from the top to the bottom"),
     ("Size", 0.05, 2.0, "1 fills the frame as far as its shape allows"),
@@ -174,7 +179,7 @@ impl App {
     /// What the panel edits and the time there in its own clock: the
     /// overlay selected, if it's showing at the playhead, else the playing
     /// cut.
-    fn effect_target(&self) -> Option<(Target, f64)> {
+    pub(super) fn effect_target(&self) -> Option<(Target, f64)> {
         let t = self.position();
         if let Some(i) = self.selection.item(&self.edit)
             && let Some(item) = self.edit.item(i)
@@ -186,7 +191,7 @@ impl App {
         self.playing_cut().map(|(_, t)| (Target::Cut(self.current), t))
     }
 
-    fn effects_of(&self, target: Target) -> &[EffectKey] {
+    pub(super) fn effects_of(&self, target: Target) -> &[EffectKey] {
         match target {
             Target::Cut(i) => &self.edit.cuts[i].effects,
             Target::Overlay(i) => &self.edit.item(i).expect("the selected overlay").effects,
@@ -269,6 +274,16 @@ impl App {
                 }
             }
             EffectMsg::Done => self.edit.commit(),
+            EffectMsg::Fold(g) => {
+                let name = g.name().to_owned();
+                if self.effects_folded.contains(&name) {
+                    self.effects_folded.retain(|n| *n != name);
+                } else {
+                    self.effects_folded.push(name);
+                }
+            }
+            EffectMsg::ResetGroup(g) => self.reset_group(g),
+            EffectMsg::Extra(extra) => self.effect_extra = extra,
             EffectMsg::Bars(bars, press) => {
                 let Some(item) = self.selection.item(&self.edit).and_then(|i| self.edit.item(i)).map(|it| it.id) else { return };
                 self.edit.begin();
@@ -459,14 +474,43 @@ impl App {
 
     /// Cut `i`'s LUT, and its strength in `grade` (the effects at the
     /// playhead): the LUT acts before the effects, which act on what it gives.
+    /// Group `g`'s effects back to none (an overlay's place, the Look's
+    /// style off too): one undo step.
+    fn reset_group(&mut self, g: super::effects_view::Group) {
+        use super::effects_view::Group;
+        let Some((target, _)) = self.effect_target() else { return };
+        self.edit.begin();
+        for &p in g.params() {
+            self.set_effect(true, p, crate::grade::NEUTRAL[p]);
+        }
+        if g == Group::Place {
+            for p in 0..4 {
+                self.set_place(true, p, Place::default().values()[p]);
+            }
+        }
+        if let (Group::Look, Target::Cut(i)) = (g, target) {
+            let cut = self.edit.cuts[i].id;
+            self.op(Op::Cut(crate::model::ops::cuts::CutOp::Style { cut, look: None }));
+        }
+        self.edit.commit();
+    }
+
     /// Cut `i`'s style look: set, a setting moved, all set back.
     fn on_style(&mut self, i: usize, message: EffectMsg) {
         use crate::model::ops::cuts::CutOp;
         let c = &self.edit.cuts[i];
         let (cut, style) = (c.id, c.style.clone());
         match message {
+            // A press on the chosen one again brings its knobs out or puts
+            // them away; another is chosen with its knobs out.
             EffectMsg::Style(look) => {
+                use super::effects_view::Extra;
+                if look.is_some() && look == style.as_ref().map(|s| s.look) {
+                    self.effect_extra = (self.effect_extra != Some(Extra::Style)).then_some(Extra::Style);
+                    return;
+                }
                 self.op(Op::Cut(CutOp::Style { cut, look }));
+                self.effect_extra = look.map(|_| Extra::Style);
             }
             EffectMsg::StyleKnob(key, value) => {
                 let choice = style.and_then(|s| s.look.knob(key)).is_some_and(|k| !k.choices.is_empty());
@@ -486,207 +530,6 @@ impl App {
             _ => {}
         }
     }
-
-    /// Cut `i`'s style (gap 87): a look over its whole picture, its tiles
-    /// and its settings.
-    fn style_controls(&self, i: usize) -> Element<'_, Message> {
-        use crate::transition::Look;
-        let style = self.edit.cuts[i].style.as_ref();
-        let m = |e: EffectMsg| Message::Effect(e);
-        let off = tip(button(text("✕").size(12)).padding([1, 6]).style(button::text).on_press_maybe(style.map(|_| m(EffectMsg::Style(None)))), text("No style"), tooltip::Position::Left);
-        let looks = Look::STYLES.into_iter().map(|l| (l, m(EffectMsg::Style(Some(l)))));
-        let mut col = column![row![text("Style").size(16).width(Length::Fill), off].align_y(Alignment::Center), super::transitions_panel::tiles(looks, style.map(|s| s.look))].spacing(10);
-        if let Some(s) = style {
-            for (k, &v) in s.look.knobs().iter().zip(&s.spec().values) {
-                col = col.push(super::transitions_panel::knob(k, v, |key, v| Message::Effect(EffectMsg::StyleKnob(key, v)), m(EffectMsg::Done)));
-            }
-            let reset = button(text("Reset").size(13)).style(button::secondary).on_press_maybe((!s.params.is_empty()).then(|| m(EffectMsg::StyleReset)));
-            col = col.push(tip(reset, text("Every setting back to the style's own"), tooltip::Position::Left));
-        }
-        col.push(rule::horizontal(1)).into()
-    }
-
-    fn lut_controls(&self, i: usize, grade: &Grade) -> Element<'_, Message> {
-        let cut = &self.edit.cuts[i];
-        let mut choices = vec![LutChoice::None];
-        choices.extend(self.luts.iter().map(|n| LutChoice::Named(n.clone())));
-        let current = LutChoice::of(cut.lut.as_ref());
-        if !choices.contains(&current) {
-            choices.push(current.clone());
-        }
-        let d_log_m = self.library.iter().find(|m| m.input == cut.input).is_some_and(|m| m.color_mode == crate::dji::ColorMode::DLogM);
-        let hint = if self.luts.is_empty() {
-            "Add LUTs (.cube) in Settings: DJI's D-Log M to Rec.709 for D-Log M footage, or any look"
-        } else {
-            "A LUT turns the picture's colours into others before the effects: DJI's D-Log M to Rec.709 makes D-Log M footage look normal"
-        };
-        let mut col = column![
-            row![text("LUT").width(Length::Fill), text(if d_log_m { "filmed in D-Log M" } else { "" }).size(13).style(text::secondary)].align_y(Alignment::Center),
-            tip(pick_list(choices, Some(current), |c| Message::Effect(EffectMsg::Lut(c))).text_size(13).width(Length::Fill), text(hint), tooltip::Position::Left),
-        ]
-        .spacing(4);
-        if cut.lut.is_some() {
-            // An effect like the others, for the whole cut.
-            let v = grade.lut;
-            let reset = button(text("↺").size(13)).padding([0, 5]).style(button::text).on_press_maybe((v != 1.0).then(|| Message::Effect(EffectMsg::Reset(Some(LUT)))));
-            col = col.push(tip(
-                column![
-                    row![text("Strength").width(Length::Fill), text(format!("{:.0} %", v * 100.0)).size(13), reset].spacing(4).align_y(Alignment::Center),
-                    slider(0.0..=1.0, v, |v| Message::Effect(EffectMsg::Set(LUT, v))).step(0.01).on_release(Message::Effect(EffectMsg::Done)),
-                ]
-                .spacing(2),
-                text("How much of the LUT: 100 % is all of it, less mixes in the picture as filmed. For the whole cut"),
-                tooltip::Position::Left,
-            ));
-        }
-        col.push(rule::horizontal(1)).into()
-    }
-
-    pub(super) fn effects_panel(&self) -> Element<'_, Message> {
-        let m = |e: EffectMsg| Message::Effect(e);
-        let target = self.effect_target();
-        let grade = target.map(|(tg, t)| grade_at(self.effects_of(tg), t)).unwrap_or_default();
-        let overlay = target.and_then(|(tg, t)| match tg {
-            Target::Overlay(i) => Some((i, t)),
-            Target::Cut(_) => None,
-        });
-        let enabled = target.is_some();
-        let mut sliders = column![].spacing(6);
-        // Bars: their own values; an overlay's place first: where it is is
-        // what's set most.
-        let bars = overlay.and_then(|(i, _)| self.edit.item(i)?.bars);
-        if let Some(b) = bars {
-            sliders = sliders.push(bars_controls(b)).push(rule::horizontal(1));
-        } else if let Some((i, t)) = overlay {
-            let place = self.edit.item(i).map_or_else(Place::default, |it| place_at(&it.motion, t));
-            for (p, (name, lo, hi, hint)) in PLACE.iter().enumerate() {
-                let v = place.values()[p];
-                let shown = if p == 3 { format!("{v:+.0}°") } else { format!("{v:.2}") };
-                let reset = button(text("↺").size(13)).padding([0, 5]).style(button::text).on_press_maybe((v != Place::default().values()[p]).then(|| m(EffectMsg::ResetPlace(p))));
-                let control = slider(*lo..=*hi, v, move |v| Message::Effect(EffectMsg::Place(p, v))).step(if p == 3 { 1.0 } else { 0.01 }).on_release(m(EffectMsg::Done));
-                sliders = sliders.push(tip(
-                    column![row![text(*name).width(Length::Fill), text(shown).size(13), reset].spacing(4).align_y(Alignment::Center), control].spacing(2),
-                    text(*hint),
-                    tooltip::Position::Left,
-                ));
-            }
-            sliders = sliders.push(rule::horizontal(1));
-        }
-        for (p, (name, lo, hi, hint)) in PARAMS.iter().enumerate() {
-            let v = grade.values()[p];
-            let reset = button(text("↺").size(13)).padding([0, 5]).style(button::text).on_press_maybe((enabled && v != crate::grade::NEUTRAL[p]).then(|| m(EffectMsg::Reset(Some(p)))));
-            let control = slider(*lo..=*hi, v, move |v| Message::Effect(EffectMsg::Set(p, v))).step(0.01).on_release(m(EffectMsg::Done));
-            sliders = sliders.push(tip(
-                column![row![text(*name).width(Length::Fill), text(label(p, v)).size(13), reset].spacing(4).align_y(Alignment::Center), control].spacing(2),
-                text(*hint),
-                tooltip::Position::Left,
-            ));
-            // Its shape and extent right under the vignette, while it's on.
-            if p == crate::grade::VIGNETTE && v > 0.0 {
-                sliders = sliders.push(vignette_controls(&grade));
-            }
-        }
-        let cut_name = match target {
-            Some((Target::Cut(i), _)) => format!("Cut {} · {}", i + 1, super::clip_name(&self.edit.cuts[i].input)),
-            Some((Target::Overlay(i), _)) => match self.edit.item(i) {
-                Some(it) if it.text.is_some() => format!("Text · {}", it.name()),
-                Some(it) if it.bars.is_some() => it.name(),
-                Some(it) => format!("Overlay · {}", super::clip_name(&it.input)),
-                None => String::new(),
-            },
-            None => "No cut".to_owned(),
-        };
-        let tools = self.effect_tools(target);
-        let close = tip(button(text("✕").size(14)).padding([0, 6]).style(button::text).on_press(m(EffectMsg::Toggle)), text("Close (G)"), tooltip::Position::Bottom);
-        let mut body = column![row![text("Effects").size(18).width(Length::Fill), close].align_y(Alignment::Center), text(cut_name).size(13)].spacing(10).padding(12);
-        if let Some((Target::Cut(i), _)) = target {
-            body = body.push(self.lut_controls(i, &grade));
-            body = body.push(self.style_controls(i));
-        }
-        let body = body.extend([column![sliders, tools, rule::horizontal(1), self.whole_edit()].spacing(10).into()]);
-        container(scrollable(body)).width(WIDTH).height(Length::Fill).into()
-    }
-
-    /// The cut's tools: white balance, to all cuts, reset.
-    fn effect_tools(&self, target: Option<(Target, f64)>) -> Element<'_, Message> {
-        let m = |e: EffectMsg| Message::Effect(e);
-        let on_cut = matches!(target, Some((Target::Cut(_), _)));
-        row![
-            tip(icon_button(super::PICK, on_cut.then(|| m(EffectMsg::PickWhite))), text("White balance: draw a box over something that should be grey or white (snow, a cloud)"), tooltip::Position::Bottom),
-            tip(icon_button(super::TO_ALL_CUTS, on_cut.then(|| m(EffectMsg::ToAll))), text("To all cuts: give every other cut this look (as at the playhead), replacing their effects"), tooltip::Position::Bottom),
-            tip(
-                icon_button(
-                    super::RESET_VIEW,
-                    target
-                        .filter(|&(tg, _)| !self.effects_of(tg).is_empty() || matches!(tg, Target::Overlay(i) if self.edit.item(i).is_some_and(|it| !it.motion.is_empty())))
-                        .map(|_| m(EffectMsg::Reset(None))),
-                ),
-                text(if on_cut { "Reset: remove this cut's effects" } else { "Reset: remove this overlay's effects and moves" }),
-                tooltip::Position::Bottom,
-            ),
-        ]
-        .spacing(6)
-        .align_y(Alignment::Center)
-        .into()
-    }
-
-    /// The edit's fades.
-    fn whole_edit(&self) -> Element<'_, Message> {
-        let fades = &self.edit.fades;
-        let fade = |name: &'static str, v: f64, f: fn(f64) -> EffectMsg, hint: &'static str| {
-            tip(
-                column![
-                    row![text(name).width(Length::Fill), text(if v > 0.0 { format!("{v:.1} s") } else { "none".to_owned() }).size(13)],
-                    slider(0.0..=5.0, v, move |v| Message::Effect(f(v))).step(0.1).on_release(Message::Effect(EffectMsg::Done)),
-                ]
-                .spacing(2),
-                text(hint),
-                tooltip::Position::Left,
-            )
-        };
-        column![
-            text("Edit").size(16),
-            fade("Fade in", fades.fade_in, EffectMsg::FadeIn, "From black at the start of the edit, the sound with it"),
-            fade("Fade out", fades.fade_out, EffectMsg::FadeOut, "To black at the end of the edit, the sound with it"),
-        ]
-        .spacing(10)
-        .into()
-    }
-}
-
-/// Bars' ratio (scope, 2:1, flat), how long they slide, their colour.
-fn bars_controls(b: crate::overlay::Bars) -> Element<'static, Message> {
-    let set = |bars, press| Message::Effect(EffectMsg::Bars(bars, press));
-    let pick = |label: String, on: bool, bars| button(text(label).size(12)).padding([3, 8]).style(if on { button::primary } else { button::secondary }).on_press(set(bars, true)).into();
-    let ratios = crate::overlay::BAR_RATIOS.map(|r| pick(format!("{r:.2}:1"), (b.ratio - r).abs() < 1e-6, crate::overlay::Bars { ratio: r, ..b }));
-    let colours = [("Black", [0.0; 3]), ("White", [1.0; 3])].map(|(name, c)| pick(name.to_owned(), b.colour == c, crate::overlay::Bars { colour: c, ..b }));
-    let slide = column![
-        row![text("Slide").size(13).width(Length::Fill), text(format!("{:.1} s", b.slide)).size(13)],
-        slider(0.0..=3.0, b.slide, move |s| set(crate::overlay::Bars { slide: s, ..b }, false)).step(0.1).on_release(Message::Effect(EffectMsg::Done)),
-    ]
-    .spacing(2);
-    tip(
-        column![text("Bars").size(16), iced::widget::row(ratios).spacing(4), iced::widget::row(colours).spacing(4), slide].spacing(8),
-        text("The picture's shape between the bars, their colour, and how long they slide in at the item's start and out at its end; Opacity below"),
-        tooltip::Position::Left,
-    )
-}
-
-/// The vignette's shape (gap 6) and how far in and how softly it reaches.
-fn vignette_controls(grade: &Grade) -> Element<'static, Message> {
-    let m = |e: EffectMsg| Message::Effect(e);
-    let shapes = crate::grade::VIGNETTES.iter().enumerate().map(|(i, &name)| {
-        let on = grade.vignette_shape.round() as usize == i;
-        button(text(name).size(12)).padding([3, 8]).style(if on { button::primary } else { button::secondary }).on_press(m(EffectMsg::Set(crate::grade::SHAPE, i as f64))).into()
-    });
-    let slider_of = |name: &'static str, p: usize, v: f64| {
-        column![row![text(name).size(13).width(Length::Fill), text(format!("{v:.2}")).size(13)], slider(0.0..=1.0, v, move |v| Message::Effect(EffectMsg::Set(p, v))).step(0.01).on_release(m(EffectMsg::Done))].spacing(2)
-    };
-    tip(
-        column![iced::widget::row(shapes).spacing(4).wrap().vertical_spacing(4), slider_of("Reach", crate::grade::SHAPE + 1, grade.vignette_reach), slider_of("Softness", crate::grade::SHAPE + 2, grade.vignette_soft)].spacing(6),
-        text("The vignette's shape: round, or from the top (a graduated filter on a bright sky), the bottom or the sides; how far in it reaches, how soft its edge"),
-        tooltip::Position::Left,
-    )
 }
 
 /// A font family in the text panel's list, the built-in ones marked.

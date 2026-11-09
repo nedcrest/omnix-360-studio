@@ -74,6 +74,8 @@ pub struct Settings {
     pub fold_marks: bool,
     /// The transitions lane folded to a thin row.
     pub fold_transitions: bool,
+    /// The Effects panel's groups folded, by name (`effects_view::Group`).
+    pub effects_folded: Vec<String>,
     /// The projects place, chosen in Omnix; none: Dailix's.
     pub projects: Option<PathBuf>,
     /// The edits opened or saved last, the latest first (`RECENT` at most).
@@ -137,6 +139,7 @@ impl Default for Settings {
             fold_sfx2: true,
             fold_marks: false,
             fold_transitions: false,
+            effects_folded: vec!["Whole edit".to_owned()],
             projects: None,
             recent: Vec::new(),
             browse: false,

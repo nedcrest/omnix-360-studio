@@ -273,7 +273,7 @@ impl App {
             view.into()
         };
         let view: Element<'_, Message> = match self.side {
-            Some(Side::Effects) => row![view, self.effects_panel()].into(),
+            Some(Side::Effects) => row![view, self.effects_extra_panel(), self.effects_panel()].into(),
             Some(Side::Export) => row![view, self.export_panel()].into(),
             Some(Side::Audio) => row![view, self.audio_panel()].into(),
             Some(Side::Transitions) => row![view, self.knobs_panel(), self.transitions_panel()].into(),
@@ -462,7 +462,7 @@ impl App {
             separator(),
             group("Look", open, tip(
                 tint_button(Tint::Look, EFFECTS, Some(Message::Effect(effects::EffectMsg::Toggle))),
-                text(if self.side == Some(Side::Effects) { "Close the Effects panel (G)" } else { "Effects: exposure, colour and tone of the cut, keyframed; fades for the edit (G)" }),
+                text(if self.side == Some(Side::Effects) { "Close the Effects panel (G)" } else { "Effects: light, colour, look and finish of the cut or the selected item (G)" }),
                 tooltip::Position::Top,
             )),
             separator(),

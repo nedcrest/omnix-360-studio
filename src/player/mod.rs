@@ -29,6 +29,7 @@ mod sound_ui;
 mod source;
 mod thumbs;
 mod effects;
+mod effects_view;
 pub mod music;
 mod timeline;
 mod divider;
@@ -743,6 +744,10 @@ struct App {
     /// The looks chosen last, for the overlap and an edge: what a zone
     /// drawn on the lane gets.
     last_overlap: crate::transition::Look,
+    /// The Effects panel's groups folded (kept in the settings), and the
+    /// complex control whose knobs are out beside it.
+    effects_folded: Vec<String>,
+    effect_extra: Option<effects_view::Extra>,
     last_edge: crate::transition::Look,
     /// The bin, at the far left (`bin.rs`).
     bin: bin::Bin,
@@ -915,6 +920,8 @@ impl App {
             templates: crate::template::names(),
             template_name: String::new(),
             last_overlap: crate::transition::Look::WhipPan,
+            effects_folded: saved.effects_folded.clone(),
+            effect_extra: None,
             last_edge: crate::transition::Look::EdgeFade,
             bin: bin::Bin { open: saved.bin_pinned, pinned: saved.bin_pinned, tile: saved.bin_tile, side: saved.bin_side, ..Default::default() },
             fullscreen: false,
@@ -974,6 +981,7 @@ impl App {
             fold_sfx2: self.folds.sfx2,
             fold_marks: self.folds.marks,
             fold_transitions: self.folds.transitions,
+            effects_folded: self.effects_folded.clone(),
             projects: self.projects.clone(),
             recent: self.recent.clone(),
             browse: self.browse,

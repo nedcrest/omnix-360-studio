@@ -1390,6 +1390,27 @@ radius plus a glow (the blurred highlights added back). CPU and GPU with a
 parity test. Blur is a multi-tap pass, so it costs more than a per-pixel
 effect.
 
+### 69. Scopes: a histogram and a waveform of the picture — done, checked by the user 2026-11-10 (user, 2026-11-04)
+
+To see whether the picture is clipped and whether its black is black (the
+Kos film's darkest is 14 of 255, gap 14), as editors show: a histogram
+and a luma / RGB waveform of the frame shown, in the Effects panel or a
+small panel of its own, updated while paused and a few times a second
+while playing (measured from the frame already decoded, so cheap).
+Milestone «Ефекти, колір і розумний звук», with gap 14, which it helps set by eye.
+
+**Built and checked 2026-11-10** (the user: it follows the video, and paused it answers the Light and Colour settings) (`9b8a468`): the Effects
+panel's Scopes group (folded at first): a histogram (red, green, blue,
+luma) over a luma waveform, and «Black · White · crushed · blown». Read
+from the cut's finished picture (graded, LUT and style on, overlays
+apart), not the decoded frame, so a level set shows at once: while open
+the player draws the cut into a picture of its own and copies it back
+every 250 ms (`gpu::Pipeline::scope_due`, a GPU test), measured by
+`scopes::measure` (tested). The panel redraws every screen frame while
+it's open (iced's timer needs an executor feature Omnix doesn't carry);
+the waveform's picture is made once a measure. Not for an agent yet:
+gap 89 (auto colour) will want the measure as a command.
+
 ### 77. Dailix: voice clean-up and loudness for camera and phone sound — done, checked by the user 2026-11-10 (user, 2026-11-05)
 
 Most of the material has no lavalier: the voice is the camera's or the

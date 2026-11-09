@@ -88,7 +88,7 @@ done in part stays here until its last card is done.
 | 66 | The button groups in colours of their own | [done](EDITOR-GAPS-DONE.md) |
 | 67 | Bokeh: the background softened behind a person | below |
 | 68 | Curves and colour by hue | below |
-| 69 | Scopes: a histogram and a waveform of the picture | below |
+| 69 | Scopes: a histogram and a waveform of the picture | [done](EDITOR-GAPS-DONE.md) |
 | 70 | The text and overlay lanes as groups of several lanes | below |
 | 71 | Two viewers: the source and the edit; effects tried beside the original, then applied | below |
 | 72 | The contact sheet's next round: music hints, ready music, its flow, data for AI | below |
@@ -1195,27 +1195,6 @@ deeper, the skin left alone), as Resolve's and Premiere's colour tools
 do. Kept in the effect keyframes like the other values (new optional
 fields), mirrored in the shader and `Grade::apply` with a GPU-CPU test.
 Milestone «Ефекти, колір і розумний звук», after the black and white levels (gap 14).
-
-### 69. Scopes: a histogram and a waveform of the picture — idea (user, 2026-11-04)
-
-To see whether the picture is clipped and whether its black is black (the
-Kos film's darkest is 14 of 255, gap 14), as editors show: a histogram
-and a luma / RGB waveform of the frame shown, in the Effects panel or a
-small panel of its own, updated while paused and a few times a second
-while playing (measured from the frame already decoded, so cheap).
-Milestone «Ефекти, колір і розумний звук», with gap 14, which it helps set by eye.
-
-**Built 2026-11-10, waiting for the check** (`9b8a468`): the Effects
-panel's Scopes group (folded at first): a histogram (red, green, blue,
-luma) over a luma waveform, and «Black · White · crushed · blown». Read
-from the cut's finished picture (graded, LUT and style on, overlays
-apart), not the decoded frame, so a level set shows at once: while open
-the player draws the cut into a picture of its own and copies it back
-every 250 ms (`gpu::Pipeline::scope_due`, a GPU test), measured by
-`scopes::measure` (tested). The panel redraws every screen frame while
-it's open (iced's timer needs an executor feature Omnix doesn't carry);
-the waveform's picture is made once a measure. Not for an agent yet:
-gap 89 (auto colour) will want the measure as a command.
 
 ### 70. The text and overlay lanes as groups of several lanes — idea (user, 2026-11-04)
 

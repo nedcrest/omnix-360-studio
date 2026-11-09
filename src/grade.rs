@@ -97,6 +97,12 @@ fn is_reach(v: &f64) -> bool {
 /// The vignette's shapes, by `Grade::vignette_shape`.
 pub const VIGNETTES: [&str; 4] = ["Round", "Top", "Bottom", "Sides"];
 
+/// The range of each of `Grade::values`: the panel's sliders, an
+/// automation lane's height.
+pub const RANGES: [(f64, f64); 14] = [
+    (-3.0, 3.0), (-1.0, 1.0), (-1.0, 1.0), (-1.0, 1.0), (-1.0, 1.0), (-1.0, 1.0), (-1.0, 1.0), (-1.0, 1.0), (0.0, 1.0), (0.0, 1.0), (0.0, 1.0), (0.0, 3.0), (0.0, 1.0), (0.0, 1.0),
+];
+
 /// Each of `Grade::values` by its name in the project (`KeyOp::EffectValue`).
 pub const NAMES: [&str; 14] = [
     "exposure", "contrast", "highlights", "shadows", "temperature", "tint", "saturation", "vibrance", "vignette", "opacity", "lut", "vignette_shape", "vignette_reach", "vignette_soft",

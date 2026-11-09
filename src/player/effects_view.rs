@@ -126,7 +126,7 @@ impl App {
 
     /// Effect `p`'s slider with its value and ↺.
     fn param_row(&self, p: usize, v: f64, enabled: bool) -> Element<'static, Message> {
-        let (name, lo, hi, hint) = PARAMS[p];
+        let ((name, hint), (lo, hi)) = (PARAMS[p], crate::grade::RANGES[p]);
         let reset = button(text("↺").size(13)).padding([0, 5]).style(button::text).on_press_maybe((enabled && v != crate::grade::NEUTRAL[p]).then_some(Message::Effect(EffectMsg::Reset(Some(p)))));
         let control = slider(lo..=hi, v, move |v| Message::Effect(EffectMsg::Set(p, v))).step(0.01).on_release(Message::Effect(EffectMsg::Done));
         tip(column![row![text(name).width(Length::Fill), text(label(p, v)).size(13), reset].spacing(4).align_y(Alignment::Center), control].spacing(2), text(hint), tooltip::Position::Left)

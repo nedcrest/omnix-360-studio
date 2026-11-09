@@ -93,19 +93,20 @@ impl std::fmt::Display for LutChoice {
     }
 }
 
-/// Each effect: its name, range, and what it does. Untouched, each is
-/// `grade::NEUTRAL`'s.
-pub(super) const PARAMS: [(&str, f64, f64, &str); 10] = [
-    ("Exposure", -3.0, 3.0, "Brighter or darker, in stops, like the camera's EV"),
-    ("Contrast", -1.0, 1.0, "More or less contrast, around mid-grey"),
-    ("Highlights", -1.0, 1.0, "Pull back (−) or lift the bright parts, such as the sky"),
-    ("Shadows", -1.0, 1.0, "Lift (+) or deepen the dark parts"),
-    ("Temperature", -1.0, 1.0, "Cooler (−) or warmer"),
-    ("Tint", -1.0, 1.0, "Greener (−) or more magenta"),
-    ("Saturation", -1.0, 1.0, "Less or more colour; −1 is black and white"),
-    ("Vibrance", -1.0, 1.0, "More colour mostly where there is little, sparing skin and sky"),
-    ("Vignette", 0.0, 1.0, "Darker edges: round, or from the top, the bottom or the sides"),
-    ("Opacity", 0.0, 1.0, "How much of the picture shows; on the main track it fades towards black"),
+/// Each effect as the panel shows it: its name and what it does (the first
+/// eleven of `Grade::values`; their ranges `grade::RANGES`).
+pub(super) const PARAMS: [(&str, &str); 11] = [
+    ("Exposure", "Brighter or darker, in stops, like the camera's EV"),
+    ("Contrast", "More or less contrast, around mid-grey"),
+    ("Highlights", "Pull back (−) or lift the bright parts, such as the sky"),
+    ("Shadows", "Lift (+) or deepen the dark parts"),
+    ("Temperature", "Cooler (−) or warmer"),
+    ("Tint", "Greener (−) or more magenta"),
+    ("Saturation", "Less or more colour; −1 is black and white"),
+    ("Vibrance", "More colour mostly where there is little, sparing skin and sky"),
+    ("Vignette", "Darker edges: round, or from the top, the bottom or the sides"),
+    ("Opacity", "How much of the picture shows; on the main track it fades towards black"),
+    ("Strength", "How much of the LUT: 100 % is all of it, less mixes in the picture as filmed"),
 ];
 
 /// The LUT's strength among `Grade::values` (after `PARAMS`), drawn
@@ -120,7 +121,7 @@ pub(super) fn label(i: usize, v: f64) -> String {
     match i {
         0 => format!("{v:+.2} EV"),
         8 => format!("{v:.2}"),
-        9 => format!("{:.0} %", v * 100.0),
+        9 | 10 => format!("{:.0} %", v * 100.0),
         _ => format!("{v:+.2}"),
     }
 }
@@ -545,6 +546,14 @@ impl std::fmt::Display for FontChoice {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn every_value_the_panel_draws_has_a_row_and_a_range() {
+        // The LUT's strength too: drawn by the same row, past the ten.
+        assert_eq!(PARAMS.len(), LUT + 1);
+        let neutral = crate::grade::NEUTRAL;
+        assert!(crate::grade::RANGES.iter().zip(neutral).all(|(&(lo, hi), v)| lo <= v && v <= hi));
+    }
 
     #[test]
     fn a_drag_during_playback_writes_one_key() {

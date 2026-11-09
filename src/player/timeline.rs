@@ -2833,7 +2833,7 @@ mod tests {
         // Exposure's lane open; cut 0 (0..4 s, clip time 0..4) moves it over 1..3 s.
         (t.auto_lanes, t.folds.effects) = (vec![super::super::automation_ui::Param::Grade(0)], false);
         t.rows = Rows::new(1.0, false, t.folds, 1);
-        t.blocks[0].cut.automation = vec![AutoClip { param: "exposure".into(), from: 1.0, to: 3.0, points: vec![AutoPoint { t: 2.0, v: 1.5, ease: Default::default() }], follows: None }];
+        t.blocks[0].cut.automation = vec![AutoClip { param: "exposure".into(), from: 1.0, to: 3.0, points: vec![AutoPoint { t: 2.0, v: 1.5, ease: Default::default() }], follows: None, animation: None }];
         let lanes = t.cut_lanes();
         let (top, h) = lanes.lane(0);
         let mid = top + h / 2.0;
@@ -2857,7 +2857,7 @@ mod tests {
         let (_, b) = timeline();
         let lane_with = |params: Vec<Param>, effects_open: bool| {
             let (mut t, _) = timeline();
-            let x = AutoClip { param: "x".into(), from: 0.0, to: 4.0, points: vec![AutoPoint { t: 1.0, v: 0.25, ease: Default::default() }], follows: None };
+            let x = AutoClip { param: "x".into(), from: 0.0, to: 4.0, points: vec![AutoPoint { t: 1.0, v: 0.25, ease: Default::default() }], follows: None, animation: None };
             let item = crate::overlay::Item { id: 9, input: "logo.png".into(), text: None, at: 2.0, start: 0.0, end: 4.0, motion: vec![], effects: vec![], bars: None, automation: vec![x] };
             t.overlays = vec![OverlayBlock { item, label: "logo".into(), thumb: None }];
             (t.overlay_auto, t.folds.overlay, t.folds.overlay_motion, t.folds.overlay_effects) = (params, false, false, !effects_open);

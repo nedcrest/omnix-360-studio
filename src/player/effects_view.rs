@@ -20,6 +20,7 @@ const EXTRA_WIDTH: f32 = 220.0;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Group {
     Place,
+    Animate,
     Bars,
     Light,
     Colour,
@@ -33,6 +34,7 @@ impl Group {
     pub fn name(self) -> &'static str {
         match self {
             Group::Place => "Place",
+            Group::Animate => "Animate",
             Group::Bars => "Bars",
             Group::Light => "Light",
             Group::Colour => "Colour",
@@ -49,7 +51,7 @@ impl Group {
             Group::Colour => &[4, 5, 6, 7],
             Group::Look => &[LUT],
             Group::Finish => &[8, 9, 11, 12, 13],
-            Group::Place | Group::Bars | Group::WholeEdit => &[],
+            Group::Place | Group::Animate | Group::Bars | Group::WholeEdit => &[],
         }
     }
 }
@@ -72,7 +74,10 @@ impl App {
         match target {
             Some((Target::Overlay(i), t)) => match self.edit.item(i).and_then(|it| it.bars) {
                 Some(b) => body = body.push(self.group(Group::Bars, bars_controls(b))),
-                None => body = body.push(self.group(Group::Place, self.place_sliders(i, t))),
+                None => {
+                    body = body.push(self.group(Group::Place, self.place_sliders(i, t)));
+                    body = body.push(self.group(Group::Animate, self.animate_controls(i)));
+                }
             },
             Some((Target::Cut(_), _)) | None => {}
         }
@@ -118,7 +123,7 @@ impl App {
     fn group<'a>(&self, g: Group, content: Element<'a, Message>) -> Element<'a, Message> {
         let folded = self.effects_folded.iter().any(|n| n == g.name());
         let fold = button(text(format!("{} {}", if folded { "▸" } else { "▾" }, g.name())).size(15)).padding([2, 0]).style(button::text).on_press(Message::Effect(EffectMsg::Fold(g)));
-        let resets = !g.params().is_empty() || g == Group::Place;
+        let resets = !g.params().is_empty() || matches!(g, Group::Place | Group::Animate);
         let reset = tip(button(text("↺").size(13)).padding([0, 5]).style(button::text).on_press_maybe(resets.then_some(Message::Effect(EffectMsg::ResetGroup(g)))), text(format!("{} back to none", g.name())), tooltip::Position::Left);
         let head = row![fold, space().width(Length::Fill), reset].align_y(Alignment::Center);
         if folded { head.into() } else { column![head, content].spacing(8).into() }
@@ -165,6 +170,36 @@ impl App {
             tip(column![row![text(*name).width(Length::Fill), text(shown).size(13), reset, lane].spacing(4).align_y(Alignment::Center), control].spacing(2), text(*hint), tooltip::Position::Left)
         });
         column(rows).spacing(6).into()
+    }
+
+    /// The item's in and out (gap 87, step 2a): a tile each, ✕, how long.
+    fn animate_controls(&self, i: crate::overlay::ItemRef) -> Element<'static, Message> {
+        use crate::animate::Anim;
+        use crate::model::ops::End;
+        let m = |e: EffectMsg| Message::Effect(e);
+        let made = |edge: End| self.edit.item(i).and_then(|it| it.automation.iter().find_map(|c| c.animation.filter(|a| a.edge == edge)));
+        let side = |edge: End, title: &'static str| {
+            let now = made(edge);
+            let off = button(text("✕").size(12)).padding([1, 6]).style(button::text).on_press_maybe(now.map(|_| m(EffectMsg::Animate(edge, None))));
+            let tiles = Anim::ALL.iter().map(|&a| {
+                let on = now.is_some_and(|x| x.anim == a);
+                button(text(a.name()).size(12)).padding([3, 7]).style(if on { button::primary } else { button::secondary }).on_press(m(EffectMsg::Animate(edge, Some(a)))).into()
+            });
+            let mut col = column![row![text(title).width(Length::Fill), off].align_y(Alignment::Center), iced::widget::row(tiles).spacing(4).wrap().vertical_spacing(4)].spacing(6);
+            if let Some(a) = now {
+                col = col.push(column![
+                    row![text("Length").size(13).width(Length::Fill), text(format!("{:.1} s", a.seconds)).size(13)],
+                    slider(0.2..=3.0, a.seconds, move |s| Message::Effect(EffectMsg::AnimateLength(edge, s))).step(0.1).on_release(m(EffectMsg::Done)),
+                ]
+                .spacing(2));
+            }
+            col
+        };
+        tip(
+            column![side(End::In, "In"), side(End::Out, "Out")].spacing(12),
+            text("How it comes on and goes off: made into automation clips on its Effects and Motion lanes, kept on its ends as it's trimmed"),
+            tooltip::Position::Left,
+        )
     }
 
     /// Cut `i`'s LUT and its strength.

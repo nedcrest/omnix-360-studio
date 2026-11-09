@@ -61,6 +61,10 @@ pub enum EffectMsg {
     ResetGroup(super::effects_view::Group),
     /// A complex control's knobs out beside the panel, or put away.
     Extra(Option<super::effects_view::Extra>),
+    /// The selected item's in or out (`End`): an animation or none; its
+    /// length (a slider's drag, one undo step).
+    Animate(crate::model::ops::End, Option<crate::animate::Anim>),
+    AnimateLength(crate::model::ops::End, f64),
     /// A value's automation lane shown (its Effects row opened) or, if
     /// nothing moves it, taken away (gap 39), for the panel's target.
     AutoLane(super::automation_ui::Param),
@@ -319,6 +323,11 @@ impl App {
                 }
             }
             EffectMsg::ResetGroup(g) => self.reset_group(g),
+            EffectMsg::Animate(edge, anim) => self.animate(edge, anim, None),
+            EffectMsg::AnimateLength(edge, seconds) => {
+                self.edit.begin();
+                self.animate(edge, None, Some(seconds));
+            }
             EffectMsg::Extra(extra) => self.effect_extra = extra,
             EffectMsg::AutoLane(p) => {
                 use super::automation_ui::LaneOf;
@@ -537,6 +546,17 @@ impl App {
         }
     }
 
+    /// The selected item's `edge` animated by `anim` (none with a length:
+    /// the one there, that long), its length kept or half a second.
+    fn animate(&mut self, edge: crate::model::ops::End, anim: Option<crate::animate::Anim>, seconds: Option<f64>) {
+        let Some(it) = self.selection.item(&self.edit).and_then(|i| self.edit.item(i)) else { return };
+        let now = it.automation.iter().find_map(|c| c.animation.filter(|a| a.edge == edge));
+        let anim = if seconds.is_some() { now.map(|a| a.anim) } else { anim };
+        let seconds = seconds.or(now.map(|a| a.seconds)).unwrap_or(0.5);
+        let item = it.id;
+        self.op(Op::Auto(crate::model::ops::auto::AutoOp::Animate { item, edge, anim, seconds }));
+    }
+
     /// Group `g`'s effects back to none (an overlay's place, the Look's
     /// style off too): one undo step.
     fn reset_group(&mut self, g: super::effects_view::Group) {
@@ -549,6 +569,11 @@ impl App {
         if g == Group::Place {
             for p in 0..4 {
                 self.set_place(true, p, Place::default().values()[p]);
+            }
+        }
+        if g == Group::Animate {
+            for edge in [crate::model::ops::End::In, crate::model::ops::End::Out] {
+                self.animate(edge, None, None);
             }
         }
         if let (Group::Look, Target::Cut(i)) = (g, target) {

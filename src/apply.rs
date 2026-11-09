@@ -124,6 +124,7 @@ fn auto_lines(clips: &[crate::automation::AutoClip]) -> Vec<String> {
         .map(|c| {
             let points: Vec<String> = c.points.iter().map(|q| format!("{:.2} s {}", q.t, (q.v * 1000.0).round() / 1000.0)).collect();
             let follows = c.follows.as_ref().map_or(String::new(), |f| format!(" (follows cut #{}'s «{}», {:+})", f.cut, f.track, f.offset));
+            let follows = follows + &c.animation.map_or(String::new(), |a| format!(" ({} {})", if a.edge == crate::model::ops::End::In { "in" } else { "out" }, a.anim.name()));
             format!("automation {} {:.2}-{:.2} s{follows}: {}", c.param, c.from, c.to, points.join(", "))
         })
         .collect()
@@ -180,7 +181,7 @@ mod tests {
         assert_eq!(super::look_lines(&c).last().unwrap(), "style: vhs");
         c.effects.push(crate::grade::EffectKey { t: 1.0, grade: crate::grade::Grade { vignette: 0.5, vignette_shape: 1.0, ..Default::default() }, ease: Default::default() });
         assert_eq!(super::look_lines(&c).last().unwrap(), r#"effects at 1.00 s (clip): {"vignette_shape":1.0,"vignette":0.5}"#);
-        c.automation.push(crate::automation::AutoClip { param: "exposure".into(), from: 0.0, to: 2.0, points: vec![crate::automation::AutoPoint { t: 1.0, v: 0.5, ease: Default::default() }], follows: None });
+        c.automation.push(crate::automation::AutoClip { param: "exposure".into(), from: 0.0, to: 2.0, points: vec![crate::automation::AutoPoint { t: 1.0, v: 0.5, ease: Default::default() }], follows: None, animation: None });
         assert_eq!(super::look_lines(&c).last().unwrap(), "automation exposure 0.00-2.00 s: 1.00 s 0.5");
         let list = super::looks(None).unwrap();
         for word in ["whip_pan", "streak = 1", "edge_zoom", "0 In, 1 Out", "sphere_whip", "not built yet", "old_film", "grain = 0.5", "templates in"] {

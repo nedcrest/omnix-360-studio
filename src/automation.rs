@@ -33,6 +33,10 @@ pub struct AutoClip {
     /// made again when its cut moves; none: drawn by hand.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub follows: Option<Follows>,
+    /// The in or out it was made by (`animate`), kept on its edge as the
+    /// item is trimmed; none: drawn by hand.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub animation: Option<crate::animate::Animation>,
 }
 
 /// Where a clip that follows an object came from: cut `cut`'s track
@@ -181,7 +185,7 @@ pub fn from_keys<K: Keyed>(keys: &mut Vec<K>, from: f64, to: f64) -> Vec<AutoCli
             continue;
         }
         let points = keys.iter().map(|key| AutoPoint { t: key.time(), v: key.values()[k], ease: key.ease() }).collect();
-        clips.push(AutoClip { param: name.to_owned(), from, to, points, follows: None });
+        clips.push(AutoClip { param: name.to_owned(), from, to, points, follows: None, animation: None });
     }
     keys.truncate(1);
     clips
@@ -235,7 +239,7 @@ mod tests {
     use super::*;
 
     fn clip(param: &str, from: f64, to: f64, points: &[(f64, f64)]) -> AutoClip {
-        AutoClip { param: param.into(), from, to, points: points.iter().map(|&(t, v)| AutoPoint { t, v, ease: Ease::Linear }).collect(), follows: None }
+        AutoClip { param: param.into(), from, to, points: points.iter().map(|&(t, v)| AutoPoint { t, v, ease: Ease::Linear }).collect(), follows: None, animation: None }
     }
 
     #[test]

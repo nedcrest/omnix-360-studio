@@ -94,8 +94,11 @@ pub(super) fn apply(p: &mut Project, op: &ItemOp) -> Result<Outcome, OpError> {
         &ItemOp::Trim { item, end, t, most } => {
             let (track, lane, i) = find(p, item)?;
             let lane = &mut lanes(p, track)[lane];
+            let was = (lane.items[i].start, lane.items[i].end);
             lane.trim(i, end == End::In, t, MIN_CUT, most);
-            let it = &lane.items[i];
+            let it = &mut lane.items[i];
+            // Its ins and outs stay on their edges.
+            crate::animate::keep_on_edges(&mut it.automation, was, (it.start, it.end));
             said(format!("item #{item}: {:.2}-{:.2} s on the edit", it.at, it.ends()))
         }
         ItemOp::SetText { item, text } => {

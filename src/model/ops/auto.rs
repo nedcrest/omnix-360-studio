@@ -44,6 +44,10 @@ pub enum AutoOp {
     /// the track's samples, marked as following it; clips of those values
     /// there before are replaced (gap 37's contract).
     Follow { item: Id, cut: Id, track: String, params: Vec<String>, #[serde(default)] offsets: Vec<f64> },
+    /// Item `item`'s in (`In`) or out (`Out`): `anim` (`animate::Anim`)
+    /// `seconds` long, made into clips on that edge (those of the one
+    /// before, and hand clips of the same values there, replaced), or none.
+    Animate { item: Id, edge: End, anim: Option<crate::animate::Anim>, seconds: f64 },
 }
 
 /// What an operation works on: the clips, the stretch they live in, the
@@ -121,7 +125,7 @@ pub(super) fn apply(p: &mut Project, op: &AutoOp) -> Result<Outcome, OpError> {
             clear(o.clips, param, from, to, None)?;
             let points = [from, to].map(|t| AutoPoint { t, v: (o.base)(param, t), ease: Ease::Smooth }).to_vec();
             let i = o.clips.partition_point(|c| c.from <= from);
-            o.clips.insert(i, AutoClip { param: param.clone(), from, to, points, follows: None });
+            o.clips.insert(i, AutoClip { param: param.clone(), from, to, points, follows: None, animation: None });
             said(format!("{}: {param} automated {from:.2}-{to:.2} s", name(*on)))
         }
         AutoOp::Move { on, param, at, from } => {
@@ -180,6 +184,7 @@ pub(super) fn apply(p: &mut Project, op: &AutoOp) -> Result<Outcome, OpError> {
             said(format!("{}: {param} point at {t:.2} s gone", name(*on)))
         }
         AutoOp::Follow { item, cut, track, params, offsets } => follow(p, *item, *cut, track, params, offsets),
+        &AutoOp::Animate { item, edge, anim, seconds } => animate(p, item, edge, anim, seconds),
         AutoOp::PointEase { on, param, t, ease, tolerance } => {
             let o = owner(p, *on)?;
             let i = clip_at(o.clips, param, *t)?;
@@ -219,10 +224,35 @@ fn follow(p: &mut Project, item: Id, cut: Id, track: &str, params: &[String], of
         let (from, to) = (first.t, last.t.max(first.t + SHORTEST));
         it.automation.retain(|a| !(a.param == *param && a.from < to && a.to > from));
         let follows = Some(crate::automation::Follows { cut, track: track.to_owned(), offset });
-        it.automation.push(AutoClip { param: param.clone(), from, to, points, follows });
+        it.automation.push(AutoClip { param: param.clone(), from, to, points, follows, animation: None });
     }
     it.automation.sort_by(|a, b| a.from.total_cmp(&b.from));
     said(format!("item #{item} follows «{track}» on cut #{cut}: {}", params.join(", ")))
+}
+
+/// `AutoOp::Animate`: item `item`'s `edge` animated by `anim`, from its
+/// values where it holds still.
+fn animate(p: &mut Project, item: Id, edge: End, anim: Option<crate::animate::Anim>, seconds: f64) -> Result<Outcome, OpError> {
+    let (track, l, i) = p.item_index(item).ok_or_else(|| OpError::NotFound(format!("item #{item}")))?;
+    let lanes = match track {
+        crate::overlay::Track::Overlay => &mut p.overlays,
+        crate::overlay::Track::Text => &mut p.text,
+    };
+    let it = &mut lanes[l].items[i];
+    it.automation.retain(|a| a.animation.is_none_or(|x| x.edge != edge));
+    let Some(anim) = anim else { return said(format!("item #{item}: no {}", if edge == End::In { "in" } else { "out" })) };
+    if !(seconds.is_finite() && seconds > 0.0) {
+        return Err(OpError::Invalid(format!("an animation runs some time, not {seconds} s")));
+    }
+    let at = if edge == End::In { it.start } else { it.end };
+    let (opacity, place) = (crate::grade::grade_at(&it.effects, at).opacity, crate::overlay::place_at(&it.motion, at));
+    let made = crate::animate::clips(crate::animate::Animation { anim, edge, seconds }, (it.start, it.end), opacity, place);
+    for c in &made {
+        it.automation.retain(|a| !(a.param == c.param && a.from < c.to && a.to > c.from));
+    }
+    it.automation.extend(made);
+    it.automation.sort_by(|a, b| a.from.total_cmp(&b.from));
+    said(format!("item #{item}: {} {} {seconds:.2} s", if edge == End::In { "in" } else { "out" }, anim.name()))
 }
 
 fn name(on: Graded) -> String {
@@ -285,6 +315,25 @@ mod tests {
         assert!((x.value_at(1.0) - 0.4).abs() < 1e-9 && x.follows.as_ref().is_some_and(|f| f.track == "ball"));
         assert!((it.automation.iter().find(|a| a.param == "y").unwrap().value_at(1.0) - 0.4).abs() < 1e-9, "the offset added");
         assert!(e.apply(&Op::Auto(AutoOp::Follow { item, cut, track: "ball".into(), params: vec!["size".into()], offsets: vec![] })).is_err(), "no size tracked");
+        check(&e).unwrap();
+    }
+
+
+    #[test]
+    fn an_item_animates_in_and_out_and_keeps_them_on_its_edges() {
+        use crate::animate::Anim;
+        let mut e = Edit::default();
+        let item = e.apply(&Op::Item(crate::model::ops::items::ItemOp::AddText { text: Default::default(), at: 0.0, len: 6.0 })).unwrap().made.unwrap();
+        let animate = |edge, anim| Op::Auto(AutoOp::Animate { item, edge, anim, seconds: 1.0 });
+        e.apply(&animate(End::In, Some(Anim::Fade))).unwrap();
+        e.apply(&animate(End::Out, Some(Anim::Zoom))).unwrap();
+        e.apply(&animate(End::In, Some(Anim::SlideUp))).unwrap();
+        let params = |e: &Edit| e.text[0].items[0].automation.iter().map(|c| (c.param.clone(), c.animation.unwrap().edge)).collect::<Vec<_>>();
+        assert_eq!(params(&e), [("y".into(), End::In), ("size".into(), End::Out), ("opacity".into(), End::Out)], "the in replaced, the out's two values");
+        e.apply(&Op::Item(crate::model::ops::items::ItemOp::Trim { item, end: End::Out, t: 4.0, most: 3600.0 })).unwrap();
+        assert!(e.text[0].items[0].automation.iter().filter(|c| c.animation.unwrap().edge == End::Out).all(|c| c.to == 4.0), "kept on the out");
+        e.apply(&animate(End::Out, None)).unwrap();
+        assert_eq!(params(&e).len(), 1);
         check(&e).unwrap();
     }
 

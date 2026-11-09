@@ -51,6 +51,7 @@ pub mod transition;
 mod template;
 mod style;
 mod automation;
+mod animate;
 mod fsutil;
 mod pipeline;
 mod preview;

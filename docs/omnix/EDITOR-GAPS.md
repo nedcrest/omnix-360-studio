@@ -1498,9 +1498,18 @@ cutaways, a program of its own) is another thing: it makes new footage.
   text; its outline and shadow follow their letter). CPU `composite` and
   `overlay.wgsl` match, GPU test. Ins and outs Blur and Reveal (typed at
   an even pace). `omnix looks` now lists every effect with its range.
-  Limit: past 255 letters, neighbours share a step. Next: 2c overlay
-  kinds (sticker, polaroid, picture-in-picture), 2d styles on text and
-  pictures.
+  Limit: past 255 letters, neighbours share a step. A trimmed automation
+  clip's edge points follow its edges; dragging an edge only draws it,
+  trimmed once let go (`94b91ab`, `cd93e40`, the user's find and idea).
+- **Step 2c built 2026-11-10, waiting for the check** (`4278373`,
+  `19ce064`): `Item::kind` (`dress::Kind`: sticker, polaroid, inset =
+  picture in picture), baked into the picture when it loads (`dress.rs`;
+  the sticker's edge from an exact distance transform in `mask.rs`, so a
+  PNG's outline too), so the player and the export draw the same;
+  `ItemOp::Kind` (pictures only); the Effects panel's Kind group;
+  `describe` and `looks` say it. Limit: overlays are still pictures, so
+  picture in picture holds a picture, not a playing video. Next: 2d
+  styles on text and pictures.
 - **What editors animate on text and pictures** (looked at 2026-11-10:
   CapCut, Premiere, Final Cut, Filmora, Firefly): position, scale,
   rotation, opacity (all automatable here now, gap 39), colour; then blur

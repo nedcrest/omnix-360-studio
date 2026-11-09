@@ -30,6 +30,7 @@ mod source;
 mod thumbs;
 mod effects;
 mod effects_view;
+mod automation_ui;
 pub mod music;
 mod timeline;
 mod divider;
@@ -404,6 +405,8 @@ enum Message {
     TransitionZone(usize, Option<crate::model::ops::End>),
     TransitionDraw(f64, f64),
     EdgeSeconds(usize, crate::model::ops::End, f64),
+    /// The automation lanes' presses and drags (gap 39).
+    Auto(automation_ui::AutoMsg),
     /// Transition templates: put on the join, saved, removed.
     Template(transition_templates::TemplateMsg),
     NewMenuClose,
@@ -748,6 +751,9 @@ struct App {
     /// complex control whose knobs are out beside it.
     effects_folded: Vec<String>,
     effect_extra: Option<effects_view::Extra>,
+    /// Automation lanes asked for in the Effects panel (◆), by
+    /// `grade::NAMES` index, beside those the cuts already move.
+    extra_lanes: Vec<usize>,
     last_edge: crate::transition::Look,
     /// The bin, at the far left (`bin.rs`).
     bin: bin::Bin,
@@ -904,7 +910,7 @@ impl App {
             bar_labels: saved.bar_labels,
             snapping: saved.snapping,
             snap_line: None,
-            folds: timeline::Folds { text: saved.fold_text, overlay: saved.fold_overlay, sfx2: saved.fold_sfx2, marks: saved.fold_marks, transitions: saved.fold_transitions },
+            folds: timeline::Folds { text: saved.fold_text, overlay: saved.fold_overlay, sfx2: saved.fold_sfx2, marks: saved.fold_marks, transitions: saved.fold_transitions, effects: saved.fold_effects },
             ducking: false,
             listen: Default::default(),
             check: Default::default(),
@@ -922,6 +928,7 @@ impl App {
             last_overlap: crate::transition::Look::WhipPan,
             effects_folded: saved.effects_folded.clone(),
             effect_extra: None,
+            extra_lanes: Vec::new(),
             last_edge: crate::transition::Look::EdgeFade,
             bin: bin::Bin { open: saved.bin_pinned, pinned: saved.bin_pinned, tile: saved.bin_tile, side: saved.bin_side, ..Default::default() },
             fullscreen: false,
@@ -981,6 +988,7 @@ impl App {
             fold_sfx2: self.folds.sfx2,
             fold_marks: self.folds.marks,
             fold_transitions: self.folds.transitions,
+            fold_effects: self.folds.effects,
             effects_folded: self.effects_folded.clone(),
             projects: self.projects.clone(),
             recent: self.recent.clone(),
@@ -1114,6 +1122,10 @@ impl App {
                 Task::none()
             }
             Message::Template(m) => self.on_template(m),
+            Message::Auto(m) => {
+                self.on_auto(m);
+                Task::none()
+            }
             m @ (Message::EdgeLook(..) | Message::EdgeLength(..) | Message::EdgeSide(_) | Message::TransitionZone(..) | Message::TransitionDraw(..) | Message::EdgeSeconds(..)) => {
                 self.on_edges(m);
                 Task::none()

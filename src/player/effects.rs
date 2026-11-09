@@ -61,6 +61,9 @@ pub enum EffectMsg {
     ResetGroup(super::effects_view::Group),
     /// A complex control's knobs out beside the panel, or put away.
     Extra(Option<super::effects_view::Extra>),
+    /// Effect `p`'s automation lane under the Effects row shown (opened)
+    /// or, if no cut moves it, taken away (gap 39).
+    AutoLane(usize),
 }
 
 /// A LUT in a list: none, or a library name (or a file a project names).
@@ -285,6 +288,14 @@ impl App {
             }
             EffectMsg::ResetGroup(g) => self.reset_group(g),
             EffectMsg::Extra(extra) => self.effect_extra = extra,
+            EffectMsg::AutoLane(p) => {
+                if self.extra_lanes.contains(&p) {
+                    self.extra_lanes.retain(|&q| q != p);
+                } else {
+                    self.extra_lanes.push(p);
+                    self.folds.effects = false;
+                }
+            }
             EffectMsg::Bars(bars, press) => {
                 let Some(item) = self.selection.item(&self.edit).and_then(|i| self.edit.item(i)).map(|it| it.id) else { return };
                 self.edit.begin();
@@ -475,6 +486,13 @@ impl App {
 
     /// Cut `i`'s LUT, and its strength in `grade` (the effects at the
     /// playhead): the LUT acts before the effects, which act on what it gives.
+    /// The automation lanes under the Effects row: each effect a cut moves
+    /// or the panel asked for, in `grade::NAMES` order.
+    pub(super) fn auto_lanes(&self) -> Vec<usize> {
+        let moved = |p: usize| self.edit.cuts.iter().any(|c| c.automation.iter().any(|a| a.param == crate::grade::NAMES[p]));
+        (0..crate::grade::NAMES.len()).filter(|&p| moved(p) || self.extra_lanes.contains(&p)).collect()
+    }
+
     /// Group `g`'s effects back to none (an overlay's place, the Look's
     /// style off too): one undo step.
     fn reset_group(&mut self, g: super::effects_view::Group) {

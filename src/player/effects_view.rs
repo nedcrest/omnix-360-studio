@@ -129,7 +129,14 @@ impl App {
         let ((name, hint), (lo, hi)) = (PARAMS[p], crate::grade::RANGES[p]);
         let reset = button(text("↺").size(13)).padding([0, 5]).style(button::text).on_press_maybe((enabled && v != crate::grade::NEUTRAL[p]).then_some(Message::Effect(EffectMsg::Reset(Some(p)))));
         let control = slider(lo..=hi, v, move |v| Message::Effect(EffectMsg::Set(p, v))).step(0.01).on_release(Message::Effect(EffectMsg::Done));
-        tip(column![row![text(name).width(Length::Fill), text(label(p, v)).size(13), reset].spacing(4).align_y(Alignment::Center), control].spacing(2), text(hint), tooltip::Position::Left)
+        // Its automation lane, lit while it shows (gap 39).
+        let laned = self.auto_lanes().contains(&p);
+        let lane = tip(
+            button(text("◆").size(11)).padding([0, 4]).style(if laned { button::primary } else { button::text }).on_press(Message::Effect(EffectMsg::AutoLane(p))),
+            text(if laned { "Its automation lane shows under the Effects row" } else { "Automate it: a lane under the Effects row, to draw clips on" }),
+            tooltip::Position::Left,
+        );
+        tip(column![row![text(name).width(Length::Fill), text(label(p, v)).size(13), reset, lane].spacing(4).align_y(Alignment::Center), control].spacing(2), text(hint), tooltip::Position::Left)
     }
 
     /// The vignette's slider, and its shape's button lit while its knobs

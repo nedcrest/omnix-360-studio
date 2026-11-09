@@ -38,6 +38,8 @@ use iced::widget::image::Handle;
 use iced::{Point, Rectangle, Renderer, Size, Theme};
 use std::sync::Arc;
 
+mod auto;
+
 /// Diamond half-size, and how close a click must land to pick a diamond or
 /// a cut's edge.
 const DIAMOND: f32 = 6.0;
@@ -62,6 +64,8 @@ const EFFECTS: f32 = 16.0;
 /// The transitions lane's height (gap 25f), open and folded.
 const TRANS: f32 = 24.0;
 const TRANS_FOLDED: f32 = 16.0;
+/// An automation lane's height (gap 39).
+const AUTO: f32 = 30.0;
 const KEYS: f32 = 20.0;
 /// The gap between the picture's lanes and the sound's, with the sound
 /// group's name in it: the eye finds where one group ends (gap 50d).
@@ -90,6 +94,10 @@ pub struct Rows {
     trans_top: f32,
     trans: f32,
     effects_top: f32,
+    /// The automation lanes under the Effects row (gap 39): where they
+    /// start and their height together (0 while the row is folded).
+    auto_top: f32,
+    auto: f32,
     /// The View key row's height: 0 while editing.
     keys: f32,
     keys_top: f32,
@@ -107,8 +115,9 @@ pub struct Rows {
 
 impl Rows {
     /// `framing`: the View key row shows (it holds the view's keyframes);
-    /// editing, it's left out and the lanes below move up.
-    pub fn new(scale: f32, framing: bool, folds: Folds) -> Self {
+    /// editing, it's left out and the lanes below move up. `lanes`
+    /// automation lanes open under the Effects row unless it's folded.
+    pub fn new(scale: f32, framing: bool, folds: Folds, lanes: usize) -> Self {
         let scale = scale.clamp(*SCALES.start(), *SCALES.end());
         let (cuts, music) = ((CUTS * scale).round(), (MUSIC * scale).round());
         let clip_sound = (CLIP_SOUND * scale).round();
@@ -116,12 +125,14 @@ impl Rows {
         let trans = if folds.transitions { TRANS_FOLDED } else { TRANS };
         let effects_top = trans_top + trans;
         let keys = if framing { KEYS } else { 0.0 };
-        let seek_top = effects_top + EFFECTS + keys;
+        let auto_top = effects_top + EFFECTS;
+        let auto = if folds.effects { 0.0 } else { lanes as f32 * AUTO };
+        let seek_top = auto_top + auto + keys;
         let sounds_top = seek_top + SEEK;
         let folded = SoundTrack::ALL.map(|w| w == SoundTrack::Sfx2 && folds.sfx2);
         let lanes: f32 = folded.iter().map(|&f| if f { FOLDED } else { music }).sum();
         let height = sounds_top + lanes + SCROLL;
-        Rows { cuts, clip_sound, trans_top, trans, effects_top, keys_top: effects_top + EFFECTS, keys, seek_top, music, sounds_top, folded, height, overlay: (OVERLAY * scale).round() }
+        Rows { cuts, clip_sound, trans_top, trans, effects_top, auto_top, auto, keys_top: auto_top + auto, keys, seek_top, music, sounds_top, folded, height, overlay: (OVERLAY * scale).round() }
     }
 
     /// Where sound lane `i` starts.
@@ -362,6 +373,9 @@ pub struct Timeline {
     /// Where the drag under way has snapped, edit time: a line there
     /// through every lane.
     pub snap_line: Option<f64>,
+    /// The automation lanes under the Effects row, by `grade::NAMES` index
+    /// (gap 39).
+    pub auto_lanes: Vec<usize>,
 }
 
 /// What a snap target belongs to, so a drag never snaps to its own edges
@@ -430,6 +444,13 @@ pub enum Drag {
     /// Dragging the inner edge of cut `cut`'s edge look on `end`: `from`
     /// seconds when pressed at `x0`.
     EdgeLength { cut: usize, end: End, x0: f32, from: f64, per_px: f64 },
+    /// On an automation lane: a point dragged (its clip time now), a clip's
+    /// edge (a time inside it now), a clip pressed (moved once it's dragged
+    /// a little, else a point added where it was pressed), a clip drawn.
+    AutoPoint { lane: usize, cut: usize, from: f64 },
+    AutoEdge { lane: usize, cut: usize, at: f64, start: bool },
+    AutoBody { lane: usize, cut: usize, at: f64, x0: f32, y0: f32, moved: bool },
+    AutoNew { lane: usize, cut: usize, x0: f32, x1: f32 },
 }
 
 #[derive(Default)]
@@ -505,10 +526,11 @@ impl Timeline {
     /// The effect keyframe mark under `p` (they sit in a row under the
     /// cuts): (cut, keyframe, clip time).
     fn effect_at(&self, p: Point, b: Rectangle) -> Option<(usize, usize, f64)> {
-        if !(self.rows.effects_top..self.rows.keys_top).contains(&p.y) {
+        if !(self.rows.effects_top..self.rows.auto_top).contains(&p.y) {
             return None;
         }
-        self.blocks.iter().enumerate().rev().find_map(|(i, c)| {
+        // One key is the cut's value throughout (no mark); more animate it.
+        self.blocks.iter().enumerate().rev().filter(|(_, c)| c.cut.effects.len() > 1).find_map(|(i, c)| {
             c.cut.effects.iter().map(|k| k.t).enumerate().find(|&(_, t)| t >= c.cut.start && t <= c.cut.start + c.len() && (self.x(c.from + t - c.cut.start, b) - p.x).abs() <= PICK).map(|(k, t)| (i, k, t))
         })
     }
@@ -793,6 +815,9 @@ impl Timeline {
         if self.rows.on_transitions(p.y) {
             return self.zone_hit(p.x, b);
         }
+        if let Some(lane) = self.auto_lane_at(p.y) {
+            return self.auto_hit(lane, p, b);
+        }
         if let Some((cut, key, t)) = self.effect_at(p, b) {
             return Hit::Effect { cut, key, t };
         }
@@ -911,6 +936,12 @@ enum Hit {
     Zone { join: usize, side: Option<End> },
     ZoneEdge { cut: usize, side: Option<End> },
     ZoneDraw,
+    /// On an automation lane (gap 39): a point (its clip time), a clip's
+    /// edge or body (a clip time inside it), or empty lane over cut `cut`.
+    AutoPoint { lane: usize, cut: usize, t: f64 },
+    AutoEdge { lane: usize, cut: usize, at: f64, start: bool },
+    AutoClip { lane: usize, cut: usize, at: f64 },
+    AutoEmpty { lane: usize, cut: usize },
 }
 
 impl Hit {
@@ -920,7 +951,9 @@ impl Hit {
         match self {
             Hit::Nothing => I::default(),
             Hit::Listen(..) | Hit::Fold(..) | Hit::Head | Hit::CutSound(_) | Hit::Playhead | Hit::Join(_) | Hit::Zone { .. } => I::Pointer,
-            Hit::ZoneDraw => I::Crosshair,
+            Hit::ZoneDraw | Hit::AutoEmpty { .. } => I::Crosshair,
+            Hit::AutoPoint { .. } | Hit::AutoClip { .. } => I::Grab,
+            Hit::AutoEdge { .. } => I::ResizingHorizontally,
             Hit::Scroll | Hit::Effect { .. } | Hit::Point { .. } | Hit::Cut(_) | Hit::Clip { edge: None, .. } | Hit::Key { .. } => I::Grab,
             Hit::CutFade { .. } | Hit::SoundEdge { .. } | Hit::CutEdge { .. } | Hit::ClipFade { .. } | Hit::Clip { edge: Some(_), .. } | Hit::ZoneEdge { .. } => I::ResizingHorizontally,
             Hit::LevelTag(_) => I::ResizingVertically,
@@ -1159,7 +1192,8 @@ impl Timeline {
         lane_tag(frame, "Clip sound", SOUND_LINE, tag_mid(top, h));
         draw_listen(frame, "Clip sound", tag_mid(top, h), &self.listen, super::listen::CLIP_SOUND);
         head_level(frame, top, h, self.clips_db);
-        head_rows(frame, theme, self.rows.effects_top, (self.rows.keys > 0.0).then_some("View"));
+        head_rows(frame, theme, (self.rows.effects_top, &self.effects_tag()), (self.rows.keys > 0.0).then_some((self.rows.keys_top, "View")));
+        self.draw_auto_heads(frame, theme);
         frame.fill_text(Text { content: "SOUND".into(), position: Point::new(PICK + 4.0, self.rows.seek_top + SEEK / 2.0), color: ink, size: 9.5.into(), align_y: Vertical::Center, ..Default::default() });
         for (li, lane) in self.sounds.iter().enumerate() {
             let colour = lane_colour(crate::mixcheck::Lane::Track(lane.which), theme);
@@ -1232,6 +1266,10 @@ impl Timeline {
     /// The fold toggle under `p`: a folded lane anywhere (but its solo and
     /// mute), an open one on its name tag.
     fn fold_at(&self, p: Point) -> Option<(FoldLane, bool)> {
+        // The Effects row's name folds its automation lanes, while it has any.
+        if (self.rows.effects_top..self.rows.auto_top).contains(&p.y) && p.x < HEAD && !self.auto_lanes.is_empty() {
+            return fold_tag(&self.effects_tag(), self.rows.effects_top + EFFECTS / 2.0).contains(p).then_some((FoldLane::Effects, !self.folds.effects));
+        }
         // The transitions lane: folded, anywhere opens it; open, its name.
         if self.rows.on_transitions(p.y) {
             let folded = self.folds.transitions;
@@ -1621,7 +1659,7 @@ impl canvas::Program<Message> for OverlayLane {
             }
         }
         if !self.blocks().is_empty() {
-            draw_rows(&mut frame, theme, t, bounds, self.0.rows.overlay, Some("Motion"));
+            draw_rows(&mut frame, theme, t, bounds, self.0.rows.overlay, Some(self.0.rows.overlay + EFFECTS));
             let inside = |o: &OverlayBlock, k: f64| k >= o.item.start && k <= o.item.start + o.len();
             for o in self.blocks() {
                 for k in o.item.effects.iter().map(|k| k.t).filter(|&k| inside(o, k)) {
@@ -1640,7 +1678,7 @@ impl canvas::Program<Message> for OverlayLane {
         head_cell(&mut frame, 0.0, self.height(), colour);
         lane_tag(&mut frame, &self.tag_name(name), colour, top + h / 2.0);
         if !self.blocks().is_empty() {
-            head_rows(&mut frame, theme, self.0.rows.overlay, Some("Motion"));
+            head_rows(&mut frame, theme, (self.0.rows.overlay, "Effects"), Some((self.0.rows.overlay + EFFECTS, "Motion")));
         }
         // What the drag has done so far, by the pointer.
         let said = match *drag {
@@ -1985,11 +2023,11 @@ fn draw_line(frame: &mut Frame, b: Rectangle, lane: Lane, colour: iced::Color, e
 /// The two keyframe rows under a track from `top`: faint bands over the
 /// edit's length (`t`), like the lanes, not the widget's whole width;
 /// effects above, `keys` (view or motion) below.
-fn draw_rows(frame: &mut Frame, theme: &Theme, t: &Timeline, b: Rectangle, top: f32, keys: Option<&str>) {
+fn draw_rows(frame: &mut Frame, theme: &Theme, t: &Timeline, b: Rectangle, top: f32, keys: Option<f32>) {
     let palette = theme.extended_palette();
     let (l, r) = (t.x(0.0, b).max(0.0), t.x(t.duration, b).min(b.width));
-    let rows = [Some((top, EFFECTS, "Effects")), keys.map(|k| (top + EFFECTS, KEYS, k))];
-    for (y, h, _) in rows.into_iter().flatten() {
+    let rows = [Some((top, EFFECTS)), keys.map(|k| (k, KEYS))];
+    for (y, h) in rows.into_iter().flatten() {
         frame.fill(&Path::rectangle(Point::new(l, y + 1.0), Size::new((r - l).max(0.0), h - 2.0)), palette.background.weak.color.scale_alpha(0.25));
     }
 }
@@ -2010,10 +2048,11 @@ fn head_cell(frame: &mut Frame, top: f32, h: f32, colour: iced::Color) {
     frame.fill(&Path::rectangle(Point::new(0.0, top + h - 1.0), Size::new(HEAD - 1.0, 1.0)), iced::Color::from_rgba(1.0, 1.0, 1.0, 0.12));
 }
 
-/// The keyframe rows' names (`draw_rows`'s), in the header column.
-fn head_rows(frame: &mut Frame, theme: &Theme, top: f32, keys: Option<&str>) {
+/// The keyframe rows' names (`draw_rows`'s), in the header column: the
+/// effects row's (`effects`) at `top`, the keys' row at its own top.
+fn head_rows(frame: &mut Frame, theme: &Theme, (top, effects): (f32, &str), keys: Option<(f32, &str)>) {
     let ink = theme.extended_palette().background.base.text.scale_alpha(0.45);
-    for (y, h, name) in [Some((top, EFFECTS, "Effects")), keys.map(|k| (top + EFFECTS, KEYS, k))].into_iter().flatten() {
+    for (y, h, name) in [Some((top, EFFECTS, effects)), keys.map(|(k, name)| (k, KEYS, name))].into_iter().flatten() {
         frame.fill_text(Text { content: name.to_owned(), position: Point::new(PICK + 14.0, y + h / 2.0), color: ink, size: 10.0.into(), align_y: Vertical::Center, ..Default::default() });
     }
 }
@@ -2069,6 +2108,9 @@ impl Timeline {
     fn right_press(&self, bounds: Rectangle, cursor: mouse::Cursor) -> Option<canvas::Action<Message>> {
         use super::sound_ui::{Menu, SoundMsg};
         let p = cursor.position_in(bounds)?;
+        if let Some(message) = self.auto_lane_at(p.y).filter(|_| p.x >= HEAD).and_then(|lane| self.auto_right(lane, p, bounds)) {
+            return Some(canvas::Action::publish(message).and_capture());
+        }
         // A lane's header first, then a point or a line: each has a
         // menu of its own.
         let menu = if p.x < HEAD {
@@ -2164,6 +2206,23 @@ impl Timeline {
                 *drag = Drag::EdgeLength { cut, end, x0: p.x, from, per_px };
                 Message::TransitionZone(if end == End::Out { cut + 1 } else { cut }, Some(end))
             }
+            Hit::AutoPoint { lane, cut, t } if state.ctrl => Message::Auto(super::automation_ui::AutoMsg::PointDelete { cut, param: self.auto_lanes[lane], t }),
+            Hit::AutoPoint { lane, cut, t } => {
+                *drag = Drag::AutoPoint { lane, cut, from: t };
+                return Some(canvas::Action::request_redraw().and_capture());
+            }
+            Hit::AutoEdge { lane, cut, at, start } => {
+                *drag = Drag::AutoEdge { lane, cut, at, start };
+                return Some(canvas::Action::request_redraw().and_capture());
+            }
+            Hit::AutoClip { lane, cut, at } => {
+                *drag = Drag::AutoBody { lane, cut, at, x0: p.x, y0: p.y, moved: false };
+                return Some(canvas::Action::request_redraw().and_capture());
+            }
+            Hit::AutoEmpty { lane, cut } => {
+                *drag = Drag::AutoNew { lane, cut, x0: p.x, x1: p.x };
+                return Some(canvas::Action::request_redraw().and_capture());
+            }
             Hit::ZoneDraw => {
                 *drag = Drag::Zone { x0: p.x, x1: p.x };
                 return Some(canvas::Action::request_redraw().and_capture());
@@ -2245,9 +2304,13 @@ impl Timeline {
                 snapped(to, |by| Message::MusicMove(self.sounds[lane].which, clip, at + by, overlap))
             }
             Drag::Crossfade { cut, x0, from, per_px } => Message::Crossfade(*cut, *from + (*x0 - x) as f64 * *per_px),
-            Drag::Zone { x1, .. } => {
+            Drag::Zone { x1, .. } | Drag::AutoNew { x1, .. } => {
                 *x1 = x;
                 return Some(canvas::Action::request_redraw().and_capture());
+            }
+            Drag::AutoPoint { .. } | Drag::AutoEdge { .. } | Drag::AutoBody { .. } => {
+                let message = self.auto_drag(drag, Point::new(x, position.y - bounds.y), bounds)?;
+                return Some(canvas::Action::publish(message).and_capture());
             }
             // Inward lengthens: rightwards on a start, leftwards on an end.
             Drag::EdgeLength { cut, end, x0, from, per_px } => {
@@ -2291,8 +2354,9 @@ fn release(drag: Drag) -> Option<canvas::Action<Message>> {
         Drag::None => None,
         Drag::Move { cut, moved: true, to, .. } => Some(canvas::Action::publish(Message::MoveCut(cut, to)).and_capture()),
         Drag::Move { .. } | Drag::Scroll { .. } => Some(canvas::Action::request_redraw().and_capture()),
-        // The drawn zone is let go in `Marks::update`, which knows the times.
-        Drag::Zone { .. } => Some(canvas::Action::request_redraw().and_capture()),
+        // The drawn zone and the lanes' drags are let go in `Marks::update`,
+        // which knows the times.
+        Drag::Zone { .. } | Drag::AutoPoint { .. } | Drag::AutoEdge { .. } | Drag::AutoBody { .. } | Drag::AutoNew { .. } => Some(canvas::Action::request_redraw().and_capture()),
         Drag::Playhead | Drag::Key { .. } | Drag::Effect { .. } | Drag::Trim { .. } | Drag::MusicMove { .. } | Drag::MusicTrim { .. } | Drag::Fade { .. } | Drag::Point { .. } | Drag::Level { .. } | Drag::Crossfade { .. } | Drag::SoundEdge { .. } | Drag::EdgeLength { .. } => {
             Some(canvas::Action::publish(Message::ScrubDone).and_capture())
         }
@@ -2324,6 +2388,10 @@ impl canvas::Program<Message> for Marks {
                 // A rectangle drawn on the transitions lane: a few pixels
                 // at least, or it was a click.
                 Drag::Zone { x0, x1 } if (x1 - x0).abs() > 4.0 => Some(canvas::Action::publish(Message::TransitionDraw(self.t(x0, bounds), self.t(x1, bounds))).and_capture()),
+                drag @ (Drag::AutoPoint { .. } | Drag::AutoEdge { .. } | Drag::AutoBody { .. } | Drag::AutoNew { .. }) => match self.auto_release(drag, bounds) {
+                    Some(message) => Some(canvas::Action::publish(message).and_capture()),
+                    None => Some(canvas::Action::request_redraw().and_capture()),
+                },
                 drag => release(drag),
             },
             _ => None,
@@ -2334,7 +2402,9 @@ impl canvas::Program<Message> for Marks {
         let drag = &state.drag;
         let palette = theme.extended_palette();
         let mut frame = Frame::new(renderer, bounds.size());
-        draw_rows(&mut frame, theme, self, bounds, self.rows.effects_top, (self.rows.keys > 0.0).then_some("View"));
+        draw_rows(&mut frame, theme, self, bounds, self.rows.effects_top, (self.rows.keys > 0.0).then_some(self.rows.keys_top));
+        self.draw_auto(&mut frame, theme, bounds);
+        self.draw_auto_new(&mut frame, drag);
         self.draw_zones(&mut frame, theme, bounds, drag);
         for (i, c) in self.blocks.iter().enumerate() {
             let (l, r) = self.block_x(c, bounds);
@@ -2348,7 +2418,7 @@ impl canvas::Program<Message> for Marks {
         }
         // Effect keyframes: small squares along the bottom of their cut.
         for c in &self.blocks {
-            for t in c.cut.effects.iter().map(|k| k.t).filter(|&t| t >= c.cut.start && t <= c.cut.start + c.len()) {
+            for t in c.cut.effects.iter().filter(|_| c.cut.effects.len() > 1).map(|k| k.t).filter(|&t| t >= c.cut.start && t <= c.cut.start + c.len()) {
                 effect_mark(&mut frame, self.x(c.from + t - c.cut.start, bounds), self.rows.effects_top + EFFECTS / 2.0);
             }
         }
@@ -2537,13 +2607,14 @@ mod tests {
             picked: Picked::None,
             video: 10.0, clips_db: 0.0, duration: 10.0, start: 0.0, span: 10.0, position: 0.0,
             current: None, overlays: vec![], texts: vec![], drag_epoch: 0, step_note: None,
-            rows: Rows::new(1.0, false, Folds { sfx2: false, ..Folds::default() }),
+            rows: Rows::new(1.0, false, Folds { sfx2: false, ..Folds::default() }, 0),
             listen: Default::default(),
             check_marks: vec![],
             ruler: RULER_LARGE,
             folds: Folds::default(),
             snapping: true,
             snap_line: None,
+            auto_lanes: vec![],
         };
         (t, Rectangle::new(Point::ORIGIN, Size::new(1000.0 + 2.0 * PICK, 300.0)))
     }
@@ -2660,7 +2731,7 @@ mod tests {
         let clip = crate::project::MusicClip { input: "boom.wav".into(), at: 2.0, start: 0.0, end: 1.0, ..Default::default() };
         t.sounds[li].blocks.push(MusicBlock { clip, label: "boom".into(), most: f64::INFINITY, wave: None, even_wave: None, level: "0 dB".into() });
         let open = t.rows;
-        t.rows = Rows::new(1.0, false, Folds::default());
+        t.rows = Rows::new(1.0, false, Folds::default(), 0);
         assert_eq!(t.rows.lane_h(li), FOLDED);
         assert_eq!(open.height - t.rows.height, open.lane_h(li) - FOLDED, "only SFX 2 shrinks");
         assert_eq!(t.sound_tag(li), "▸ SFX 2 (1)");
@@ -2692,6 +2763,25 @@ mod tests {
     }
 
     #[test]
+    fn an_automation_lane_finds_a_point_an_edge_a_clip_or_room_to_draw() {
+        use crate::automation::{AutoClip, AutoPoint};
+        let (mut t, b) = timeline();
+        // Exposure's lane open; cut 0 (0..4 s, clip time 0..4) moves it over 1..3 s.
+        (t.auto_lanes, t.folds.effects) = (vec![0], false);
+        t.rows = Rows::new(1.0, false, t.folds, 1);
+        t.blocks[0].cut.automation = vec![AutoClip { param: "exposure".into(), from: 1.0, to: 3.0, points: vec![AutoPoint { t: 2.0, v: 1.5, ease: Default::default() }] }];
+        let (top, h) = t.auto_lane(0);
+        let mid = top + h / 2.0;
+        assert!((t.auto_value(0, t.auto_y(0, 1.5)) - 1.5).abs() < 1e-3, "height and value both ways");
+        let at = |s: f64, y: f32| t.hit(Point::new(t.x(s, b), y), b, false, false);
+        assert!(matches!(at(2.0, t.auto_y(0, 1.5)), Hit::AutoPoint { lane: 0, cut: 0, t } if t == 2.0));
+        assert!(matches!(at(1.0, mid), Hit::AutoEdge { start: true, .. }) && matches!(at(3.0, mid), Hit::AutoEdge { start: false, .. }));
+        assert!(matches!(at(2.5, top + h - 3.0), Hit::AutoClip { cut: 0, .. }));
+        assert!(matches!(at(0.5, mid), Hit::AutoEmpty { lane: 0, cut: 0 }));
+        assert_eq!(t.effects_tag(), "▾ Effects");
+    }
+
+    #[test]
     fn the_transitions_lane_finds_a_zone_its_length_edge_or_room_to_draw() {
         let (mut t, b) = timeline();
         // The overlap of cuts 0 and 1 is 3..4 s; an in edge on cut 2, 7..8 s.
@@ -2709,7 +2799,7 @@ mod tests {
     fn the_rows_stack_top_to_bottom_at_every_scale() {
         for scale in [0.5, 0.75, 1.0, 2.0, 3.0, 5.0] {
             for framing in [false, true] {
-                let r = Rows::new(scale, framing, Folds::default());
+                let r = Rows::new(scale, framing, Folds { effects: false, ..Folds::default() }, 2);
                 assert!(r.cuts < r.effects_top && r.effects_top < r.seek_top && r.seek_top < r.sounds_top && r.sounds_top < r.height, "{scale} {framing}: {r:?}");
                 assert_eq!(r.keys > 0.0, framing, "the View row only while framing");
                 for i in 0..SOUND_LANES {
@@ -2723,7 +2813,7 @@ mod tests {
             }
         }
         // Scaled outside its range, it holds at the ends.
-        assert_eq!(Rows::new(10.0, false, Folds::default()).cuts, Rows::new(3.0, false, Folds::default()).cuts);
+        assert_eq!(Rows::new(10.0, false, Folds::default(), 0).cuts, Rows::new(3.0, false, Folds::default(), 0).cuts);
     }
 
     #[test]
@@ -3173,6 +3263,8 @@ pub enum FoldLane {
     Marks,
     /// The transitions lane over the effects row (gap 25f).
     Transitions,
+    /// The Effects row's automation lanes (gap 39).
+    Effects,
 }
 
 /// Which of them are folded.
@@ -3183,11 +3275,12 @@ pub struct Folds {
     pub sfx2: bool,
     pub marks: bool,
     pub transitions: bool,
+    pub effects: bool,
 }
 
 impl Default for Folds {
     fn default() -> Self {
-        Folds { text: true, overlay: true, sfx2: true, marks: false, transitions: false }
+        Folds { text: true, overlay: true, sfx2: true, marks: false, transitions: false, effects: true }
     }
 }
 
@@ -3199,6 +3292,7 @@ impl Folds {
             FoldLane::Sfx2 => &mut self.sfx2,
             FoldLane::Marks => &mut self.marks,
             FoldLane::Transitions => &mut self.transitions,
+            FoldLane::Effects => &mut self.effects,
         } = folded;
     }
 }

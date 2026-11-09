@@ -1390,6 +1390,83 @@ radius plus a glow (the blurred highlights added back). CPU and GPU with a
 parity test. Blur is a multi-tap pass, so it costs more than a per-pixel
 effect.
 
+### 87. Style looks and animation presets — done, checked by the user 2026-11-10 (user, 2026-11-09)
+
+The user: "effects (video, an overlay picture, text) like old film, some
+neo-cyberpunk; rather for certain one-off short videos, but could be
+interesting. Different animations for text. Animations and different
+kinds of overlays for pictures. Just a rough idea."
+
+**Style looks built and checked 2026-11-09** (`5e2ddde`, `722a7d3`,
+`e515b72`): style looks on a cut (`Cut::style`, `CutOp::Style`/
+`StyleKnob`, the Effects panel's Style section): old film, VHS,
+cyberpunk, glow and soft focus (the last two are gap 26), one function
+each in `style.rs` and `style.wgsl`, living with the clip's time; the
+player draws them in a pass of their own before a join, an edge look or
+the view; the export runs them on the CPU (≈0.3 s a 1080p frame for the
+blurs on 12 cores: a GPU path for the export's looks is the follow-up).
+Next: styles and animations for text and pictures (the milestone's step 2).
+
+Checked 2026-11-09 before building: Effects (colour, keyframed), LUTs and
+the overlay and text lanes' own motion keys are hand-set values; there
+is no ready look to put on, and no animation preset. Gap 86 (animated
+cutaways, a program of its own) is another thing: it makes new footage.
+
+- **Style looks**, put on a cut, an overlay item or a text item, keyframed
+  in strength like an effect: old film (grain, scratches, gate weave,
+  flicker, vignette), VHS (colour bleed, tracking lines, noise),
+  neo-cyberpunk (neon grade, chromatic split, scanlines, glitch), maybe
+  more (8 mm, CRT, duotone). Built as the transitions are: one function
+  on the CPU and its WGSL twin, a GPU test; their knobs as `Look::knobs`
+  have. The glitch's tearing (`transition::tear`) is a start.
+- **Step 2a done and checked 2026-11-10** (`a985731`, reset `f5d826b`):
+  ins and outs (`animate.rs`), made into automation clips on the item's
+  edge from its still values, each clip naming its animation, kept on
+  its edge by a trim; `AutoOp::Animate`; the Effects panel's Animate
+  group; listed by `omnix looks`. A reset removes automation too.
+- **Step 2b done and checked 2026-11-10** (`d118618`,
+  `fdef4f5`): two effects for text and pictures only (`grade::ITEM_ONLY`,
+  a cut refuses them): `blur` (48 samples on a sunflower disc, up to 8 %
+  of the picture's short side) and `reveal` (a picture wiped in from the
+  left with a soft edge; text typed letter by letter, from
+  `Picture::order`, each pixel's letter in reading order, drawn with the
+  text; its outline and shadow follow their letter). CPU `composite` and
+  `overlay.wgsl` match, GPU test. Ins and outs Blur and Reveal (typed at
+  an even pace). `omnix looks` now lists every effect with its range.
+  Limit: past 255 letters, neighbours share a step. A trimmed automation
+  clip's edge points follow its edges; dragging an edge only draws it,
+  trimmed once let go (`94b91ab`, `cd93e40`, the user's find and idea).
+- **Step 2c done and checked 2026-11-10** (`4278373`,
+  `19ce064`): `Item::kind` (`dress::Kind`: sticker, polaroid, inset =
+  picture in picture), baked into the picture when it loads (`dress.rs`;
+  the sticker's edge from an exact distance transform in `mask.rs`, so a
+  PNG's outline too), so the player and the export draw the same;
+  `ItemOp::Kind` (pictures only); the Effects panel's Kind group;
+  `describe` and `looks` say it. Limit: overlays are still pictures, so
+  picture in picture holds a picture, not a playing video.
+- **Step 2d done and checked 2026-11-10** (`efd2af5`,
+  `c3ee0a7`, `deeeb5a`): `Item::style` (as a cut's), `ItemOp::Style` and
+  `StyleKnob` sharing the cut's checks; the item's picture styled first
+  (CPU `Picture::styled`; the player runs the style pass on it into a
+  picture of its own, `StyledSlot`, the see-through kept), then laid on
+  the frame; GPU test on a living and a blurring look; the Effects
+  panel's Look group and side panel for items. With it, step 2 is built
+  whole.
+- **What editors animate on text and pictures** (looked at 2026-11-10:
+  CapCut, Premiere, Final Cut, Filmora, Firefly): position, scale,
+  rotation, opacity (all automatable here now, gap 39), colour; then blur
+  (a «blur in»), letter spacing, shadow, typewriter. To add, each drawn
+  on the GPU and the CPU alike: an overlay's blur, a reveal (typewriter
+  for text, a wipe for a picture), text colour, letter spacing.
+- **Text animation presets**: in and out (type-on, fade by letters,
+  slide, pop, wobble), as named sets of the text item's motion keys, so
+  they stay editable; perhaps per-letter later.
+- **Picture overlay presets**: animations (pop in, float, shake, spin,
+  Ken Burns) and kinds of overlay (a sticker with a border and shadow,
+  a polaroid, picture-in-picture with a frame).
+- A preset is a template as transitions have (gap 25c): one library for
+  the program.
+
 ### 90. The Effects panel sorted into groups — done, checked by the user 2026-11-10 (user, 2026-11-09)
 
 Built 2026-11-09: an overlay's place set for the whole item

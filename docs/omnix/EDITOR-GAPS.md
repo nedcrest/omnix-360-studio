@@ -743,6 +743,18 @@ View doesn't work now, but the function, contract and factory can be
 thought out for it too." (First raised 2026-10-23, gap 31's «grouped
 effects per track».)
 
+**Decided 2026-11-09 (user).** An edit in the Effects panel no longer
+keys: a slider sets its effect for the whole cut or item
+(`KeyOp::EffectValue`, `d8ee4ec`); no writing values on the fly.
+Automation moves onto the Effects row, folding open into lanes, with
+**automation clips as in FL Studio**: a block on a parameter's lane over
+a stretch, holding a curve; outside it the slider's value holds. A clip
+is **tied to its cut or item** (moves and trims with it, as keys do);
+one across several cuts waits for groups (4B). Text and overlays have
+effect rows of their own: the same there. Old keys are read into clips.
+In the milestone «Ефекти, колір і розумний звук», after the Effects
+panel's layout is sorted (the user's next ask).
+
 **What it looks like.**
 - «Effects» and «View» stay as one thin row each, with a ▸ to fold open.
   Folded, as today: the dots of all keys.

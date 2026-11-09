@@ -133,6 +133,14 @@ impl App {
                 _ => {}
             }
         }
+        // The selected text or picture a lane up or down (gap 70).
+        if let Key::Named(arrow @ (Named::ArrowUp | Named::ArrowDown)) = key.as_ref()
+            && mods.alt()
+            && self.selection.item(&self.edit).is_some()
+        {
+            self.item_to_lane(arrow == Named::ArrowUp);
+            return Task::none();
+        }
         if !self.framing && framing_key(&key, mods, sound) {
             return Task::none();
         }

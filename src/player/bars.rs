@@ -351,6 +351,7 @@ impl App {
             overlay_auto: self.lanes_of_track(crate::overlay::Track::Overlay),
             held: self.modifiers,
             text_auto: self.lanes_of_track(crate::overlay::Track::Text),
+            active_lanes: self.active_lanes,
             folds: self.folds,
             video: self.edit.duration(),
             clips_db: self.edit.sound.volume,

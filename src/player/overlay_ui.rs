@@ -99,9 +99,25 @@ impl App {
     }
 
     /// Which lane of `track` something added goes on (gap 70): the
-    /// selected item's, if it's on that track, else the lowest.
-    fn adding_lane(&self, track: crate::overlay::Track) -> usize {
-        self.selection.item(&self.edit).filter(|r| r.0 == track).map_or(0, |r| r.1)
+    /// selected item's, if it's on that track, else the active one.
+    pub(super) fn adding_lane(&self, track: crate::overlay::Track) -> usize {
+        let active = self.active_lanes[track_index(track)].min(self.shown_lanes(track) - 1);
+        self.selection.item(&self.edit).filter(|r| r.0 == track).map_or(active, |r| r.1)
+    }
+
+    /// The selected item onto the lane above (`up`; a new one on top from
+    /// the top lane) or below, where it fits nearest its time: one step.
+    pub(super) fn item_to_lane(&mut self, up: bool) {
+        let Some((track, l, i)) = self.selection.item(&self.edit) else { return };
+        let Some(it) = self.edit.lane(track, l).and_then(|lane| lane.items.get(i)) else { return };
+        let (item, at) = (it.id, it.at);
+        let Some(to) = (if up { Some(l + 1) } else { l.checked_sub(1) }) else { return };
+        self.edit.begin();
+        if to == self.edit.track_lanes(track).len() {
+            self.op(Op::Item(ItemOp::AddLane { track }));
+        }
+        self.op(Op::Item(ItemOp::Move { item, at, lane: Some(to) }));
+        self.edit.commit();
     }
 
     /// How many lanes `track` shows: its own, one at least.
@@ -163,7 +179,10 @@ impl App {
                 // Typing in another overlay is a change of its own for undo.
                 self.edit.commit();
                 match i {
-                    Some(r) => self.selection = Selection::item_at(&self.edit, r),
+                    Some(r) => {
+                        self.selection = Selection::item_at(&self.edit, r);
+                        self.active_lanes[track_index(r.0)] = r.1;
+                    }
                     // An empty spot on its lane: only an item lets go.
                     None if self.selection.item(&self.edit).is_some() => self.selection = Selection::None,
                     None => {}
@@ -171,6 +190,13 @@ impl App {
             }
             Message::LaneAdd(track) => {
                 self.op(Op::Item(ItemOp::AddLane { track }));
+                self.active_lanes[track_index(track)] = self.edit.track_lanes(track).len() - 1;
+            }
+            Message::LaneActive(track, lane) => {
+                self.active_lanes[track_index(track)] = lane;
+                if self.selection.item(&self.edit).is_some() {
+                    self.selection = Selection::None;
+                }
             }
             Message::LaneRemove(track, lane) => {
                 self.op(Op::Item(ItemOp::RemoveLane { track, lane }));
@@ -243,5 +269,13 @@ impl App {
             _ => {}
         }
         Task::none()
+    }
+}
+
+/// `track`'s place in `App::active_lanes`.
+pub(super) fn track_index(track: crate::overlay::Track) -> usize {
+    match track {
+        crate::overlay::Track::Overlay => 0,
+        crate::overlay::Track::Text => 1,
     }
 }

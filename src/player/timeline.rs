@@ -387,6 +387,8 @@ pub struct Timeline {
     pub text_auto: Vec<Vec<super::automation_ui::Param>>,
     /// The keys held (Shift, Ctrl), for canvases that don't follow them.
     pub held: iced::keyboard::Modifiers,
+    /// The lane new things go on, of the overlay track and of the text's.
+    pub active_lanes: [usize; 2],
 }
 
 /// What a snap target belongs to, so a drag never snaps to its own edges
@@ -1701,7 +1703,7 @@ impl canvas::Program<Message> for OverlayLane {
                         Message::OverlayJump(at)
                     }
                     OverlayHit::Seek => Message::OverlayJump(t.t(p.x, bounds)),
-                    OverlayHit::Empty => Message::OverlaySelect(None),
+                    OverlayHit::Empty => Message::LaneActive(self.1, self.2),
                     OverlayHit::Edge { item, start } => {
                         let o = &self.blocks()[item];
                         *drag = OverlayDrag::Trim { item, start, x0: p.x, from: if start { o.item.start } else { o.item.start + o.len() }, per_px };
@@ -1829,6 +1831,10 @@ impl canvas::Program<Message> for OverlayLane {
         draw_head_ground(&mut frame, theme, self.height());
         head_cell(&mut frame, 0.0, self.height(), colour);
         lane_tag(&mut frame, &self.tag_name(name), colour, top + h / 2.0);
+        // The lane new things go on, of several: a bar at its head's edge.
+        if self.count() > 1 && self.0.active_lanes[super::overlay_ui::track_index(self.1)].min(self.count() - 1) == self.2 {
+            frame.fill(&Path::rectangle(Point::new(0.0, 0.0), Size::new(3.0, self.height())), colour);
+        }
         // The track's «+» on its top lane; «×» on an empty one of several.
         let ink = palette.background.base.text.scale_alpha(0.75);
         let mut sign = |r: Rectangle, s: &str| {
@@ -2770,6 +2776,7 @@ mod tests {
             auto_lanes: vec![],
             overlay_auto: vec![],
             text_auto: vec![],
+            active_lanes: [0; 2],
             held: Default::default(),
         };
         (t, Rectangle::new(Point::ORIGIN, Size::new(1000.0 + 2.0 * PICK, 300.0)))

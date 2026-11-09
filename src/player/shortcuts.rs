@@ -31,6 +31,7 @@ const GROUPS: &[(&str, &[(&str, &str)])] = &[
             ("Alt+[ / Alt+]", "trim the start / end to the playhead"),
             ("D", "select the cut under the playhead"),
             ("Alt+← / Alt+→", "move the selected cut one place"),
+            ("Alt+↑ / Alt+↓", "the selected text or picture a lane up / down (a new lane on top)"),
             ("Del", "delete what's selected (Shift+Del: the cut)"),
             ("Esc", "cancel a drag under way"),
             ("Ctrl+Z / Ctrl+Shift+Z", "undo / redo"),

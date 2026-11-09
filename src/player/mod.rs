@@ -343,6 +343,9 @@ enum Message {
     /// «×»; gap 70).
     LaneAdd(crate::overlay::Track),
     LaneRemove(crate::overlay::Track, usize),
+    /// A press on a lane away from its items: nothing selected, that lane
+    /// the one new things go on.
+    LaneActive(crate::overlay::Track, usize),
     /// An overlay's in (`true`) or out edge dragged to own time `t`.
     OverlayTrim(crate::overlay::ItemRef, bool, f64),
     /// To an overlay keyframe's edit time.
@@ -758,6 +761,9 @@ struct App {
     effects_folded: Vec<String>,
     /// The scopes' feed, read by the Effects panel (gap 69).
     scope: gpu::Scope,
+    /// The overlay track's lane and the text track's that new things go
+    /// on (gap 70): the last one clicked, an item selected on, or added.
+    active_lanes: [usize; 2],
     effect_extra: Option<effects_view::Extra>,
     /// Automation lanes asked for in the Effects panel (◆), beside those
     /// the clips already move.
@@ -936,6 +942,7 @@ impl App {
             last_overlap: crate::transition::Look::WhipPan,
             effects_folded: saved.effects_folded.clone(),
             scope: Default::default(),
+            active_lanes: [0; 2],
             effect_extra: None,
             extra_lanes: Vec::new(),
             last_edge: crate::transition::Look::EdgeFade,
@@ -1157,7 +1164,7 @@ impl App {
             m @ (Message::Tick | Message::TimelineZoom { .. } | Message::TimelineWheel { .. } | Message::TimelineZoomTo { .. } | Message::TimelinePan { .. } | Message::Toggle | Message::Scrub { .. } | Message::ScrubDone) => self.on_transport(m),
             m @ (Message::Select { .. } | Message::AddBlank | Message::SoundEdge { .. } | Message::Trim { .. } | Message::MoveCut { .. } | Message::AddMark | Message::SelectAtPlayhead | Message::MarkMove { .. } | Message::MarkSelect { .. } | Message::StepsRested { .. } | Message::ToastGone { .. } | Message::StepNoteGone { .. } | Message::TrimToPlayhead { .. } | Message::Crossfade { .. } | Message::ToggleCrossfade | Message::Split | Message::DeleteCut | Message::Undo | Message::Redo) => self.on_cuts(m),
             m @ (Message::LookDone | Message::Framing { .. } | Message::KeyMove { .. } | Message::KeyAdd | Message::KeyDelete | Message::KeyEase { .. } | Message::KeyFollow { .. } | Message::Stab { .. } | Message::Projection { .. } | Message::KeyJump { .. } | Message::Look { .. } | Message::Zoom { .. } | Message::Fov { .. } | Message::AngleInput { .. } | Message::AngleDone | Message::AngleScrubStart { .. } | Message::AngleScrubDone | Message::AngleScrub { .. } | Message::AngleNudge { .. } | Message::AngleArrow { .. } | Message::Source { .. } | Message::RollingShutter { .. } | Message::FullOnPause { .. } | Message::ResetView) => self.on_framing(m),
-            m @ (Message::AddOverlay | Message::OverlayPicked { .. } | Message::OverlaySelect { .. } | Message::OverlayMove { .. } | Message::OverlayTrim { .. } | Message::OverlayJump { .. } | Message::OverlayKeyMove { .. } | Message::OverlayPicture { .. } | Message::AddText | Message::AddBars | Message::LaneAdd(_) | Message::LaneRemove(..)) => self.on_overlay_ui(m),
+            m @ (Message::AddOverlay | Message::OverlayPicked { .. } | Message::OverlaySelect { .. } | Message::OverlayMove { .. } | Message::OverlayTrim { .. } | Message::OverlayJump { .. } | Message::OverlayKeyMove { .. } | Message::OverlayPicture { .. } | Message::AddText | Message::AddBars | Message::LaneAdd(_) | Message::LaneRemove(..) | Message::LaneActive(..)) => self.on_overlay_ui(m),
             m @ (Message::AddSound { .. } | Message::SoundPicked { .. } | Message::SoundProbed { .. } | Message::Waveform { .. } | Message::CutWave { .. } | Message::SelectMusic { .. } | Message::PointAdd { .. } | Message::PointSelect { .. } | Message::PointMove { .. } | Message::MusicMove { .. } | Message::MusicTrim { .. } | Message::Fade { .. } | Message::Level { .. } | Message::Listen { .. } | Message::SoundLevel { .. } | Message::TrackLevel { .. } | Message::DuckDepth { .. } | Message::Duck | Message::Ducked { .. } | Message::LevelDone) => self.on_tracks(m),
             Message::Snapped(at, inner) => {
                 self.snap_line = at;

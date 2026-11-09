@@ -388,6 +388,27 @@ impl Picture {
         Ok(Picture { width: size.0 as usize, height: size.1 as usize, rgba, natural: None, order: None })
     }
 
+    /// Itself under a style look (gap 87, step 2d) at its own time `t`:
+    /// each pixel by `transition::colour` from its premultiplied colour,
+    /// read as the GPU reads it; its see-through kept. The player's style
+    /// pass draws the same (`gpu::Pipeline::prepare_overlays`).
+    pub fn styled(&self, spec: &crate::transition::Spec, t: f32) -> Picture {
+        let (w, h) = (self.width, self.height);
+        let from = |uv: [f32; 2]| {
+            let p = self.sample(uv[0] as f64 * w as f64, uv[1] as f64 * h as f64);
+            [p[0] as f32, p[1] as f32, p[2] as f32]
+        };
+        let mut rgba = self.rgba.clone();
+        rgba.par_chunks_mut(4).enumerate().for_each(|(i, px)| {
+            let (x, y) = (i % w, i / w);
+            let uv = [(x as f32 + 0.5) / w as f32, (y as f32 + 0.5) / h as f32];
+            let a = px[3] as f32 / 255.0;
+            let c = crate::transition::colour(spec, t, uv, w as f32 / h as f32, [x as u32, y as u32], &from, &from);
+            (0..3).for_each(|k| px[k] = (c[k].clamp(0.0, a) * 255.0).round() as u8);
+        });
+        Picture { rgba, ..self.clone() }
+    }
+
     /// Premultiplied RGBA 0..1 at (`u`, `v`), 0..1 across and down,
     /// blurred `reach` (`blur_reach`) as `overlay.wgsl`'s `blurred`.
     fn blurred(&self, u: f64, v: f64, reach: [f64; 2]) -> [f64; 4] {
@@ -606,6 +627,8 @@ impl<'a> Overlays<'a> {
         for item in self.lanes.iter().filter_map(|l| l.at(t).map(|(_, it)| it)) {
             let key = item.key();
             let picture = &self.pictures.iter().find(|(k, _)| *k == key).unwrap().1;
+            let styled = item.style.as_ref().map(|s| picture.styled(&s.spec(), item.local(t) as f32));
+            let picture = styled.as_ref().unwrap_or(picture);
             for (spot, grade) in spots(item, t) {
                 composite(frame, picture, &spot.quad(picture, (frame.width, frame.height)), &grade, black);
             }

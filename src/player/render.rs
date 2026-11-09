@@ -626,7 +626,7 @@ mod tests {
         let picture = Arc::new(overlay::Picture { width: 4, height: 2, rgba, natural: None, order: None });
         let place = Place { x: 0.4, y: 0.6, size: 0.5, rotation: 20.0 };
         let grade = crate::grade::Grade { opacity: 0.8, saturation: -0.5, ..Default::default() };
-        let draw = gpu::OverlayDraw { id: 1, picture: picture.clone(), spot: crate::overlay::Spot::Placed(place), grade, black: 0.25 };
+        let draw = gpu::OverlayDraw { id: 1, picture: picture.clone(), spot: crate::overlay::Spot::Placed(place), grade, black: 0.25, style: None };
         let mut render = |overlays: &[gpu::OverlayDraw]| {
             gpu.size = (0, 0);
             gpu.targets = vec![gpu.make_target(w, h)];
@@ -663,7 +663,7 @@ mod tests {
         let (bars, _) = item.picture(0, h).unwrap();
         let bars = Arc::new(bars);
         let spots = overlay::spots(&item, 0.5);
-        let draws: Vec<gpu::OverlayDraw> = spots.iter().map(|&(spot, grade)| gpu::OverlayDraw { id: 2, picture: bars.clone(), spot, grade, black: 0.0 }).collect();
+        let draws: Vec<gpu::OverlayDraw> = spots.iter().map(|&(spot, grade)| gpu::OverlayDraw { id: 2, picture: bars.clone(), spot, grade, black: 0.0, style: None }).collect();
         let mut want = render(&[]);
         let got = render(&draws);
         for (spot, grade) in &spots {
@@ -674,9 +674,29 @@ mod tests {
         // Blurred and half wiped in; then typed, its letters' order set.
         let blurred = crate::grade::Grade { blur: 0.7, reveal: 0.5, ..Default::default() };
         let typed = Arc::new(overlay::Picture { order: Some(vec![64, 128, 192, 255, 64, 128, 192, 255]), ..(*picture).clone() });
-        for (id, pic, grade) in [(3, picture.clone(), blurred), (4, typed, crate::grade::Grade { reveal: 0.6, ..Default::default() })] {
+        // Styled (gap 87, step 2d): a living look and a blurring one, over
+        // a picture with a see-through edge.
+        let mut rgba = Vec::new();
+        for y in 0..24u32 {
+            for x in 0..32u32 {
+                let a = if x < 2 { 128 } else { 255 };
+                rgba.extend([(x * 8 * a / 255) as u8, (y * 10 * a / 255) as u8, (a / 2) as u8, a as u8]);
+            }
+        }
+        let wide = Arc::new(overlay::Picture { width: 32, height: 24, rgba, natural: None, order: None });
+        let style = |look| crate::project::Style { look, params: Default::default() }.spec();
+        let plain = crate::grade::Grade::default();
+        let cases = [
+            (3, picture.clone(), blurred, None),
+            (4, typed, crate::grade::Grade { reveal: 0.6, ..Default::default() }, None),
+            (5, wide.clone(), plain, Some((style(crate::transition::Look::Vhs), 1.3))),
+            (6, wide, plain, Some((style(crate::transition::Look::Glow), 0.0))),
+        ];
+        for (id, pic, grade, style) in cases {
             let mut want = render(&[]);
-            let got = render(&[gpu::OverlayDraw { id, picture: pic.clone(), spot: crate::overlay::Spot::Placed(place), grade, black: 0.0 }]);
+            let got = render(&[gpu::OverlayDraw { id, picture: pic.clone(), spot: crate::overlay::Spot::Placed(place), grade, black: 0.0, style }]);
+            let styled = style.map(|(spec, t)| pic.styled(&spec, t));
+            let pic = styled.map_or(pic, Arc::new);
             overlay::composite(&mut want, &pic, &Quad::new(&place, &pic, (w, h)), &grade, 0.0);
             let diff: Vec<i32> = want.rgb.iter().zip(&got.rgb).map(|(a, b)| (*a as i32 - *b as i32).abs()).collect();
             let (big, mean) = (diff.iter().filter(|&&d| d > 8).count(), diff.iter().sum::<i32>() as f64 / diff.len() as f64);

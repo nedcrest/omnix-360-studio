@@ -63,6 +63,16 @@ pub struct OverlayDraw {
     pub spot: crate::overlay::Spot,
     pub grade: Grade,
     pub black: f64,
+    /// Its style look (gap 87, step 2d) at its own time.
+    pub style: Option<(crate::transition::Spec, f32)>,
+}
+
+/// An overlay's picture with its style over it: the style pass's
+/// picture, its uniforms and what it reads.
+struct StyledSlot {
+    plane: Plane,
+    uniforms: wgpu::Buffer,
+    bind: wgpu::BindGroup,
 }
 
 /// One overlay drawn: its uniforms and picture.
@@ -71,6 +81,8 @@ struct OverlaySlot {
     texture: Plane,
     /// Its letters' order (`Picture::order`); 1×1 for a picture.
     order: Plane,
+    /// Its picture under its style, drawn by the style pass first.
+    styled: Option<StyledSlot>,
     bind_group: wgpu::BindGroup,
     picture: u64,
 }
@@ -435,19 +447,39 @@ impl Pipeline {
                 let texture = plane(device, 1, 1, wgpu::TextureFormat::Rgba8Unorm);
                 let order = plane(device, 1, 1, wgpu::TextureFormat::R8Unorm);
                 let bind_group = bind_overlay(device, &self.overlay_layout, &uniforms, &self.sampler, &texture, &order);
-                self.overlay_slots.push(OverlaySlot { uniforms, texture, order, bind_group, picture: 0 });
+                self.overlay_slots.push(OverlaySlot { uniforms, texture, order, styled: None, bind_group, picture: 0 });
             }
+            // The style pass reads the picture as it is: display values, not
+            // light, whatever the target.
+            let style = d.style.map(|(spec, t)| {
+                let mut u = self.mix_uniforms([pic.width as f32, pic.height as f32], [0.0, 0.0], &spec, t);
+                u[0][3] = 0.0;
+                u
+            });
             let slot = &mut self.overlay_slots[k];
-            if slot.picture != d.id {
-                slot.texture = plane(device, pic.width as u32, pic.height as u32, wgpu::TextureFormat::Rgba8Unorm);
-                write(queue, &slot.texture.texture, &pic.rgba, pic.width as u32, pic.height as u32, 4);
-                let (w, h) = if pic.order.is_some() { (pic.width as u32, pic.height as u32) } else { (1, 1) };
+            let (pw, ph) = (pic.width as u32, pic.height as u32);
+            let new = slot.picture != d.id;
+            if new {
+                slot.texture = plane(device, pw, ph, wgpu::TextureFormat::Rgba8Unorm);
+                write(queue, &slot.texture.texture, &pic.rgba, pw, ph, 4);
+                let (w, h) = if pic.order.is_some() { (pw, ph) } else { (1, 1) };
                 slot.order = plane(device, w, h, wgpu::TextureFormat::R8Unorm);
                 if let Some(order) = &pic.order {
                     write(queue, &slot.order.texture, order, w, h, 1);
                 }
-                slot.bind_group = bind_overlay(device, &self.overlay_layout, &slot.uniforms, &self.sampler, &slot.texture, &slot.order);
                 slot.picture = d.id;
+            }
+            if new || slot.styled.is_some() != style.is_some() {
+                slot.styled = style.map(|_| {
+                    let uniforms = device.create_buffer(&wgpu::BufferDescriptor { label: Some("overlay style"), size: 64, usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST, mapped_at_creation: false });
+                    let bind = bind_transition(device, &self.transition.layout, &uniforms, &self.sampler, &slot.texture, &slot.texture);
+                    StyledSlot { plane: render_target(device, pw, ph, self.format), uniforms, bind }
+                });
+                let shown = slot.styled.as_ref().map_or(&slot.texture, |s| &s.plane);
+                slot.bind_group = bind_overlay(device, &self.overlay_layout, &slot.uniforms, &self.sampler, shown, &slot.order);
+            }
+            if let (Some(s), Some(u)) = (&slot.styled, style) {
+                queue.write_buffer(&s.uniforms, 0, bytemuck::cast_slice(&u));
             }
             let q = d.spot.quad(pic, (size[0].round() as usize, size[1].round() as usize));
             let f = |v: f64| v as f32;
@@ -602,6 +634,10 @@ impl Pipeline {
             for i in (0..self.mixing).filter(|&i| self.styled[i]) {
                 pass_into(encoder, &pics.styled[i], &self.transition.pipeline, &pics.styles[i]);
             }
+        }
+        // Each styled overlay's picture under its style.
+        for s in self.overlay_slots[..self.overlays].iter().filter_map(|slot| slot.styled.as_ref()) {
+            pass_into(encoder, &s.plane, &self.transition.pipeline, &s.bind);
         }
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("stitch"),
@@ -862,37 +898,43 @@ impl Transition {
         if self.pictures.as_ref().is_some_and(|p| p.size == (w, h)) {
             return;
         }
-        let picture = || {
-            let texture = device.create_texture(&wgpu::TextureDescriptor {
-                label: Some("transition picture"),
-                size: wgpu::Extent3d { width: w, height: h, depth_or_array_layers: 1 },
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format,
-                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
-                view_formats: &[],
-            });
-            let view = texture.create_view(&Default::default());
-            Plane { texture, view }
-        };
+        let picture = || render_target(device, w, h, format);
         let (from, to, styled) = (picture(), picture(), [picture(), picture()]);
-        let bind = |uniforms: &wgpu::Buffer, a: &Plane, b: &Plane| {
-            device.create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("transition"),
-                layout: &self.layout,
-                entries: &[
-                    wgpu::BindGroupEntry { binding: 0, resource: uniforms.as_entire_binding() },
-                    wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(sampler) },
-                    wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::TextureView(&a.view) },
-                    wgpu::BindGroupEntry { binding: 3, resource: wgpu::BindingResource::TextureView(&b.view) },
-                ],
-            })
-        };
+        let bind = |uniforms: &wgpu::Buffer, a: &Plane, b: &Plane| bind_transition(device, &self.layout, uniforms, sampler, a, b);
         let mixes = [0, 1, 2, 3].map(|k| bind(&self.uniforms, if k & 1 == 1 { &styled[0] } else { &from }, if k & 2 == 2 { &styled[1] } else { &to }));
         let styles = [bind(&self.style_uniforms[0], &from, &to), bind(&self.style_uniforms[1], &to, &from)];
         self.pictures = Some(Pictures { size: (w, h), from, to, styled, mixes, styles });
     }
+}
+
+/// A picture `w` × `h` to draw into and read from.
+fn render_target(device: &wgpu::Device, w: u32, h: u32, format: wgpu::TextureFormat) -> Plane {
+    let texture = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("transition picture"),
+        size: wgpu::Extent3d { width: w, height: h, depth_or_array_layers: 1 },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format,
+        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
+        view_formats: &[],
+    });
+    let view = texture.create_view(&Default::default());
+    Plane { texture, view }
+}
+
+/// The transition pass reading `a` and `b` with `uniforms`.
+fn bind_transition(device: &wgpu::Device, layout: &wgpu::BindGroupLayout, uniforms: &wgpu::Buffer, sampler: &wgpu::Sampler, a: &Plane, b: &Plane) -> wgpu::BindGroup {
+    device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("transition"),
+        layout,
+        entries: &[
+            wgpu::BindGroupEntry { binding: 0, resource: uniforms.as_entire_binding() },
+            wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(sampler) },
+            wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::TextureView(&a.view) },
+            wgpu::BindGroupEntry { binding: 3, resource: wgpu::BindingResource::TextureView(&b.view) },
+        ],
+    })
 }
 
 fn overlay_pipeline(device: &wgpu::Device, format: wgpu::TextureFormat) -> (wgpu::RenderPipeline, wgpu::BindGroupLayout) {

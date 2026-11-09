@@ -73,7 +73,10 @@ impl App {
             .lanes()
             .filter_map(|lane| lane.at(t).map(|(_, it)| it))
             .filter_map(|item| Some((item, self.overlay_pictures.get(&item.key())?.clone()?)))
-            .flat_map(|(item, (id, picture))| crate::overlay::spots(item, t).into_iter().map(move |(spot, grade)| gpu::OverlayDraw { id, picture: picture.clone(), spot, grade, black }))
+            .flat_map(|(item, (id, picture))| {
+                let style = item.style.as_ref().map(|s| (s.spec(), item.local(t) as f32));
+                crate::overlay::spots(item, t).into_iter().map(move |(spot, grade)| gpu::OverlayDraw { id, picture: picture.clone(), spot, grade, black, style })
+            })
             .collect()
     }
 

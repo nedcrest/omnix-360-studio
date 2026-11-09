@@ -326,5 +326,8 @@ fn tfs(@builtin(position) pos: vec4f) -> @location(0) vec4f {
     let local = pos.xy - t.view.zw;
     let uv = local / t.view.xy;
     let c = transition(u32(t.look.x), t.look.y, uv, t.look.z, vec2u(local));
-    return vec4f(dec(clamp(c, vec3f(0.0), vec3f(1.0))), 1.0);
+    // A picture's see-through kept (an overlay's, under its style:
+    // premultiplied, so its colour no more than it); a cut's is whole.
+    let a = textureSampleLevel(from_pic, samp, uv, 0.0).a;
+    return vec4f(dec(clamp(c, vec3f(0.0), vec3f(a))), a);
 }

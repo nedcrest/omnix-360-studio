@@ -203,13 +203,7 @@ pub(super) fn apply(p: &mut Project, op: &CutOp) -> Result<Outcome, OpError> {
         }
         &CutOp::Style { cut, look } => {
             let i = find(p, cut)?;
-            if let Some(l) = look.filter(|l| l.group() != crate::transition::Group::Style) {
-                return Err(OpError::Invalid(format!("{} isn't a style look", l.name())));
-            }
-            let c = &mut p.cuts[i];
-            // The settings were the old look's.
-            let params = c.style.take().filter(|s| Some(s.look) == look).map(|s| s.params).unwrap_or_default();
-            c.style = look.map(|look| crate::project::Style { look, params });
+            set_style(&mut p.cuts[i].style, look)?;
             said(format!("cut #{cut}: style {}", look.map_or("none", |l| l.name())))
         }
         CutOp::Track { cut, track } => {
@@ -234,8 +228,7 @@ pub(super) fn apply(p: &mut Project, op: &CutOp) -> Result<Outcome, OpError> {
         CutOp::StyleKnob { cut, key, value } => {
             let i = find(p, *cut)?;
             let style = p.cuts[i].style.as_mut().ok_or_else(|| OpError::Invalid(format!("cut #{cut} has no style to set")))?;
-            let said_ = set_knob(style.look, &mut style.params, key, *value)?;
-            said(format!("cut #{cut}: {said_}"))
+            said(format!("cut #{cut}: {}", set_knob(style.look, &mut style.params, key, *value)?))
         }
         CutOp::EdgeKnob { cut, end, key, value } => {
             let i = find(p, *cut)?;
@@ -335,9 +328,21 @@ fn position(i: usize, of: usize) -> String {
     format!("{} of {of}", i + 1)
 }
 
+/// A cut's or an item's style to `look` (none: off), its settings kept
+/// while the look stays.
+pub(super) fn set_style(style: &mut Option<crate::project::Style>, look: Option<crate::transition::Look>) -> Result<(), OpError> {
+    if let Some(l) = look.filter(|l| l.group() != crate::transition::Group::Style) {
+        return Err(OpError::Invalid(format!("{} isn't a style look", l.name())));
+    }
+    // The settings were the old look's.
+    let params = style.take().filter(|s| Some(s.look) == look).map(|s| s.params).unwrap_or_default();
+    *style = look.map(|look| crate::project::Style { look, params });
+    Ok(())
+}
+
 /// One of `look`'s settings in `params` to `value` (none: the default);
 /// only what differs from the default is kept. What it says it did.
-fn set_knob(look: crate::transition::Look, params: &mut std::collections::BTreeMap<String, f32>, key: &str, value: Option<f32>) -> Result<String, OpError> {
+pub(super) fn set_knob(look: crate::transition::Look, params: &mut std::collections::BTreeMap<String, f32>, key: &str, value: Option<f32>) -> Result<String, OpError> {
     let knob = look.knob(key).ok_or_else(|| OpError::NotFound(format!("setting {key:?} of {}", look.name())))?;
     match value {
         Some(v) if !(knob.least..=knob.most).contains(&v) => {

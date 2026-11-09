@@ -73,6 +73,9 @@ pub fn describe(project: &Path) -> Result<()> {
                 (None, None) => format!("{}{}", name(&i.input), i.kind.map_or(String::new(), |k| format!(" as a {}", k.name().to_lowercase()))),
             };
             println!("  item #{:<2} {:7.2}-{:7.2} s  {label}", i.id, i.at, i.ends());
+            if let Some(s) = &i.style {
+                println!("    {}", style_line(s));
+            }
             for line in auto_lines(&i.automation) {
                 println!("    {line}");
             }
@@ -85,20 +88,18 @@ pub fn describe(project: &Path) -> Result<()> {
 /// and look), its edge looks and its style, each with the settings moved,
 /// and its effect keys.
 fn look_lines(c: &crate::project::Cut) -> Vec<String> {
-    use std::collections::BTreeMap;
-    let set = |params: &BTreeMap<String, f32>| if params.is_empty() { String::new() } else { format!("  {}", params.iter().map(|(k, v)| format!("{k} {}", (*v as f64 * 1000.0).round() / 1000.0)).collect::<Vec<_>>().join(", ")) };
     let mut lines = Vec::new();
     if c.crossfade > 0.0 || c.transition.is_some() {
         let look = c.transition.map_or("dissolve".to_owned(), key_of);
-        lines.push(format!("join before: {look} over {:.2} s{}", c.crossfade, set(&c.transition_params)));
+        lines.push(format!("join before: {look} over {:.2} s{}", c.crossfade, settings(&c.transition_params)));
     }
     for (side, edge) in [("in", &c.edge_in), ("out", &c.edge_out)] {
         if let Some(e) = edge {
-            lines.push(format!("{side}: {} {:.2} s{}", key_of(e.look), e.seconds, set(&e.params)));
+            lines.push(format!("{side}: {} {:.2} s{}", key_of(e.look), e.seconds, settings(&e.params)));
         }
     }
     if let Some(s) = &c.style {
-        lines.push(format!("style: {}{}", key_of(s.look), set(&s.params)));
+        lines.push(style_line(s));
     }
     // Its effect keys, each with what it sets (as the project writes it).
     for k in &c.effects {
@@ -114,6 +115,16 @@ fn look_lines(c: &crate::project::Cut) -> Vec<String> {
         lines.push(format!("track «{}»: {} samples{span}", t.name, t.samples.len()));
     }
     lines
+}
+
+/// A look's settings the user moved, as `describe` says them.
+fn settings(params: &std::collections::BTreeMap<String, f32>) -> String {
+    if params.is_empty() { String::new() } else { format!("  {}", params.iter().map(|(k, v)| format!("{k} {}", (*v as f64 * 1000.0).round() / 1000.0)).collect::<Vec<_>>().join(", ")) }
+}
+
+/// A cut's or an item's style, as `describe` says it.
+fn style_line(s: &crate::project::Style) -> String {
+    format!("style: {}{}", key_of(s.look), settings(&s.params))
 }
 
 /// Automation clips as `describe` says them: the value, its stretch (clip
@@ -148,7 +159,7 @@ pub fn looks(template: Option<&str>) -> Result<String> {
     for (kind, looks) in [
         ("overlap (op `transition`, settings `transition_knob`)", &Look::OVERLAP[..]),
         ("edge (op `edge`, settings `edge_knob`)", &Look::EDGES[..]),
-        ("style (op `style`, settings `style_knob`)", &Look::STYLES[..]),
+        ("style, on a cut or a text or picture (op cut or item `style`, settings `style_knob`)", &Look::STYLES[..]),
     ] {
         out += &format!("{kind}:\n");
         for &l in looks {

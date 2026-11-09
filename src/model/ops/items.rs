@@ -27,6 +27,11 @@ pub enum ItemOp {
     /// A picture dressed as a sticker, a polaroid or a picture in
     /// picture, or plain (`None`).
     Kind { item: Id, kind: Option<crate::dress::Kind> },
+    /// A style look over a text's or a picture's own picture (old film,
+    /// VHS, glow…), as `CutOp::Style`; none: off.
+    Style { item: Id, look: Option<crate::transition::Look> },
+    /// One of its style's settings, as `CutOp::StyleKnob`.
+    StyleKnob { item: Id, key: String, value: Option<f32> },
     /// To start at edit time `at`, or where it fits nearest.
     Move { item: Id, at: f64 },
     /// Its in or out edge to `t` (its own time), staying where it is on the
@@ -59,7 +64,7 @@ pub(super) fn apply(p: &mut Project, op: &ItemOp) -> Result<Outcome, OpError> {
             let mut last = None;
             for input in inputs {
                 let id = p.next_id();
-                at = add(p, Track::Overlay, Item { id, input: input.clone(), text: None, at, start: 0.0, end: *len, motion: Vec::new(), effects: Vec::new(), bars: None, automation: Vec::new(), kind: None });
+                at = add(p, Track::Overlay, Item { id, input: input.clone(), text: None, at, start: 0.0, end: *len, motion: Vec::new(), effects: Vec::new(), bars: None, automation: Vec::new(), kind: None, style: None });
                 last = Some(id);
             }
             let Some(id) = last else { return Err(OpError::Invalid("no pictures to add".into())) };
@@ -68,14 +73,14 @@ pub(super) fn apply(p: &mut Project, op: &ItemOp) -> Result<Outcome, OpError> {
         ItemOp::AddText { text, at, len } => {
             positive(*len)?;
             let id = p.next_id();
-            add(p, Track::Text, Item { id, input: PathBuf::new(), text: Some(text.clone()), at: *at, start: 0.0, end: *len, motion: Vec::new(), effects: Vec::new(), bars: None, automation: Vec::new(), kind: None });
+            add(p, Track::Text, Item { id, input: PathBuf::new(), text: Some(text.clone()), at: *at, start: 0.0, end: *len, motion: Vec::new(), effects: Vec::new(), bars: None, automation: Vec::new(), kind: None, style: None });
             Ok(Outcome { summary: format!("text item #{id} added"), made: Some(id) })
         }
         ItemOp::AddBars { bars, at, len } => {
             positive(*len)?;
             check_bars(bars)?;
             let id = p.next_id();
-            add(p, Track::Overlay, Item { id, input: PathBuf::new(), text: None, at: *at, start: 0.0, end: *len, motion: Vec::new(), effects: Vec::new(), bars: Some(*bars), automation: Vec::new(), kind: None });
+            add(p, Track::Overlay, Item { id, input: PathBuf::new(), text: None, at: *at, start: 0.0, end: *len, motion: Vec::new(), effects: Vec::new(), bars: Some(*bars), automation: Vec::new(), kind: None, style: None });
             Ok(Outcome { summary: format!("bars {:.2}:1, item #{id}", bars.ratio), made: Some(id) })
         }
         ItemOp::SetBars { item, bars } => {
@@ -96,6 +101,15 @@ pub(super) fn apply(p: &mut Project, op: &ItemOp) -> Result<Outcome, OpError> {
             }
             it.kind = kind;
             said(format!("item #{item}: {}", kind.map_or("plain", |k| k.name())))
+        }
+        &ItemOp::Style { item, look } => {
+            let it = styleable(p, item)?;
+            super::cuts::set_style(&mut it.style, look)?;
+            said(format!("item #{item}: style {}", look.map_or("none", |l| l.name())))
+        }
+        ItemOp::StyleKnob { item, key, value } => {
+            let style = styleable(p, *item)?.style.as_mut().ok_or_else(|| OpError::Invalid(format!("item #{item} has no style to set")))?;
+            said(format!("item #{item}: {}", super::cuts::set_knob(style.look, &mut style.params, key, *value)?))
         }
         &ItemOp::Move { item, at } => {
             let (track, lane, i) = find(p, item)?;
@@ -152,6 +166,16 @@ fn lanes(p: &mut Project, track: Track) -> &mut Vec<crate::overlay::Lane> {
 }
 
 /// Which track, lane and place item `id` is in.
+/// Item `id`, a text or a picture (bars take no style).
+fn styleable(p: &mut Project, id: Id) -> Result<&mut Item, OpError> {
+    let (track, lane, i) = find(p, id)?;
+    let it = &mut lanes(p, track)[lane].items[i];
+    if it.bars.is_some() {
+        return Err(OpError::Invalid(format!("item #{id} is bars: no style")));
+    }
+    Ok(it)
+}
+
 fn find(p: &Project, id: Id) -> Result<(Track, usize, usize), OpError> {
     p.item_index(id).ok_or_else(|| OpError::NotFound(format!("item #{id}")))
 }
@@ -170,6 +194,11 @@ mod tests {
         assert_eq!((lane[0].at, lane[1].at, lane[1].id), (1.0, 6.0, last));
         e.apply(&Op::Item(ItemOp::Kind { item: last, kind: Some(crate::dress::Kind::Polaroid) })).unwrap();
         assert_eq!(e.overlays[0].items[1].kind, Some(crate::dress::Kind::Polaroid));
+        use crate::transition::Look;
+        e.apply(&Op::Item(ItemOp::Style { item: last, look: Some(Look::Vhs) })).unwrap();
+        e.apply(&Op::Item(ItemOp::StyleKnob { item: last, key: "amount".into(), value: Some(0.5) })).unwrap();
+        assert_eq!(e.overlays[0].items[1].style.as_ref().map(|s| (s.look, s.params.len())), Some((Look::Vhs, 1)));
+        assert!(e.apply(&Op::Item(ItemOp::Style { item: last, look: Some(Look::WhipPan) })).is_err(), "a transition isn't a style");
         let words = e.apply(&Op::Item(ItemOp::AddText { text: Text::default(), at: 2.0, len: 3.0 })).unwrap().made.unwrap();
         let text = Text { content: "Kos".into(), bold: false, ..Text::default() };
         let set = Op::Item(ItemOp::SetText { item: words, text: text.clone() });

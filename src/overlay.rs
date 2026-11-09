@@ -78,6 +78,10 @@ pub struct Item {
     /// (`dress`); plain when left out.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub kind: Option<crate::dress::Kind>,
+    /// A style look over its picture (gap 87, step 2d), living with its
+    /// own time; as a cut's.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub style: Option<crate::project::Style>,
 }
 
 /// Cinematic bars (gap 15, the user's route, 2026-11-04): an item on the
@@ -644,7 +648,7 @@ mod tests {
 
     #[test]
     fn bars_slide_in_to_the_ratio_and_out() {
-        let item = Item { id: 0, input: PathBuf::new(), text: None, at: 10.0, start: 0.0, end: 6.0, motion: vec![], effects: vec![], bars: Some(Bars::default()), automation: Vec::new(), kind: None };
+        let item = Item { id: 0, input: PathBuf::new(), text: None, at: 10.0, start: 0.0, end: 6.0, motion: vec![], effects: vec![], bars: Some(Bars::default()), automation: Vec::new(), kind: None, style: None };
         let pic = item.picture(0, 1080).unwrap().0;
         let band = |t: f64, top: bool| spots(&item, t).into_iter().find(|(s, _)| matches!(s, Spot::Band { top: tp, .. } if *tp == top)).unwrap().0.quad(&pic, (1920, 1080));
         // 16:9 to 2.39:1: about 138 px each, top and bottom.
@@ -660,7 +664,7 @@ mod tests {
     }
 
     fn item(at: f64, len: f64) -> Item {
-        Item { id: 0, input: "a.png".into(), text: None, at, start: 0.0, end: len, motion: Vec::new(), effects: Vec::new(), bars: None, automation: Vec::new(), kind: None }
+        Item { id: 0, input: "a.png".into(), text: None, at, start: 0.0, end: len, motion: Vec::new(), effects: Vec::new(), bars: None, automation: Vec::new(), kind: None, style: None }
     }
 
     #[test]

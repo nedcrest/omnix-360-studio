@@ -1390,6 +1390,57 @@ radius plus a glow (the blurred highlights added back). CPU and GPU with a
 parity test. Blur is a multi-tap pass, so it costs more than a per-pixel
 effect.
 
+### 93. Effects edit the selected clip, the playhead on it — done, checked by the user 2026-11-10 (user, 2026-11-10)
+
+The user: the Effects sliders work on the selected clip only while the
+playhead is on it; when the playhead and the selected clip are apart,
+show a notice at the top that can't be missed ("the playhead isn't on
+the selected clip: make sure which clip you're editing"). A good
+constraint: no misclick edits another clip, and an edit happens only
+with the playhead on the clip (its start or end counting).
+
+Today (`App::effect_target`): a selected text or picture is the target
+while the playhead is on it; otherwise the panel quietly works on the
+cut under the playhead, a selected cut or not (a selected cut is
+ignored). The header names the target in small print.
+
+- With a selection: the panel is locked to it. Playhead off it → a
+  notice at the top (a warning colour), the controls greyed, and a
+  button «Go to it» (the playhead to its nearest end).
+- With no selection: the cut under the playhead, as today, said plainly.
+- The same notice wherever a panel edits a clip in time (the Text
+  panel's look isn't timed; it may stay free).
+- Milestone «Ефекти, колір і розумний звук».
+
+### 94. The Effects and Text panels tidied — done, checked by the user 2026-11-10 (Claude's UI review, user, 2026-11-10)
+
+A review of the Effects panel, its side panel and the Text panel, agreed
+to do at once with gap 93:
+
+1. **Text in one place.** A text item's look (words, font, bold, size,
+   align, colour, outline, shadow) becomes the first group «Text» of the
+   Effects panel; the left Text panel goes. «Lines» reads «Align».
+   Later, separate cards: a custom colour, a box behind the text.
+2. **Groups for a text or a picture**: Place (across, down, size,
+   turn), Show (opacity, reveal, blur: how much of it shows), Animate
+   (ins and outs only), Kind (pictures), Look (style); Light and Colour
+   folded at first on items; the vignette in Finish.
+3. **The film's fades out of a clip's panel**: Whole edit moves to the
+   Transitions panel (the film's start and end are edges too).
+4. **No dead controls**: the white-balance picker and «To all cuts»
+   hidden for items, not greyed.
+5. **Consistent controls**: a style's settings open by a «VHS ▸»
+   button, as the vignette's «Round ▸» (not by pressing the chosen tile
+   again); ins and outs as «In: Fade ▾ 0.5 s» (a list and a length),
+   not 20 tiles; the header's reset says «↺ All».
+
+Milestone «Ефекти, колір і розумний звук».
+
+**Built and checked 2026-11-10**: gap 93 (`d55bac2`) and 1–5
+(`aca1267` groups, `5919b10` Text group, `28bdd84` the film's fades in
+Transitions, `c0bace6` style settings button and ins/outs as lists).
+Items' Light and Colour fold apart from a cut's (`Group::fold_key`).
+
 ### 87. Style looks and animation presets — done, checked by the user 2026-11-10 (user, 2026-11-09)
 
 The user: "effects (video, an overlay picture, text) like old film, some

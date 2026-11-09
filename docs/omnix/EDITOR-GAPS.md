@@ -110,8 +110,8 @@ done in part stays here until its last card is done.
 | 88 | The Osmo 360 II: its calibration and 8K50 decoding | below |
 | 89 | Auto colour: exposure and white balance set from the picture (or by an AI), keyed where the camera misses | below |
 | 95 | Text: a colour of its own, letter spacing, a box behind it; its colour automatable | below |
-| 94 | The Effects and Text panels tidied: text's look in Effects, groups for items (Place, Show, Animate), the film's fades to Transitions, consistent controls | below |
-| 93 | Effects edit the selected clip only, with the playhead on it; a clear notice when they're apart | below |
+| 94 | The Effects and Text panels tidied: text's look in Effects, groups for items (Place, Show, Animate), the film's fades to Transitions, consistent controls | [done](EDITOR-GAPS-DONE.md) |
+| 93 | Effects edit the selected clip only, with the playhead on it; a clear notice when they're apart | [done](EDITOR-GAPS-DONE.md) |
 | 92 | Play a stretch: drag a range on the ruler, Shift+Space plays it once and comes back to its start, paused; a button beside Play | below |
 | 91 | Pictures from the bin or the file manager dragged onto the overlay lane; a «Pictures» folder in every project | below |
 | 90 | The Effects panel sorted: groups, a side panel for complex controls, one scope | [done](EDITOR-GAPS-DONE.md) |
@@ -1532,57 +1532,6 @@ this beside our Play."
 - «Play the join» (transitions) already plays a stretch and stops: share
   its stop-and-return.
 - Milestone «Зручний таймлайн».
-
-### 93. Effects edit the selected clip, the playhead on it — idea (user, 2026-11-10)
-
-The user: the Effects sliders work on the selected clip only while the
-playhead is on it; when the playhead and the selected clip are apart,
-show a notice at the top that can't be missed ("the playhead isn't on
-the selected clip: make sure which clip you're editing"). A good
-constraint: no misclick edits another clip, and an edit happens only
-with the playhead on the clip (its start or end counting).
-
-Today (`App::effect_target`): a selected text or picture is the target
-while the playhead is on it; otherwise the panel quietly works on the
-cut under the playhead, a selected cut or not (a selected cut is
-ignored). The header names the target in small print.
-
-- With a selection: the panel is locked to it. Playhead off it → a
-  notice at the top (a warning colour), the controls greyed, and a
-  button «Go to it» (the playhead to its nearest end).
-- With no selection: the cut under the playhead, as today, said plainly.
-- The same notice wherever a panel edits a clip in time (the Text
-  panel's look isn't timed; it may stay free).
-- Milestone «Ефекти, колір і розумний звук».
-
-### 94. The Effects and Text panels tidied — agreed (Claude's UI review, user, 2026-11-10)
-
-A review of the Effects panel, its side panel and the Text panel, agreed
-to do at once with gap 93:
-
-1. **Text in one place.** A text item's look (words, font, bold, size,
-   align, colour, outline, shadow) becomes the first group «Text» of the
-   Effects panel; the left Text panel goes. «Lines» reads «Align».
-   Later, separate cards: a custom colour, a box behind the text.
-2. **Groups for a text or a picture**: Place (across, down, size,
-   turn), Show (opacity, reveal, blur: how much of it shows), Animate
-   (ins and outs only), Kind (pictures), Look (style); Light and Colour
-   folded at first on items; the vignette in Finish.
-3. **The film's fades out of a clip's panel**: Whole edit moves to the
-   Transitions panel (the film's start and end are edges too).
-4. **No dead controls**: the white-balance picker and «To all cuts»
-   hidden for items, not greyed.
-5. **Consistent controls**: a style's settings open by a «VHS ▸»
-   button, as the vignette's «Round ▸» (not by pressing the chosen tile
-   again); ins and outs as «In: Fade ▾ 0.5 s» (a list and a length),
-   not 20 tiles; the header's reset says «↺ All».
-
-Milestone «Ефекти, колір і розумний звук».
-
-**Built 2026-11-10, waiting for the check**: gap 93 (`d55bac2`) and 1–5
-(`aca1267` groups, `5919b10` Text group, `28bdd84` the film's fades in
-Transitions, `c0bace6` style settings button and ins/outs as lists).
-Items' Light and Colour fold apart from a cut's (`Group::fold_key`).
 
 ### 95. Text: its own colour, letter spacing, a box behind it — idea (Claude's UI review, 2026-11-10)
 

@@ -1390,6 +1390,27 @@ radius plus a glow (the blurred highlights added back). CPU and GPU with a
 parity test. Blur is a multi-tap pass, so it costs more than a per-pixel
 effect.
 
+### 14. Black and white levels — done, checked by the user 2026-11-10 (Kos TODO, 2026-10-23)
+
+The Kos master's darkest pixel is 14 of 255 (median over 1968 frames):
+nothing is black, so it looks flat. The TODO's fix is levels: black input
+≈ 0.055, white ≈ 0.95, then a little saturation. `Grade` has exposure,
+contrast and highlights/shadows, but no black and white points. Add `black_in`
+and `white_in` to the effect key, mirrored in `grade.rs` and `grade.wgsl`
+with a GPU-vs-CPU test. "To all cuts" already applies a look to the whole
+film. The name `black` is taken by the fades, so pick another.
+
+**Built and checked 2026-11-10** (`5c4e3f4`): `black_in` (0..0.5)
+and `white_in` (0.5..1), applied first in `Grade::apply` and
+`grade.wgsl` (a fifth uniform row), tested GPU against CPU. The Light
+group's Levels: Black and White as levels of 255 (as Scopes say them)
+and «Auto» from the Scopes' measure (`App::auto_levels`: their darkest
+and brightest, the levels already there undone). Milestone «Ефекти,
+колір і розумний звук»; curves (68) next.
+«Auto» reads the one frame shown (the Scopes' latest measure) and sets
+one value for the cut; a measure over the whole cut, or levels moving
+with the light, is for later (the user asked, 2026-11-10; gap 89).
+
 ### 69. Scopes: a histogram and a waveform of the picture — done, checked by the user 2026-11-10 (user, 2026-11-04)
 
 To see whether the picture is clipped and whether its black is black (the

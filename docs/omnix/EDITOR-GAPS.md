@@ -1216,6 +1216,24 @@ top. Subtitles (gap 16) get a lane of their own by default. No format
 change: lanes gain an optional `name`. Milestone «Ефекти, колір і розумний звук» (text
 and titles), and the overlay side with «B-roll і групи».
 
+**Built 2026-11-10, waiting for the check** (`f544cc9`, `c3a241d`,
+`04a4368`; the user: «not changing what's there, just groups, so
+subtitles and titles can have lanes of their own; what's above is on
+top»):
+- Model: `ItemRef` is (track, lane, place), 0 the lowest lane (drawn
+  first). Ops: `add_text` / `add_pictures` / `add_bars` take `lane` (0
+  when left out), `add_lane` on top, `remove_lane` (empty, not the last),
+  `move` takes `lane`. `describe` says the lanes.
+- Timeline: a track is its lanes, the top one first, each with its
+  items, Effects and Motion rows and automation lanes; the top lane
+  carries «▾ Text 2» (the fold) and «+»; an empty lane of several has
+  «×»; folded, one thin row of every lane's items.
+- Alt+↑ / Alt+↓ move the selected item a lane up or down (a new lane
+  from the top one); new things go on the track's active lane (clicked,
+  an item selected on it, or just added), marked at its head's edge.
+- Not yet: lane names («Subtitles»), dragging an item between lanes with
+  the mouse, hiding a lane while editing.
+
 ### 71. Two viewers: the source and the edit; effects tried beside the original, then applied — idea (user, 2026-11-04)
 
 User, on the skimmer card (gaps 2, 9): "I don't know if it'll be needed,

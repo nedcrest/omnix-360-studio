@@ -45,9 +45,7 @@ pub fn build(root: &Path, day: Option<&str>) -> Result<Project> {
         if !matches!(mark.rating, Some(Rating::Take | Rating::Think)) {
             continue;
         }
-        let (d, file) = clip.key.split_once('/').unwrap_or_default();
-        let stem = Path::new(file).file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
-        let voice = mark.audio.as_ref().map(|r| layout.voice().join(d).join(&stem).join(format!("{r}.flac"))).filter(|v| v.is_file());
+        let voice = mark.audio.as_ref().zip(dailix_sheet::voice::dir(&layout, &clip.key)).map(|(r, dir)| dailix_sheet::voice::track(&dir, r)).filter(|v| v.is_file());
         let mut spans: Vec<(f64, f64, String)> = mark
             .marks
             .iter()

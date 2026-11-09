@@ -1476,7 +1476,17 @@ keys).
 - In the milestone «Ефекти, колір і розумний звук», with the colour
   tools (after 69 scopes).
 
-### 90. The Effects panel sorted into groups — agreed, next (user, 2026-11-09)
+### 90. The Effects panel sorted into groups — built, waiting for the check (user, 2026-11-09)
+
+Built 2026-11-09: an overlay's place set for the whole item
+(`KeyOp::PlaceValue`, `6b837d3`); rolling shutter in Settings → Picture
+(`960d53f`); the groups and the side panel (`effects_view.rs`,
+`aad85cc`): Place or Bars, Light, Colour (the picker in it), Look (LUT,
+Style tiles), Finish (vignette with its shape's button, opacity; opacity
+first for an overlay), Whole edit (folded at first); folded groups kept
+in the settings; Style's knobs and the vignette's shape, reach and
+softness slide out beside. The film's fades as handles on the timeline
+stay for later.
 
 The user: "the layout and grouping of the effects are everything in a row;
 systematise and improve the layout, make groups; e.g. the vignette, when

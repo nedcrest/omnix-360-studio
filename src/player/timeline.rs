@@ -61,6 +61,13 @@ const GAP: f32 = 2.0;
 /// Under a track, a row of its effect keyframes and one of its view (a
 /// cut's) or motion (an overlay's) keyframes.
 const EFFECTS: f32 = 16.0;
+/// The keys that get a mark: one key is a value set throughout (a
+/// slider's, the whole cut or item), no mark; more animate it (the user,
+/// 2026-11-10: a place slider showed a key on an overlay).
+fn marked<K>(keys: &[K]) -> &[K] {
+    if keys.len() > 1 { keys } else { &[] }
+}
+
 /// The transitions lane's height (gap 25f), open and folded.
 const TRANS: f32 = 24.0;
 const TRANS_FOLDED: f32 = 16.0;
@@ -527,9 +534,8 @@ impl Timeline {
         if !(self.rows.effects_top..self.rows.auto_top).contains(&p.y) {
             return None;
         }
-        // One key is the cut's value throughout (no mark); more animate it.
-        self.blocks.iter().enumerate().rev().filter(|(_, c)| c.cut.effects.len() > 1).find_map(|(i, c)| {
-            c.cut.effects.iter().map(|k| k.t).enumerate().find(|&(_, t)| t >= c.cut.start && t <= c.cut.start + c.len() && (self.x(c.from + t - c.cut.start, b) - p.x).abs() <= PICK).map(|(k, t)| (i, k, t))
+        self.blocks.iter().enumerate().rev().find_map(|(i, c)| {
+            marked(&c.cut.effects).iter().map(|k| k.t).enumerate().find(|&(_, t)| t >= c.cut.start && t <= c.cut.start + c.len() && (self.x(c.from + t - c.cut.start, b) - p.x).abs() <= PICK).map(|(k, t)| (i, k, t))
         })
     }
 
@@ -1533,7 +1539,7 @@ impl OverlayLane {
             return None;
         }
         self.blocks().iter().enumerate().find_map(|(item, o)| {
-            let times: Vec<f64> = if effects { o.item.effects.iter().map(|k| k.t).collect() } else { o.item.motion.iter().map(|k| k.t).collect() };
+            let times: Vec<f64> = if effects { marked(&o.item.effects).iter().map(|k| k.t).collect() } else { marked(&o.item.motion).iter().map(|k| k.t).collect() };
             times
                 .into_iter()
                 .enumerate()
@@ -1735,10 +1741,10 @@ impl canvas::Program<Message> for OverlayLane {
             }
             let inside = |o: &OverlayBlock, k: f64| k >= o.item.start && k <= o.item.start + o.len();
             for o in self.blocks() {
-                for k in o.item.effects.iter().map(|k| k.t).filter(|&k| inside(o, k)) {
+                for k in marked(&o.item.effects).iter().map(|k| k.t).filter(|&k| inside(o, k)) {
                     effect_mark(&mut frame, t.x(o.item.at + k - o.item.start, bounds), self.0.rows.overlay + EFFECTS / 2.0);
                 }
-                for (k, ease) in o.item.motion.iter().map(|k| (k.t, k.ease)).filter(|&(k, _)| inside(o, k)) {
+                for (k, ease) in marked(&o.item.motion).iter().map(|k| (k.t, k.ease)).filter(|&(k, _)| inside(o, k)) {
                     let mark = key_mark(t.x(o.item.at + k - o.item.start, bounds), self.motion_top() + KEYS / 2.0, ease);
                     frame.fill(&mark, colour);
                     frame.stroke(&mark, Stroke::default().with_width(1.5).with_color(palette.background.base.color));
@@ -2480,7 +2486,7 @@ impl canvas::Program<Message> for Marks {
         }
         // Effect keyframes: small squares along the bottom of their cut.
         for c in &self.blocks {
-            for t in c.cut.effects.iter().filter(|_| c.cut.effects.len() > 1).map(|k| k.t).filter(|&t| t >= c.cut.start && t <= c.cut.start + c.len()) {
+            for t in marked(&c.cut.effects).iter().map(|k| k.t).filter(|&t| t >= c.cut.start && t <= c.cut.start + c.len()) {
                 effect_mark(&mut frame, self.x(c.from + t - c.cut.start, bounds), self.rows.effects_top + EFFECTS / 2.0);
             }
         }
@@ -2849,6 +2855,24 @@ mod tests {
         let tag = lanes.value_tag(0, t.x(2.0, b), lanes.y(0, 1.5), 1.5);
         assert!(matches!(t.hit(tag.center(), b, false, false), Hit::Auto(LaneHit::Value { owner: 0, t, v, .. }) if t == 2.0 && v == 1.5));
         assert_eq!(lanes.tag(), "▾ Effects");
+    }
+
+    #[test]
+    fn one_key_is_a_value_with_no_mark() {
+        let key = |t| crate::overlay::MotionKey { t, place: Default::default(), ease: Default::default() };
+        let lane_with = |motion| {
+            let (mut t, _) = timeline();
+            let item = crate::overlay::Item { id: 9, input: "logo.png".into(), text: None, at: 2.0, start: 0.0, end: 4.0, motion, effects: vec![], bars: None, automation: vec![], kind: None, style: None };
+            t.overlays = vec![OverlayBlock { item, label: "logo".into(), thumb: None }];
+            t.folds.overlay = false;
+            OverlayLane(Arc::new(t), Track::Overlay)
+        };
+        let (_, b) = timeline();
+        let at_start = |lane: &OverlayLane| Point::new(lane.0.x(2.0, b), lane.motion_top() + KEYS / 2.0);
+        let one = lane_with(vec![key(0.0)]);
+        assert_eq!(one.key_at(at_start(&one), b), None, "a slider's value");
+        let two = lane_with(vec![key(0.0), key(2.0)]);
+        assert!(two.key_at(at_start(&two), b).is_some(), "two animate it");
     }
 
     #[test]

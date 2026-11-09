@@ -694,6 +694,21 @@ effect rows of their own: the same there. Old keys are read into clips.
 In the milestone «Ефекти, колір і розумний звук», after the Effects
 panel's layout is sorted (the user's next ask).
 
+**Built 2026-11-10 for cuts, waiting for the check** (`60d1189` core,
+`9491af2` lanes): `automation.rs` (`AutoClip`: the value's name, from..to
+in clip time, eased points; `graded`/`placed` over the set values,
+read through `Cut::grade_at` and `overlay::look`); old effect and motion
+keys read into clips spanning their cut or item (looks the same);
+`Op::Auto` (add flat at the value there, move, trim, delete, point
+set/move, delete, ease), no overlap of one value's clips (`check`),
+in the property run and `describe`. The timeline: the Effects row folds
+open into a lane per moved effect, or one asked for by the ◆ beside its
+slider in the panel (`timeline/auto.rs`); drag over empty lane draws a
+clip, a click in a clip adds a point, drag a point, a clip or its edge,
+Ctrl+click deletes a point, a right-click turns a point's ease or takes
+a clip away. Next: the same on the text and overlay lanes' own rows
+(effects and place); then the View row (framing keys) by the same lanes.
+
 **What it looks like.**
 - «Effects» and «View» stay as one thin row each, with a ▸ to fold open.
   Folded, as today: the dots of all keys.

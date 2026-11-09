@@ -1490,7 +1490,7 @@ cutaways, a program of its own) is another thing: it makes new footage.
   edge from its still values, each clip naming its animation, kept on
   its edge by a trim; `AutoOp::Animate`; the Effects panel's Animate
   group; listed by `omnix looks`. A reset removes automation too.
-- **Step 2b built 2026-11-10, waiting for the check** (`d118618`,
+- **Step 2b done and checked 2026-11-10** (`d118618`,
   `fdef4f5`): two effects for text and pictures only (`grade::ITEM_ONLY`,
   a cut refuses them): `blur` (48 samples on a sunflower disc, up to 8 %
   of the picture's short side) and `reveal` (a picture wiped in from the
@@ -1502,7 +1502,7 @@ cutaways, a program of its own) is another thing: it makes new footage.
   Limit: past 255 letters, neighbours share a step. A trimmed automation
   clip's edge points follow its edges; dragging an edge only draws it,
   trimmed once let go (`94b91ab`, `cd93e40`, the user's find and idea).
-- **Step 2c built 2026-11-10, waiting for the check** (`4278373`,
+- **Step 2c done and checked 2026-11-10** (`4278373`,
   `19ce064`): `Item::kind` (`dress::Kind`: sticker, polaroid, inset =
   picture in picture), baked into the picture when it loads (`dress.rs`;
   the sticker's edge from an exact distance transform in `mask.rs`, so a

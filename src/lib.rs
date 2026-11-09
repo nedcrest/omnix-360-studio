@@ -28,6 +28,7 @@ mod hdr;
 mod imu;
 mod loudness;
 mod lut;
+mod mask;
 mod overlay;
 mod player;
 /// Omnix's player for another program's window (Dailix).

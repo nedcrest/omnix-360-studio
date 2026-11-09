@@ -8,6 +8,7 @@
 //! shares of the frame's height, so the text is drawn sharp at whatever size
 //! the export or the view needs.
 
+use crate::mask::{blur, shift};
 use crate::overlay::Picture;
 use cosmic_text::{Align, Attrs, Buffer, Color, Family, FontSystem, Metrics, Shaping, SwashCache, Weight};
 use rayon::prelude::*;
@@ -353,53 +354,6 @@ fn dilate(mask: &[f32], order: &[u8], (w, h): (usize, usize), r: f64) -> (Vec<f3
             best
         })
         .unzip()
-}
-
-/// `mask` moved `by` pixels right and down.
-fn shift<T: Copy + Default>(mask: &[T], (w, h): (usize, usize), by: f64) -> Vec<T> {
-    let d = by.round() as usize;
-    let mut out = vec![T::default(); w * h];
-    for y in d..h {
-        out[y * w + d..(y + 1) * w].copy_from_slice(&mask[(y - d) * w..(y - d + 1) * w - d]);
-    }
-    out
-}
-
-/// A box blur of radius `r` across and then down, twice: near enough a
-/// Gaussian for a shadow.
-fn blur(mask: &[f32], (w, h): (usize, usize), r: f64) -> Vec<f32> {
-    let r = r.round() as usize;
-    if r == 0 {
-        return mask.to_vec();
-    }
-    let mut a = mask.to_vec();
-    for _ in 0..2 {
-        a = box_rows(&a, w, h, r);
-        a = transpose(&box_rows(&transpose(&a, w, h), h, w, r), h, w);
-    }
-    a
-}
-
-fn box_rows(m: &[f32], w: usize, h: usize, r: usize) -> Vec<f32> {
-    let mut out = vec![0f32; w * h];
-    out.par_chunks_mut(w).enumerate().for_each(|(y, row)| {
-        let src = &m[y * w..(y + 1) * w];
-        for (x, o) in row.iter_mut().enumerate() {
-            let (a, b) = (x.saturating_sub(r), (x + r).min(w - 1));
-            *o = src[a..=b].iter().sum::<f32>() / (2 * r + 1) as f32;
-        }
-    });
-    out
-}
-
-fn transpose(m: &[f32], w: usize, h: usize) -> Vec<f32> {
-    let mut out = vec![0f32; w * h];
-    for y in 0..h {
-        for x in 0..w {
-            out[x * h + y] = m[y * w + x];
-        }
-    }
-    out
 }
 
 #[cfg(test)]

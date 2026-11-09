@@ -7,7 +7,7 @@
 //! knobs slide out in a second panel beside it (`effects_extra_panel`),
 //! as the Transitions panel's settings do.
 
-use super::effects::{EffectMsg, LUT, LutChoice, PARAMS, PLACE, Target, WIDTH, label};
+use super::effects::{EffectMsg, Focus, LUT, LutChoice, PARAMS, PLACE, Target, WIDTH, label};
 use super::{App, Message, icon_button, tip};
 use crate::grade::{Grade, grade_at};
 use crate::overlay::{Place, place_at};
@@ -75,6 +75,9 @@ impl App {
         let enabled = target.is_some();
         let sliders = |ps: &[usize]| column(ps.iter().map(|&p| self.param_row(p, grade.values()[p], enabled))).spacing(6).into();
         let mut body = column![self.effects_header(target)].spacing(12).padding(12);
+        if let Focus::Apart(selected) = self.effect_focus() {
+            body = body.push(self.apart_notice(selected));
+        }
         match target {
             Some((Target::Overlay(i), t)) => match self.edit.item(i).and_then(|it| it.bars) {
                 Some(b) => body = body.push(self.group(Group::Bars, bars_controls(b))),
@@ -111,21 +114,45 @@ impl App {
     fn effects_header(&self, target: Option<(Target, f64)>) -> Element<'_, Message> {
         let m = |e: EffectMsg| Message::Effect(e);
         let on_cut = matches!(target, Some((Target::Cut(_), _)));
-        let name = match target {
-            Some((Target::Cut(i), _)) => format!("Cut {} · {}", i + 1, super::clip_name(&self.edit.cuts[i].input)),
-            Some((Target::Overlay(i), _)) => match self.edit.item(i) {
-                Some(it) if it.text.is_some() => format!("Text · {}", it.name()),
-                Some(it) if it.bars.is_some() => it.name(),
-                Some(it) => format!("Overlay · {}", super::clip_name(&it.input)),
-                None => String::new(),
-            },
-            None => "No cut".to_owned(),
+        let name = match self.effect_focus() {
+            Focus::On(tg, _) if self.selection == super::Selection::None => format!("{} (under the playhead)", self.target_name(tg)),
+            Focus::On(tg, _) | Focus::Apart(tg) => self.target_name(tg),
+            Focus::Nothing => "No cut".to_owned(),
         };
         let close = tip(button(text("✕").size(14)).padding([0, 6]).style(button::text).on_press(m(EffectMsg::Toggle)), text("Close (G)"), tooltip::Position::Bottom);
         let to_all = tip(icon_button(super::TO_ALL_CUTS, on_cut.then(|| m(EffectMsg::ToAll))), text("To all cuts: give every other cut this look, replacing their effects"), tooltip::Position::Bottom);
         let any = target.filter(|&(tg, _)| !self.effects_of(tg).is_empty() || !self.automation_of(tg).is_empty() || matches!(tg, Target::Overlay(i) if self.edit.item(i).is_some_and(|it| !it.motion.is_empty())));
         let reset = tip(icon_button(super::RESET_VIEW, any.map(|_| m(EffectMsg::Reset(None)))), text(if on_cut { "Reset: remove this cut's effects and automation" } else { "Reset: remove this item's effects, place, automation and ins and outs" }), tooltip::Position::Bottom);
         column![row![text("Effects").size(18).width(Length::Fill), close].align_y(Alignment::Center), row![text(name).size(13).width(Length::Fill), to_all, reset].spacing(6).align_y(Alignment::Center)].spacing(6).into()
+    }
+
+    /// What `target` is called in the panel: «Cut 3 · name», «Text · words».
+    fn target_name(&self, target: Target) -> String {
+        match target {
+            Target::Cut(i) => format!("Cut {} · {}", i + 1, super::clip_name(&self.edit.cuts[i].input)),
+            Target::Overlay(i) => match self.edit.item(i) {
+                Some(it) if it.text.is_some() => format!("Text · {}", it.name()),
+                Some(it) if it.bars.is_some() => it.name(),
+                Some(it) => format!("Overlay · {}", super::clip_name(&it.input)),
+                None => String::new(),
+            },
+        }
+    }
+
+    /// The notice while the playhead is off the selected clip (gap 93):
+    /// nothing is edited until it's there.
+    fn apart_notice(&self, selected: Target) -> Element<'static, Message> {
+        let what = match selected {
+            Target::Cut(_) => "cut",
+            Target::Overlay(_) => "item",
+        };
+        let go = button(text("Go to it").size(13)).padding([3, 10]).style(button::secondary).on_press(Message::Effect(EffectMsg::GoToSelected));
+        let words = text(format!("The playhead isn't on the selected {what}. Nothing here is edited until it is: make sure which clip you're editing.")).size(13).color(iced::Color::from_rgb(0.12, 0.08, 0.0));
+        container(column![words, go].spacing(6))
+            .padding(10)
+            .width(Length::Fill)
+            .style(|_| container::Style { background: Some(iced::Color::from_rgb(0.98, 0.74, 0.25).into()), border: iced::Border { radius: 4.0.into(), ..Default::default() }, ..Default::default() })
+            .into()
     }
 
     /// A group: its name folding it open or shut, its ↺, and `content`

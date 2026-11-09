@@ -21,6 +21,8 @@ use iced::{Alignment, Element, Length};
 pub enum EffectMsg {
     /// Open or close the panel.
     Toggle,
+    /// The playhead onto the selected clip, the panel's to edit (gap 93).
+    GoToSelected,
     /// Effect `i` (as in `PARAMS`) moved to this value.
     Set(usize, f64),
     /// A slider let go: the next move is a change of its own for undo.
@@ -157,12 +159,23 @@ pub enum TextChange {
 /// The colours a text's swatches offer.
 const SWATCHES: [[u8; 3]; 9] = [[255, 255, 255], [0, 0, 0], [255, 214, 10], [255, 140, 0], [230, 40, 40], [255, 90, 170], [40, 120, 255], [30, 200, 110], [130, 130, 130]];
 
-/// What the panel edits: the playing cut, or the overlay selected (in the
-/// lane shown).
+/// What the panel edits: a cut, or a text or picture (in the lane shown).
 #[derive(Clone, Copy, PartialEq)]
 pub(super) enum Target {
     Cut(usize),
     Overlay(crate::overlay::ItemRef),
+}
+
+/// Whether the panel may edit (gap 93, the user, 2026-11-10): the selected
+/// cut or item with the playhead on it (its ends counting), and the time
+/// there in its own clock; the selection with the playhead off it, edited
+/// only once it's there; with nothing selected, the cut under the
+/// playhead.
+#[derive(Clone, Copy, PartialEq)]
+pub(super) enum Focus {
+    On(Target, f64),
+    Apart(Target),
+    Nothing,
 }
 
 /// Where one drag of a control writes: the target and its time, taken
@@ -190,20 +203,69 @@ pub(super) const PLACE: [(&str, f64, f64, &str); 4] = [
     ("Rotation", -180.0, 180.0, "Degrees, clockwise"),
 ];
 
+/// A selected cut or item: where it starts on the edit, how long, and its
+/// own clock's start.
+#[derive(Clone, Copy)]
+struct Selected {
+    target: Target,
+    at: f64,
+    len: f64,
+    start: f64,
+}
+
+/// The panel's focus at edit time `t` (`Focus`): on `selected` while `t`
+/// is on it, its ends counting; else apart; with nothing selected, the
+/// `playing` cut (its index and clip time).
+fn focus(t: f64, selected: Option<Selected>, playing: Option<(usize, f64)>) -> Focus {
+    match selected {
+        Some(s) if (s.at..=s.at + s.len).contains(&t) => Focus::On(s.target, s.start + t - s.at),
+        Some(s) => Focus::Apart(s.target),
+        None => playing.map_or(Focus::Nothing, |(i, t)| Focus::On(Target::Cut(i), t)),
+    }
+}
+
 impl App {
-    /// What the panel edits and the time there in its own clock: the
-    /// overlay selected, if it's showing at the playhead, else the playing
-    /// cut.
+    /// What the panel works on (`Focus`).
+    pub(super) fn effect_focus(&self) -> Focus {
+        let selected = match (self.selection.item(&self.edit), self.selection.cut(&self.edit)) {
+            (Some(i), _) => self.edit.item(i).map(|it| Selected { target: Target::Overlay(i), at: it.at, len: it.end - it.start, start: it.start }),
+            (None, Some(i)) => {
+                let c = &self.edit.cuts[i];
+                Some(Selected { target: Target::Cut(i), at: self.edit.edit_time(i, c.start), len: c.len(), start: c.start })
+            }
+            (None, None) => None,
+        };
+        focus(self.position(), selected, self.playing_cut().map(|(_, t)| (self.current, t)))
+    }
+
+    /// What the panel edits and the time there in its own clock, while it
+    /// may (`effect_focus`).
     pub(super) fn effect_target(&self) -> Option<(Target, f64)> {
-        let t = self.position();
-        if let Some(i) = self.selection.item(&self.edit)
-            && let Some(item) = self.edit.item(i)
-            && t >= item.at
-            && t <= item.ends()
-        {
-            return Some((Target::Overlay(i), item.local(t)));
+        match self.effect_focus() {
+            Focus::On(target, t) => Some((target, t)),
+            Focus::Apart(_) | Focus::Nothing => None,
         }
-        self.playing_cut().map(|(_, t)| (Target::Cut(self.current), t))
+    }
+
+    /// The playhead onto `target`: its nearer end, a frame inside.
+    fn go_to(&mut self, target: Target) {
+        let t = self.position();
+        let frame = 1.0 / self.fps();
+        let span = match target {
+            Target::Cut(i) => {
+                let c = &self.edit.cuts[i];
+                (self.edit.edit_time(i, c.start), self.edit.edit_time(i, c.end))
+            }
+            Target::Overlay(i) => match self.edit.item(i) {
+                Some(it) => (it.at, it.ends()),
+                None => return,
+            },
+        };
+        let to = if t < span.0 { span.0 } else { (span.1 - frame).max(span.0) };
+        if let Some((i, clip_t)) = self.edit.locate(to) {
+            let playing = self.playing();
+            self.goto(i, clip_t, playing);
+        }
     }
 
     pub(super) fn effects_of(&self, target: Target) -> &[EffectKey] {
@@ -295,6 +357,11 @@ impl App {
         let target = self.effect_target();
         match m {
             EffectMsg::Toggle => self.toggle_side(super::Side::Effects),
+            EffectMsg::GoToSelected => {
+                if let Focus::Apart(target) = self.effect_focus() {
+                    self.go_to(target);
+                }
+            }
             EffectMsg::Set(p, v) => {
                 let starting = !self.edit.changing();
                 self.edit.begin();
@@ -698,6 +765,15 @@ impl std::fmt::Display for FontChoice {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_panel_edits_the_selection_only_with_the_playhead_on_it() {
+        let item = Selected { target: Target::Overlay((crate::overlay::Track::Text, 0)), at: 10.0, len: 4.0, start: 1.0 };
+        assert!(focus(12.0, Some(item), Some((3, 5.0))) == Focus::On(item.target, 3.0), "on it, its own clock");
+        assert!(focus(14.0, Some(item), None) == Focus::On(item.target, 5.0), "its end counts");
+        assert!(focus(15.0, Some(item), Some((3, 5.0))) == Focus::Apart(item.target), "off it: not the cut under the playhead");
+        assert!(focus(15.0, None, Some((3, 5.0))) == Focus::On(Target::Cut(3), 5.0), "nothing selected: the playing cut");
+    }
 
     #[test]
     fn every_value_the_panel_draws_has_a_row_and_a_range() {

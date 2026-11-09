@@ -121,6 +121,15 @@ impl App {
                 .spacing(6)
                 .into()
             ),
+            section(
+                "Correction",
+                column![
+                    toggler(self.rolling_shutter).label("Rolling shutter").on_toggle(Message::RollingShutter),
+                    note("Straightens what a 360 camera's row-by-row readout bends while it turns, in playback and the export."),
+                ]
+                .spacing(6)
+                .into()
+            ),
             section("LUTs", self.lut_library()),
         ]
         .spacing(18)

@@ -14,7 +14,7 @@ use crate::model::ops::keys::{EXACT, Graded, KeyOp, Line};
 use crate::model::ops::sound::SoundOp;
 use crate::model::ops::{End, Op, items::ItemOp};
 use crate::text::{Colour, Outline, Text, TextAlign};
-use iced::widget::{button, column, container, pick_list, row, rule, scrollable, slider, text, toggler, tooltip};
+use iced::widget::{button, column, container, pick_list, row, rule, scrollable, slider, text, tooltip};
 use iced::{Alignment, Element, Length};
 
 #[derive(Debug, Clone)]
@@ -603,7 +603,7 @@ impl App {
             body = body.push(self.lut_controls(i, &grade));
             body = body.push(self.style_controls(i));
         }
-        let body = body.extend([column![sliders, tools, rule::horizontal(1), self.edit_and_correction()].spacing(10).into()]);
+        let body = body.extend([column![sliders, tools, rule::horizontal(1), self.whole_edit()].spacing(10).into()]);
         container(scrollable(body)).width(WIDTH).height(Length::Fill).into()
     }
 
@@ -630,8 +630,8 @@ impl App {
         .into()
     }
 
-    /// The edit's fades, and the rolling-shutter correction.
-    fn edit_and_correction(&self) -> Element<'_, Message> {
+    /// The edit's fades.
+    fn whole_edit(&self) -> Element<'_, Message> {
         let fades = &self.edit.fades;
         let fade = |name: &'static str, v: f64, f: fn(f64) -> EffectMsg, hint: &'static str| {
             tip(
@@ -648,13 +648,6 @@ impl App {
             text("Edit").size(16),
             fade("Fade in", fades.fade_in, EffectMsg::FadeIn, "From black at the start of the edit, the sound with it"),
             fade("Fade out", fades.fade_out, EffectMsg::FadeOut, "To black at the end of the edit, the sound with it"),
-            rule::horizontal(1),
-            text("Correction").size(16),
-            tip(
-                toggler(self.rolling_shutter).label("Rolling shutter").on_toggle(Message::RollingShutter),
-                text("Straightens what the sensor's row-by-row readout bends while the camera turns, in playback and the export"),
-                tooltip::Position::Left,
-            ),
         ]
         .spacing(10)
         .into()

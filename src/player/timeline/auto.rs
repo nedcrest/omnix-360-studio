@@ -109,12 +109,24 @@ impl Lanes<'_> {
         lo + ((top + h - 4.0 - y) / (h - 8.0)).clamp(0.0, 1.0) as f64 * (hi - lo)
     }
 
-    fn x(&self, o: &Owner, t: f64, b: Rectangle) -> f32 {
+    pub(super) fn x(&self, o: &Owner, t: f64, b: Rectangle) -> f32 {
         self.t.x(o.from + t - o.start, b)
     }
 
+    /// `t` (own time) on `o`'s start or end when within `SNAP` pixels of
+    /// it, as the timeline's edges snap (the user, 2026-11-10); free with
+    /// snapping off or `free` (Shift).
+    pub(super) fn snapped(&self, o: &Owner, t: f64, b: Rectangle, free: bool) -> f64 {
+        if free || !self.t.snapping {
+            return t;
+        }
+        let x = self.x(o, t, b);
+        let near = |e: f64| (self.x(o, e, b) - x).abs();
+        [o.start, o.start + o.len].into_iter().filter(|&e| near(e) < super::SNAP).min_by(|&a, &c| near(a).total_cmp(&near(c))).unwrap_or(t)
+    }
+
     /// Owner `o`'s time at `x`.
-    fn own_time(&self, o: &Owner, x: f32, b: Rectangle) -> f64 {
+    pub(super) fn own_time(&self, o: &Owner, x: f32, b: Rectangle) -> f64 {
         o.start + self.t.t(x, b) - o.from
     }
 
@@ -219,8 +231,10 @@ impl Lanes<'_> {
     /// clip as the clip moves. `shift`: a value tag's finer steps.
     pub(super) fn drag(&self, drag: &mut LaneDrag, p: Point, b: Rectangle, shift: bool) -> Option<Message> {
         match drag {
-            LaneDrag::New { x1, .. } => {
-                *x1 = p.x;
+            LaneDrag::New { owner, x0, x1, .. } => {
+                let o = &self.owners[*owner];
+                let snap = |x: f32| self.x(o, self.snapped(o, self.own_time(o, x, b), b, shift), b);
+                (*x0, *x1) = (snap(*x0), snap(p.x));
                 None
             }
             // Up is more: a 120th of the range a pixel in 200ths, Shift a
@@ -246,7 +260,7 @@ impl Lanes<'_> {
                 let clip = self.clip_at(*lane, *owner, *at)?;
                 let o = &self.owners[*owner];
                 let shortest = crate::model::ops::auto::SHORTEST;
-                let t = self.own_time(o, p.x, b);
+                let t = self.snapped(o, self.own_time(o, p.x, b), b, shift);
                 *to = if *start { t.clamp(o.start, clip.to - shortest) } else { t.clamp(clip.from + shortest, o.start + o.len) };
                 None
             }
@@ -258,10 +272,16 @@ impl Lanes<'_> {
                 let clip = self.clip_at(*lane, *owner, *at)?;
                 let o = &self.owners[*owner];
                 let len = clip.to - clip.from;
-                let from = (clip.from + self.own_time(o, p.x, b) - self.own_time(o, *x0, b)).clamp(o.start, (o.start + o.len - len).max(o.start));
+                let from = clip.from + self.own_time(o, p.x, b) - self.own_time(o, *x0, b);
+                // Its start onto an edge, else its end.
+                let start = self.snapped(o, from, b, shift);
+                let from = if start != from { start } else { self.snapped(o, from + len, b, shift) - len };
+                let from = from.clamp(o.start, (o.start + o.len - len).max(o.start));
                 let message = AutoMsg::Move { on: o.on, param: self.params[*lane], at: *at, from };
                 *at += from - clip.from;
-                *x0 = p.x;
+                // Only by what it moved: held on an edge, the pointer's
+                // way past it adds up until it pulls free.
+                *x0 += self.x(o, from, b) - self.x(o, clip.from, b);
                 Some(Message::Auto(message))
             }
         }

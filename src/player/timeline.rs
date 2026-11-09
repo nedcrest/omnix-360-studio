@@ -2901,6 +2901,11 @@ mod tests {
         let lane2 = lane_with(vec![Param::Grade(9), Param::Place(0)], true);
         assert_eq!(lane2.motion_top(), lane2.0.rows.overlay + EFFECTS + AUTO);
         assert_eq!((lane2.lanes(false).tag(), lane2.lanes(true).tag()), ("▾ Effects".to_owned(), "▾ Motion".to_owned()));
+        // A clip's edges snap to its item's, within reach; Shift frees them.
+        let (motion, o) = (lane2.lanes(true), &lane2.lanes(true).owners[0]);
+        let near = |px: f32| motion.own_time(o, motion.x(o, 4.0, b) - px, b);
+        assert_eq!((motion.snapped(o, near(5.0), b, false), motion.snapped(o, near(5.0), b, true)), (4.0, near(5.0)), "onto its end");
+        assert_eq!(motion.snapped(o, near(40.0), b, false), near(40.0), "out of reach");
         // Each row's name folds its lanes.
         for motion in [false, true] {
             let lanes = lane2.lanes(motion);

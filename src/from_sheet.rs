@@ -8,7 +8,8 @@
 //!   sheet's first version) a cut of `POINT` seconds from it;
 //! - a clip with no segment goes in whole (a flag is no marking: a note
 //!   about a meme doesn't mean the clip was gone through);
-//! - the cleaned voice chosen for a clip plays in its cuts;
+//! - the cleaned voice chosen for a clip plays in its cuts, its level set
+//!   from the loudness Dailix measured (gap 77);
 //! - by day, by file, by time; 16:9 (the player shows the export's shape).
 //!
 //! New here (gap 75): a clip's flags inside a cut become the cut's
@@ -45,7 +46,12 @@ pub fn build(root: &Path, day: Option<&str>) -> Result<Project> {
         if !matches!(mark.rating, Some(Rating::Take | Rating::Think)) {
             continue;
         }
-        let voice = mark.audio.as_ref().zip(dailix_sheet::voice::dir(&layout, &clip.key)).map(|(r, dir)| dailix_sheet::voice::track(&dir, r)).filter(|v| v.is_file());
+        use dailix_sheet::voice;
+        let chosen = mark.audio.as_ref().zip(voice::dir(&layout, &clip.key)).filter(|(r, dir)| voice::track(dir, r).is_file());
+        let voice = chosen.as_ref().map(|(r, dir)| voice::track(dir, r));
+        // Its loudness as Dailix measured it (gap 77): the cut's level set
+        // from it, nothing made again.
+        let loudness = chosen.as_ref().and_then(|(r, dir)| voice::made(dir).get(*r)?.lufs);
         let mut spans: Vec<(f64, f64, String)> = mark
             .marks
             .iter()
@@ -63,6 +69,10 @@ pub fn build(root: &Path, day: Option<&str>) -> Result<Project> {
             let mut cut = Cut::new(clip.path.clone(), start, end);
             cut.note = (!note.is_empty()).then_some(note);
             cut.audio = voice.clone();
+            if voice.is_some() {
+                cut.loudness = loudness;
+                cut.gain = crate::model::ops::sound::normal_gain(loudness);
+            }
             cut.marks = mark
                 .marks
                 .iter()
@@ -134,6 +144,8 @@ mod tests {
         clip("2030-05-02", "D.MP4", 8.0);
         std::fs::create_dir_all(layout.voice().join("2030-05-01/A")).unwrap();
         std::fs::write(layout.voice().join("2030-05-01/A/dnn6.flac"), b"v").unwrap();
+        let made = r#"{"dnn6": {"recipe": "dnn6", "kind": "dnn", "args": ["-D", "-a", "6"], "note": "", "source": "", "source_size": 1, "source_mtime": 0, "lufs": -26.0}}"#;
+        std::fs::write(layout.voice().join("2030-05-01/A/_recipes.json"), made).unwrap();
         std::fs::write(
             layout.sheet(),
             r#"{"clips": {
@@ -159,6 +171,7 @@ mod tests {
         );
         // The voice, and the flag inside the segment as its marker.
         assert_eq!(p.cuts[1].audio.as_deref(), Some(layout.voice().join("2030-05-01/A/dnn6.flac").as_path()));
+        assert_eq!((p.cuts[1].loudness, p.cuts[1].gain), (Some(-26.0), 10.0), "its level from the voice's loudness");
         assert_eq!(p.cuts[1].marks.iter().map(|m| (m.t, m.note.as_str())).collect::<Vec<_>>(), [(15.0, "cut · a meme here")]);
         assert_eq!(p.cuts[2].marks.len(), 1, "a whole clip keeps its flags as markers too");
         assert_eq!(build(&root, None).unwrap().cuts.len(), 4, "all days: D whole too");

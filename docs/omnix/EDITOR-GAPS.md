@@ -1484,6 +1484,14 @@ cutaways, a program of its own) is another thing: it makes new footage.
   more (8 mm, CRT, duotone). Built as the transitions are: one function
   on the CPU and its WGSL twin, a GPU test; their knobs as `Look::knobs`
   have. The glitch's tearing (`transition::tear`) is a start.
+- **Step 2a built 2026-11-10, waiting for the check** (`a985731`): ins
+  and outs (`animate.rs`: Fade, Slide four ways, Pop, Zoom, Spin), made
+  into automation clips on the item's edge from its still values, each
+  clip naming its animation, kept on its edge by a trim;
+  `AutoOp::Animate`; the Effects panel's Animate group; listed by `omnix
+  looks`. Agreed order next: 2b blur and reveal (wipe, typewriter) as
+  values and as ins/outs, 2c overlay kinds (sticker, polaroid,
+  picture-in-picture), 2d styles on text and pictures.
 - **What editors animate on text and pictures** (looked at 2026-11-10:
   CapCut, Premiere, Final Cut, Filmora, Firefly): position, scale,
   rotation, opacity (all automatable here now, gap 39), colour; then blur

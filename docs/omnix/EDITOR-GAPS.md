@@ -109,7 +109,7 @@ done in part stays here until its last card is done.
 | 87 | Style looks (old film, VHS, neo-cyberpunk) for a video, an overlay picture or text; animation presets for text and pictures | below |
 | 88 | The Osmo 360 II: its calibration and 8K50 decoding | below |
 | 89 | Auto colour: exposure and white balance set from the picture (or by an AI), keyed where the camera misses | below |
-| 90 | The Effects panel sorted: groups, a side panel for complex controls, one scope | below |
+| 90 | The Effects panel sorted: groups, a side panel for complex controls, one scope | [done](EDITOR-GAPS-DONE.md) |
 
 ## Open gaps
 
@@ -1475,56 +1475,6 @@ keys).
   measure, through the same ops; nothing it does is hidden from undo.
 - In the milestone «Ефекти, колір і розумний звук», with the colour
   tools (after 69 scopes).
-
-### 90. The Effects panel sorted into groups — built, waiting for the check (user, 2026-11-09)
-
-Built 2026-11-09: an overlay's place set for the whole item
-(`KeyOp::PlaceValue`, `6b837d3`); rolling shutter in Settings → Picture
-(`960d53f`); the groups and the side panel (`effects_view.rs`,
-`aad85cc`): Place or Bars, Light, Colour (the picker in it), Look (LUT,
-Style tiles), Finish (vignette with its shape's button, opacity; opacity
-first for an overlay), Whole edit (folded at first); folded groups kept
-in the settings; Style's knobs and the vignette's shape, reach and
-softness slide out beside. The film's fades as handles on the timeline
-stay for later.
-
-The user: "the layout and grouping of the effects are everything in a row;
-systematise and improve the layout, make groups; e.g. the vignette, when
-pressed, should light up, and its knobs slide out on an extra side panel,
-as we did for transitions." Agreed with the proposal below (2026-11-09).
-
-**Today** (top to bottom): the target's name; LUT and its strength;
-Style tiles with its knobs inline; ten sliders in one list (exposure …
-vignette with its shape, reach and softness inline, opacity); white
-balance, to all cuts, reset; «Edit» (the whole film's fades); «Correction»
-(rolling shutter, a program setting). Three scopes mixed (cut, film,
-program), no groups, complex controls growing the list, the white-balance
-picker far from temperature and tint, opacity last for overlays.
-
-**Agreed layout.**
-- Header: the target («Cut 3 · walk.mp4»), «to all cuts», «reset all».
-- Folding groups, each with its own ↺: **Light** (exposure, contrast,
-  highlights, shadows); **Colour** (the white-balance picker, temperature,
-  tint, saturation, vibrance); **Look** (LUT and strength, Style tiles);
-  **Finish** (vignette, opacity). Folded state remembered.
-- Complex controls (Style's knobs, the vignette's shape, reach and
-  softness; later curves and the like) only light up in the list; their
-  knobs slide out in a second side panel beside, as the Transitions
-  panel's settings do (`knobs_panel`).
-- An overlay or text selected: **Place** (across, down, size, rotation)
-  or **Bars** first, then Light, Colour, Finish with Opacity first.
-- The whole film's fades leave the cut's panel: later as handles at the
-  edit's ends on the timeline (as a sound clip's fades), for now a folded
-  «Whole edit» group at the bottom. Rolling shutter moves to Settings →
-  Picture.
-
-**Also agreed:** an overlay's place (the sliders and dragging it on the
-view) stops making motion keys, as effects did (`d8ee4ec`): it's set
-for the whole item; moving it over time comes with the automation clips
-(39).
-
-**Order:** this layout (with place made static) → the automation lanes
-and clips (39) → the milestone's step 2 (text and picture animations).
 
 ## Format rule for all of these
 

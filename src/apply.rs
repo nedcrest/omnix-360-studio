@@ -70,7 +70,7 @@ pub fn describe(project: &Path) -> Result<()> {
             let label = match (&i.text, i.bars) {
                 (Some(t), _) => format!("«{}»", t.content),
                 (None, Some(b)) => format!("bars {:.2}:1, sliding {:.1} s, colour {:?}", b.ratio, b.slide, b.colour),
-                (None, None) => name(&i.input),
+                (None, None) => format!("{}{}", name(&i.input), i.kind.map_or(String::new(), |k| format!(" as a {}", k.name().to_lowercase()))),
             };
             println!("  item #{:<2} {:7.2}-{:7.2} s  {label}", i.id, i.at, i.ends());
             for line in auto_lines(&i.automation) {
@@ -163,6 +163,8 @@ pub fn looks(template: Option<&str>) -> Result<String> {
     let effects: Vec<String> = crate::grade::NAMES.iter().zip(crate::grade::RANGES).map(|(n, (lo, hi))| format!("{n} {lo}..{hi}")).collect();
     let only: Vec<&str> = crate::grade::ITEM_ONLY.iter().map(|&k| crate::grade::NAMES[k]).collect();
     out += &format!("effects (op key `effect_value`, auto `add`; {} on text and pictures only): {}\n", only.join(" and "), effects.join(", "));
+    let kinds: Vec<String> = crate::dress::Kind::ALL.iter().map(|k| format!("{} ({})", serde_json::to_string(k).expect("a kind is JSON").trim_matches('"'), k.about())).collect();
+    out += &format!("kinds of picture (op item `kind`, or none for plain): {}\n", kinds.join("; "));
     let anims: Vec<String> = crate::animate::Anim::ALL.iter().map(|a| serde_json::to_string(a).expect("an animation is JSON").trim_matches('"').to_owned()).collect();
     out += &format!("ins and outs of text and pictures (op auto `animate`, edge in or out, seconds): {}\n", anims.join(", "));
     let names = crate::template::names();

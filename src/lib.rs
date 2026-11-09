@@ -11,6 +11,7 @@ mod cache;
 mod capture;
 mod check;
 mod dissolve;
+mod dress;
 mod dji;
 mod duck;
 mod mixdown;

@@ -1448,7 +1448,7 @@ mod tests {
         let mut p = Project { cuts: vec![Cut::new("a.mp4".into(), 0.0, 4.0), Cut { audio: Some("voice.flac".into()), ..Cut::new("b.mp4".into(), 0.0, 3.0) }, Cut { audio: Some("voice.flac".into()), ..Cut::new("b.mp4".into(), 3.0, 5.0) }], ..Default::default() };
         p.music.append_part("song.wav".into(), 0.0, 0.0, 10.0);
         p.sfx.append_part("bang.wav".into(), 0.0, 0.0, 1.0);
-        let item = |input: &str, text| crate::overlay::Item { id: 0, input: input.into(), text, at: 0.0, start: 0.0, end: 5.0, motion: Vec::new(), effects: Vec::new(), bars: None, automation: Vec::new() };
+        let item = |input: &str, text| crate::overlay::Item { id: 0, input: input.into(), text, at: 0.0, start: 0.0, end: 5.0, motion: Vec::new(), effects: Vec::new(), bars: None, automation: Vec::new(), kind: None };
         p.overlays.push(crate::overlay::Lane::default());
         let bars = crate::overlay::Item { bars: Some(Default::default()), ..item("", None) };
         p.overlays[0].items = vec![item("logo.png", None), item("", Some(Default::default())), bars];
@@ -1472,7 +1472,7 @@ mod tests {
         let mut p = Project { cuts: vec![Cut::new("a.mp4".into(), 0.0, 4.0), Cut { id: 7, ..Cut::new("b.mp4".into(), 0.0, 3.0) }], ..Default::default() };
         p.music.append_part("song.wav".into(), 0.0, 0.0, 10.0);
         p.text.push(crate::overlay::Lane::default());
-        p.text[0].items.push(crate::overlay::Item { id: 0, input: PathBuf::new(), text: Some(Default::default()), at: 0.0, start: 0.0, end: 5.0, motion: Vec::new(), effects: Vec::new(), bars: None, automation: Vec::new() });
+        p.text[0].items.push(crate::overlay::Item { id: 0, input: PathBuf::new(), text: Some(Default::default()), at: 0.0, start: 0.0, end: 5.0, motion: Vec::new(), effects: Vec::new(), bars: None, automation: Vec::new(), kind: None });
         p.settle_ids();
         assert_eq!(p.cuts[1].id, 7, "an id given stays");
         assert_eq!((p.cuts[0].id, p.music.clips[0].id, p.text[0].items[0].id), (8, 9, 10), "past the highest, in order");

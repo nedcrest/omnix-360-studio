@@ -659,7 +659,7 @@ mod tests {
         // Edge pixels differ by filtering; the inside must agree.
         assert!(mean < 0.3 && big < 50, "mean {mean}, {big} off");
         // Bars (gap 15): two bands of their colour, half way in.
-        let item = overlay::Item { id: 0, input: Default::default(), text: None, at: 0.0, start: 0.0, end: 4.0, motion: vec![], effects: vec![], bars: Some(overlay::Bars { colour: [0.1, 0.2, 0.6], ..Default::default() }), automation: vec![] };
+        let item = overlay::Item { id: 0, input: Default::default(), text: None, at: 0.0, start: 0.0, end: 4.0, motion: vec![], effects: vec![], bars: Some(overlay::Bars { colour: [0.1, 0.2, 0.6], ..Default::default() }), automation: vec![], kind: None };
         let (bars, _) = item.picture(0, h).unwrap();
         let bars = Arc::new(bars);
         let spots = overlay::spots(&item, 0.5);

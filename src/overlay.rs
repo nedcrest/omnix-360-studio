@@ -74,6 +74,10 @@ pub struct Item {
     /// its own time.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub automation: Vec<crate::automation::AutoClip>,
+    /// A picture dressed as a sticker, a polaroid or a picture in picture
+    /// (`dress`); plain when left out.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kind: Option<crate::dress::Kind>,
 }
 
 /// Cinematic bars (gap 15, the user's route, 2026-11-04): an item on the
@@ -157,9 +161,10 @@ impl Item {
             let rgba = [px[0], px[1], px[2], 255].repeat(4);
             return Ok((Picture { width: 2, height: 2, rgba, natural: None, order: None }, None));
         }
-        match &self.text {
-            Some(text) => Ok(crate::text::render(text, height)),
-            None => Ok((Picture::load(&self.input, most)?, None)),
+        match (&self.text, self.kind) {
+            (Some(text), _) => Ok(crate::text::render(text, height)),
+            (None, Some(kind)) => Ok((crate::dress::dress(&Picture::load(&self.input, most)?, kind), None)),
+            (None, None) => Ok((Picture::load(&self.input, most)?, None)),
         }
     }
 
@@ -170,7 +175,7 @@ impl Item {
         }
         match &self.text {
             Some(text) => format!("text:{}", serde_json::to_string(text).unwrap_or_default()),
-            None => format!("file:{}", self.input.display()),
+            None => format!("file:{}{}", self.input.display(), self.kind.map_or(String::new(), |k| format!(" as {k:?}"))),
         }
     }
 
@@ -639,7 +644,7 @@ mod tests {
 
     #[test]
     fn bars_slide_in_to_the_ratio_and_out() {
-        let item = Item { id: 0, input: PathBuf::new(), text: None, at: 10.0, start: 0.0, end: 6.0, motion: vec![], effects: vec![], bars: Some(Bars::default()), automation: Vec::new() };
+        let item = Item { id: 0, input: PathBuf::new(), text: None, at: 10.0, start: 0.0, end: 6.0, motion: vec![], effects: vec![], bars: Some(Bars::default()), automation: Vec::new(), kind: None };
         let pic = item.picture(0, 1080).unwrap().0;
         let band = |t: f64, top: bool| spots(&item, t).into_iter().find(|(s, _)| matches!(s, Spot::Band { top: tp, .. } if *tp == top)).unwrap().0.quad(&pic, (1920, 1080));
         // 16:9 to 2.39:1: about 138 px each, top and bottom.
@@ -655,7 +660,7 @@ mod tests {
     }
 
     fn item(at: f64, len: f64) -> Item {
-        Item { id: 0, input: "a.png".into(), text: None, at, start: 0.0, end: len, motion: Vec::new(), effects: Vec::new(), bars: None, automation: Vec::new() }
+        Item { id: 0, input: "a.png".into(), text: None, at, start: 0.0, end: len, motion: Vec::new(), effects: Vec::new(), bars: None, automation: Vec::new(), kind: None }
     }
 
     #[test]

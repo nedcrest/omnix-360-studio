@@ -222,7 +222,7 @@ mod tests {
         e.cuts[0].volume = vec![VolumeKey { t: 1.0, volume: -6.0 }];
         e.cuts[1].crossfade = 0.5;
         e.track_mut(SoundTrack::Music).append_part(PathBuf::from("song"), 0.0, 0.0, 5.0);
-        e.lane_mut(Track::Text).items.push(crate::overlay::Item { id: 0, input: PathBuf::new(), text: Some(Default::default()), at: 0.0, start: 0.0, end: 5.0, motion: Vec::new(), effects: Vec::new(), bars: None, automation: Vec::new() });
+        e.lane_mut(Track::Text).items.push(crate::overlay::Item { id: 0, input: PathBuf::new(), text: Some(Default::default()), at: 0.0, start: 0.0, end: 5.0, motion: Vec::new(), effects: Vec::new(), bars: None, automation: Vec::new(), kind: None });
         e.settle_ids();
         e
     }

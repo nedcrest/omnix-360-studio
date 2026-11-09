@@ -24,6 +24,9 @@ pub enum ItemOp {
     AddBars { bars: crate::overlay::Bars, at: f64, len: f64 },
     /// A bars item's ratio, slide and colour, all of it.
     SetBars { item: Id, bars: crate::overlay::Bars },
+    /// A picture dressed as a sticker, a polaroid or a picture in
+    /// picture, or plain (`None`).
+    Kind { item: Id, kind: Option<crate::dress::Kind> },
     /// To start at edit time `at`, or where it fits nearest.
     Move { item: Id, at: f64 },
     /// Its in or out edge to `t` (its own time), staying where it is on the
@@ -56,7 +59,7 @@ pub(super) fn apply(p: &mut Project, op: &ItemOp) -> Result<Outcome, OpError> {
             let mut last = None;
             for input in inputs {
                 let id = p.next_id();
-                at = add(p, Track::Overlay, Item { id, input: input.clone(), text: None, at, start: 0.0, end: *len, motion: Vec::new(), effects: Vec::new(), bars: None, automation: Vec::new() });
+                at = add(p, Track::Overlay, Item { id, input: input.clone(), text: None, at, start: 0.0, end: *len, motion: Vec::new(), effects: Vec::new(), bars: None, automation: Vec::new(), kind: None });
                 last = Some(id);
             }
             let Some(id) = last else { return Err(OpError::Invalid("no pictures to add".into())) };
@@ -65,14 +68,14 @@ pub(super) fn apply(p: &mut Project, op: &ItemOp) -> Result<Outcome, OpError> {
         ItemOp::AddText { text, at, len } => {
             positive(*len)?;
             let id = p.next_id();
-            add(p, Track::Text, Item { id, input: PathBuf::new(), text: Some(text.clone()), at: *at, start: 0.0, end: *len, motion: Vec::new(), effects: Vec::new(), bars: None, automation: Vec::new() });
+            add(p, Track::Text, Item { id, input: PathBuf::new(), text: Some(text.clone()), at: *at, start: 0.0, end: *len, motion: Vec::new(), effects: Vec::new(), bars: None, automation: Vec::new(), kind: None });
             Ok(Outcome { summary: format!("text item #{id} added"), made: Some(id) })
         }
         ItemOp::AddBars { bars, at, len } => {
             positive(*len)?;
             check_bars(bars)?;
             let id = p.next_id();
-            add(p, Track::Overlay, Item { id, input: PathBuf::new(), text: None, at: *at, start: 0.0, end: *len, motion: Vec::new(), effects: Vec::new(), bars: Some(*bars), automation: Vec::new() });
+            add(p, Track::Overlay, Item { id, input: PathBuf::new(), text: None, at: *at, start: 0.0, end: *len, motion: Vec::new(), effects: Vec::new(), bars: Some(*bars), automation: Vec::new(), kind: None });
             Ok(Outcome { summary: format!("bars {:.2}:1, item #{id}", bars.ratio), made: Some(id) })
         }
         ItemOp::SetBars { item, bars } => {
@@ -84,6 +87,15 @@ pub(super) fn apply(p: &mut Project, op: &ItemOp) -> Result<Outcome, OpError> {
             }
             it.bars = Some(*bars);
             said(format!("item #{item}: bars {:.2}:1", bars.ratio))
+        }
+        &ItemOp::Kind { item, kind } => {
+            let (track, lane, i) = find(p, item)?;
+            let it = &mut lanes(p, track)[lane].items[i];
+            if it.file().is_none() {
+                return Err(OpError::Invalid(format!("item #{item} isn't a picture")));
+            }
+            it.kind = kind;
+            said(format!("item #{item}: {}", kind.map_or("plain", |k| k.name())))
         }
         &ItemOp::Move { item, at } => {
             let (track, lane, i) = find(p, item)?;
@@ -156,6 +168,8 @@ mod tests {
         let last = e.apply(&Op::Item(ItemOp::AddPictures { inputs: vec!["a.png".into(), "b.png".into()], at: 1.0, len: 5.0 })).unwrap().made.unwrap();
         let lane = &e.overlays[0].items;
         assert_eq!((lane[0].at, lane[1].at, lane[1].id), (1.0, 6.0, last));
+        e.apply(&Op::Item(ItemOp::Kind { item: last, kind: Some(crate::dress::Kind::Polaroid) })).unwrap();
+        assert_eq!(e.overlays[0].items[1].kind, Some(crate::dress::Kind::Polaroid));
         let words = e.apply(&Op::Item(ItemOp::AddText { text: Text::default(), at: 2.0, len: 3.0 })).unwrap().made.unwrap();
         let text = Text { content: "Kos".into(), bold: false, ..Text::default() };
         let set = Op::Item(ItemOp::SetText { item: words, text: text.clone() });
@@ -182,6 +196,7 @@ mod tests {
         let bars = |ratio| crate::overlay::Bars { ratio, colour: [1.0, 1.0, 1.0], ..Default::default() };
         e.apply(&Op::Item(ItemOp::SetBars { item: id, bars: bars(2.0) })).unwrap();
         assert_eq!(e.overlays[0].items[0].bars, Some(bars(2.0)));
+        assert!(e.apply(&Op::Item(ItemOp::Kind { item: id, kind: Some(crate::dress::Kind::Sticker) })).is_err(), "bars aren't a picture to dress");
         assert!(e.apply(&Op::Item(ItemOp::SetBars { item: id, bars: bars(9.0) })).is_err(), "out of range");
         let text = e.apply(&Op::Item(ItemOp::AddText { text: Default::default(), at: 0.0, len: 2.0 })).unwrap().made.unwrap();
         assert!(e.apply(&Op::Item(ItemOp::SetBars { item: text, bars: bars(2.0) })).is_err(), "text isn't bars");

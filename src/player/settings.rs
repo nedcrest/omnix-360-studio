@@ -150,7 +150,7 @@ impl Default for Settings {
             fold_text_effects: true,
             fold_overlay_motion: true,
             fold_text_motion: true,
-            effects_folded: vec!["Whole edit".to_owned()],
+            effects_folded: Vec::new(),
             projects: None,
             recent: Vec::new(),
             browse: false,

@@ -1,11 +1,13 @@
-//! The Effects panel's look (gap 90, agreed with the user 2026-11-09):
-//! folding groups, each with its own reset — Kind (a picture's), Place,
-//! Animate or Bars for an overlay, then Light, Colour (with the
-//! white-balance picker), Look (a cut's LUT, and the style of a cut, a
-//! text or a picture), Finish (vignette, opacity), Whole edit (the film's fades,
-//! folded at first). A complex control only lights up in the list; its
-//! knobs slide out in a second panel beside it (`effects_extra_panel`),
-//! as the Transitions panel's settings do.
+//! The Effects panel's look (gap 90, agreed with the user 2026-11-09;
+//! tidied in gap 94): folding groups, each with its own reset. A cut's:
+//! Light, Colour (with the white-balance picker), Look (LUT and style),
+//! Finish (vignette, opacity). A text's or picture's: Text (its words and
+//! look), Kind, Place, Show (opacity, reveal, blur), Animate, Look, then
+//! Light and Colour folded at first, Finish (vignette); bars have their
+//! own. The film's fades are in the Transitions panel. A complex control
+//! only lights up in the list; its knobs slide out in a second panel
+//! beside it (`effects_extra_panel`), as the Transitions panel's settings
+//! do.
 
 use super::effects::{EffectMsg, Focus, LUT, LutChoice, PARAMS, PLACE, Target, WIDTH, label};
 use super::{App, Message, icon_button, tip};
@@ -30,7 +32,6 @@ pub enum Group {
     Colour,
     Look,
     Finish,
-    WholeEdit,
 }
 
 impl Group {
@@ -47,7 +48,6 @@ impl Group {
             Group::Colour => "Colour",
             Group::Look => "Look",
             Group::Finish => "Finish",
-            Group::WholeEdit => "Whole edit",
         }
     }
 
@@ -62,7 +62,7 @@ impl Group {
             Group::Finish if item => &[8, 11, 12, 13],
             Group::Finish => &[8, 9, 11, 12, 13],
             Group::Show => &[9, REVEAL, BLUR],
-            Group::Text | Group::Kind | Group::Place | Group::Animate | Group::Bars | Group::WholeEdit => &[],
+            Group::Text | Group::Kind | Group::Place | Group::Animate | Group::Bars => &[],
         }
     }
 
@@ -96,7 +96,7 @@ impl App {
             Some((Target::Cut(i), t)) => self.cut_groups(Some((i, t))),
             None => self.cut_groups(None),
         };
-        body = body.extend(groups).push(self.group(Group::WholeEdit, self.whole_edit()));
+        body = body.extend(groups);
         container(scrollable(body)).width(WIDTH).height(Length::Fill).into()
     }
 
@@ -338,8 +338,8 @@ impl App {
         column![row![text("Style").width(Length::Fill), off].align_y(Alignment::Center), super::transitions_panel::tiles(looks, style)].spacing(6).into()
     }
 
-    /// The film's fades.
-    fn whole_edit(&self) -> Element<'static, Message> {
+    /// The film's fades (in the Transitions panel).
+    pub(super) fn whole_edit(&self) -> Element<'static, Message> {
         let fades = &self.edit.fades;
         let fade = |name: &'static str, v: f64, f: fn(f64) -> EffectMsg, hint: &'static str| {
             tip(

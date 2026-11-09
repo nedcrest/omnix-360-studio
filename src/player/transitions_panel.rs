@@ -255,6 +255,9 @@ impl App {
                 body = body.push(rule::horizontal(1)).push(self.templates_section()).push(rule::horizontal(1)).push(self.join_footer());
             }
         }
+        // The film's own ends: from and to black (gap 94: they were in the
+        // Effects panel, which is a clip's).
+        body = body.push(rule::horizontal(1)).push(text("The film's start and end").size(15)).push(self.whole_edit());
         container(scrollable(body.padding(12))).width(WIDTH).height(Length::Fill).into()
     }
 

@@ -1327,3 +1327,65 @@ Steps, each checked by the user:
    editing work. Dailix: «+ New trip» on Home, Ctrl+N, `dailix new-trip`.
    One way to find and start the other program: `omnix::sibling`.
 Milestone «Матеріал і бін».
+
+### 6. Vignette shapes — idea (user, 2026-10-22)
+
+Built 2026-11-09 (`2a32621`), checked by the user 2026-11-09: `Grade::vignette_shape`
+(0 round, 1 top, 2 bottom, 3 sides; held from key to key), `vignette_reach`
+and `vignette_soft` (their defaults the old vignette); a fourth row of
+grade values in the shaders; the Effects panel's shapes and sliders under
+the Vignette slider; GPU and CPU tested per shape.
+
+Today there is one vignette: `Grade.vignette` (0..1, "Darker corners"),
+round, by distance from the centre (`grade.rs` ~136, mirrored in
+`grade.wgsl`). The user wants **types**, e.g. on a sunny day with a deep
+blue sky, darken only the **top edge** of the frame — a graduated filter
+like an ND grad on a lens.
+
+Possible shapes: round (today), top, bottom, left/right, and maybe an
+angle. Parameters: amount (exists), shape, softness, how far in it reaches.
+Keyframed like every effect, so a top grad can follow a tilt. Format: new
+optional fields on the effect key; CPU (`grade.rs`) and GPU (`grade.wgsl`)
+together with a GPU-vs-CPU test, as upstream `AGENTS.md` requires.
+Small-medium; independent of the rest.
+
+### 15. Cinematic bars — small (Kos TODO, 2026-10-23)
+
+Built 2026-11-09 (`0cdce6c`), checked by the user 2026-11-09, on the user's route:
+an overlay item with `Bars` (ratio, slide, colour), drawn as two bands
+(`overlay::Spot::Band`) by the overlays' pass and the export's burn, so
+over the finished picture (after a transition) and under text; eased in
+over the slide at its start and out at its end, not keyframed (the
+automation lanes, 39, will key «how far in»); opacity from its effects.
+`ItemOp::AddBars`/`SetBars`, a button beside text's, the Effects panel's
+Bars section; `Item::file` tells a picture from text and bars.
+
+The TODO's plan: on 30 s of forest B-roll, black bars slide in from top and
+bottom (2.39:1, 194 px each at 2688×1512), a colour shift and a vignette,
+then back. Possible today by hand: two black PNGs on the overlay lane with
+motion keys. Proper: an effect value "bars" (0 = none, 1 = 2.39:1), keyframed,
+so it eases in and out per cut. Small with 14's plumbing.
+
+**The user's route (2026-11-04): bars as an item on the overlay lane.**
+Rather than a value inside each cut's effects, a «Bars» item on the
+overlay lane, made by the app as text items are (no file): it spans the
+stretch it covers across cuts (30 s of forest over several cuts is one
+item), moves and trims like any overlay, and its own values sit in the
+Effects panel's group with keyframes: the shape (2.39:1, 2:1, 1.85:1 or
+a number), how far in (0 = gone, 1 = full, so a slide is two keys), the
+colour (black by default) and opacity; a slide in and out at its ends by
+default. Drawn after the picture's grade and before text, burnt into the
+export as overlays are, the same on GPU and CPU (`overlay::Burn`). Wins
+over the per-cut value: one item instead of keys on every cut, and it's
+seen on the timeline where it runs.
+
+### 26. Glow and blur — small-medium (Kos TODO, 2026-10-23)
+
+Built 2026-11-09 as two style looks of gap 87 (Glow: strength, radius,
+threshold; Soft focus: amount, radius), checked by the user 2026-11-09.
+
+The Kos TODO's «Міст» shot wants Kdenlive's "Blur of the glow" (blur 0.2,
+brightness 0.1) to soften hard edges. A keyframed effect value: a blur
+radius plus a glow (the blurred highlights added back). CPU and GPU with a
+parity test. Blur is a multi-tap pass, so it costs more than a per-pixel
+effect.

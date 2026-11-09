@@ -121,6 +121,15 @@ pub fn compare_gain(lufs: Option<f64>) -> f64 {
     lufs.map_or(0.0, |l| (HEARD_AT - l).min(MOST_LIFT))
 }
 
+/// Which made voice speech is looked for in (gap 83): one DeepFilterNet
+/// cleaned, as the noise is gone there and plain loudness finds the talk;
+/// the one the edit uses if it is such, else `DEFAULT`, else any. None
+/// without one (`eq` keeps the wind: it would read as talk).
+pub fn speech_source<'a>(made: &'a [String], chosen: Option<&'a str>) -> Option<&'a str> {
+    let cleaned = |n: &&str| recipe(n).is_some_and(|r| r.kind == Kind::Dnn) && made.iter().any(|m| m == n);
+    chosen.filter(cleaned).or_else(|| Some(DEFAULT).filter(cleaned)).or_else(|| made.iter().map(String::as_str).find(cleaned))
+}
+
 /// The record beside a clip's variants.
 pub const MADE: &str = "_recipes.json";
 
@@ -178,6 +187,8 @@ mod tests {
         assert_eq!(dir(&layout, "../x/A.MP4"), None, "never outside");
         assert_eq!(track(Path::new("/v"), "dnn6"), PathBuf::from("/v/dnn6.flac"));
         assert_eq!(recipe(DEFAULT).map(|r| r.args), Some(&["-D", "-a", "6"][..]));
+        let made = ["dnn24".to_owned(), "dnn6".to_owned(), "eq".to_owned()];
+        assert_eq!((speech_source(&made, Some("eq")), speech_source(&made, Some("dnn24")), speech_source(&made[2..], None)), (Some("dnn6"), Some("dnn24"), None));
         assert_eq!((compare_gain(Some(-26.0)), compare_gain(Some(-50.0)), compare_gain(Some(-14.0)), compare_gain(None)), (6.0, 15.0, -6.0, 0.0));
     }
 

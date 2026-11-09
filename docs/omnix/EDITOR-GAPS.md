@@ -1421,6 +1421,10 @@ keys).
   kept or replaced by choice.
 - An agent (or a local model) may choose instead, from frames and the
   measure, through the same ops; nothing it does is hidden from undo.
+- **Levels' «Auto» over the whole cut** (the user, 2026-11-10): today it
+  reads the one frame shown; measured over 10–20 frames across the cut
+  (its darkest and brightest, specks aside), one value fits the whole of
+  it; further, levels keyed where the light changes.
 - In the milestone «Ефекти, колір і розумний звук», with the colour
   tools (after 69 scopes).
 

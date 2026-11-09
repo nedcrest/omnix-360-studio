@@ -101,7 +101,7 @@ const PARAMS: [(&str, f64, f64, &str); 10] = [
     ("Tint", -1.0, 1.0, "Greener (−) or more magenta"),
     ("Saturation", -1.0, 1.0, "Less or more colour; −1 is black and white"),
     ("Vibrance", -1.0, 1.0, "More colour mostly where there is little, sparing skin and sky"),
-    ("Vignette", 0.0, 1.0, "Darker corners"),
+    ("Vignette", 0.0, 1.0, "Darker edges: round, or from the top, the bottom or the sides"),
     ("Opacity", 0.0, 1.0, "How much of the picture shows; on the main track it fades towards black"),
 ];
 
@@ -288,6 +288,10 @@ impl App {
                     values[p] = v;
                     *g = Grade::from_values(values);
                 });
+                // A shape is a press, not a drag: its own undo step at once.
+                if p == crate::grade::SHAPE {
+                    self.edit.commit();
+                }
             }
             EffectMsg::Place(p, v) => {
                 let starting = !self.edit.changing();
@@ -636,6 +640,10 @@ impl App {
                 text(*hint),
                 tooltip::Position::Left,
             ));
+            // Its shape and extent right under the vignette, while it's on.
+            if p == crate::grade::VIGNETTE && v > 0.0 {
+                sliders = sliders.push(vignette_controls(&grade));
+            }
         }
         let cut_name = match target {
             Some((Target::Cut(i), _)) => format!("Cut {} · {}", i + 1, super::clip_name(&self.edit.cuts[i].input)),
@@ -727,6 +735,23 @@ impl App {
         .spacing(10)
         .into()
     }
+}
+
+/// The vignette's shape (gap 6) and how far in and how softly it reaches.
+fn vignette_controls(grade: &Grade) -> Element<'static, Message> {
+    let m = |e: EffectMsg| Message::Effect(e);
+    let shapes = crate::grade::VIGNETTES.iter().enumerate().map(|(i, &name)| {
+        let on = grade.vignette_shape.round() as usize == i;
+        button(text(name).size(12)).padding([3, 8]).style(if on { button::primary } else { button::secondary }).on_press(m(EffectMsg::Set(crate::grade::SHAPE, i as f64))).into()
+    });
+    let slider_of = |name: &'static str, p: usize, v: f64| {
+        column![row![text(name).size(13).width(Length::Fill), text(format!("{v:.2}")).size(13)], slider(0.0..=1.0, v, move |v| Message::Effect(EffectMsg::Set(p, v))).step(0.01).on_release(m(EffectMsg::Done))].spacing(2)
+    };
+    tip(
+        column![iced::widget::row(shapes).spacing(4).wrap().vertical_spacing(4), slider_of("Reach", crate::grade::SHAPE + 1, grade.vignette_reach), slider_of("Softness", crate::grade::SHAPE + 2, grade.vignette_soft)].spacing(6),
+        text("The vignette's shape: round, or from the top (a graduated filter on a bright sky), the bottom or the sides; how far in it reaches, how soft its edge"),
+        tooltip::Position::Left,
+    )
 }
 
 /// A font family in the text panel's list, the built-in ones marked.

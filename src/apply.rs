@@ -43,7 +43,7 @@ pub fn describe(project: &Path) -> Result<()> {
     println!("cuts:");
     for (c, at) in p.cuts.iter().zip(offsets) {
         println!("  cut #{:<3} {:7.2}-{:7.2} s  {} {:.2}-{:.2}  level {:+.1} dB{}", c.id, at, at + c.len(), name(&c.input), c.start, c.end, c.gain, if c.mute { " muted" } else { "" });
-        for line in transition_lines(c) {
+        for line in look_lines(c) {
             println!("    {line}");
         }
         for m in c.marks.iter().filter(|m| m.t >= c.start && m.t <= c.end) {
@@ -75,8 +75,9 @@ pub fn describe(project: &Path) -> Result<()> {
 }
 
 /// A cut's looks as `describe` says them: the join before it (its overlap
-/// and look), its edge looks and its style, each with the settings moved.
-fn transition_lines(c: &crate::project::Cut) -> Vec<String> {
+/// and look), its edge looks and its style, each with the settings moved,
+/// and its effect keys.
+fn look_lines(c: &crate::project::Cut) -> Vec<String> {
     use std::collections::BTreeMap;
     let set = |params: &BTreeMap<String, f32>| if params.is_empty() { String::new() } else { format!("  {}", params.iter().map(|(k, v)| format!("{k} {v}")).collect::<Vec<_>>().join(", ")) };
     let mut lines = Vec::new();
@@ -91,6 +92,14 @@ fn transition_lines(c: &crate::project::Cut) -> Vec<String> {
     }
     if let Some(s) = &c.style {
         lines.push(format!("style: {}{}", key_of(s.look), set(&s.params)));
+    }
+    // Its effect keys, each with what it sets (as the project writes it).
+    for k in &c.effects {
+        let mut values = serde_json::to_value(k).unwrap_or_default();
+        if let Some(map) = values.as_object_mut() {
+            map.remove("t");
+        }
+        lines.push(format!("effects at {:.2} s (clip): {values}", k.t));
     }
     lines
 }
@@ -141,9 +150,11 @@ mod tests {
         (c.crossfade, c.transition) = (0.5, Some(Look::WhipPan));
         c.transition_params.insert("streak".into(), 1.5);
         c.edge_out = Some(Edge { look: Look::EdgeFade, seconds: 1.0, params: Default::default() });
-        assert_eq!(super::transition_lines(&c), ["join before: whip_pan over 0.50 s  streak 1.5", "out: edge_fade 1.00 s"]);
+        assert_eq!(super::look_lines(&c), ["join before: whip_pan over 0.50 s  streak 1.5", "out: edge_fade 1.00 s"]);
         c.style = Some(crate::project::Style { look: Look::Vhs, params: Default::default() });
-        assert_eq!(super::transition_lines(&c).last().unwrap(), "style: vhs");
+        assert_eq!(super::look_lines(&c).last().unwrap(), "style: vhs");
+        c.effects.push(crate::grade::EffectKey { t: 1.0, grade: crate::grade::Grade { vignette: 0.5, vignette_shape: 1.0, ..Default::default() }, ease: Default::default() });
+        assert_eq!(super::look_lines(&c).last().unwrap(), r#"effects at 1.00 s (clip): {"vignette_shape":1.0,"vignette":0.5}"#);
         let list = super::looks(None).unwrap();
         for word in ["whip_pan", "streak = 1", "edge_zoom", "0 In, 1 Out", "sphere_whip", "not built yet", "old_film", "grain = 0.5", "templates in"] {
             assert!(list.contains(word), "{word} missing:\n{list}");

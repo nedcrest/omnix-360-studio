@@ -485,6 +485,26 @@ mod tests {
         close(&got, &blend(&whip, 0.5, &blend(&vhs, 0.7, &fa, &fa), &blend(&glow, 0.2, &fb, &fb)), "styles on both cuts of a join");
     }
 
+    /// Each vignette shape (gap 6) darkens where `Grade::apply` does, its
+    /// reach and softness too.
+    #[test]
+    fn gpu_vignette_shapes_match_the_cpu() {
+        let Ok(mut gpu) = Gpu::new(false) else { return };
+        let (w, h) = (64, 32);
+        let mut camera = crate::view::View::home(crate::view::Projection::Perspective).camera();
+        for shape in 0..crate::grade::VIGNETTES.len() {
+            camera.grade = crate::grade::Grade { vignette: 0.8, vignette_shape: shape as f64, vignette_reach: 0.6, vignette_soft: 0.5, ..Default::default() };
+            let got = draw_flat_as(&mut gpu, p010(w, h, |_| 700, 512, 512), crate::hdr::Hdr::None, (w, h), camera);
+            let grey = ((700.0 - 64.0) / 876.0f64).clamp(0.0, 1.0);
+            for (x, y) in [(1, 1), (32, 1), (32, 30), (1, 16), (32, 16), (60, 25)] {
+                let at = [(x as f64 + 0.5) / w as f64 * 2.0 - 1.0, (y as f64 + 0.5) / h as f64 * 2.0 - 1.0];
+                let want = (camera.grade.apply([grey; 3], at, w as f64 / h as f64)[0] * 255.0).round() as i32;
+                let px = got.rgb[(y * w + x) * 3] as i32;
+                assert!((px - want).abs() <= 2, "shape {shape} at ({x}, {y}): GPU {px}, CPU {want}");
+            }
+        }
+    }
+
     /// The shader brings a 10-bit HLG picture to SDR as `hdr::to_sdr` does.
     #[test]
     fn gpu_hdr_matches_the_cpu() {

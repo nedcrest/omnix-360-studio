@@ -13,7 +13,7 @@ fn shoulder(x: vec3f, gain: vec3f) -> vec3f {
 
 // Mirrors `Grade::apply` in grade.rs: exposure and white balance on light,
 // tone and colour on display values, then the vignette, opacity and fade.
-fn grade_by(g0: vec4f, g1: vec4f, g2: vec4f, rgb: vec3f, at: vec2f, aspect: f32) -> vec3f {
+fn grade_by(g0: vec4f, g1: vec4f, g2: vec4f, g3: vec4f, rgb: vec3f, at: vec2f, aspect: f32) -> vec3f {
     let luma = vec3f(0.2126, 0.7152, 0.0722);
     let wb = vec3f(exp2(g0.y), exp2(-g0.z), exp2(-g0.y));
     let gain = g0.x * wb;
@@ -32,7 +32,14 @@ fn grade_by(g0: vec4f, g1: vec4f, g2: vec4f, rgb: vec3f, at: vec2f, aspect: f32)
     let spread = max(max(c.r, c.g), c.b) - min(min(c.r, c.g), c.b);
     let s = (1.0 + g1.z) * (1.0 + g1.w * (1.0 - clamp(spread, 0.0, 1.0)));
     c = vec3f(l) + (c - vec3f(l)) * s;
-    let r = length(vec2f(at.x * aspect, at.y)) / sqrt(aspect * aspect + 1.0);
-    let keep = (1.0 - g2.x * smoothstep(0.3, 1.0, r)) * g2.w * (1.0 - g2.y);
+    // The vignette's mask by its shape (`Grade::vignette_mask`).
+    var d = length(vec2f(at.x * aspect, at.y)) / sqrt(aspect * aspect + 1.0);
+    switch u32(g3.x) {
+        case 1u: { d = (1.0 - at.y) / 2.0; }
+        case 2u: { d = (1.0 + at.y) / 2.0; }
+        case 3u: { d = abs(at.x); }
+        default: {}
+    }
+    let keep = (1.0 - g2.x * smoothstep(g3.y, g3.z, d)) * g2.w * (1.0 - g2.y);
     return clamp(c * keep, vec3f(0.0), vec3f(1.0));
 }

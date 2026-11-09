@@ -41,6 +41,17 @@ pub struct Grade {
     /// 0..1: how dark the corners go.
     #[serde(default, skip_serializing_if = "is_zero")]
     pub vignette: f64,
+    /// The vignette's shape (gap 6): 0 round, 1 the top (a graduated
+    /// filter on a sky), 2 the bottom, 3 the sides (`VIGNETTES`); held
+    /// from key to key, not blended.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub vignette_shape: f64,
+    /// 0..1: how far in from its edge it reaches.
+    #[serde(default = "reach", skip_serializing_if = "is_reach")]
+    pub vignette_reach: f64,
+    /// 0..1: how soft its inner edge is.
+    #[serde(default = "one", skip_serializing_if = "is_one")]
+    pub vignette_soft: f64,
     /// 0..1: how much of the picture shows. On the main track what's left
     /// is black, as in a fade; an overlay will show what's beneath.
     #[serde(default = "one", skip_serializing_if = "is_one")]
@@ -72,8 +83,27 @@ fn is_one(v: &f64) -> bool {
     *v == 1.0
 }
 
+/// The vignette's reach as it was before it could be set.
+const REACH: f64 = 0.7;
+
+fn reach() -> f64 {
+    REACH
+}
+
+fn is_reach(v: &f64) -> bool {
+    *v == REACH
+}
+
+/// The vignette's shapes, by `Grade::vignette_shape`.
+pub const VIGNETTES: [&str; 4] = ["Round", "Top", "Bottom", "Sides"];
+
+/// Where `Grade::values` holds the vignette's amount, and its shape (held,
+/// not blended; its reach and softness follow).
+pub const VIGNETTE: usize = 8;
+pub const SHAPE: usize = 11;
+
 /// `Grade::values` of the picture untouched.
-pub const NEUTRAL: [f64; 11] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0];
+pub const NEUTRAL: [f64; 14] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0, REACH, 1.0];
 
 /// Stops of colour per unit of temperature or tint: at ±1, red and blue
 /// are four times apart, enough to neutralise shade or low sun.
@@ -85,13 +115,43 @@ impl Grade {
     }
 
     /// The fields as a list, for blending and the panel.
-    pub fn values(&self) -> [f64; 11] {
-        [self.exposure, self.contrast, self.highlights, self.shadows, self.temperature, self.tint, self.saturation, self.vibrance, self.vignette, self.opacity, self.lut]
+    pub fn values(&self) -> [f64; 14] {
+        [
+            self.exposure,
+            self.contrast,
+            self.highlights,
+            self.shadows,
+            self.temperature,
+            self.tint,
+            self.saturation,
+            self.vibrance,
+            self.vignette,
+            self.opacity,
+            self.lut,
+            self.vignette_shape,
+            self.vignette_reach,
+            self.vignette_soft,
+        ]
     }
 
-    pub fn from_values(v: [f64; 11]) -> Grade {
-        let [exposure, contrast, highlights, shadows, temperature, tint, saturation, vibrance, vignette, opacity, lut] = v;
-        Grade { exposure, contrast, highlights, shadows, temperature, tint, saturation, vibrance, vignette, opacity, lut, black: 0.0 }
+    pub fn from_values(v: [f64; 14]) -> Grade {
+        let [exposure, contrast, highlights, shadows, temperature, tint, saturation, vibrance, vignette, opacity, lut, vignette_shape, vignette_reach, vignette_soft] = v;
+        Grade { exposure, contrast, highlights, shadows, temperature, tint, saturation, vibrance, vignette, vignette_shape, vignette_reach, vignette_soft, opacity, lut, black: 0.0 }
+    }
+
+    /// How far toward the vignette's edge `at` is (−1..1 each way, y down),
+    /// 0..1 by its shape, and where its darkening starts and ends.
+    fn vignette_mask(&self, at: [f64; 2], aspect: f64) -> f64 {
+        let d = match self.vignette_shape.round() as u32 {
+            1 => (1.0 - at[1]) / 2.0,
+            2 => (1.0 + at[1]) / 2.0,
+            3 => at[0].abs(),
+            _ => ((at[0] * aspect).powi(2) + at[1].powi(2)).sqrt() / (aspect * aspect + 1.0).sqrt(),
+        };
+        let from = 1.0 - self.vignette_reach;
+        let to = from + (1.0 - from) * self.vignette_soft.max(0.05);
+        let t = ((d - from) / (to - from)).clamp(0.0, 1.0);
+        t * t * (3.0 - 2.0 * t)
     }
 
     /// Grades display-encoded `rgb` (0..1) at screen point `at` (−1..1 each
@@ -135,21 +195,24 @@ impl Grade {
         c = c.map(|v| l + (v - l) * s);
         // The vignette, by distance from the centre (1 at the corners), the
         // opacity over black and the fade to black.
-        let r = ((at[0] * aspect).powi(2) + at[1].powi(2)).sqrt() / (aspect * aspect + 1.0).sqrt();
-        let keep = (1.0 - self.vignette * smooth(0.3, 1.0, r)) * self.opacity * (1.0 - self.black);
+        let keep = (1.0 - self.vignette * self.vignette_mask(at, aspect)) * self.opacity * (1.0 - self.black);
         c.map(|v| (v * keep).clamp(0.0, 1.0))
     }
 
     /// For the shader: (exposure gain, temperature and tint in stops,
     /// contrast gain),
     /// (highlights, shadows, saturation, vibrance), (vignette, black, 1 if
-    /// it does anything, opacity).
-    pub fn uniforms(&self) -> [[f32; 4]; 3] {
+    /// it does anything, opacity), the vignette's (shape, from, to, 0).
+    pub fn uniforms(&self) -> [[f32; 4]; 4] {
         let f = |v: f64| v as f32;
         [
             [f(2f64.powf(self.exposure)), f(WB_STOPS * self.temperature), f(WB_STOPS * self.tint), f(2f64.powf(self.contrast))],
             [f(self.highlights), f(self.shadows), f(self.saturation), f(self.vibrance)],
             [f(self.vignette), f(self.black), if self.is_neutral() { 0.0 } else { 1.0 }, f(self.opacity)],
+            {
+                let from = 1.0 - self.vignette_reach;
+                [self.vignette_shape.round() as f32, f(from), f(from + (1.0 - from) * self.vignette_soft.max(0.05)), 0.0]
+            },
         ]
     }
 }
@@ -218,7 +281,7 @@ pub fn grade_at(keys: &[EffectKey], t: f64) -> Grade {
     let (a, b) = (&keys[i - 1], &keys[i]);
     let Some(u) = a.ease.shape(((t - a.t) / (b.t - a.t)).clamp(0.0, 1.0)) else { return a.grade };
     let (va, vb) = (a.grade.values(), b.grade.values());
-    Grade::from_values(std::array::from_fn(|k| va[k] + (vb[k] - va[k]) * u))
+    Grade::from_values(std::array::from_fn(|k| if k == SHAPE { va[k] } else { va[k] + (vb[k] - va[k]) * u }))
 }
 
 #[cfg(test)]
@@ -316,5 +379,27 @@ mod tests {
         // Eased like the rest.
         let keys = [EffectKey { t: 0.0, ..faded }, EffectKey { t: 10.0, grade: Grade::default(), ease: Ease::Linear }];
         assert!((grade_at(&[EffectKey { ease: Ease::Linear, ..keys[0] }, keys[1]], 5.0).opacity - 0.75).abs() < 1e-9);
+    }
+
+    #[test]
+    fn a_vignette_keeps_its_old_look_by_default_and_takes_a_shape() {
+        // An old project's vignette reads as it was drawn before shapes.
+        let old: EffectKey = serde_json::from_str(r#"{"t":1.0,"vignette":0.5}"#).unwrap();
+        assert_eq!((old.grade.vignette_shape, old.grade.vignette_reach, old.grade.vignette_soft), (0.0, 0.7, 1.0));
+        let smooth = |a: f64, b: f64, x: f64| {
+            let t = ((x - a) / (b - a)).clamp(0.0, 1.0);
+            t * t * (3.0 - 2.0 * t)
+        };
+        for at in [[0.0, 0.0], [0.9, -0.8], [-1.0, 1.0], [0.4, 0.2]] {
+            let r = ((at[0] * 1.6f64).powi(2) + at[1].powi(2)).sqrt() / (1.6f64 * 1.6 + 1.0).sqrt();
+            assert!((old.grade.vignette_mask(at, 1.6) - smooth(0.3, 1.0, r)).abs() < 1e-12);
+        }
+        // The top: the sky darkened, the ground not; held from key to key.
+        let top = Grade { vignette: 1.0, vignette_shape: 1.0, ..Default::default() };
+        let grey = [0.5; 3];
+        assert!(top.apply(grey, [0.0, -0.95], 1.6)[0] < 0.2 && (top.apply(grey, [0.0, 0.9], 1.6)[0] - 0.5).abs() < 1e-9);
+        let keys = [EffectKey { t: 0.0, grade: top, ease: Ease::Linear }, EffectKey { t: 2.0, grade: Grade { vignette_shape: 3.0, ..top }, ease: Ease::Linear }];
+        assert_eq!(grade_at(&keys, 1.5).vignette_shape, 1.0);
+        assert!(serde_json::to_string(&top).unwrap().contains("vignette_shape") && !serde_json::to_string(&Grade::default()).unwrap().contains("vignette"));
     }
 }

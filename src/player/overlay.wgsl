@@ -11,7 +11,7 @@ struct Overlay {
     // cos and sin of the clockwise turn, opacity, 1 if graded.
     turn: vec4f,
     // `Grade::uniforms`, its opacity and fade left out (1 and 0).
-    grade: array<vec4f, 3>,
+    grade: array<vec4f, 4>,
 }
 
 @group(0) @binding(0) var<uniform> o: Overlay;
@@ -47,7 +47,7 @@ fn ofs(v: Out) -> @location(0) vec4f {
     }
     var c = p.rgb / max(p.a, 1e-6);
     if o.turn.w > 0.5 {
-        c = grade_by(o.grade[0], o.grade[1], o.grade[2], c, v.uv * 2.0 - vec2f(1.0), o.quad.z / o.quad.w);
+        c = grade_by(o.grade[0], o.grade[1], o.grade[2], o.grade[3], c, v.uv * 2.0 - vec2f(1.0), o.quad.z / o.quad.w);
     }
     c = c * (1.0 - o.dest.w);
     if o.dest.z > 0.5 {

@@ -49,7 +49,7 @@ struct OverlayU {
     target: [f32; 4],
     quad: [f32; 4],
     turn: [f32; 4],
-    grade: [[f32; 4]; 3],
+    grade: [[f32; 4]; 4],
 }
 
 /// An overlay picture to draw over the view: where, graded how, and how far
@@ -88,7 +88,7 @@ struct Uniforms {
     /// Disagreement cut strength per azimuth bin, four per vector.
     cut: [[f32; 4]; CELLS_PHI / 4],
     /// Colour effects (`Grade::uniforms`).
-    grade: [[f32; 4]; 3],
+    grade: [[f32; 4]; 4],
     /// An ordinary video: 1 if it is one, its picture's width over height, 1 if
     /// it came as 10-bit, its HDR (`Hdr::code`).
     flat: [f32; 4],

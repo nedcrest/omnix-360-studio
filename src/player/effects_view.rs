@@ -65,7 +65,7 @@ pub enum Extra {
 impl App {
     pub(super) fn effects_panel(&self) -> Element<'_, Message> {
         let target = self.effect_target();
-        let grade = target.map(|(tg, t)| grade_at(self.effects_of(tg), t)).unwrap_or_default();
+        let grade = target.map(|(tg, t)| self.shown_grade(tg, t)).unwrap_or_default();
         let enabled = target.is_some();
         let sliders = |ps: &[usize]| column(ps.iter().map(|&p| self.param_row(p, grade.values()[p], enabled))).spacing(6).into();
         let mut body = column![self.effects_header(target)].spacing(12).padding(12);
@@ -151,7 +151,7 @@ impl App {
 
     /// The overlay's place: across, down, size, rotation.
     fn place_sliders(&self, i: crate::overlay::ItemRef, t: f64) -> Element<'static, Message> {
-        let place = self.edit.item(i).map_or_else(Place::default, |it| place_at(&it.motion, t));
+        let place = self.edit.item(i).map_or_else(Place::default, |it| crate::automation::placed(place_at(&it.motion, t), &it.automation, t));
         let rows = PLACE.iter().enumerate().map(|(p, (name, lo, hi, hint))| {
             let v = place.values()[p];
             let shown = if p == 3 { format!("{v:+.0}°") } else { format!("{v:.2}") };

@@ -8,6 +8,8 @@ use super::*;
 
 /// A point's dot, half its side.
 pub(super) const DOT: f32 = 3.5;
+/// A point's value tag's height.
+const TAG_H: f32 = 12.0;
 
 impl Timeline {
     /// The Effects row's name: «▾ Effects» open, «▸ Effects (2)» folded
@@ -57,6 +59,7 @@ impl Timeline {
     /// points.
     pub(super) fn draw_auto(&self, frame: &mut Frame, theme: &Theme, b: Rectangle) {
         if self.folds.effects {
+            self.draw_auto_folded(frame, b);
             return;
         }
         let ground = theme.extended_palette().background.weak.color.scale_alpha(0.18);
@@ -81,7 +84,50 @@ impl Timeline {
                     for q in clip.points.iter().filter(|q| clip.covers(q.t)) {
                         let x = self.x(c.from + q.t - c.cut.start, b);
                         if x >= l - 0.5 && x <= r + 0.5 {
-                            frame.fill(&Path::rectangle(Point::new(x - DOT, self.auto_y(i, q.v) - DOT), Size::new(2.0 * DOT, 2.0 * DOT)), EFFECT_MARK);
+                            let y = self.auto_y(i, q.v);
+                            frame.fill(&Path::rectangle(Point::new(x - DOT, y - DOT), Size::new(2.0 * DOT, 2.0 * DOT)), EFFECT_MARK);
+                            self.draw_value_tag(frame, i, x, y, q.v);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// A point's value as the panel says it («+1.50 EV», «40 %»), what
+    /// its tag shows.
+    fn value_text(&self, i: usize, v: f64) -> String {
+        super::super::effects::label(self.auto_lanes[i], v)
+    }
+
+    /// The tag beside a point at (`x`, `y`) on lane `i`, kept inside the
+    /// lane: where it is, for drawing and for a press on it.
+    pub(super) fn value_tag(&self, i: usize, x: f32, y: f32, v: f64) -> Rectangle {
+        let (top, h) = self.auto_lane(i);
+        let w = self.value_text(i, v).chars().count() as f32 * 5.6 + 6.0;
+        let y = (y - TAG_H / 2.0).clamp(top + 1.0, top + h - TAG_H - 1.0);
+        Rectangle::new(Point::new(x + DOT + 2.0, y), Size::new(w, TAG_H))
+    }
+
+    /// A point's value on a dark tag beside it (as a sound clip's dB).
+    fn draw_value_tag(&self, frame: &mut Frame, i: usize, x: f32, y: f32, v: f64) {
+        let r = self.value_tag(i, x, y, v);
+        frame.fill(&Path::rounded_rectangle(r.position(), r.size(), 2.0.into()), iced::Color::from_rgba(0.0, 0.0, 0.0, 0.65));
+        frame.fill_text(Text { content: self.value_text(i, v), position: Point::new(r.x + 3.0, r.y + TAG_H / 2.0), color: iced::Color::WHITE, size: 10.0.into(), align_y: Vertical::Center, ..Default::default() });
+    }
+
+    /// Folded, the Effects row marks where clips move a value and where
+    /// their points are (the user, 2026-11-10: it was empty).
+    fn draw_auto_folded(&self, frame: &mut Frame, b: Rectangle) {
+        let mid = self.rows.effects_top + EFFECTS / 2.0;
+        for c in &self.blocks {
+            for i in 0..self.auto_lanes.len() {
+                for (_, clip, l, r) in self.auto_clips(i, c, b) {
+                    frame.fill(&Path::rectangle(Point::new(l, mid - 1.0), Size::new((r - l).max(1.0), 2.0)), EFFECT_MARK.scale_alpha(0.45));
+                    for q in clip.points.iter().filter(|q| clip.covers(q.t)) {
+                        let x = self.x(c.from + q.t - c.cut.start, b);
+                        if x >= l - 0.5 && x <= r + 0.5 {
+                            frame.fill(&key_mark(x, mid, Ease::Smooth), EFFECT_MARK);
                         }
                     }
                 }
@@ -135,6 +181,13 @@ impl Timeline {
     /// A point, an edge or the body of one of cut `c`'s clips on lane `lane`.
     fn auto_clip_hit(&self, lane: usize, cut: usize, c: &Block, p: Point, b: Rectangle) -> Option<Hit> {
         for (_, clip, l, r) in self.auto_clips(lane, c, b) {
+            let on_tag = clip.points.iter().find(|q| {
+                let x = self.x(c.from + q.t - c.cut.start, b);
+                x >= l - 0.5 && x <= r + 0.5 && self.value_tag(lane, x, self.auto_y(lane, q.v), q.v).contains(p)
+            });
+            if let Some(q) = on_tag {
+                return Some(Hit::AutoValue { lane, cut, t: q.t, v: q.v });
+            }
             let near = clip.points.iter().find(|q| (self.x(c.from + q.t - c.cut.start, b) - p.x).abs() <= DOT + 2.0 && (self.auto_y(lane, q.v) - p.y).abs() <= DOT + 2.0);
             if let Some(q) = near {
                 return Some(Hit::AutoPoint { lane, cut, t: q.t });
@@ -156,7 +209,7 @@ impl Timeline {
         use super::super::automation_ui::AutoMsg;
         let param = self.auto_lanes[lane];
         match self.auto_hit(lane, p, b) {
-            Hit::AutoPoint { cut, t, .. } => Some(Message::Auto(AutoMsg::Ease { cut, param, t })),
+            Hit::AutoPoint { cut, t, .. } | Hit::AutoValue { cut, t, .. } => Some(Message::Auto(AutoMsg::Ease { cut, param, t })),
             Hit::AutoClip { cut, at, .. } | Hit::AutoEdge { cut, at, .. } => Some(Message::Auto(AutoMsg::Delete { cut, param, at })),
             _ => None,
         }
@@ -170,9 +223,17 @@ impl Timeline {
 
     /// A lane drag moved to `p`: the message it sends, its state kept on
     /// the clip as the clip moves.
-    pub(super) fn auto_drag(&self, drag: &mut Drag, p: Point, b: Rectangle) -> Option<Message> {
+    pub(super) fn auto_drag(&self, drag: &mut Drag, p: Point, b: Rectangle, shift: bool) -> Option<Message> {
         use super::super::automation_ui::AutoMsg;
         match drag {
+            // Up is more: a 120th of the range a pixel in 200ths, Shift a
+            // tenth of that in 1000ths, as a sound clip's dB tag drags.
+            Drag::AutoValue { lane, cut, t, y0, from } => {
+                let (lo, hi) = crate::grade::RANGES[self.auto_lanes[*lane]];
+                let (per_px, step) = if shift { ((hi - lo) / 1200.0, (hi - lo) / 1000.0) } else { ((hi - lo) / 120.0, (hi - lo) / 200.0) };
+                let v = (*from + ((*y0 - p.y) as f64 * per_px / step).round() * step).clamp(lo, hi);
+                Some(Message::Auto(AutoMsg::Point { cut: *cut, param: self.auto_lanes[*lane], from: Some(*t), t: *t, v }))
+            }
             Drag::AutoPoint { lane, cut, from } => {
                 let (lane, cut) = (*lane, *cut);
                 let clip = self.auto_clip(lane, cut, *from)?;
@@ -221,7 +282,7 @@ impl Timeline {
                 Some(Message::Auto(AutoMsg::Add { cut, param: self.auto_lanes[lane], from: self.clip_time(c, x0, b), to: self.clip_time(c, x1, b) }))
             }
             Drag::AutoBody { lane, cut, at, moved: false, y0, .. } => Some(Message::Auto(AutoMsg::Point { cut, param: self.auto_lanes[lane], from: None, t: at, v: self.auto_value(lane, y0) })),
-            Drag::AutoPoint { .. } | Drag::AutoEdge { .. } | Drag::AutoBody { .. } => Some(Message::ScrubDone),
+            Drag::AutoPoint { .. } | Drag::AutoEdge { .. } | Drag::AutoBody { .. } | Drag::AutoValue { .. } => Some(Message::ScrubDone),
             _ => None,
         }
     }

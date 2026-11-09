@@ -202,6 +202,26 @@ impl App {
         }
     }
 
+    /// `target`'s automation clips (gap 39).
+    pub(super) fn automation_of(&self, target: Target) -> &[crate::automation::AutoClip] {
+        match target {
+            Target::Cut(i) => &self.edit.cuts[i].automation,
+            Target::Overlay(i) => &self.edit.item(i).expect("the selected overlay").automation,
+        }
+    }
+
+    /// What `target` looks like at its time `t`, its automation over its
+    /// values: what the panel's sliders show (the user, 2026-11-10).
+    pub(super) fn shown_grade(&self, target: Target, t: f64) -> crate::grade::Grade {
+        crate::automation::graded(crate::grade::grade_at(self.effects_of(target), t), self.automation_of(target), t)
+    }
+
+    /// The value named `param` moved by `target`'s automation at `t`, if a
+    /// clip covers it there: a slider then sets that clip's point there.
+    fn automated(&self, target: Target, param: &str, t: f64) -> bool {
+        crate::automation::value(self.automation_of(target), param, t).is_some()
+    }
+
 
     /// The target and time a drag writes to (`Pin`), if it's still there:
     /// an undo mid-drag can take the overlay or cut away.
@@ -218,19 +238,31 @@ impl App {
     /// Effect `p` (as in `Grade::values`) at `v` on the target the drag
     /// started on, for the whole of it (`KeyOp::EffectValue`): an edit sets
     /// the value, it doesn't make a key (user, 2026-11-09).
+    /// Where an automation clip moves it at the playhead, it sets the
+    /// clip's point there instead (made if there's none).
     fn set_effect(&mut self, starting: bool, p: usize, v: f64) {
-        let Some((target, _)) = self.pinned(starting) else { return };
-        let on = self.graded(target);
-        self.op(Op::Key(KeyOp::EffectValue { on, param: crate::grade::NAMES[p].to_owned(), value: v }));
+        let Some((target, t)) = self.pinned(starting) else { return };
+        let (on, param) = (self.graded(target), crate::grade::NAMES[p].to_owned());
+        if self.automated(target, &param, t) {
+            self.op(Op::Auto(crate::model::ops::auto::AutoOp::Point { on, param, t, v, from: None, tolerance: self.tolerance() }));
+            return;
+        }
+        self.op(Op::Key(KeyOp::EffectValue { on, param, value: v }));
     }
 
     /// The selected overlay's place value `p` (as in `Place::values`) at
     /// `v` for the whole item (`KeyOp::PlaceValue`), on the item the drag
     /// started on: no motion key (user, 2026-11-09).
     fn set_place(&mut self, starting: bool, p: usize, v: f64) {
-        let Some((Target::Overlay(i), _)) = self.pinned(starting) else { return };
+        let Some((target @ Target::Overlay(i), t)) = self.pinned(starting) else { return };
         let Some(item) = self.edit.item(i).map(|it| it.id) else { return };
-        self.op(Op::Key(KeyOp::PlaceValue { item, param: Place::NAMES[p].to_owned(), value: v }));
+        let param = Place::NAMES[p].to_owned();
+        if self.automated(target, &param, t) {
+            let on = crate::model::ops::keys::Graded::Item(item);
+            self.op(Op::Auto(crate::model::ops::auto::AutoOp::Point { on, param, t, v, from: None, tolerance: self.tolerance() }));
+            return;
+        }
+        self.op(Op::Key(KeyOp::PlaceValue { item, param, value: v }));
     }
 
     /// Applies `ops` as one undo step, showing a refusal.
@@ -272,9 +304,9 @@ impl App {
                 // Each value it changed, for the whole item.
                 let Some((Target::Overlay(i), t)) = self.pinned(starting) else { return };
                 let Some(it) = self.edit.item(i) else { return };
-                let (item, was, now) = (it.id, place_at(&it.motion, t).values(), to.values());
+                let (was, now) = (crate::automation::placed(place_at(&it.motion, t), &it.automation, t).values(), to.values());
                 for p in (0..4).filter(|&p| was[p] != now[p]) {
-                    self.op(Op::Key(KeyOp::PlaceValue { item, param: Place::NAMES[p].to_owned(), value: now[p] }));
+                    self.set_place(false, p, now[p]);
                 }
             }
             EffectMsg::Done => self.edit.commit(),

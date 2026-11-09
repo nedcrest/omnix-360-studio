@@ -448,6 +448,8 @@ pub enum Drag {
     /// edge (a time inside it now), a clip pressed (moved once it's dragged
     /// a little, else a point added where it was pressed), a clip drawn.
     AutoPoint { lane: usize, cut: usize, from: f64 },
+    /// A point's value tag dragged from `y0`, the value `from` then.
+    AutoValue { lane: usize, cut: usize, t: f64, y0: f32, from: f64 },
     AutoEdge { lane: usize, cut: usize, at: f64, start: bool },
     AutoBody { lane: usize, cut: usize, at: f64, x0: f32, y0: f32, moved: bool },
     AutoNew { lane: usize, cut: usize, x0: f32, x1: f32 },
@@ -939,6 +941,8 @@ enum Hit {
     /// On an automation lane (gap 39): a point (its clip time), a clip's
     /// edge or body (a clip time inside it), or empty lane over cut `cut`.
     AutoPoint { lane: usize, cut: usize, t: f64 },
+    /// A point's value tag (dragged up or down for its value).
+    AutoValue { lane: usize, cut: usize, t: f64, v: f64 },
     AutoEdge { lane: usize, cut: usize, at: f64, start: bool },
     AutoClip { lane: usize, cut: usize, at: f64 },
     AutoEmpty { lane: usize, cut: usize },
@@ -954,6 +958,7 @@ impl Hit {
             Hit::ZoneDraw | Hit::AutoEmpty { .. } => I::Crosshair,
             Hit::AutoPoint { .. } | Hit::AutoClip { .. } => I::Grab,
             Hit::AutoEdge { .. } => I::ResizingHorizontally,
+            Hit::AutoValue { .. } => I::ResizingVertically,
             Hit::Scroll | Hit::Effect { .. } | Hit::Point { .. } | Hit::Cut(_) | Hit::Clip { edge: None, .. } | Hit::Key { .. } => I::Grab,
             Hit::CutFade { .. } | Hit::SoundEdge { .. } | Hit::CutEdge { .. } | Hit::ClipFade { .. } | Hit::Clip { edge: Some(_), .. } | Hit::ZoneEdge { .. } => I::ResizingHorizontally,
             Hit::LevelTag(_) => I::ResizingVertically,
@@ -2211,6 +2216,10 @@ impl Timeline {
                 *drag = Drag::AutoPoint { lane, cut, from: t };
                 return Some(canvas::Action::request_redraw().and_capture());
             }
+            Hit::AutoValue { lane, cut, t, v } => {
+                *drag = Drag::AutoValue { lane, cut, t, y0: p.y, from: v };
+                return Some(canvas::Action::request_redraw().and_capture());
+            }
             Hit::AutoEdge { lane, cut, at, start } => {
                 *drag = Drag::AutoEdge { lane, cut, at, start };
                 return Some(canvas::Action::request_redraw().and_capture());
@@ -2308,8 +2317,8 @@ impl Timeline {
                 *x1 = x;
                 return Some(canvas::Action::request_redraw().and_capture());
             }
-            Drag::AutoPoint { .. } | Drag::AutoEdge { .. } | Drag::AutoBody { .. } => {
-                let message = self.auto_drag(drag, Point::new(x, position.y - bounds.y), bounds)?;
+            Drag::AutoPoint { .. } | Drag::AutoEdge { .. } | Drag::AutoBody { .. } | Drag::AutoValue { .. } => {
+                let message = self.auto_drag(drag, Point::new(x, position.y - bounds.y), bounds, state.shift)?;
                 return Some(canvas::Action::publish(message).and_capture());
             }
             // Inward lengthens: rightwards on a start, leftwards on an end.
@@ -2356,7 +2365,7 @@ fn release(drag: Drag) -> Option<canvas::Action<Message>> {
         Drag::Move { .. } | Drag::Scroll { .. } => Some(canvas::Action::request_redraw().and_capture()),
         // The drawn zone and the lanes' drags are let go in `Marks::update`,
         // which knows the times.
-        Drag::Zone { .. } | Drag::AutoPoint { .. } | Drag::AutoEdge { .. } | Drag::AutoBody { .. } | Drag::AutoNew { .. } => Some(canvas::Action::request_redraw().and_capture()),
+        Drag::Zone { .. } | Drag::AutoPoint { .. } | Drag::AutoValue { .. } | Drag::AutoEdge { .. } | Drag::AutoBody { .. } | Drag::AutoNew { .. } => Some(canvas::Action::request_redraw().and_capture()),
         Drag::Playhead | Drag::Key { .. } | Drag::Effect { .. } | Drag::Trim { .. } | Drag::MusicMove { .. } | Drag::MusicTrim { .. } | Drag::Fade { .. } | Drag::Point { .. } | Drag::Level { .. } | Drag::Crossfade { .. } | Drag::SoundEdge { .. } | Drag::EdgeLength { .. } => {
             Some(canvas::Action::publish(Message::ScrubDone).and_capture())
         }
@@ -2388,7 +2397,7 @@ impl canvas::Program<Message> for Marks {
                 // A rectangle drawn on the transitions lane: a few pixels
                 // at least, or it was a click.
                 Drag::Zone { x0, x1 } if (x1 - x0).abs() > 4.0 => Some(canvas::Action::publish(Message::TransitionDraw(self.t(x0, bounds), self.t(x1, bounds))).and_capture()),
-                drag @ (Drag::AutoPoint { .. } | Drag::AutoEdge { .. } | Drag::AutoBody { .. } | Drag::AutoNew { .. }) => match self.auto_release(drag, bounds) {
+                drag @ (Drag::AutoPoint { .. } | Drag::AutoValue { .. } | Drag::AutoEdge { .. } | Drag::AutoBody { .. } | Drag::AutoNew { .. }) => match self.auto_release(drag, bounds) {
                     Some(message) => Some(canvas::Action::publish(message).and_capture()),
                     None => Some(canvas::Action::request_redraw().and_capture()),
                 },
@@ -2778,6 +2787,9 @@ mod tests {
         assert!(matches!(at(1.0, mid), Hit::AutoEdge { start: true, .. }) && matches!(at(3.0, mid), Hit::AutoEdge { start: false, .. }));
         assert!(matches!(at(2.5, top + h - 3.0), Hit::AutoClip { cut: 0, .. }));
         assert!(matches!(at(0.5, mid), Hit::AutoEmpty { lane: 0, cut: 0 }));
+        // The point's value tag, beside it: drags its value.
+        let tag = t.value_tag(0, t.x(2.0, b), t.auto_y(0, 1.5), 1.5);
+        assert!(matches!(t.hit(tag.center(), b, false, false), Hit::AutoValue { cut: 0, t, v, .. } if t == 2.0 && v == 1.5));
         assert_eq!(t.effects_tag(), "▾ Effects");
     }
 

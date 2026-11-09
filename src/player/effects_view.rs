@@ -1,8 +1,8 @@
 //! The Effects panel's look (gap 90, agreed with the user 2026-11-09):
 //! folding groups, each with its own reset — Kind (a picture's), Place,
-//! Animate or Bars for an overlay,
-//! then Light, Colour (with the white-balance picker), Look (LUT and
-//! style), Finish (vignette, opacity), Whole edit (the film's fades,
+//! Animate or Bars for an overlay, then Light, Colour (with the
+//! white-balance picker), Look (a cut's LUT, and the style of a cut, a
+//! text or a picture), Finish (vignette, opacity), Whole edit (the film's fades,
 //! folded at first). A complex control only lights up in the list; its
 //! knobs slide out in a second panel beside it (`effects_extra_panel`),
 //! as the Transitions panel's settings do.
@@ -93,8 +93,10 @@ impl App {
         body = body.push(self.group(Group::Light, sliders(&[0, 1, 2, 3])));
         let picker = tip(icon_button(super::PICK, on_cut.then(|| Message::Effect(EffectMsg::PickWhite))), text("White balance: draw a box over something that should be grey or white (snow, a cloud)"), tooltip::Position::Left);
         body = body.push(self.group(Group::Colour, column![row![text("White balance").size(13).width(Length::Fill), picker].align_y(Alignment::Center), sliders(&[4, 5, 6, 7])].spacing(6).into()));
-        if let Some((Target::Cut(i), _)) = target {
-            body = body.push(self.group(Group::Look, column![self.lut_controls(i, &grade), self.style_tiles(i)].spacing(10).into()));
+        match target {
+            Some((tg @ Target::Cut(i), _)) => body = body.push(self.group(Group::Look, column![self.lut_controls(i, &grade), self.style_tiles(tg)].spacing(10).into())),
+            Some((tg @ Target::Overlay(i), _)) if self.edit.item(i).is_some_and(|it| it.bars.is_none()) => body = body.push(self.group(Group::Look, self.style_tiles(tg))),
+            _ => {}
         }
         // An overlay's opacity is what's set most on it.
         let finish = if on_cut { [8, 9] } else { [9, 8] };
@@ -254,9 +256,9 @@ impl App {
 
     /// Cut `i`'s style tiles: the one chosen lit, a press on it again
     /// bringing its knobs out beside.
-    fn style_tiles(&self, i: usize) -> Element<'static, Message> {
+    fn style_tiles(&self, target: Target) -> Element<'static, Message> {
         use crate::transition::Look;
-        let style = self.edit.cuts[i].style.as_ref().map(|s| s.look);
+        let style = self.style_of(target).map(|s| s.look);
         let m = |e: EffectMsg| Message::Effect(e);
         let off = tip(button(text("✕").size(12)).padding([1, 6]).style(button::text).on_press_maybe(style.map(|_| m(EffectMsg::Style(None)))), text("No style"), tooltip::Position::Left);
         let looks = Look::STYLES.into_iter().map(|l| (l, m(EffectMsg::Style(Some(l)))));
@@ -286,15 +288,15 @@ impl App {
     }
 
     /// Beside the Effects panel while a complex control's knobs are out:
-    /// the cut's style's settings, or the vignette's shape, reach and
+    /// the cut's or item's style's settings, or the vignette's shape, reach and
     /// softness.
     pub(super) fn effects_extra_panel(&self) -> Element<'_, Message> {
         let m = |e: EffectMsg| Message::Effect(e);
         let target = self.effect_target();
         let close = button(text("✕").size(14)).padding([0, 6]).style(button::text).on_press(m(EffectMsg::Extra(None)));
         let body = match (self.effect_extra, target) {
-            (Some(Extra::Style), Some((Target::Cut(i), _))) => {
-                let Some(s) = self.edit.cuts[i].style.as_ref() else { return space().into() };
+            (Some(Extra::Style), Some((tg, _))) => {
+                let Some(s) = self.style_of(tg) else { return space().into() };
                 let mut col = column![row![text(s.look.name()).size(16).width(Length::Fill), close].align_y(Alignment::Center)].spacing(14);
                 for (k, &v) in s.look.knobs().iter().zip(&s.spec().values) {
                     col = col.push(super::transitions_panel::knob(k, v, |key, v| Message::Effect(EffectMsg::StyleKnob(key, v)), m(EffectMsg::Done)));

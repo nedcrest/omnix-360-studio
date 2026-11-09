@@ -364,8 +364,8 @@ impl App {
                 }
             }
             m @ (EffectMsg::Style(_) | EffectMsg::StyleKnob(..) | EffectMsg::StyleReset) => {
-                let Some((Target::Cut(i), _)) = target else { return };
-                self.on_style(i, m);
+                let Some((target, _)) = target else { return };
+                self.on_style(target, m);
             }
             EffectMsg::Lut(choice) => {
                 let Some((Target::Cut(i), _)) = target else { return };
@@ -618,18 +618,41 @@ impl App {
                 self.animate(edge, None, None);
             }
         }
-        if let (Group::Look, Target::Cut(i)) = (g, target) {
-            let cut = self.edit.cuts[i].id;
-            self.op(Op::Cut(crate::model::ops::cuts::CutOp::Style { cut, look: None }));
+        if g == Group::Look && self.style_of(target).is_some() {
+            self.op(self.style_op(target, None));
         }
         self.edit.commit();
     }
 
     /// Cut `i`'s style look: set, a setting moved, all set back.
-    fn on_style(&mut self, i: usize, message: EffectMsg) {
-        use crate::model::ops::cuts::CutOp;
-        let c = &self.edit.cuts[i];
-        let (cut, style) = (c.id, c.style.clone());
+    /// The style on `target`, a cut's or a text's or picture's.
+    pub(super) fn style_of(&self, target: Target) -> Option<&crate::project::Style> {
+        match target {
+            Target::Cut(i) => self.edit.cuts.get(i)?.style.as_ref(),
+            Target::Overlay(i) => self.edit.item(i)?.style.as_ref(),
+        }
+    }
+
+    /// `target`'s style to `look` (none: off).
+    fn style_op(&self, target: Target, look: Option<crate::transition::Look>) -> Op {
+        use crate::model::ops::{cuts::CutOp, items::ItemOp};
+        match target {
+            Target::Cut(i) => Op::Cut(CutOp::Style { cut: self.edit.cuts[i].id, look }),
+            Target::Overlay(i) => Op::Item(ItemOp::Style { item: self.edit.item(i).map_or(0, |it| it.id), look }),
+        }
+    }
+
+    /// One of `target`'s style's settings to `value` (none: its own).
+    fn style_knob_op(&self, target: Target, key: String, value: Option<f32>) -> Op {
+        use crate::model::ops::{cuts::CutOp, items::ItemOp};
+        match target {
+            Target::Cut(i) => Op::Cut(CutOp::StyleKnob { cut: self.edit.cuts[i].id, key, value }),
+            Target::Overlay(i) => Op::Item(ItemOp::StyleKnob { item: self.edit.item(i).map_or(0, |it| it.id), key, value }),
+        }
+    }
+
+    fn on_style(&mut self, target: Target, message: EffectMsg) {
+        let style = self.style_of(target).cloned();
         match message {
             // A press on the chosen one again brings its knobs out or puts
             // them away; another is chosen with its knobs out.
@@ -639,13 +662,13 @@ impl App {
                     self.effect_extra = (self.effect_extra != Some(Extra::Style)).then_some(Extra::Style);
                     return;
                 }
-                self.op(Op::Cut(CutOp::Style { cut, look }));
+                self.op(self.style_op(target, look));
                 self.effect_extra = look.map(|_| Extra::Style);
             }
             EffectMsg::StyleKnob(key, value) => {
                 let choice = style.and_then(|s| s.look.knob(key)).is_some_and(|k| !k.choices.is_empty());
                 self.edit.begin();
-                self.op(Op::Cut(CutOp::StyleKnob { cut, key: key.to_owned(), value: Some(value) }));
+                self.op(self.style_knob_op(target, key.to_owned(), Some(value)));
                 if choice {
                     self.edit.commit();
                 }
@@ -653,7 +676,7 @@ impl App {
             EffectMsg::StyleReset => {
                 self.edit.begin();
                 for key in style.iter().flat_map(|s| s.params.keys()) {
-                    self.op(Op::Cut(CutOp::StyleKnob { cut, key: key.clone(), value: None }));
+                    self.op(self.style_knob_op(target, key.clone(), None));
                 }
                 self.edit.commit();
             }

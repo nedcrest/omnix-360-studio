@@ -109,6 +109,7 @@ done in part stays here until its last card is done.
 | 87 | Style looks (old film, VHS, neo-cyberpunk) for a video, an overlay picture or text; animation presets for text and pictures | [done](EDITOR-GAPS-DONE.md) |
 | 88 | The Osmo 360 II: its calibration and 8K50 decoding | below |
 | 89 | Auto colour: exposure and white balance set from the picture (or by an AI), keyed where the camera misses | below |
+| 95 | Text: a colour of its own, letter spacing, a box behind it; its colour automatable | below |
 | 94 | The Effects and Text panels tidied: text's look in Effects, groups for items (Place, Show, Animate), the film's fades to Transitions, consistent controls | below |
 | 93 | Effects edit the selected clip only, with the playhead on it; a clear notice when they're apart | below |
 | 92 | Play a stretch: drag a range on the ruler, Shift+Space plays it once and comes back to its start, paused; a button beside Play | below |
@@ -1577,6 +1578,20 @@ to do at once with gap 93:
    not 20 tiles; the header's reset says «↺ All».
 
 Milestone «Ефекти, колір і розумний звук».
+
+**Built 2026-11-10, waiting for the check**: gap 93 (`d55bac2`) and 1–5
+(`aca1267` groups, `5919b10` Text group, `28bdd84` the film's fades in
+Transitions, `c0bace6` style settings button and ins/outs as lists).
+Left out of «Light and Colour folded at first»: nothing; the folding of
+items' Light and Colour is kept apart from a cut's (`Group::fold_key`).
+
+### 95. Text: its own colour, letter spacing, a box behind it — idea (Claude's UI review, 2026-11-10)
+
+From gap 94's review, for later: the text's colour is one of a few
+swatches (no colour of its own); no letter or line spacing; no box
+behind it (a caption's plate), common in editors. Its colour could be
+automatable as the effects are. Milestone «Ефекти, колір і розумний
+звук».
 
 ## Format rule for all of these
 

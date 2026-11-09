@@ -194,12 +194,6 @@ impl App {
     }
 
 
-    /// Overlay `i`'s motion keyframe at its time `t`, if there's one.
-    fn motion_key_at(&self, i: crate::overlay::ItemRef, t: f64) -> Option<usize> {
-        let tolerance = self.tolerance();
-        self.edit.item(i)?.motion.iter().position(|k| (k.t - t).abs() <= tolerance)
-    }
-
     /// The target and time a drag writes to (`Pin`), if it's still there:
     /// an undo mid-drag can take the overlay or cut away.
     fn pinned(&mut self, starting: bool) -> Option<(Target, f64)> {
@@ -221,16 +215,13 @@ impl App {
         self.op(Op::Key(KeyOp::EffectValue { on, param: crate::grade::NAMES[p].to_owned(), value: v }));
     }
 
-    /// Sets the selected overlay's place with `change`, at the playhead the
-    /// drag started at: in the motion keyframe there, made from where it is
-    /// if there's none.
-    fn change_place(&mut self, starting: bool, change: impl FnOnce(&mut Place)) {
-        let Some((Target::Overlay(i), t)) = self.pinned(starting) else { return };
-        let Some(it) = self.edit.item(i) else { return };
-        let mut place = self.motion_key_at(i, t).map_or_else(|| place_at(&it.motion, t), |k| it.motion[k].place);
-        change(&mut place);
-        let (item, tolerance) = (it.id, self.tolerance());
-        self.op(Op::Key(KeyOp::Motion { item, t, place, tolerance }));
+    /// The selected overlay's place value `p` (as in `Place::values`) at
+    /// `v` for the whole item (`KeyOp::PlaceValue`), on the item the drag
+    /// started on: no motion key (user, 2026-11-09).
+    fn set_place(&mut self, starting: bool, p: usize, v: f64) {
+        let Some((Target::Overlay(i), _)) = self.pinned(starting) else { return };
+        let Some(item) = self.edit.item(i).map(|it| it.id) else { return };
+        self.op(Op::Key(KeyOp::PlaceValue { item, param: Place::NAMES[p].to_owned(), value: v }));
     }
 
     /// Applies `ops` as one undo step, showing a refusal.
@@ -264,16 +255,18 @@ impl App {
             EffectMsg::Place(p, v) => {
                 let starting = !self.edit.changing();
                 self.edit.begin();
-                self.change_place(starting, |place| {
-                    let mut values = place.values();
-                    values[p] = v;
-                    *place = Place::from_values(values);
-                });
+                self.set_place(starting, p, v);
             }
             EffectMsg::Drag(to) => {
                 let starting = !self.edit.changing();
                 self.edit.begin();
-                self.change_place(starting, |place| *place = to);
+                // Each value it changed, for the whole item.
+                let Some((Target::Overlay(i), t)) = self.pinned(starting) else { return };
+                let Some(it) = self.edit.item(i) else { return };
+                let (item, was, now) = (it.id, place_at(&it.motion, t).values(), to.values());
+                for p in (0..4).filter(|&p| was[p] != now[p]) {
+                    self.op(Op::Key(KeyOp::PlaceValue { item, param: Place::NAMES[p].to_owned(), value: now[p] }));
+                }
             }
             EffectMsg::Done => self.edit.commit(),
             EffectMsg::Bars(bars, press) => {
@@ -335,13 +328,7 @@ impl App {
                 self.op(Op::Item(ItemOp::SetText { item, text }));
             }
             EffectMsg::Reset(Some(p)) => self.set_effect(true, p, crate::grade::NEUTRAL[p]),
-            EffectMsg::ResetPlace(p) => {
-                self.change_place(true, |place| {
-                    let mut values = place.values();
-                    values[p] = Place::default().values()[p];
-                    *place = Place::from_values(values);
-                });
-            }
+            EffectMsg::ResetPlace(p) => self.set_place(true, p, Place::default().values()[p]),
             EffectMsg::Reset(None) => {
                 let Some((target, _)) = target else { return };
                 let on = self.graded(target);

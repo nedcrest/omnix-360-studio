@@ -62,6 +62,10 @@ pub enum KeyOp {
     /// its start if it has none (the user, 2026-11-09: an edit in Effects
     /// sets the value, it doesn't key it; automation goes on lanes, 39).
     EffectValue { on: Graded, param: String, value: f64 },
+    /// One of an item's place values (`Place::NAMES`: "x", "y", "size",
+    /// "rotation") for the whole item, as `EffectValue` (the user,
+    /// 2026-11-09: moving an overlay doesn't key it either).
+    PlaceValue { item: Id, param: String, value: f64 },
     /// An item's place at `t`, as `Effects`.
     Motion { item: Id, t: f64, place: Place, #[serde(default = "half_a_frame")] tolerance: f64 },
     /// How the key at `t` moves on to the next.
@@ -103,6 +107,22 @@ pub(super) fn apply(p: &mut Project, op: &KeyOp) -> Result<Outcome, OpError> {
                 key.grade = Grade::from_values(values);
             }
             said(format!("{}: {param} {value}", name(*on)))
+        }
+        KeyOp::PlaceValue { item, param, value } => {
+            let k = Place::NAMES.iter().position(|n| n == param).ok_or_else(|| OpError::NotFound(format!("place value {param:?}")))?;
+            if !value.is_finite() {
+                return Err(OpError::Invalid(format!("{param} {value} isn't a number")));
+            }
+            let it = find_item(p, *item)?;
+            if it.motion.is_empty() {
+                it.motion.push(crate::overlay::MotionKey { t: it.start, place: Place::default(), ease: Default::default() });
+            }
+            for key in it.motion.iter_mut() {
+                let mut values = key.place.values();
+                values[k] = *value;
+                key.place = Place::from_values(values);
+            }
+            said(format!("item #{item}: {param} {value}"))
         }
         KeyOp::Follow { cut, t, follow, tolerance, aims } => {
             let keys = &mut find_cut(p, *cut)?.keyframes;
@@ -312,6 +332,20 @@ mod tests {
         e.apply(&value("exposure", 0.2)).unwrap();
         assert!(e.cuts[0].effects.iter().all(|k| k.grade.exposure == 0.2) && e.cuts[0].effects[1].grade.contrast == 0.4);
         assert!(e.apply(&value("sparkle", 1.0)).is_err() && e.apply(&value("exposure", f64::NAN)).is_err());
+        check(&e).unwrap();
+    }
+
+
+    #[test]
+    fn a_place_value_holds_for_the_whole_item_and_makes_no_key() {
+        let mut e = edit();
+        let item = e.apply(&Op::Item(crate::model::ops::items::ItemOp::AddText { text: Default::default(), at: 0.0, len: 3.0 })).unwrap().made.unwrap();
+        let place = |param: &str, value| Op::Key(KeyOp::PlaceValue { item, param: param.into(), value });
+        e.apply(&place("x", 0.2)).unwrap();
+        e.apply(&place("size", 0.5)).unwrap();
+        let motion = &e.text[0].items[0].motion;
+        assert_eq!((motion.len(), motion[0].place.x, motion[0].place.size, motion[0].place.y), (1, 0.2, 0.5, 0.5), "one key, the rest as they were");
+        assert!(e.apply(&place("depth", 1.0)).is_err());
         check(&e).unwrap();
     }
 

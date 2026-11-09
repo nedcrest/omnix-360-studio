@@ -233,6 +233,9 @@ impl Place {
         [self.x, self.y, self.size, self.rotation]
     }
 
+    /// Each of `values` by its name in the project (`KeyOp::PlaceValue`).
+    pub const NAMES: [&str; 4] = ["x", "y", "size", "rotation"];
+
     pub fn from_values([x, y, size, rotation]: [f64; 4]) -> Place {
         Place { x, y, size, rotation }
     }

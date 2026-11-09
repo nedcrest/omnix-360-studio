@@ -280,10 +280,9 @@ impl App {
             Some(Side::Record) => row![view, self.record_panel()].into(),
             None => view,
         };
-        // A text item's words and look, at the left while it's selected.
-        // The Info and Settings panels win the left side over the Text panel
-        // while open.
-        let view: Element<'_, Message> = match self.info_panel().or_else(|| self.text_panel()) {
+        // The Info panel at the left while open (a text's words and look
+        // are in the Effects panel, gap 94).
+        let view: Element<'_, Message> = match self.info_panel() {
             Some(panel) => row![panel, view].into(),
             None => view,
         };
@@ -425,7 +424,7 @@ impl App {
                     tooltip::Position::Top,
                 ),
                 tip(tint_button(Tint::Add, ADD_OVERLAY, Some(Message::AddOverlay)), text("Add pictures over the picture, at the playhead (PNG transparency shows through)"), tooltip::Position::Top),
-                tip(tint_button(Tint::Add, ADD_TEXT, Some(Message::AddText)), text("Add text over the picture, at the playhead (typed in the Text panel at the left)"), tooltip::Position::Top),
+                tip(tint_button(Tint::Add, ADD_TEXT, Some(Message::AddText)), text("Add text over the picture, at the playhead (typed in the Effects panel's Text group)"), tooltip::Position::Top),
                 tip(tint_button(Tint::Add, ADD_BARS, Some(Message::AddBars)), text("Cinematic bars at the playhead: they slide in and out at the item's ends (ratio, slide and colour in Effects)"), tooltip::Position::Top),
             ].spacing(12).align_y(Alignment::Center)),
             separator(),

@@ -200,8 +200,9 @@ impl App {
                 if let Some(id) = added.and_then(|o| o.made) {
                     self.selection = Selection::Item(id);
                 }
-                // Its words and look are set in the text panel, open now.
+                // Its words and look are set in the Effects panel, open now.
                 self.text_of = None;
+                self.side = Some(super::Side::Effects);
             }
             // Ten seconds of them, selected: their ratio, slide and colour
             // in the Effects panel.

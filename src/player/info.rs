@@ -1,7 +1,6 @@
 //! The Info panel: what a file on the timeline is (right-click a cut, a
 //! song or an overlay picture), where it is in the edit, and buttons to
-//! show it in its folder or copy its path. Docked at the left of the view,
-//! in the Text panel's place.
+//! show it in its folder or copy its path. Docked at the left of the view.
 
 use super::{App, COPY, FOLDER, Message, icon_button, tip};
 use crate::overlay::ItemRef;

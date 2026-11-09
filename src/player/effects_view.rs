@@ -20,6 +20,7 @@ const EXTRA_WIDTH: f32 = 220.0;
 /// The panel's folding groups, top to bottom.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Group {
+    Text,
     Kind,
     Place,
     Show,
@@ -36,6 +37,7 @@ impl Group {
     /// Its name, shown and kept in the settings while folded.
     pub fn name(self) -> &'static str {
         match self {
+            Group::Text => "Text",
             Group::Kind => "Kind",
             Group::Place => "Place",
             Group::Show => "Show",
@@ -60,7 +62,7 @@ impl Group {
             Group::Finish if item => &[8, 11, 12, 13],
             Group::Finish => &[8, 9, 11, 12, 13],
             Group::Show => &[9, REVEAL, BLUR],
-            Group::Kind | Group::Place | Group::Animate | Group::Bars | Group::WholeEdit => &[],
+            Group::Text | Group::Kind | Group::Place | Group::Animate | Group::Bars | Group::WholeEdit => &[],
         }
     }
 
@@ -117,7 +119,8 @@ impl App {
         groups
     }
 
-    /// A text's or picture's groups (gap 94): Kind (a picture's), Place,
+    /// A text's or picture's groups (gap 94): Text (its words and look,
+    /// once a panel of their own at the left), Kind (a picture's), Place,
     /// Show (opacity, reveal, blur), Animate (ins and outs), Look (style),
     /// Light and Colour, Finish (the vignette); bars have their own.
     fn item_groups(&self, i: crate::overlay::ItemRef, t: f64) -> Vec<Element<'_, Message>> {
@@ -127,6 +130,9 @@ impl App {
             return vec![self.group(Group::Bars, bars_controls(b)), self.group(Group::Show, self.sliders(&grade, &[9], true))];
         }
         let mut groups = Vec::new();
+        if let Some(words) = &it.text {
+            groups.push(self.group(Group::Text, self.text_controls(words)));
+        }
         if it.file().is_some() {
             groups.push(self.group(Group::Kind, self.kind_tiles(i)));
         }

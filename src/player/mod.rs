@@ -815,7 +815,7 @@ struct App {
     /// Which foldable lanes are folded.
     folds: timeline::Folds,
     ducking: bool,
-    /// The Info panel (at the left, in the Text panel's place).
+    /// The Info panel (at the left of the view).
     info: Option<info::Info>,
     /// A running colour track: its cancel flag and progress, 0..1.
     tracking: Option<(Arc<std::sync::atomic::AtomicBool>, f32)>,
@@ -1028,8 +1028,7 @@ impl App {
         let at = self.clip_place();
         let task = self.handle(message);
         // Something else selected: the Info panel told of what was
-        // right-clicked before, and it stood over the Text panel (user,
-        // 2026-11-07).
+        // right-clicked before (user, 2026-11-07).
         if self.selection != selected && !opens_info {
             self.info = None;
         }

@@ -14,7 +14,7 @@ use crate::model::ops::keys::{EXACT, Graded, KeyOp, Line};
 use crate::model::ops::sound::SoundOp;
 use crate::model::ops::{End, Op, items::ItemOp};
 use crate::text::{Colour, Outline, Text, TextAlign};
-use iced::widget::{button, column, container, pick_list, row, scrollable, slider, text, tooltip};
+use iced::widget::{button, column, pick_list, row, slider, text, tooltip};
 use iced::{Alignment, Element, Length};
 
 #[derive(Debug, Clone)]
@@ -547,9 +547,7 @@ impl App {
     /// The text panel, at the player's left while a text item is selected:
     /// its words and look, wherever the playhead is (where it is and its
     /// effects stay in the Effects panel).
-    pub(super) fn text_panel(&self) -> Option<Element<'_, Message>> {
-        let i = self.selection.item(&self.edit)?;
-        let words = self.edit.item(i)?.text.as_ref()?;
+    pub(super) fn text_controls(&self, words: &crate::text::Text) -> Element<'_, Message> {
         let t = |c: TextChange| Message::Effect(EffectMsg::Text(c));
         let swatches = |chosen: Colour, f: fn(Colour) -> TextChange| {
             let mut r = row![].spacing(4);
@@ -570,13 +568,7 @@ impl App {
             r
         };
         let families: Vec<FontChoice> = crate::text::families().iter().map(|f| FontChoice(f.clone())).collect();
-        let close = tip(
-            button(text("✕").size(14)).padding([0, 6]).style(button::text).on_press(Message::OverlaySelect(None)),
-            text("Close (deselects the text)"),
-            tooltip::Position::Bottom,
-        );
         let mut controls = column![
-            row![text("Text").size(18).width(Length::Fill), close].align_y(Alignment::Center),
             iced::widget::text_editor(&self.text_content).placeholder("Type the text here").height(80).on_action(|a| Message::Effect(EffectMsg::TextEdit(a))),
             row![
                 tip(
@@ -590,7 +582,7 @@ impl App {
             .align_y(Alignment::Center),
             row![text("Size").width(Length::Fill), text(format!("{:.0} %", words.size * 100.0)).size(13)],
             slider(0.02..=0.3, words.size, move |v| Message::Effect(EffectMsg::Text(TextChange::Size(v)))).step(0.005).on_release(Message::Effect(EffectMsg::Done)),
-            row![text("Lines").width(Length::Fill), pick_list(&TextAlign::ALL[..], Some(words.align), move |a| t(TextChange::Align(a))).width(110)].align_y(Alignment::Center),
+            row![text("Align").width(Length::Fill), pick_list(&TextAlign::ALL[..], Some(words.align), move |a| t(TextChange::Align(a))).width(110)].align_y(Alignment::Center),
             text("Colour"),
             swatches(words.colour, TextChange::Colour),
             iced::widget::checkbox(words.shadow).label("Shadow").on_toggle(move |b| Message::Effect(EffectMsg::Text(TextChange::Shadow(b)))),
@@ -602,7 +594,7 @@ impl App {
             controls = controls.push(slider(0.01..=0.3, o.width, move |v| Message::Effect(EffectMsg::Text(TextChange::OutlineWidth(v)))).step(0.005).on_release(Message::Effect(EffectMsg::Done)));
             controls = controls.push(swatches(o.colour, TextChange::OutlineColour));
         }
-        Some(container(scrollable(controls.spacing(8).padding(12))).width(WIDTH).height(Length::Fill).into())
+        controls.spacing(8).into()
     }
 
     /// Neutralises the playing cut's colour cast from `rgb`, the median of

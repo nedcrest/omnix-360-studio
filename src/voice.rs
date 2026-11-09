@@ -109,6 +109,18 @@ impl Made {
     }
 }
 
+/// Voices are compared at this loudness, LUFS: a louder one would pass for
+/// better (footage-agent's VOICE.md).
+pub const HEARD_AT: f64 = -20.0;
+/// None is lifted more than this, dB: a near-silent one would roar.
+const MOST_LIFT: f64 = 15.0;
+
+/// The gain, dB, that brings a voice `lufs` loud to `HEARD_AT`; none
+/// unmeasured.
+pub fn compare_gain(lufs: Option<f64>) -> f64 {
+    lufs.map_or(0.0, |l| (HEARD_AT - l).min(MOST_LIFT))
+}
+
 /// The record beside a clip's variants.
 pub const MADE: &str = "_recipes.json";
 
@@ -166,6 +178,7 @@ mod tests {
         assert_eq!(dir(&layout, "../x/A.MP4"), None, "never outside");
         assert_eq!(track(Path::new("/v"), "dnn6"), PathBuf::from("/v/dnn6.flac"));
         assert_eq!(recipe(DEFAULT).map(|r| r.args), Some(&["-D", "-a", "6"][..]));
+        assert_eq!((compare_gain(Some(-26.0)), compare_gain(Some(-50.0)), compare_gain(Some(-14.0)), compare_gain(None)), (6.0, 15.0, -6.0, 0.0));
     }
 
     #[test]

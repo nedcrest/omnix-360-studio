@@ -1,8 +1,8 @@
 //! On-screen handles for overlays, a layer over the view while paused:
 //! click an overlay where it shows to select it, drag it to move it, a corner to size it
 //! (about its centre) and the knob above it to turn it (Shift snaps to 15°).
-//! Each drag sets the motion keyframe at the playhead, as the Effects
-//! panel's sliders do. Elsewhere the layer takes nothing, so the view under
+//! Each drag sets its place for the whole item, as the Effects panel's
+//! sliders do (no motion key). Elsewhere the layer takes nothing, so the view under
 //! it still looks around: iced's `stack` hides the pointer from the layers
 //! below one that claims it.
 

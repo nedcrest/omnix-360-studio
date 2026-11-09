@@ -1205,6 +1205,18 @@ small panel of its own, updated while paused and a few times a second
 while playing (measured from the frame already decoded, so cheap).
 Milestone «Ефекти, колір і розумний звук», with gap 14, which it helps set by eye.
 
+**Built 2026-11-10, waiting for the check** (`9b8a468`): the Effects
+panel's Scopes group (folded at first): a histogram (red, green, blue,
+luma) over a luma waveform, and «Black · White · crushed · blown». Read
+from the cut's finished picture (graded, LUT and style on, overlays
+apart), not the decoded frame, so a level set shows at once: while open
+the player draws the cut into a picture of its own and copies it back
+every 250 ms (`gpu::Pipeline::scope_due`, a GPU test), measured by
+`scopes::measure` (tested). The panel redraws every screen frame while
+it's open (iced's timer needs an executor feature Omnix doesn't carry);
+the waveform's picture is made once a measure. Not for an agent yet:
+gap 89 (auto colour) will want the measure as a command.
+
 ### 70. The text and overlay lanes as groups of several lanes — idea (user, 2026-11-04)
 
 The user again, 2026-11-10: "texts and overlays — maybe groups, a Texts

@@ -75,7 +75,7 @@ pub enum AutoMsg {
     Point { on: AutoOn, param: Param, from: Option<f64>, t: f64, v: f64 },
     /// The clip pressed at `at` moved to start at `from` (a drag).
     Move { on: AutoOn, param: Param, at: f64, from: f64 },
-    /// Its start or end to `t` (a drag).
+    /// Its start or end to `t` (a drag let go: one step).
     Trim { on: AutoOn, param: Param, at: f64, start: bool, t: f64 },
     PointDelete { on: AutoOn, param: Param, t: f64 },
     /// The point at `t` eases on the next way: smooth, linear, hold.
@@ -132,7 +132,6 @@ impl App {
             }
             AutoMsg::Trim { on, param, at, start, t } => {
                 let Some((on, param)) = of(on, param) else { return };
-                self.edit.begin();
                 AutoOp::Trim { on, param, at, end: if start { End::In } else { End::Out }, t }
             }
             AutoMsg::PointDelete { on, param, t } => {

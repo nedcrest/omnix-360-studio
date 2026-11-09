@@ -62,14 +62,15 @@ impl LaneHit {
 }
 
 /// A drag on a lane: a point (its time now), its value tag (from `y0`,
-/// the value `from` then), a clip's edge (a time inside it now), a clip
+/// the value `from` then), a clip's edge (a time inside it, the edge's
+/// time `to` now: trimmed once let go, its points hidden till then), a clip
 /// pressed (moved once dragged a little, else a point added where it was
 /// pressed), a clip drawn.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum LaneDrag {
     Point { lane: usize, owner: usize, from: f64 },
     Value { lane: usize, owner: usize, t: f64, y0: f32, from: f64 },
-    Edge { lane: usize, owner: usize, at: f64, start: bool },
+    Edge { lane: usize, owner: usize, at: f64, start: bool, to: f64 },
     Body { lane: usize, owner: usize, at: f64, x0: f32, y0: f32, moved: bool },
     New { lane: usize, owner: usize, x0: f32, x1: f32 },
 }
@@ -183,7 +184,10 @@ impl Lanes<'_> {
             LaneHit::Point { lane, owner, t } if ctrl => return Err(Message::Auto(AutoMsg::PointDelete { on: self.owners[owner].on, param: self.params[lane], t })),
             LaneHit::Point { lane, owner, t } => LaneDrag::Point { lane, owner, from: t },
             LaneHit::Value { lane, owner, t, v } => LaneDrag::Value { lane, owner, t, y0: p.y, from: v },
-            LaneHit::Edge { lane, owner, at, start } => LaneDrag::Edge { lane, owner, at, start },
+            LaneHit::Edge { lane, owner, at, start } => {
+                let clip = self.clip_at(lane, owner, at).ok_or(Message::ScrubDone)?;
+                LaneDrag::Edge { lane, owner, at, start, to: if start { clip.from } else { clip.to } }
+            }
             LaneHit::Clip { lane, owner, at } => LaneDrag::Body { lane, owner, at, x0: p.x, y0: p.y, moved: false },
             LaneHit::Empty { lane, owner } => LaneDrag::New { lane, owner, x0: p.x, x1: p.x },
         })
@@ -236,15 +240,15 @@ impl Lanes<'_> {
                 *from = t;
                 Some(Message::Auto(message))
             }
-            LaneDrag::Edge { lane, owner, at, start } => {
+            // Only drawn while dragged (the user, 2026-11-10): trimmed in one
+            // step when let go, from the clip as it was.
+            LaneDrag::Edge { lane, owner, at, start, to } => {
                 let clip = self.clip_at(*lane, *owner, *at)?;
                 let o = &self.owners[*owner];
                 let shortest = crate::model::ops::auto::SHORTEST;
                 let t = self.own_time(o, p.x, b);
-                let (from, to) = if *start { (t.clamp(o.start, clip.to - shortest), clip.to) } else { (clip.from, t.clamp(clip.from + shortest, o.start + o.len)) };
-                let message = AutoMsg::Trim { on: o.on, param: self.params[*lane], at: *at, start: *start, t: if *start { from } else { to } };
-                *at = (from + to) / 2.0;
-                Some(Message::Auto(message))
+                *to = if *start { t.clamp(o.start, clip.to - shortest) } else { t.clamp(clip.from + shortest, o.start + o.len) };
+                None
             }
             LaneDrag::Body { lane, owner, at, x0, moved, .. } => {
                 if !*moved && (p.x - *x0).abs() <= 3.0 {
@@ -272,6 +276,7 @@ impl Lanes<'_> {
                 Some(Message::Auto(AutoMsg::Add { on: o.on, param: self.params[lane], from: self.own_time(o, x0, b), to: self.own_time(o, x1, b) }))
             }
             LaneDrag::New { .. } => None,
+            LaneDrag::Edge { lane, owner, at, start, to } => Some(Message::Auto(AutoMsg::Trim { on: self.owners[owner].on, param: self.params[lane], at, start, t: to })),
             LaneDrag::Body { lane, owner, at, moved: false, y0, .. } => Some(Message::Auto(AutoMsg::Point { on: self.owners[owner].on, param: self.params[lane], from: None, t: at, v: self.value(lane, y0) })),
             _ => Some(Message::ScrubDone),
         }
@@ -288,9 +293,15 @@ impl Lanes<'_> {
         for i in 0..self.params.len() {
             let (top, h) = self.lane(i);
             frame.fill(&Path::rectangle(Point::new(0.0, top + 1.0), Size::new(b.width, h - 2.0)), ground);
-            for o in &self.owners {
+            for (k, o) in self.owners.iter().enumerate() {
                 for (clip, l, r) in self.clips(i, o, b) {
-                    self.draw_clip(frame, i, o, clip, (l, r), b);
+                    match drag {
+                        Some(&LaneDrag::Edge { lane, owner, at, start, to }) if (lane, owner) == (i, k) && clip.covers(at) => {
+                            let x = self.x(o, to, b);
+                            self.clip_block(frame, i, if start { (x, r) } else { (l, x) });
+                        }
+                        _ => self.draw_clip(frame, i, o, clip, (l, r), b),
+                    }
                 }
             }
         }
@@ -300,11 +311,16 @@ impl Lanes<'_> {
         }
     }
 
-    fn draw_clip(&self, frame: &mut Frame, i: usize, o: &Owner, clip: &AutoClip, (l, r): (f32, f32), b: Rectangle) {
+    /// A clip's block on lane `i`, from `l` to `r`.
+    fn clip_block(&self, frame: &mut Frame, i: usize, (l, r): (f32, f32)) {
         let (top, h) = self.lane(i);
         let block = Path::rectangle(Point::new(l, top + 2.0), Size::new((r - l).max(1.0), h - 4.0));
         frame.fill(&block, EFFECT_MARK.scale_alpha(0.18));
         frame.stroke(&block, Stroke::default().with_width(1.0).with_color(EFFECT_MARK.scale_alpha(0.7)));
+    }
+
+    fn draw_clip(&self, frame: &mut Frame, i: usize, o: &Owner, clip: &AutoClip, (l, r): (f32, f32), b: Rectangle) {
+        self.clip_block(frame, i, (l, r));
         let curve = Path::new(|p| {
             let mut x = l;
             while x <= r {

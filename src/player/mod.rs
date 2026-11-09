@@ -751,9 +751,9 @@ struct App {
     /// complex control whose knobs are out beside it.
     effects_folded: Vec<String>,
     effect_extra: Option<effects_view::Extra>,
-    /// Automation lanes asked for in the Effects panel (◆), by
-    /// `grade::NAMES` index, beside those the cuts already move.
-    extra_lanes: Vec<usize>,
+    /// Automation lanes asked for in the Effects panel (◆), beside those
+    /// the clips already move.
+    extra_lanes: Vec<(automation_ui::LaneOf, automation_ui::Param)>,
     last_edge: crate::transition::Look,
     /// The bin, at the far left (`bin.rs`).
     bin: bin::Bin,
@@ -910,7 +910,7 @@ impl App {
             bar_labels: saved.bar_labels,
             snapping: saved.snapping,
             snap_line: None,
-            folds: timeline::Folds { text: saved.fold_text, overlay: saved.fold_overlay, sfx2: saved.fold_sfx2, marks: saved.fold_marks, transitions: saved.fold_transitions, effects: saved.fold_effects },
+            folds: timeline::Folds { text: saved.fold_text, overlay: saved.fold_overlay, sfx2: saved.fold_sfx2, marks: saved.fold_marks, transitions: saved.fold_transitions, effects: saved.fold_effects, overlay_effects: saved.fold_overlay_effects, text_effects: saved.fold_text_effects },
             ducking: false,
             listen: Default::default(),
             check: Default::default(),
@@ -989,6 +989,8 @@ impl App {
             fold_marks: self.folds.marks,
             fold_transitions: self.folds.transitions,
             fold_effects: self.folds.effects,
+            fold_overlay_effects: self.folds.overlay_effects,
+            fold_text_effects: self.folds.text_effects,
             effects_folded: self.effects_folded.clone(),
             projects: self.projects.clone(),
             recent: self.recent.clone(),

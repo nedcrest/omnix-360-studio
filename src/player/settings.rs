@@ -76,6 +76,8 @@ pub struct Settings {
     pub fold_transitions: bool,
     /// The Effects row's automation lanes folded away.
     pub fold_effects: bool,
+    pub fold_overlay_effects: bool,
+    pub fold_text_effects: bool,
     /// The Effects panel's groups folded, by name (`effects_view::Group`).
     pub effects_folded: Vec<String>,
     /// The projects place, chosen in Omnix; none: Dailix's.
@@ -142,6 +144,8 @@ impl Default for Settings {
             fold_marks: false,
             fold_transitions: false,
             fold_effects: true,
+            fold_overlay_effects: true,
+            fold_text_effects: true,
             effects_folded: vec!["Whole edit".to_owned()],
             projects: None,
             recent: Vec::new(),

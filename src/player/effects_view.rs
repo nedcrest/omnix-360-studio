@@ -129,14 +129,18 @@ impl App {
         let ((name, hint), (lo, hi)) = (PARAMS[p], crate::grade::RANGES[p]);
         let reset = button(text("↺").size(13)).padding([0, 5]).style(button::text).on_press_maybe((enabled && v != crate::grade::NEUTRAL[p]).then_some(Message::Effect(EffectMsg::Reset(Some(p)))));
         let control = slider(lo..=hi, v, move |v| Message::Effect(EffectMsg::Set(p, v))).step(0.01).on_release(Message::Effect(EffectMsg::Done));
-        // Its automation lane, lit while it shows (gap 39).
-        let laned = self.auto_lanes().contains(&p);
-        let lane = tip(
+        let lane = self.lane_button(super::automation_ui::Param::Grade(p));
+        tip(column![row![text(name).width(Length::Fill), text(label(p, v)).size(13), reset, lane].spacing(4).align_y(Alignment::Center), control].spacing(2), text(hint), tooltip::Position::Left)
+    }
+
+    /// The ◆ beside a value: its automation lane, lit while it shows (gap 39).
+    fn lane_button(&self, p: super::automation_ui::Param) -> Element<'static, Message> {
+        let laned = self.lane_owner().is_some_and(|of| self.lanes_of(of).contains(&p));
+        tip(
             button(text("◆").size(11)).padding([0, 4]).style(if laned { button::primary } else { button::text }).on_press(Message::Effect(EffectMsg::AutoLane(p))),
             text(if laned { "Its automation lane shows under the Effects row" } else { "Automate it: a lane under the Effects row, to draw clips on" }),
             tooltip::Position::Left,
-        );
-        tip(column![row![text(name).width(Length::Fill), text(label(p, v)).size(13), reset, lane].spacing(4).align_y(Alignment::Center), control].spacing(2), text(hint), tooltip::Position::Left)
+        )
     }
 
     /// The vignette's slider, and its shape's button lit while its knobs
@@ -157,7 +161,8 @@ impl App {
             let shown = if p == 3 { format!("{v:+.0}°") } else { format!("{v:.2}") };
             let reset = button(text("↺").size(13)).padding([0, 5]).style(button::text).on_press_maybe((v != Place::default().values()[p]).then_some(Message::Effect(EffectMsg::ResetPlace(p))));
             let control = slider(*lo..=*hi, v, move |v| Message::Effect(EffectMsg::Place(p, v))).step(if p == 3 { 1.0 } else { 0.01 }).on_release(Message::Effect(EffectMsg::Done));
-            tip(column![row![text(*name).width(Length::Fill), text(shown).size(13), reset].spacing(4).align_y(Alignment::Center), control].spacing(2), text(*hint), tooltip::Position::Left)
+            let lane = self.lane_button(super::automation_ui::Param::Place(p));
+            tip(column![row![text(*name).width(Length::Fill), text(shown).size(13), reset, lane].spacing(4).align_y(Alignment::Center), control].spacing(2), text(*hint), tooltip::Position::Left)
         });
         column(rows).spacing(6).into()
     }

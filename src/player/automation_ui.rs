@@ -7,67 +7,151 @@ use crate::model::ops::keys::Graded;
 use crate::model::ops::{End, Op, auto::AutoOp};
 use crate::view::Ease;
 
-/// On cut `cut` (its index), effect `param` (`grade::NAMES` index); times
-/// are the cut's clip time.
+/// What an automation lane's clips belong to: a cut (its index) or an
+/// overlay item (its id).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AutoOn {
+    Cut(usize),
+    Item(crate::project::Id),
+}
+
+/// Whose automation lanes: the cuts' (under their Effects row), or the
+/// items' of an overlay or text track (under its own).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LaneOf {
+    Cuts,
+    Track(crate::overlay::Track),
+}
+
+/// A value a lane moves: a colour effect (`grade::NAMES` index) or, on an
+/// item, its place (`Place::NAMES` index).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Param {
+    Grade(usize),
+    Place(usize),
+}
+
+impl Param {
+    /// Its name in the project.
+    pub fn name(self) -> &'static str {
+        match self {
+            Param::Grade(k) => crate::grade::NAMES[k],
+            Param::Place(k) => crate::overlay::Place::NAMES[k],
+        }
+    }
+
+    /// As the panel calls it.
+    pub fn title(self) -> &'static str {
+        match self {
+            Param::Grade(k) => super::effects::PARAMS.get(k).map_or(crate::grade::NAMES[k], |(n, _)| n),
+            Param::Place(k) => super::effects::PLACE[k].0,
+        }
+    }
+
+    pub fn range(self) -> (f64, f64) {
+        match self {
+            Param::Grade(k) => crate::grade::RANGES[k],
+            Param::Place(k) => (super::effects::PLACE[k].1, super::effects::PLACE[k].2),
+        }
+    }
+
+    /// A value as the panel shows it.
+    pub fn label(self, v: f64) -> String {
+        match self {
+            Param::Grade(k) => super::effects::label(k, v),
+            Param::Place(3) => format!("{v:+.0}°"),
+            Param::Place(_) => format!("{v:.2}"),
+        }
+    }
+}
+
+/// On `on`, value `param`; times are its clip (or own) time.
 #[derive(Clone, Debug)]
 pub enum AutoMsg {
     /// A clip drawn over `from`..`to`.
-    Add { cut: usize, param: usize, from: f64, to: f64 },
+    Add { on: AutoOn, param: Param, from: f64, to: f64 },
     /// A point at `t` and `v`: the one at `from` moved there (a drag), or
     /// a new one.
-    Point { cut: usize, param: usize, from: Option<f64>, t: f64, v: f64 },
+    Point { on: AutoOn, param: Param, from: Option<f64>, t: f64, v: f64 },
     /// The clip pressed at `at` moved to start at `from` (a drag).
-    Move { cut: usize, param: usize, at: f64, from: f64 },
+    Move { on: AutoOn, param: Param, at: f64, from: f64 },
     /// Its start or end to `t` (a drag).
-    Trim { cut: usize, param: usize, at: f64, start: bool, t: f64 },
-    PointDelete { cut: usize, param: usize, t: f64 },
+    Trim { on: AutoOn, param: Param, at: f64, start: bool, t: f64 },
+    PointDelete { on: AutoOn, param: Param, t: f64 },
     /// The point at `t` eases on the next way: smooth, linear, hold.
-    Ease { cut: usize, param: usize, t: f64 },
-    Delete { cut: usize, param: usize, at: f64 },
+    Ease { on: AutoOn, param: Param, t: f64 },
+    Delete { on: AutoOn, param: Param, at: f64 },
 }
 
 impl App {
+    /// The lanes of `of`: each value its clips move, or that the panel
+    /// asked for (◆); an item's place first, then its effects.
+    pub(super) fn lanes_of(&self, of: LaneOf) -> Vec<Param> {
+        let clips: Vec<&crate::automation::AutoClip> = match of {
+            LaneOf::Cuts => self.edit.cuts.iter().flat_map(|c| &c.automation).collect(),
+            LaneOf::Track(track) => self.edit.lane(track).iter().flat_map(|l| &l.items).flat_map(|it| &it.automation).collect(),
+        };
+        let place = (0..4).map(Param::Place).filter(|_| of != LaneOf::Cuts);
+        let all = place.chain((0..crate::grade::NAMES.len()).map(Param::Grade));
+        all.filter(|p| clips.iter().any(|c| c.param == p.name()) || self.extra_lanes.contains(&(of, *p))).collect()
+    }
+
+    /// `on` as an op names it, and its automation clips.
+    fn auto_owner(&self, on: AutoOn) -> Option<(Graded, &[crate::automation::AutoClip])> {
+        match on {
+            AutoOn::Cut(i) => self.edit.cuts.get(i).map(|c| (Graded::Cut(c.id), &c.automation[..])),
+            AutoOn::Item(id) => {
+                let (track, l, i) = self.edit.item_index(id)?;
+                let lanes = match track {
+                    crate::overlay::Track::Overlay => &self.edit.overlays,
+                    crate::overlay::Track::Text => &self.edit.text,
+                };
+                Some((Graded::Item(id), &lanes.get(l)?.items.get(i)?.automation[..]))
+            }
+        }
+    }
+
     pub(super) fn on_auto(&mut self, message: AutoMsg) {
-        let of = |cut: usize, param: usize| -> Option<(Graded, String)> { Some((Graded::Cut(self.edit.cuts.get(cut)?.id), crate::grade::NAMES.get(param)?.to_string())) };
+        let of = |on: AutoOn, param: Param| -> Option<(Graded, String)> { Some((self.auto_owner(on)?.0, param.name().to_owned())) };
         let op = match message {
-            AutoMsg::Add { cut, param, from, to } => {
-                let Some((on, param)) = of(cut, param) else { return };
+            AutoMsg::Add { on, param, from, to } => {
+                let Some((on, param)) = of(on, param) else { return };
                 AutoOp::Add { on, param, from, to }
             }
-            AutoMsg::Point { cut, param, from, t, v } => {
-                let Some((on, param)) = of(cut, param) else { return };
+            AutoMsg::Point { on, param, from, t, v } => {
+                let Some((on, param)) = of(on, param) else { return };
                 if from.is_some() {
                     self.edit.begin();
                 }
                 AutoOp::Point { on, param, t, v, from, tolerance: self.tolerance() }
             }
-            AutoMsg::Move { cut, param, at, from } => {
-                let Some((on, param)) = of(cut, param) else { return };
+            AutoMsg::Move { on, param, at, from } => {
+                let Some((on, param)) = of(on, param) else { return };
                 self.edit.begin();
                 AutoOp::Move { on, param, at, from }
             }
-            AutoMsg::Trim { cut, param, at, start, t } => {
-                let Some((on, param)) = of(cut, param) else { return };
+            AutoMsg::Trim { on, param, at, start, t } => {
+                let Some((on, param)) = of(on, param) else { return };
                 self.edit.begin();
                 AutoOp::Trim { on, param, at, end: if start { End::In } else { End::Out }, t }
             }
-            AutoMsg::PointDelete { cut, param, t } => {
-                let Some((on, param)) = of(cut, param) else { return };
+            AutoMsg::PointDelete { on, param, t } => {
+                let Some((on, param)) = of(on, param) else { return };
                 AutoOp::PointDelete { on, param, t, tolerance: self.tolerance() }
             }
-            AutoMsg::Ease { cut, param, t } => {
-                let Some((on, name)) = of(cut, param) else { return };
+            AutoMsg::Ease { on, param, t } => {
                 let tolerance = self.tolerance();
-                let now = self.edit.cuts[cut].automation.iter().filter(|c| c.param == name && c.covers(t)).flat_map(|c| &c.points).find(|q| (q.t - t).abs() <= tolerance).map(|q| q.ease);
+                let Some((graded, clips)) = self.auto_owner(on) else { return };
+                let now = clips.iter().filter(|c| c.param == param.name() && c.covers(t)).flat_map(|c| &c.points).find(|q| (q.t - t).abs() <= tolerance).map(|q| q.ease);
                 let ease = match now {
                     Some(Ease::Smooth) => Ease::Linear,
                     Some(Ease::Linear) => Ease::Hold,
                     _ => Ease::Smooth,
                 };
-                AutoOp::PointEase { on, param: name, t, ease, tolerance }
+                AutoOp::PointEase { on: graded, param: param.name().to_owned(), t, ease, tolerance }
             }
-            AutoMsg::Delete { cut, param, at } => {
-                let Some((on, param)) = of(cut, param) else { return };
+            AutoMsg::Delete { on, param, at } => {
+                let Some((on, param)) = of(on, param) else { return };
                 AutoOp::Delete { on, param, at }
             }
         };

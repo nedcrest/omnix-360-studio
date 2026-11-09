@@ -61,9 +61,9 @@ pub enum EffectMsg {
     ResetGroup(super::effects_view::Group),
     /// A complex control's knobs out beside the panel, or put away.
     Extra(Option<super::effects_view::Extra>),
-    /// Effect `p`'s automation lane under the Effects row shown (opened)
-    /// or, if no cut moves it, taken away (gap 39).
-    AutoLane(usize),
+    /// A value's automation lane shown (its Effects row opened) or, if
+    /// nothing moves it, taken away (gap 39), for the panel's target.
+    AutoLane(super::automation_ui::Param),
 }
 
 /// A LUT in a list: none, or a library name (or a file a project names).
@@ -321,11 +321,17 @@ impl App {
             EffectMsg::ResetGroup(g) => self.reset_group(g),
             EffectMsg::Extra(extra) => self.effect_extra = extra,
             EffectMsg::AutoLane(p) => {
-                if self.extra_lanes.contains(&p) {
-                    self.extra_lanes.retain(|&q| q != p);
+                use super::automation_ui::LaneOf;
+                let Some(of) = self.lane_owner() else { return };
+                if self.extra_lanes.contains(&(of, p)) {
+                    self.extra_lanes.retain(|&q| q != (of, p));
                 } else {
-                    self.extra_lanes.push(p);
-                    self.folds.effects = false;
+                    self.extra_lanes.push((of, p));
+                    *match of {
+                        LaneOf::Cuts => &mut self.folds.effects,
+                        LaneOf::Track(crate::overlay::Track::Overlay) => &mut self.folds.overlay_effects,
+                        LaneOf::Track(crate::overlay::Track::Text) => &mut self.folds.text_effects,
+                    } = false;
                 }
             }
             EffectMsg::Bars(bars, press) => {
@@ -518,11 +524,13 @@ impl App {
 
     /// Cut `i`'s LUT, and its strength in `grade` (the effects at the
     /// playhead): the LUT acts before the effects, which act on what it gives.
-    /// The automation lanes under the Effects row: each effect a cut moves
-    /// or the panel asked for, in `grade::NAMES` order.
-    pub(super) fn auto_lanes(&self) -> Vec<usize> {
-        let moved = |p: usize| self.edit.cuts.iter().any(|c| c.automation.iter().any(|a| a.param == crate::grade::NAMES[p]));
-        (0..crate::grade::NAMES.len()).filter(|&p| moved(p) || self.extra_lanes.contains(&p)).collect()
+    /// Whose lanes the panel's target has: the cuts', or its track's.
+    pub(super) fn lane_owner(&self) -> Option<super::automation_ui::LaneOf> {
+        use super::automation_ui::LaneOf;
+        match self.effect_target()? {
+            (Target::Cut(_), _) => Some(LaneOf::Cuts),
+            (Target::Overlay((track, _)), _) => Some(LaneOf::Track(track)),
+        }
     }
 
     /// Group `g`'s effects back to none (an overlay's place, the Look's

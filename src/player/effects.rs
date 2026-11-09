@@ -102,7 +102,7 @@ impl std::fmt::Display for LutChoice {
 
 /// Each effect as the panel shows it: its name and what it does (the first
 /// eleven of `Grade::values`; their ranges `grade::RANGES`).
-pub(super) const PARAMS: [(&str, &str); 11] = [
+pub(super) const PARAMS: [(&str, &str); 16] = [
     ("Exposure", "Brighter or darker, in stops, like the camera's EV"),
     ("Contrast", "More or less contrast, around mid-grey"),
     ("Highlights", "Pull back (−) or lift the bright parts, such as the sky"),
@@ -114,9 +114,14 @@ pub(super) const PARAMS: [(&str, &str); 11] = [
     ("Vignette", "Darker edges: round, or from the top, the bottom or the sides"),
     ("Opacity", "How much of the picture shows; on the main track it fades towards black"),
     ("Strength", "How much of the LUT: 100 % is all of it, less mixes in the picture as filmed"),
+    ("Shape", "The vignette's shape: round, from the top, the bottom or the sides"),
+    ("Reach", "How far in the vignette reaches"),
+    ("Softness", "How soft the vignette's inner edge is"),
+    ("Blur", "How soft it's drawn; at 100 % past reading"),
+    ("Reveal", "How much has come on: a picture wiped in from the left, text typed letter by letter"),
 ];
 
-/// The LUT's strength among `Grade::values` (after `PARAMS`), drawn
+/// The LUT's strength among `Grade::values` (a row of `PARAMS`), drawn
 /// beside the LUT picker.
 pub(super) const LUT: usize = 10;
 
@@ -128,7 +133,7 @@ pub(super) fn label(i: usize, v: f64) -> String {
     match i {
         0 => format!("{v:+.2} EV"),
         8 => format!("{v:.2}"),
-        9 | 10 => format!("{:.0} %", v * 100.0),
+        9 | 10 | 14 | 15 => format!("{:.0} %", v * 100.0),
         _ => format!("{v:+.2}"),
     }
 }
@@ -658,8 +663,7 @@ mod tests {
 
     #[test]
     fn every_value_the_panel_draws_has_a_row_and_a_range() {
-        // The LUT's strength too: drawn by the same row, past the ten.
-        assert_eq!(PARAMS.len(), LUT + 1);
+        assert_eq!(PARAMS.len(), crate::grade::NAMES.len());
         let neutral = crate::grade::NEUTRAL;
         assert!(crate::grade::RANGES.iter().zip(neutral).all(|(&(lo, hi), v)| lo <= v && v <= hi));
     }

@@ -155,7 +155,7 @@ impl Item {
             // Their colour, filling each band.
             let px = bars.colour.map(|c| (c.clamp(0.0, 1.0) * 255.0).round() as u8);
             let rgba = [px[0], px[1], px[2], 255].repeat(4);
-            return Ok((Picture { width: 2, height: 2, rgba, natural: None }, None));
+            return Ok((Picture { width: 2, height: 2, rgba, natural: None, order: None }, None));
         }
         match &self.text {
             Some(text) => Ok(crate::text::render(text, height)),
@@ -346,6 +346,7 @@ impl Lane {
 }
 
 /// A picture to draw: premultiplied RGBA, upright.
+#[derive(Clone)]
 pub struct Picture {
     pub width: usize,
     pub height: usize,
@@ -353,6 +354,9 @@ pub struct Picture {
     /// Its own size on the frame, as a share of the frame's height (text,
     /// drawn for it); `None` fits the frame.
     pub natural: Option<f64>,
+    /// Text's: each pixel's letter in reading order, 1..255 over its
+    /// letters (0 none), so a reveal types it (`revealed`).
+    pub order: Option<Vec<u8>>,
 }
 
 impl std::fmt::Debug for Picture {
@@ -372,7 +376,32 @@ impl Picture {
         let k = (most as f64 / w.max(h) as f64).min(1.0);
         let size = (((w as f64 * k).round() as u32).max(1), ((h as f64 * k).round() as u32).max(1));
         let rgba = ffmpeg::picture_rgba(input, flat, size)?;
-        Ok(Picture { width: size.0 as usize, height: size.1 as usize, rgba, natural: None })
+        Ok(Picture { width: size.0 as usize, height: size.1 as usize, rgba, natural: None, order: None })
+    }
+
+    /// Premultiplied RGBA 0..1 at (`u`, `v`), 0..1 across and down,
+    /// blurred `reach` (`blur_reach`) as `overlay.wgsl`'s `blurred`.
+    fn blurred(&self, u: f64, v: f64, reach: [f64; 2]) -> [f64; 4] {
+        let (w, h) = (self.width as f64, self.height as f64);
+        if reach == [0.0; 2] {
+            return self.sample(u * w, v * h);
+        }
+        let mut sum = [0.0; 4];
+        for i in 0..BLUR_TAPS {
+            let [x, y] = tap(i);
+            let p = self.sample((u + x * reach[0]).clamp(0.0, 1.0) * w, (v + y * reach[1]).clamp(0.0, 1.0) * h);
+            (0..4).for_each(|c| sum[c] += p[c]);
+        }
+        sum.map(|c| c / BLUR_TAPS as f64)
+    }
+
+    /// Its letter's place in reading order at (`u`, `v`), 0..1 across and
+    /// down: the nearest pixel's; `None` for a picture.
+    fn order_at(&self, u: f64, v: f64) -> Option<f64> {
+        let order = self.order.as_ref()?;
+        let x = ((u * self.width as f64) as usize).min(self.width - 1);
+        let y = ((v * self.height as f64) as usize).min(self.height - 1);
+        Some(order[y * self.width + x] as f64 / 255.0)
     }
 
     /// Premultiplied RGBA 0..1 at picture point (`u`, `v`) in pixels,
@@ -392,6 +421,42 @@ impl Picture {
             let bottom = px(x0, y1, c) * (1.0 - fx) + px(x1, y1, c) * fx;
             top * (1.0 - fy) + bottom * fy
         })
+    }
+}
+
+/// How far a blur of 1 reaches, as a share of a picture's short side.
+pub const BLUR_REACH: f64 = 0.08;
+/// The samples a blur averages, spread over a disc (`overlay.wgsl` takes
+/// the same).
+pub const BLUR_TAPS: usize = 48;
+/// How soft a wipe's edge is, as a share of the picture's width.
+pub const WIPE_EDGE: f64 = 0.04;
+
+/// A blur of `b` over a `w`×`h` picture: how far it reaches across and
+/// down, as shares of its width and height.
+pub fn blur_reach(b: f64, (w, h): (usize, usize)) -> [f64; 2] {
+    let short = w.min(h).max(1) as f64;
+    [b * BLUR_REACH * short / w.max(1) as f64, b * BLUR_REACH * short / h.max(1) as f64]
+}
+
+/// Sample `i` of a blur, on a unit disc, evenly spread (a sunflower's
+/// seeds).
+fn tap(i: usize) -> [f64; 2] {
+    let r = ((i as f64 + 0.5) / BLUR_TAPS as f64).sqrt();
+    let a = i as f64 * 2.399_963_229_728_653;
+    [r * a.cos(), r * a.sin()]
+}
+
+/// How much shows at `x` across (0..1) when `reveal` of it has come on: a
+/// picture wiped in from the left, softly; text (its letter's `order`)
+/// a whole letter at a time.
+pub fn revealed(reveal: f64, x: f64, order: Option<f64>) -> f64 {
+    if reveal >= 1.0 {
+        return 1.0;
+    }
+    match order {
+        Some(o) => f64::from(u8::from(o <= reveal)),
+        None => ((reveal * (1.0 + WIPE_EDGE) - x) / WIPE_EDGE).clamp(0.0, 1.0),
     }
 }
 
@@ -439,18 +504,18 @@ impl Quad {
 }
 
 /// Draws `picture` over `frame` as `quad`, graded by `grade` (its opacity
-/// its see-through, the vignette across the item) and faded to black by
-/// `black`, as the main picture under it is.
+/// its see-through, the vignette across the item, its blur and reveal)
+/// and faded to black by `black`, as the main picture under it is.
 pub fn composite(frame: &mut Frame, picture: &Picture, quad: &Quad, grade: &Grade, black: f64) {
     let (w, h) = (frame.width, frame.height);
     let (x0, y0, x1, y1) = quad.bounds((w, h));
     if x0 >= x1 || y0 >= y1 {
         return;
     }
-    let shade = Grade { opacity: 1.0, black: 0.0, ..*grade };
+    let shade = grade.shade();
     let neutral = shade.is_neutral();
     let aspect = quad.half[0] / quad.half[1].max(1e-9);
-    let (pw, ph) = (picture.width as f64, picture.height as f64);
+    let reach = blur_reach(grade.blur, (picture.width, picture.height));
     // A 16-bit frame (a 10-bit export) is drawn on at its depth.
     let deep = frame.deep;
     let bytes = if deep { 2 } else { 1 };
@@ -460,8 +525,9 @@ pub fn composite(frame: &mut Frame, picture: &Picture, quad: &Quad, grade: &Grad
             if u.abs() > 1.0 || v.abs() > 1.0 {
                 continue;
             }
-            let p = picture.sample((u + 1.0) / 2.0 * pw, (v + 1.0) / 2.0 * ph);
-            let a = p[3] * grade.opacity;
+            let (u01, v01) = ((u + 1.0) / 2.0, (v + 1.0) / 2.0);
+            let p = picture.blurred(u01, v01, reach);
+            let a = p[3] * grade.opacity * revealed(grade.reveal, u01, picture.order_at(u01, v01));
             if a <= 0.0 {
                 continue;
             }
@@ -631,7 +697,7 @@ mod tests {
         assert!((place_at(&keys, 1.0).x - 0.4).abs() < 1e-9);
         assert_eq!(place_at(&[], 1.0), Place::default());
         // A square picture fills the height of a 16:9 frame, centred.
-        let square = Picture { width: 100, height: 100, rgba: vec![0; 40000], natural: None };
+        let square = Picture { width: 100, height: 100, rgba: vec![0; 40000], natural: None, order: None };
         let q = Quad::new(&Place::default(), &square, (1920, 1080));
         assert_eq!((q.centre, q.half), ([960.0, 540.0], [540.0, 540.0]));
         // Turned a quarter clockwise, its top edge points right.
@@ -644,9 +710,21 @@ mod tests {
     }
 
     #[test]
+    fn a_reveal_wipes_a_picture_and_types_text() {
+        assert_eq!((revealed(0.5, 0.2, None), revealed(0.5, 0.8, None), revealed(0.0, 0.0, None)), (1.0, 0.0, 0.0));
+        assert_eq!((revealed(0.5, 0.9, Some(0.4)), revealed(0.5, 0.1, Some(0.6)), revealed(1.0, 0.9, Some(1.0))), (1.0, 0.0, 1.0), "a letter at a time, wherever it is");
+        let text: crate::text::Text = serde_json::from_str(r#"{"content":"Hi"}"#).unwrap();
+        let (picture, _) = crate::text::render(&text, 200);
+        let mut ranks: Vec<u8> = picture.order.unwrap().into_iter().filter(|&o| o > 0).collect();
+        ranks.sort_unstable();
+        ranks.dedup();
+        assert_eq!(ranks, [128, 255], "two letters, in order");
+    }
+
+    #[test]
     fn composite_blends_by_alpha_and_opacity() {
         // A 2×2 half-transparent white picture over grey, filling the frame.
-        let picture = Picture { width: 2, height: 2, rgba: [128u8, 128, 128, 128].repeat(4), natural: None };
+        let picture = Picture { width: 2, height: 2, rgba: [128u8, 128, 128, 128].repeat(4), natural: None, order: None };
         let mut frame = Frame { width: 4, height: 4, rgb: vec![100; 48], deep: false };
         let quad = Quad::new(&Place::default(), &picture, (4, 4));
         composite(&mut frame, &picture, &quad, &Grade::default(), 0.0);

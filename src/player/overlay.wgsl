@@ -1,5 +1,6 @@
 // An overlay picture drawn over the stitched view: a turned quad, its
-// picture premultiplied, graded as `overlay::composite` does it on the CPU.
+// picture premultiplied, graded, blurred and revealed as
+// `overlay::composite` does it on the CPU.
 
 struct Overlay {
     // The view's size and its origin in the target, pixels.
@@ -12,11 +13,48 @@ struct Overlay {
     turn: vec4f,
     // `Grade::uniforms`, its opacity and fade left out (1 and 0).
     grade: array<vec4f, 4>,
+    // The blur's reach across and down (`overlay::blur_reach`), the
+    // reveal, 1 if `order` holds its letters' order.
+    show: vec4f,
 }
 
 @group(0) @binding(0) var<uniform> o: Overlay;
 @group(0) @binding(1) var samp: sampler;
 @group(0) @binding(2) var pic: texture_2d<f32>;
+@group(0) @binding(3) var order: texture_2d<f32>;
+
+// `overlay::BLUR_TAPS` and `overlay::WIPE_EDGE`.
+const TAPS: u32 = 48u;
+const WIPE_EDGE: f32 = 0.04;
+
+// `Picture::blurred`: the picture averaged over a sunflower disc.
+fn blurred(uv: vec2f) -> vec4f {
+    if o.show.x <= 0.0 && o.show.y <= 0.0 {
+        return textureSampleLevel(pic, samp, uv, 0.0);
+    }
+    var sum = vec4f(0.0);
+    for (var i = 0u; i < TAPS; i++) {
+        let r = sqrt((f32(i) + 0.5) / f32(TAPS));
+        let a = f32(i) * 2.3999632;
+        let at = clamp(uv + vec2f(cos(a), sin(a)) * r * o.show.xy, vec2f(0.0), vec2f(1.0));
+        sum += textureSampleLevel(pic, samp, at, 0.0);
+    }
+    return sum / f32(TAPS);
+}
+
+// `overlay::revealed`: a picture wiped in from the left, text typed.
+fn revealed(uv: vec2f) -> f32 {
+    let reveal = o.show.z;
+    if reveal >= 1.0 {
+        return 1.0;
+    }
+    if o.show.w > 0.5 {
+        let size = vec2f(textureDimensions(order));
+        let at = min(vec2u(uv * size), vec2u(size) - vec2u(1u));
+        return select(0.0, 1.0, textureLoad(order, at, 0).r <= reveal);
+    }
+    return clamp((reveal * (1.0 + WIPE_EDGE) - uv.x) / WIPE_EDGE, 0.0, 1.0);
+}
 
 struct Out {
     @builtin(position) pos: vec4f,
@@ -40,8 +78,8 @@ fn ovs(@builtin(vertex_index) i: u32) -> Out {
 
 @fragment
 fn ofs(v: Out) -> @location(0) vec4f {
-    let p = textureSample(pic, samp, v.uv);
-    let a = p.a * o.turn.z;
+    let p = blurred(v.uv);
+    let a = p.a * o.turn.z * revealed(v.uv);
     if a <= 0.0 {
         discard;
     }

@@ -60,6 +60,15 @@ pub struct Grade {
     /// rest; keyframed with them, so a LUT can fade in or out in a cut.
     #[serde(default = "one", skip_serializing_if = "is_one")]
     pub lut: f64,
+    /// 0..1, text and pictures only (gap 87, step 2b): how soft it's
+    /// drawn, 1 past reading (`overlay::blur_reach`).
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub blur: f64,
+    /// 0..1, text and pictures only: how much of it has come on, a
+    /// picture wiped in from the left, text typed letter by letter
+    /// (`overlay::revealed`).
+    #[serde(default = "one", skip_serializing_if = "is_one")]
+    pub reveal: f64,
     /// 0..1: how far faded to black, from the edit's fades; not keyframed.
     #[serde(skip)]
     pub black: f64,
@@ -99,14 +108,20 @@ pub const VIGNETTES: [&str; 4] = ["Round", "Top", "Bottom", "Sides"];
 
 /// The range of each of `Grade::values`: the panel's sliders, an
 /// automation lane's height.
-pub const RANGES: [(f64, f64); 14] = [
-    (-3.0, 3.0), (-1.0, 1.0), (-1.0, 1.0), (-1.0, 1.0), (-1.0, 1.0), (-1.0, 1.0), (-1.0, 1.0), (-1.0, 1.0), (0.0, 1.0), (0.0, 1.0), (0.0, 1.0), (0.0, 3.0), (0.0, 1.0), (0.0, 1.0),
+pub const RANGES: [(f64, f64); 16] = [
+    (-3.0, 3.0), (-1.0, 1.0), (-1.0, 1.0), (-1.0, 1.0), (-1.0, 1.0), (-1.0, 1.0), (-1.0, 1.0), (-1.0, 1.0), (0.0, 1.0), (0.0, 1.0), (0.0, 1.0), (0.0, 3.0), (0.0, 1.0), (0.0, 1.0), (0.0, 1.0), (0.0, 1.0),
 ];
 
 /// Each of `Grade::values` by its name in the project (`KeyOp::EffectValue`).
-pub const NAMES: [&str; 14] = [
-    "exposure", "contrast", "highlights", "shadows", "temperature", "tint", "saturation", "vibrance", "vignette", "opacity", "lut", "vignette_shape", "vignette_reach", "vignette_soft",
+pub const NAMES: [&str; 16] = [
+    "exposure", "contrast", "highlights", "shadows", "temperature", "tint", "saturation", "vibrance", "vignette", "opacity", "lut", "vignette_shape", "vignette_reach", "vignette_soft", "blur", "reveal",
 ];
+
+/// Where `Grade::values` holds the blur and the reveal: a text's or a
+/// picture's, never a cut's (`ITEM_ONLY`).
+pub const BLUR: usize = 14;
+pub const REVEAL: usize = 15;
+pub const ITEM_ONLY: [usize; 2] = [BLUR, REVEAL];
 
 /// Where `Grade::values` holds the vignette's amount, and its shape (held,
 /// not blended; its reach and softness follow).
@@ -114,7 +129,7 @@ pub const VIGNETTE: usize = 8;
 pub const SHAPE: usize = 11;
 
 /// `Grade::values` of the picture untouched.
-pub const NEUTRAL: [f64; 14] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0, REACH, 1.0];
+pub const NEUTRAL: [f64; 16] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0, REACH, 1.0, 0.0, 1.0];
 
 /// Stops of colour per unit of temperature or tint: at ±1, red and blue
 /// are four times apart, enough to neutralise shade or low sun.
@@ -126,7 +141,7 @@ impl Grade {
     }
 
     /// The fields as a list, for blending and the panel.
-    pub fn values(&self) -> [f64; 14] {
+    pub fn values(&self) -> [f64; 16] {
         [
             self.exposure,
             self.contrast,
@@ -142,12 +157,20 @@ impl Grade {
             self.vignette_shape,
             self.vignette_reach,
             self.vignette_soft,
+            self.blur,
+            self.reveal,
         ]
     }
 
-    pub fn from_values(v: [f64; 14]) -> Grade {
-        let [exposure, contrast, highlights, shadows, temperature, tint, saturation, vibrance, vignette, opacity, lut, vignette_shape, vignette_reach, vignette_soft] = v;
-        Grade { exposure, contrast, highlights, shadows, temperature, tint, saturation, vibrance, vignette, vignette_shape, vignette_reach, vignette_soft, opacity, lut, black: 0.0 }
+    pub fn from_values(v: [f64; 16]) -> Grade {
+        let [exposure, contrast, highlights, shadows, temperature, tint, saturation, vibrance, vignette, opacity, lut, vignette_shape, vignette_reach, vignette_soft, blur, reveal] = v;
+        Grade { exposure, contrast, highlights, shadows, temperature, tint, saturation, vibrance, vignette, vignette_shape, vignette_reach, vignette_soft, opacity, lut, blur, reveal, black: 0.0 }
+    }
+
+    /// What colours an overlay's pixels: its opacity, fade, blur and
+    /// reveal left out, each applied on its own.
+    pub fn shade(&self) -> Grade {
+        Grade { opacity: 1.0, black: 0.0, blur: 0.0, reveal: 1.0, ..*self }
     }
 
     /// How far toward the vignette's edge `at` is (−1..1 each way, y down),

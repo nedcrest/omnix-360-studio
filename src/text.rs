@@ -250,22 +250,22 @@ pub fn render(text: &Text, frame_height: usize) -> (Picture, Option<String>) {
     let (shadow_off, shadow_blur) = if text.shadow { (0.05 * px as f64, 0.06 * px as f64) } else { (0.0, 0.0) };
     let pad = (ring + shadow_off + 2.0 * shadow_blur).ceil() as usize + 2;
     let (w, h) = (width as usize + 2 * pad, height as usize + 2 * pad);
-    let mut mask = vec![0f32; w * h];
-    buffer.draw(system, cache, Color::rgb(255, 255, 255), |x, y, gw, gh, c| {
-        let a = c.a() as f32 / 255.0;
-        for yy in y..y + gh as i32 {
-            for xx in x..x + gw as i32 {
-                let (px, py) = (xx + pad as i32, yy + pad as i32);
-                if px >= 0 && py >= 0 && (px as usize) < w && (py as usize) < h {
-                    let m = &mut mask[py as usize * w + px as usize];
-                    *m = (*m + a).min(1.0);
-                }
-            }
-        }
-    });
+    let (mask, letter) = letters(&buffer, system, cache, pad, (w, h));
     drop(guard);
-    let around = outline.map(|r| dilate(&mask, (w, h), r)).unwrap_or_else(|| mask.clone());
-    let shade = text.shadow.then(|| blur(&shift(&around, (w, h), shadow_off), (w, h), shadow_blur));
+    let (around, ring) = outline.map(|r| dilate(&mask, &letter, (w, h), r)).unwrap_or_else(|| (mask.clone(), letter.clone()));
+    let shade = text.shadow.then(|| {
+        let (cast, cast_letter) = (shift(&around, (w, h), shadow_off), shift(&ring, (w, h), shadow_off));
+        (blur(&cast, (w, h), shadow_blur), dilate(&cast, &cast_letter, (w, h), 2.0 * shadow_blur).1)
+    });
+    // A pixel types in with the letter drawn on top there.
+    let order = (0..w * h)
+        .map(|i| match &shade {
+            _ if mask[i] > 0.0 => letter[i],
+            _ if outline.is_some() && around[i] > 0.0 => ring[i],
+            Some((_, cast)) => cast[i],
+            None => 0,
+        })
+        .collect();
     let fill = text.colour.0.map(|c| c as f32 / 255.0);
     let ring_colour = text.outline.map_or([0.0; 3], |o| o.colour.0.map(|c| c as f32 / 255.0));
     let mut rgba = vec![0u8; w * h * 4];
@@ -279,7 +279,7 @@ pub fn render(text: &Text, frame_height: usize) -> (Picture, Option<String>) {
             }
             a = alpha + a * (1.0 - alpha);
         };
-        if let Some(s) = &shade {
+        if let Some((s, _)) = &shade {
             over([0.0; 3], 0.6 * s[i]);
         }
         if outline.is_some() {
@@ -291,12 +291,41 @@ pub fn render(text: &Text, frame_height: usize) -> (Picture, Option<String>) {
         }
         px[3] = (a * 255.0).round() as u8;
     });
-    let picture = Picture { width: w, height: h, rgba, natural: Some(h as f64 * (asked / px) as f64 / frame_height as f64) };
+    let picture = Picture { width: w, height: h, rgba, natural: Some(h as f64 * (asked / px) as f64 / frame_height as f64), order: Some(order) };
     (picture, missing)
 }
 
-/// `mask` grown by `r` pixels all round (a disc), soft at its edge.
-fn dilate(mask: &[f32], (w, h): (usize, usize), r: f64) -> Vec<f32> {
+/// The letters of `buffer` as a coverage mask, `pad` pixels in on a
+/// `w`×`h` picture, and each pixel's letter in reading order
+/// (`Picture::order`): the one covering it most.
+fn letters(buffer: &Buffer, system: &mut FontSystem, cache: &mut SwashCache, pad: usize, (w, h): (usize, usize)) -> (Vec<f32>, Vec<u8>) {
+    let (mut mask, mut order, mut most) = (vec![0f32; w * h], vec![0u8; w * h], vec![0f32; w * h]);
+    let count = buffer.layout_runs().map(|r| r.glyphs.len()).sum::<usize>().max(1);
+    let mut k = 0usize;
+    for run in buffer.layout_runs() {
+        for glyph in run.glyphs {
+            k += 1;
+            let rank = (k * 255).div_ceil(count).min(255) as u8;
+            let at = glyph.physical((0.0, 0.0), 1.0);
+            cache.with_pixels(system, at.cache_key, Color::rgb(255, 255, 255), |x, y, c| {
+                let (px, py) = (at.x + x + pad as i32, run.line_y as i32 + at.y + y + pad as i32);
+                if px < 0 || py < 0 || px as usize >= w || py as usize >= h {
+                    return;
+                }
+                let (i, a) = (py as usize * w + px as usize, c.a() as f32 / 255.0);
+                mask[i] = (mask[i] + a).min(1.0);
+                if a > most[i] {
+                    (most[i], order[i]) = (a, rank);
+                }
+            });
+        }
+    }
+    (mask, order)
+}
+
+/// `mask` grown by `r` pixels all round (a disc), soft at its edge, and
+/// whose `order` each pixel took (the strongest it grew from).
+fn dilate(mask: &[f32], order: &[u8], (w, h): (usize, usize), r: f64) -> (Vec<f32>, Vec<u8>) {
     let reach = r.ceil() as i32;
     let offsets: Vec<(i32, i32, f32)> = (-reach..=reach)
         .flat_map(|dy| (-reach..=reach).map(move |dx| (dx, dy)))
@@ -311,22 +340,25 @@ fn dilate(mask: &[f32], (w, h): (usize, usize), r: f64) -> Vec<f32> {
         .into_par_iter()
         .map(|i| {
             let (x, y) = ((i % w) as i32, (i / w) as i32);
-            let mut best = 0f32;
+            let mut best = (0f32, 0u8);
             for &(dx, dy, k) in &offsets {
                 let (sx, sy) = (x + dx, y + dy);
                 if sx >= 0 && sy >= 0 && (sx as usize) < w && (sy as usize) < h {
-                    best = best.max(mask[sy as usize * w + sx as usize] * k);
+                    let j = sy as usize * w + sx as usize;
+                    if mask[j] * k > best.0 {
+                        best = (mask[j] * k, order[j]);
+                    }
                 }
             }
             best
         })
-        .collect()
+        .unzip()
 }
 
 /// `mask` moved `by` pixels right and down.
-fn shift(mask: &[f32], (w, h): (usize, usize), by: f64) -> Vec<f32> {
+fn shift<T: Copy + Default>(mask: &[T], (w, h): (usize, usize), by: f64) -> Vec<T> {
     let d = by.round() as usize;
-    let mut out = vec![0f32; w * h];
+    let mut out = vec![T::default(); w * h];
     for y in d..h {
         out[y * w + d..(y + 1) * w].copy_from_slice(&mask[(y - d) * w..(y - d + 1) * w - d]);
     }

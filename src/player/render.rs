@@ -623,7 +623,7 @@ mod tests {
         for _ in 0..2 {
             rgba.extend([255, 0, 0, 255, 255, 0, 0, 255, 0, 128, 0, 128, 0, 128, 0, 128]);
         }
-        let picture = Arc::new(overlay::Picture { width: 4, height: 2, rgba, natural: None });
+        let picture = Arc::new(overlay::Picture { width: 4, height: 2, rgba, natural: None, order: None });
         let place = Place { x: 0.4, y: 0.6, size: 0.5, rotation: 20.0 };
         let grade = crate::grade::Grade { opacity: 0.8, saturation: -0.5, ..Default::default() };
         let draw = gpu::OverlayDraw { id: 1, picture: picture.clone(), spot: crate::overlay::Spot::Placed(place), grade, black: 0.25 };
@@ -671,5 +671,16 @@ mod tests {
         }
         let big = want.rgb.iter().zip(&got.rgb).filter(|(a, b)| a.abs_diff(**b) > 8).count();
         assert!(big < 4 * w, "bars: {big} values off");
+        // Blurred and half wiped in; then typed, its letters' order set.
+        let blurred = crate::grade::Grade { blur: 0.7, reveal: 0.5, ..Default::default() };
+        let typed = Arc::new(overlay::Picture { order: Some(vec![64, 128, 192, 255, 64, 128, 192, 255]), ..(*picture).clone() });
+        for (id, pic, grade) in [(3, picture.clone(), blurred), (4, typed, crate::grade::Grade { reveal: 0.6, ..Default::default() })] {
+            let mut want = render(&[]);
+            let got = render(&[gpu::OverlayDraw { id, picture: pic.clone(), spot: crate::overlay::Spot::Placed(place), grade, black: 0.0 }]);
+            overlay::composite(&mut want, &pic, &Quad::new(&place, &pic, (w, h)), &grade, 0.0);
+            let diff: Vec<i32> = want.rgb.iter().zip(&got.rgb).map(|(a, b)| (*a as i32 - *b as i32).abs()).collect();
+            let (big, mean) = (diff.iter().filter(|&&d| d > 8).count(), diff.iter().sum::<i32>() as f64 / diff.len() as f64);
+            assert!(mean < 0.3 && big < 80, "picture {id}: mean {mean}, {big} off");
+        }
     }
 }

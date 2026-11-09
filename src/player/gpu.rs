@@ -50,6 +50,7 @@ struct OverlayU {
     quad: [f32; 4],
     turn: [f32; 4],
     grade: [[f32; 4]; 4],
+    show: [f32; 4],
 }
 
 /// An overlay picture to draw over the view: where, graded how, and how far
@@ -68,6 +69,8 @@ pub struct OverlayDraw {
 struct OverlaySlot {
     uniforms: wgpu::Buffer,
     texture: Plane,
+    /// Its letters' order (`Picture::order`); 1×1 for a picture.
+    order: Plane,
     bind_group: wgpu::BindGroup,
     picture: u64,
 }
@@ -430,27 +433,35 @@ impl Pipeline {
                     mapped_at_creation: false,
                 });
                 let texture = plane(device, 1, 1, wgpu::TextureFormat::Rgba8Unorm);
-                let bind_group = bind_overlay(device, &self.overlay_layout, &uniforms, &self.sampler, &texture);
-                self.overlay_slots.push(OverlaySlot { uniforms, texture, bind_group, picture: 0 });
+                let order = plane(device, 1, 1, wgpu::TextureFormat::R8Unorm);
+                let bind_group = bind_overlay(device, &self.overlay_layout, &uniforms, &self.sampler, &texture, &order);
+                self.overlay_slots.push(OverlaySlot { uniforms, texture, order, bind_group, picture: 0 });
             }
             let slot = &mut self.overlay_slots[k];
             if slot.picture != d.id {
                 slot.texture = plane(device, pic.width as u32, pic.height as u32, wgpu::TextureFormat::Rgba8Unorm);
                 write(queue, &slot.texture.texture, &pic.rgba, pic.width as u32, pic.height as u32, 4);
-                slot.bind_group = bind_overlay(device, &self.overlay_layout, &slot.uniforms, &self.sampler, &slot.texture);
+                let (w, h) = if pic.order.is_some() { (pic.width as u32, pic.height as u32) } else { (1, 1) };
+                slot.order = plane(device, w, h, wgpu::TextureFormat::R8Unorm);
+                if let Some(order) = &pic.order {
+                    write(queue, &slot.order.texture, order, w, h, 1);
+                }
+                slot.bind_group = bind_overlay(device, &self.overlay_layout, &slot.uniforms, &self.sampler, &slot.texture, &slot.order);
                 slot.picture = d.id;
             }
             let q = d.spot.quad(pic, (size[0].round() as usize, size[1].round() as usize));
             let f = |v: f64| v as f32;
             let (s, c) = q.turn.sin_cos();
-            // Its opacity and fade are applied on their own, after the grade.
-            let shade = Grade { opacity: 1.0, black: 0.0, ..d.grade };
+            // Its opacity, fade, blur and reveal are applied on their own.
+            let shade = d.grade.shade();
+            let reach = crate::overlay::blur_reach(d.grade.blur, (pic.width, pic.height));
             let u = OverlayU {
                 frame: [size[0], size[1], origin[0], origin[1]],
                 target: [target[0], target[1], self.srgb as u8 as f32, f(d.black)],
                 quad: [f(q.centre[0]), f(q.centre[1]), f(q.half[0]), f(q.half[1])],
                 turn: [f(c), f(s), f(d.grade.opacity), if shade.is_neutral() { 0.0 } else { 1.0 }],
                 grade: shade.uniforms(),
+                show: [f(reach[0]), f(reach[1]), f(d.grade.reveal), pic.order.is_some() as u8 as f32],
             };
             queue.write_buffer(&slot.uniforms, 0, bytemuck::bytes_of(&u));
         }
@@ -905,6 +916,12 @@ fn overlay_pipeline(device: &wgpu::Device, format: wgpu::TextureFormat) -> (wgpu
                 ty: wgpu::BindingType::Texture { sample_type: wgpu::TextureSampleType::Float { filterable: true }, view_dimension: wgpu::TextureViewDimension::D2, multisampled: false },
                 count: None,
             },
+            wgpu::BindGroupLayoutEntry {
+                binding: 3,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture { sample_type: wgpu::TextureSampleType::Float { filterable: true }, view_dimension: wgpu::TextureViewDimension::D2, multisampled: false },
+                count: None,
+            },
         ],
     });
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor { label: None, bind_group_layouts: &[&layout], push_constant_ranges: &[] });
@@ -928,7 +945,7 @@ fn overlay_pipeline(device: &wgpu::Device, format: wgpu::TextureFormat) -> (wgpu
     (pipeline, layout)
 }
 
-fn bind_overlay(device: &wgpu::Device, layout: &wgpu::BindGroupLayout, uniforms: &wgpu::Buffer, sampler: &wgpu::Sampler, texture: &Plane) -> wgpu::BindGroup {
+fn bind_overlay(device: &wgpu::Device, layout: &wgpu::BindGroupLayout, uniforms: &wgpu::Buffer, sampler: &wgpu::Sampler, texture: &Plane, order: &Plane) -> wgpu::BindGroup {
     device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("overlay"),
         layout,
@@ -936,6 +953,7 @@ fn bind_overlay(device: &wgpu::Device, layout: &wgpu::BindGroupLayout, uniforms:
             wgpu::BindGroupEntry { binding: 0, resource: uniforms.as_entire_binding() },
             wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(sampler) },
             wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::TextureView(&texture.view) },
+            wgpu::BindGroupEntry { binding: 3, resource: wgpu::BindingResource::TextureView(&order.view) },
         ],
     })
 }

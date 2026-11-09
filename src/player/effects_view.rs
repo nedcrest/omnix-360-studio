@@ -51,7 +51,8 @@ impl Group {
             Group::Colour => &[4, 5, 6, 7],
             Group::Look => &[LUT],
             Group::Finish => &[8, 9, 11, 12, 13],
-            Group::Place | Group::Animate | Group::Bars | Group::WholeEdit => &[],
+            Group::Animate => &crate::grade::ITEM_ONLY,
+            Group::Place | Group::Bars | Group::WholeEdit => &[],
         }
     }
 }
@@ -76,7 +77,8 @@ impl App {
                 Some(b) => body = body.push(self.group(Group::Bars, bars_controls(b))),
                 None => {
                     body = body.push(self.group(Group::Place, self.place_sliders(i, t)));
-                    body = body.push(self.group(Group::Animate, self.animate_controls(i)));
+                    let shown = column(crate::grade::ITEM_ONLY.map(|p| self.param_row(p, grade.values()[p], enabled))).spacing(6);
+                    body = body.push(self.group(Group::Animate, column![shown, self.animate_controls(i)].spacing(12).into()));
                 }
             },
             Some((Target::Cut(_), _)) | None => {}
@@ -317,7 +319,7 @@ fn vignette_controls(grade: &Grade) -> Element<'static, Message> {
         column![row![text(name).size(13).width(Length::Fill), text(format!("{v:.2}")).size(13)], slider(0.0..=1.0, v, move |v| Message::Effect(EffectMsg::Set(p, v))).step(0.01).on_release(m(EffectMsg::Done))].spacing(2)
     };
     tip(
-        column![iced::widget::row(shapes).spacing(4).wrap().vertical_spacing(4), slider_of("Reach", crate::grade::SHAPE + 1, grade.vignette_reach), slider_of("Softness", crate::grade::SHAPE + 2, grade.vignette_soft)].spacing(8),
+        column![iced::widget::row(shapes).spacing(4).wrap().vertical_spacing(4), slider_of(PARAMS[crate::grade::SHAPE + 1].0, crate::grade::SHAPE + 1, grade.vignette_reach), slider_of(PARAMS[crate::grade::SHAPE + 2].0, crate::grade::SHAPE + 2, grade.vignette_soft)].spacing(8),
         text("Round, or from the top (a graduated filter on a bright sky), the bottom or the sides; how far in it reaches, how soft its edge"),
         tooltip::Position::Left,
     )

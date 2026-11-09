@@ -98,7 +98,8 @@ fn grade_value(effects: &[crate::grade::EffectKey], param: &str, t: f64) -> f64 
 /// `param` names something `o` can move.
 fn check_param(o: &Owner, param: &str) -> Result<(), OpError> {
     let place = o.item && crate::overlay::Place::NAMES.contains(&param);
-    if crate::grade::NAMES.contains(&param) || place {
+    let effect = crate::grade::NAMES.iter().position(|n| *n == param).is_some_and(|k| o.item || !crate::grade::ITEM_ONLY.contains(&k));
+    if effect || place {
         Ok(())
     } else {
         Err(OpError::NotFound(format!("value {param:?} to automate")))
@@ -298,6 +299,7 @@ mod tests {
         assert_eq!(e.cuts[0].automation.iter().find(|c| c.param == "exposure").unwrap().to, 9.0, "within the cut");
         assert!(e.apply(&op(AutoOp::Add { on, param: "sparkle".into(), from: 1.0, to: 2.0 })).is_err());
         assert!(e.apply(&op(AutoOp::Add { on, param: "x".into(), from: 1.0, to: 2.0 })).is_err(), "a cut has no place to move");
+        assert!(e.apply(&op(AutoOp::Add { on, param: "reveal".into(), from: 1.0, to: 2.0 })).is_err(), "nor a reveal");
         e.apply(&op(AutoOp::Delete { on, param: "vignette".into(), at: 4.0 })).unwrap();
         assert_eq!(e.cuts[0].automation.len(), 1);
         check(&e).unwrap();

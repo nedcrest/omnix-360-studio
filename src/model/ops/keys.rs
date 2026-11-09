@@ -94,6 +94,9 @@ pub(super) fn apply(p: &mut Project, op: &KeyOp) -> Result<Outcome, OpError> {
             if !value.is_finite() {
                 return Err(OpError::Invalid(format!("{param} {value} isn't a number")));
             }
+            if matches!(on, Graded::Cut(_)) && crate::grade::ITEM_ONLY.contains(&k) {
+                return Err(OpError::Invalid(format!("{param} is for text and pictures, not a cut")));
+            }
             let start = match *on {
                 Graded::Cut(id) => find_cut(p, id)?.start,
                 Graded::Item(id) => find_item(p, id)?.start,

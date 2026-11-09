@@ -1582,8 +1582,7 @@ Milestone «Ефекти, колір і розумний звук».
 **Built 2026-11-10, waiting for the check**: gap 93 (`d55bac2`) and 1–5
 (`aca1267` groups, `5919b10` Text group, `28bdd84` the film's fades in
 Transitions, `c0bace6` style settings button and ins/outs as lists).
-Left out of «Light and Colour folded at first»: nothing; the folding of
-items' Light and Colour is kept apart from a cut's (`Group::fold_key`).
+Items' Light and Colour fold apart from a cut's (`Group::fold_key`).
 
 ### 95. Text: its own colour, letter spacing, a box behind it — idea (Claude's UI review, 2026-11-10)
 

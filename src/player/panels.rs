@@ -17,7 +17,7 @@ impl App {
                 let path = match of {
                     info::Of::Cut(i) => self.edit.cuts.get(i).map(|c| c.input.clone()),
                     info::Of::Music(which, i) => self.edit.track(which).clips.get(i).map(|m| m.input.clone()),
-                    info::Of::Overlay(r) => self.edit.item(r).filter(|it| it.text.is_none()).map(|it| it.input.clone()),
+                    info::Of::Overlay(r) => self.edit.item(r).and_then(|it| it.file().map(Path::to_owned)),
                     // The bin opens its files with their path (`open_info`).
                     info::Of::File(_) => None,
                 };

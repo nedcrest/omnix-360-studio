@@ -72,11 +72,8 @@ impl App {
         self.edit
             .lanes()
             .filter_map(|lane| lane.at(t).map(|(_, it)| it))
-            .filter_map(|item| {
-                let (id, picture) = self.overlay_pictures.get(&item.key())?.clone()?;
-                let (place, grade) = crate::overlay::look(item, t);
-                Some(gpu::OverlayDraw { id, picture, place, grade, black })
-            })
+            .filter_map(|item| Some((item, self.overlay_pictures.get(&item.key())?.clone()?)))
+            .flat_map(|(item, (id, picture))| crate::overlay::spots(item, t).into_iter().map(move |(spot, grade)| gpu::OverlayDraw { id, picture: picture.clone(), spot, grade, black }))
             .collect()
     }
 
@@ -89,7 +86,8 @@ impl App {
             .into_iter()
             .filter(|_| !playing)
             .filter_map(|track| {
-                let (i, item) = self.edit.lane(track)?.at(t)?;
+                // Bars have no place to drag.
+                let (i, item) = self.edit.lane(track)?.at(t).filter(|(_, it)| it.bars.is_none())?;
                 let (_, picture) = self.overlay_pictures.get(&item.key())?.clone()?;
                 Some(((track, i), crate::overlay::look(item, t).0, picture))
             })
@@ -201,6 +199,15 @@ impl App {
                 }
                 // Its words and look are set in the text panel, open now.
                 self.text_of = None;
+            }
+            // Ten seconds of them, selected: their ratio, slide and colour
+            // in the Effects panel.
+            Message::AddBars => {
+                self.folds.overlay = false;
+                let added = self.op(Op::Item(ItemOp::AddBars { bars: Default::default(), at: self.position(), len: 10.0 }));
+                if let Some(id) = added.and_then(|o| o.made) {
+                    self.selection = Selection::Item(id);
+                }
             }
             _ => {}
         }

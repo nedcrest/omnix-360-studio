@@ -16,7 +16,7 @@ use crate::hdr::Hdr;
 use crate::align::{Aligner, CELLS_ALPHA, CELLS_PHI, Field, Strips};
 use crate::exposure::{self, BINS, FADE_FROM, FADE_TO, Gains, Seam};
 use crate::grade::Grade;
-use crate::overlay::{Picture, Place, Quad};
+use crate::overlay::Picture;
 use crate::stitch::{Lens, M3};
 use crate::view::Camera;
 use bytemuck::{Pod, Zeroable};
@@ -59,7 +59,7 @@ pub struct OverlayDraw {
     /// Tells pictures apart, so each is uploaded once.
     pub id: u64,
     pub picture: Arc<Picture>,
-    pub place: Place,
+    pub spot: crate::overlay::Spot,
     pub grade: Grade,
     pub black: f64,
 }
@@ -440,7 +440,7 @@ impl Pipeline {
                 slot.bind_group = bind_overlay(device, &self.overlay_layout, &slot.uniforms, &self.sampler, &slot.texture);
                 slot.picture = d.id;
             }
-            let q = Quad::new(&d.place, pic, (size[0].round() as usize, size[1].round() as usize));
+            let q = d.spot.quad(pic, (size[0].round() as usize, size[1].round() as usize));
             let f = |v: f64| v as f32;
             let (s, c) = q.turn.sin_cos();
             // Its opacity and fade are applied on their own, after the grade.

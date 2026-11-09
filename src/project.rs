@@ -951,7 +951,7 @@ impl Project {
             });
         }
         for lane in &mut self.overlays {
-            lane.items.retain(|it| it.text.is_some() || exists(&it.input) || {
+            lane.items.retain(|it| it.file().is_none_or(&exists) || {
                 missing.overlays.push(it.input.clone());
                 false
             });
@@ -1036,8 +1036,10 @@ impl Project {
             if item.end <= item.start || item.at < 0.0 {
                 bail!("overlay {} is empty or starts before the edit", n + 1);
             }
-            if item.text.is_none() == item.input.as_os_str().is_empty() {
-                bail!("overlay {} needs a picture (\"input\") or \"text\", one of them", n + 1);
+            // One of a picture, text or bars.
+            let kinds = [item.file().is_some(), item.text.is_some(), item.bars.is_some()].into_iter().filter(|&k| k).count();
+            if kinds != 1 {
+                bail!("overlay {} needs one of a picture (\"input\"), \"text\" or \"bars\"", n + 1);
             }
             if item.motion.iter().any(|k| !k.t.is_finite() || k.place.values().iter().any(|v| !v.is_finite())) {
                 bail!("an overlay's motion keyframe isn't a number");
@@ -1045,7 +1047,7 @@ impl Project {
             if item.effects.iter().any(|k| !k.t.is_finite() || k.grade.values().iter().any(|v| !v.is_finite())) {
                 bail!("an overlay's effect keyframe isn't a number");
             }
-            if item.text.is_none() {
+            if item.file().is_some() {
                 item.input = dir.join(&item.input);
             }
             item.motion.sort_by(|a, b| a.t.total_cmp(&b.t));
@@ -1424,12 +1426,19 @@ mod tests {
         let mut p = Project { cuts: vec![Cut::new("a.mp4".into(), 0.0, 4.0), Cut { audio: Some("voice.flac".into()), ..Cut::new("b.mp4".into(), 0.0, 3.0) }, Cut { audio: Some("voice.flac".into()), ..Cut::new("b.mp4".into(), 3.0, 5.0) }], ..Default::default() };
         p.music.append_part("song.wav".into(), 0.0, 0.0, 10.0);
         p.sfx.append_part("bang.wav".into(), 0.0, 0.0, 1.0);
-        let item = |input: &str, text| crate::overlay::Item { id: 0, input: input.into(), text, at: 0.0, start: 0.0, end: 5.0, motion: Vec::new(), effects: Vec::new() };
+        let item = |input: &str, text| crate::overlay::Item { id: 0, input: input.into(), text, at: 0.0, start: 0.0, end: 5.0, motion: Vec::new(), effects: Vec::new(), bars: None };
         p.overlays.push(crate::overlay::Lane::default());
-        p.overlays[0].items = vec![item("logo.png", None), item("", Some(Default::default()))];
+        let bars = crate::overlay::Item { bars: Some(Default::default()), ..item("", None) };
+        p.overlays[0].items = vec![item("logo.png", None), item("", Some(Default::default())), bars];
         let here = ["b.mp4", "song.wav"];
         let m = p.drop_missing(|f| here.iter().any(|h| f == Path::new(h)));
-        assert_eq!((p.cuts.len(), p.music.clips.len(), p.sfx.clips.len(), p.overlays[0].items.len()), (2, 1, 0, 1), "the text item stays");
+        assert_eq!((p.cuts.len(), p.music.clips.len(), p.sfx.clips.len(), p.overlays[0].items.len()), (2, 1, 0, 2), "the text and bars items stay");
+        // Bars read back from a project file: neither a picture nor text.
+        let path = std::env::temp_dir().join(format!("omnix-bars-{}.json", std::process::id()));
+        std::fs::write(&path, serde_json::to_string(&Project { cuts: vec![Cut::new("x.mp4".into(), 0.0, 2.0)], overlays: p.overlays.clone(), ..Default::default() }).unwrap()).unwrap();
+        let read = Project::read(&path);
+        let _ = std::fs::remove_file(&path);
+        assert!(read.unwrap().overlays[0].items.iter().any(|it| it.bars.is_some() && it.file().is_none()));
         assert_eq!(m.deaf, [PathBuf::from("voice.flac")], "named once");
         assert!(!m.is_complete());
         assert_eq!(m.said().unwrap(), "Left out cuts of missing clips: a.mp4. Missing sound files, playing the clips' own: voice.flac. Left out missing SFX: bang.wav. Left out missing overlays: logo.png");
@@ -1441,7 +1450,7 @@ mod tests {
         let mut p = Project { cuts: vec![Cut::new("a.mp4".into(), 0.0, 4.0), Cut { id: 7, ..Cut::new("b.mp4".into(), 0.0, 3.0) }], ..Default::default() };
         p.music.append_part("song.wav".into(), 0.0, 0.0, 10.0);
         p.text.push(crate::overlay::Lane::default());
-        p.text[0].items.push(crate::overlay::Item { id: 0, input: PathBuf::new(), text: Some(Default::default()), at: 0.0, start: 0.0, end: 5.0, motion: Vec::new(), effects: Vec::new() });
+        p.text[0].items.push(crate::overlay::Item { id: 0, input: PathBuf::new(), text: Some(Default::default()), at: 0.0, start: 0.0, end: 5.0, motion: Vec::new(), effects: Vec::new(), bars: None });
         p.settle_ids();
         assert_eq!(p.cuts[1].id, 7, "an id given stays");
         assert_eq!((p.cuts[0].id, p.music.clips[0].id, p.text[0].items[0].id), (8, 9, 10), "past the highest, in order");

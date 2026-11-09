@@ -52,6 +52,9 @@ pub enum EffectMsg {
     Style(Option<crate::transition::Look>),
     StyleKnob(&'static str, f32),
     StyleReset,
+    /// The selected bars' ratio, slide and colour (a press made at once, a
+    /// slider's drag one undo step closed by `Done`).
+    Bars(crate::overlay::Bars, bool),
     /// Jump to cut `cut`'s effect keyframe at clip time `t`.
     Jump(usize, f64),
     /// Cut `cut`'s effect keyframe `key` dragged to clip time `t`.
@@ -308,6 +311,14 @@ impl App {
                 self.change_place(starting, |place| *place = to);
             }
             EffectMsg::Done => self.edit.commit(),
+            EffectMsg::Bars(bars, press) => {
+                let Some(item) = self.selection.item(&self.edit).and_then(|i| self.edit.item(i)).map(|it| it.id) else { return };
+                self.edit.begin();
+                self.op(Op::Item(crate::model::ops::items::ItemOp::SetBars { item, bars }));
+                if press {
+                    self.edit.commit();
+                }
+            }
             m @ (EffectMsg::Style(_) | EffectMsg::StyleKnob(..) | EffectMsg::StyleReset) => {
                 let Some((Target::Cut(i), _)) = target else { return };
                 self.on_style(i, m);
@@ -615,8 +626,12 @@ impl App {
         let motion_key = overlay.and_then(|(i, t)| self.motion_key_at(i, t));
         let enabled = target.is_some();
         let mut sliders = column![].spacing(6);
-        // An overlay's place first: where it is is what's set most.
-        if let Some((i, t)) = overlay {
+        // Bars: their own values; an overlay's place first: where it is is
+        // what's set most.
+        let bars = overlay.and_then(|(i, _)| self.edit.item(i)?.bars);
+        if let Some(b) = bars {
+            sliders = sliders.push(bars_controls(b)).push(rule::horizontal(1));
+        } else if let Some((i, t)) = overlay {
             let place = self.edit.item(i).map_or_else(Place::default, |it| place_at(&it.motion, t));
             for (p, (name, lo, hi, hint)) in PLACE.iter().enumerate() {
                 let v = place.values()[p];
@@ -649,6 +664,7 @@ impl App {
             Some((Target::Cut(i), _)) => format!("Cut {} · {}", i + 1, super::clip_name(&self.edit.cuts[i].input)),
             Some((Target::Overlay(i), _)) => match self.edit.item(i) {
                 Some(it) if it.text.is_some() => format!("Text · {}", it.name()),
+                Some(it) if it.bars.is_some() => it.name(),
                 Some(it) => format!("Overlay · {}", super::clip_name(&it.input)),
                 None => String::new(),
             },
@@ -735,6 +751,24 @@ impl App {
         .spacing(10)
         .into()
     }
+}
+
+/// Bars' ratio (scope, 2:1, flat), how long they slide, their colour.
+fn bars_controls(b: crate::overlay::Bars) -> Element<'static, Message> {
+    let set = |bars, press| Message::Effect(EffectMsg::Bars(bars, press));
+    let pick = |label: String, on: bool, bars| button(text(label).size(12)).padding([3, 8]).style(if on { button::primary } else { button::secondary }).on_press(set(bars, true)).into();
+    let ratios = crate::overlay::BAR_RATIOS.map(|r| pick(format!("{r:.2}:1"), (b.ratio - r).abs() < 1e-6, crate::overlay::Bars { ratio: r, ..b }));
+    let colours = [("Black", [0.0; 3]), ("White", [1.0; 3])].map(|(name, c)| pick(name.to_owned(), b.colour == c, crate::overlay::Bars { colour: c, ..b }));
+    let slide = column![
+        row![text("Slide").size(13).width(Length::Fill), text(format!("{:.1} s", b.slide)).size(13)],
+        slider(0.0..=3.0, b.slide, move |s| set(crate::overlay::Bars { slide: s, ..b }, false)).step(0.1).on_release(Message::Effect(EffectMsg::Done)),
+    ]
+    .spacing(2);
+    tip(
+        column![text("Bars").size(16), iced::widget::row(ratios).spacing(4), iced::widget::row(colours).spacing(4), slide].spacing(8),
+        text("The picture's shape between the bars, their colour, and how long they slide in at the item's start and out at its end; Opacity below"),
+        tooltip::Position::Left,
+    )
 }
 
 /// The vignette's shape (gap 6) and how far in and how softly it reaches.

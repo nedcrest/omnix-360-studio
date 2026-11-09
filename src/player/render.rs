@@ -626,7 +626,7 @@ mod tests {
         let picture = Arc::new(overlay::Picture { width: 4, height: 2, rgba, natural: None });
         let place = Place { x: 0.4, y: 0.6, size: 0.5, rotation: 20.0 };
         let grade = crate::grade::Grade { opacity: 0.8, saturation: -0.5, ..Default::default() };
-        let draw = gpu::OverlayDraw { id: 1, picture: picture.clone(), place, grade, black: 0.25 };
+        let draw = gpu::OverlayDraw { id: 1, picture: picture.clone(), spot: crate::overlay::Spot::Placed(place), grade, black: 0.25 };
         let mut render = |overlays: &[gpu::OverlayDraw]| {
             gpu.size = (0, 0);
             gpu.targets = vec![gpu.make_target(w, h)];
@@ -658,5 +658,18 @@ mod tests {
         eprintln!("mean diff {mean:.3}, {big} of {} values off by more than 8", diff.len());
         // Edge pixels differ by filtering; the inside must agree.
         assert!(mean < 0.3 && big < 50, "mean {mean}, {big} off");
+        // Bars (gap 15): two bands of their colour, half way in.
+        let item = overlay::Item { id: 0, input: Default::default(), text: None, at: 0.0, start: 0.0, end: 4.0, motion: vec![], effects: vec![], bars: Some(overlay::Bars { colour: [0.1, 0.2, 0.6], ..Default::default() }) };
+        let (bars, _) = item.picture(0, h).unwrap();
+        let bars = Arc::new(bars);
+        let spots = overlay::spots(&item, 0.5);
+        let draws: Vec<gpu::OverlayDraw> = spots.iter().map(|&(spot, grade)| gpu::OverlayDraw { id: 2, picture: bars.clone(), spot, grade, black: 0.0 }).collect();
+        let mut want = render(&[]);
+        let got = render(&draws);
+        for (spot, grade) in &spots {
+            overlay::composite(&mut want, &bars, &spot.quad(&bars, (w, h)), grade, 0.0);
+        }
+        let big = want.rgb.iter().zip(&got.rgb).filter(|(a, b)| a.abs_diff(**b) > 8).count();
+        assert!(big < 4 * w, "bars: {big} values off");
     }
 }

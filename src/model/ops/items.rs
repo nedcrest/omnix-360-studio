@@ -19,6 +19,11 @@ pub enum ItemOp {
     /// Text on the text track at edit time `at` for `len` seconds, or where
     /// it fits nearest.
     AddText { text: Text, at: f64, len: f64 },
+    /// Cinematic bars on the overlay track at edit time `at` for `len`
+    /// seconds, or where they fit nearest (gap 15).
+    AddBars { bars: crate::overlay::Bars, at: f64, len: f64 },
+    /// A bars item's ratio, slide and colour, all of it.
+    SetBars { item: Id, bars: crate::overlay::Bars },
     /// To start at edit time `at`, or where it fits nearest.
     Move { item: Id, at: f64 },
     /// Its in or out edge to `t` (its own time), staying where it is on the
@@ -29,6 +34,20 @@ pub enum ItemOp {
     Delete { item: Id },
 }
 
+/// Bars wider than tall, a slide of none or more, a colour in 0..1.
+fn check_bars(b: &crate::overlay::Bars) -> Result<(), OpError> {
+    if !(1.0..=4.0).contains(&b.ratio) {
+        return Err(OpError::OutOfRange { what: "bars' ratio", value: b.ratio, least: 1.0, most: 4.0 });
+    }
+    if !(0.0..=10.0).contains(&b.slide) {
+        return Err(OpError::OutOfRange { what: "bars' slide", value: b.slide, least: 0.0, most: 10.0 });
+    }
+    if b.colour.iter().any(|c| !(0.0..=1.0).contains(c)) {
+        return Err(OpError::Invalid("a colour runs 0..1".into()));
+    }
+    Ok(())
+}
+
 pub(super) fn apply(p: &mut Project, op: &ItemOp) -> Result<Outcome, OpError> {
     match op {
         ItemOp::AddPictures { inputs, at, len } => {
@@ -37,7 +56,7 @@ pub(super) fn apply(p: &mut Project, op: &ItemOp) -> Result<Outcome, OpError> {
             let mut last = None;
             for input in inputs {
                 let id = p.next_id();
-                at = add(p, Track::Overlay, Item { id, input: input.clone(), text: None, at, start: 0.0, end: *len, motion: Vec::new(), effects: Vec::new() });
+                at = add(p, Track::Overlay, Item { id, input: input.clone(), text: None, at, start: 0.0, end: *len, motion: Vec::new(), effects: Vec::new(), bars: None });
                 last = Some(id);
             }
             let Some(id) = last else { return Err(OpError::Invalid("no pictures to add".into())) };
@@ -46,8 +65,25 @@ pub(super) fn apply(p: &mut Project, op: &ItemOp) -> Result<Outcome, OpError> {
         ItemOp::AddText { text, at, len } => {
             positive(*len)?;
             let id = p.next_id();
-            add(p, Track::Text, Item { id, input: PathBuf::new(), text: Some(text.clone()), at: *at, start: 0.0, end: *len, motion: Vec::new(), effects: Vec::new() });
+            add(p, Track::Text, Item { id, input: PathBuf::new(), text: Some(text.clone()), at: *at, start: 0.0, end: *len, motion: Vec::new(), effects: Vec::new(), bars: None });
             Ok(Outcome { summary: format!("text item #{id} added"), made: Some(id) })
+        }
+        ItemOp::AddBars { bars, at, len } => {
+            positive(*len)?;
+            check_bars(bars)?;
+            let id = p.next_id();
+            add(p, Track::Overlay, Item { id, input: PathBuf::new(), text: None, at: *at, start: 0.0, end: *len, motion: Vec::new(), effects: Vec::new(), bars: Some(*bars) });
+            Ok(Outcome { summary: format!("bars {:.2}:1, item #{id}", bars.ratio), made: Some(id) })
+        }
+        ItemOp::SetBars { item, bars } => {
+            check_bars(bars)?;
+            let (track, lane, i) = find(p, *item)?;
+            let it = &mut lanes(p, track)[lane].items[i];
+            if it.bars.is_none() {
+                return Err(OpError::Invalid(format!("item #{item} isn't bars")));
+            }
+            it.bars = Some(*bars);
+            said(format!("item #{item}: bars {:.2}:1", bars.ratio))
         }
         &ItemOp::Move { item, at } => {
             let (track, lane, i) = find(p, item)?;
@@ -135,4 +171,17 @@ mod tests {
         assert!(matches!(e.apply(&Op::Item(ItemOp::Delete { item: first })), Err(OpError::NotFound(_))));
         check(&e).unwrap();
     }
+
+    #[test]
+    fn bars_are_added_set_and_kept_in_range() {
+        let mut e = Edit::default();
+        let id = e.apply(&Op::Item(ItemOp::AddBars { bars: Default::default(), at: 2.0, len: 5.0 })).unwrap().made.unwrap();
+        let bars = |ratio| crate::overlay::Bars { ratio, colour: [1.0, 1.0, 1.0], ..Default::default() };
+        e.apply(&Op::Item(ItemOp::SetBars { item: id, bars: bars(2.0) })).unwrap();
+        assert_eq!(e.overlays[0].items[0].bars, Some(bars(2.0)));
+        assert!(e.apply(&Op::Item(ItemOp::SetBars { item: id, bars: bars(9.0) })).is_err(), "out of range");
+        let text = e.apply(&Op::Item(ItemOp::AddText { text: Default::default(), at: 0.0, len: 2.0 })).unwrap().made.unwrap();
+        assert!(e.apply(&Op::Item(ItemOp::SetBars { item: text, bars: bars(2.0) })).is_err(), "text isn't bars");
+    }
+
 }

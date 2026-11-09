@@ -422,6 +422,7 @@ impl App {
                 ),
                 tip(tint_button(Tint::Add, ADD_OVERLAY, Some(Message::AddOverlay)), text("Add pictures over the picture, at the playhead (PNG transparency shows through)"), tooltip::Position::Top),
                 tip(tint_button(Tint::Add, ADD_TEXT, Some(Message::AddText)), text("Add text over the picture, at the playhead (typed in the Text panel at the left)"), tooltip::Position::Top),
+                tip(tint_button(Tint::Add, ADD_BARS, Some(Message::AddBars)), text("Cinematic bars at the playhead: they slide in and out at the item's ends (ratio, slide and colour in Effects)"), tooltip::Position::Top),
             ].spacing(12).align_y(Alignment::Center)),
             separator(),
             group("Cut", open, row![

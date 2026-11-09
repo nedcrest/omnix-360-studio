@@ -67,7 +67,11 @@ pub fn describe(project: &Path) -> Result<()> {
         }
         println!("{what}:");
         for i in items {
-            let label = i.text.as_ref().map_or_else(|| name(&i.input), |t| format!("«{}»", t.content));
+            let label = match (&i.text, i.bars) {
+                (Some(t), _) => format!("«{}»", t.content),
+                (None, Some(b)) => format!("bars {:.2}:1, sliding {:.1} s, colour {:?}", b.ratio, b.slide, b.colour),
+                (None, None) => name(&i.input),
+            };
             println!("  item #{:<2} {:7.2}-{:7.2} s  {label}", i.id, i.at, i.ends());
         }
     }
@@ -79,7 +83,7 @@ pub fn describe(project: &Path) -> Result<()> {
 /// and its effect keys.
 fn look_lines(c: &crate::project::Cut) -> Vec<String> {
     use std::collections::BTreeMap;
-    let set = |params: &BTreeMap<String, f32>| if params.is_empty() { String::new() } else { format!("  {}", params.iter().map(|(k, v)| format!("{k} {v}")).collect::<Vec<_>>().join(", ")) };
+    let set = |params: &BTreeMap<String, f32>| if params.is_empty() { String::new() } else { format!("  {}", params.iter().map(|(k, v)| format!("{k} {}", (*v as f64 * 1000.0).round() / 1000.0)).collect::<Vec<_>>().join(", ")) };
     let mut lines = Vec::new();
     if c.crossfade > 0.0 || c.transition.is_some() {
         let look = c.transition.map_or("dissolve".to_owned(), key_of);

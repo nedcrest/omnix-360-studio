@@ -67,6 +67,75 @@ pub struct Item {
     /// Its effects, in its own time; its opacity is how much shows.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub effects: Vec<EffectKey>,
+    /// Cinematic bars instead of a picture (gap 15).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bars: Option<Bars>,
+}
+
+/// Cinematic bars (gap 15, the user's route, 2026-11-04): an item on the
+/// overlay lane, made by the app as text is, spanning the cuts it covers;
+/// a band at the top and the bottom of the frame, sliding in at its start
+/// and out at its end. Its opacity is the item's effects'.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Bars {
+    /// The picture's width to its height between them (2.39 for «scope»).
+    pub ratio: f64,
+    /// Seconds they take to slide in at its start and out at its end.
+    #[serde(default = "one", skip_serializing_if = "is_one")]
+    pub slide: f64,
+    /// Their colour, 0..1 RGB; black when left out.
+    #[serde(default, skip_serializing_if = "is_black")]
+    pub colour: [f64; 3],
+}
+
+fn is_one(v: &f64) -> bool {
+    *v == 1.0
+}
+
+fn is_black(c: &[f64; 3]) -> bool {
+    *c == [0.0; 3]
+}
+
+/// The ratios the panel offers for bars: scope, 2:1, flat.
+pub const BAR_RATIOS: [f64; 3] = [2.39, 2.0, 1.85];
+
+impl Default for Bars {
+    fn default() -> Self {
+        Bars { ratio: 2.39, slide: 1.0, colour: [0.0; 3] }
+    }
+}
+
+/// Where an item is drawn: placed (its picture fitted to the frame and
+/// moved by its keyframes), or as a band across the frame's top or bottom
+/// (bars: `amount` of the way in, the picture between them `ratio` wide).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Spot {
+    Placed(Place),
+    Band { top: bool, amount: f64, ratio: f64 },
+}
+
+impl Spot {
+    /// Its quad on a `frame` big frame, for `picture`.
+    pub fn quad(&self, picture: &Picture, frame: (usize, usize)) -> Quad {
+        match *self {
+            Spot::Placed(place) => Quad::new(&place, picture, frame),
+            Spot::Band { top, amount, ratio } => {
+                let (fw, fh) = (frame.0 as f64, frame.1 as f64);
+                let h = amount * ((1.0 - fw / fh / ratio) / 2.0).max(0.0) * fh;
+                Quad { centre: [fw / 2.0, if top { h / 2.0 } else { fh - h / 2.0 }], half: [fw / 2.0, h / 2.0], turn: 0.0 }
+            }
+        }
+    }
+}
+
+/// What `item` draws at edit time `t`: where, and graded how.
+pub fn spots(item: &Item, t: f64) -> Vec<(Spot, Grade)> {
+    let (place, grade) = look(item, t);
+    let Some(bars) = item.bars else { return vec![(Spot::Placed(place), grade)] };
+    let ease = |x: f64| x * x * (3.0 - 2.0 * x);
+    let amount = ease(crate::project::ramp(t - item.at, bars.slide).min(crate::project::ramp(item.ends() - t, bars.slide)));
+    [true, false].map(|top| (Spot::Band { top, amount, ratio: bars.ratio }, grade)).to_vec()
 }
 
 fn is_empty_path(p: &Path) -> bool {
@@ -78,6 +147,12 @@ impl Item {
     /// pixels high (`most` caps a file's size). Also the text's missing
     /// font, if any.
     pub fn picture(&self, most: usize, height: usize) -> Result<(Picture, Option<String>)> {
+        if let Some(bars) = self.bars {
+            // Their colour, filling each band.
+            let px = bars.colour.map(|c| (c.clamp(0.0, 1.0) * 255.0).round() as u8);
+            let rgba = [px[0], px[1], px[2], 255].repeat(4);
+            return Ok((Picture { width: 2, height: 2, rgba, natural: None }, None));
+        }
         match &self.text {
             Some(text) => Ok(crate::text::render(text, height)),
             None => Ok((Picture::load(&self.input, most)?, None)),
@@ -86,14 +161,25 @@ impl Item {
 
     /// Tells its picture apart from others': the file, or the text drawn.
     pub fn key(&self) -> String {
+        if let Some(bars) = self.bars {
+            return format!("bars:{:?}", bars.colour);
+        }
         match &self.text {
             Some(text) => format!("text:{}", serde_json::to_string(text).unwrap_or_default()),
             None => format!("file:{}", self.input.display()),
         }
     }
 
+    /// Its picture's file, if it's a picture (not text or bars).
+    pub fn file(&self) -> Option<&Path> {
+        (!self.input.as_os_str().is_empty()).then_some(self.input.as_path())
+    }
+
     /// A name for it: the file's, or its text's first line.
     pub fn name(&self) -> String {
+        if let Some(bars) = self.bars {
+            return format!("Bars {:.2}:1", bars.ratio);
+        }
         match &self.text {
             Some(text) => text.content.lines().next().unwrap_or("").to_owned(),
             None => self.input.file_stem().map_or_else(String::new, |s| s.to_string_lossy().into_owned()),
@@ -437,9 +523,9 @@ impl<'a> Overlays<'a> {
         for item in self.lanes.iter().filter_map(|l| l.at(t).map(|(_, it)| it)) {
             let key = item.key();
             let picture = &self.pictures.iter().find(|(k, _)| *k == key).unwrap().1;
-            let (place, grade) = look(item, t);
-            let quad = Quad::new(&place, picture, (frame.width, frame.height));
-            composite(frame, picture, &quad, &grade, black);
+            for (spot, grade) in spots(item, t) {
+                composite(frame, picture, &spot.quad(picture, (frame.width, frame.height)), &grade, black);
+            }
         }
     }
 }
@@ -477,8 +563,25 @@ impl FrameSink for Burn<'_> {
 mod tests {
     use super::*;
 
+    #[test]
+    fn bars_slide_in_to_the_ratio_and_out() {
+        let item = Item { id: 0, input: PathBuf::new(), text: None, at: 10.0, start: 0.0, end: 6.0, motion: vec![], effects: vec![], bars: Some(Bars::default()) };
+        let pic = item.picture(0, 1080).unwrap().0;
+        let band = |t: f64, top: bool| spots(&item, t).into_iter().find(|(s, _)| matches!(s, Spot::Band { top: tp, .. } if *tp == top)).unwrap().0.quad(&pic, (1920, 1080));
+        // 16:9 to 2.39:1: about 138 px each, top and bottom.
+        let full = band(13.0, true);
+        assert!((full.half[1] * 2.0 - (1.0 - 1920.0 / 1080.0 / 2.39) / 2.0 * 1080.0).abs() < 1e-9 && (full.half[1] * 2.0 - 138.3).abs() < 0.1);
+        assert_eq!((full.centre[1], band(13.0, false).centre[1]), (full.half[1], 1080.0 - full.half[1]));
+        // In over the first second, out over the last; gone at the ends.
+        assert_eq!((band(10.0, true).half[1], band(16.0, true).half[1]), (0.0, 0.0));
+        assert!(band(10.5, true).half[1] > 0.0 && band(10.5, true).half[1] < full.half[1]);
+        // A frame already as wide as the ratio has none.
+        assert_eq!(Spot::Band { top: true, amount: 1.0, ratio: 2.39 }.quad(&pic, (2400, 1000)).half[1], 0.0);
+        assert_eq!(item.name(), "Bars 2.39:1");
+    }
+
     fn item(at: f64, len: f64) -> Item {
-        Item { id: 0, input: "a.png".into(), text: None, at, start: 0.0, end: len, motion: Vec::new(), effects: Vec::new() }
+        Item { id: 0, input: "a.png".into(), text: None, at, start: 0.0, end: len, motion: Vec::new(), effects: Vec::new(), bars: None }
     }
 
     #[test]

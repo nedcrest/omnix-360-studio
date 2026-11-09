@@ -329,6 +329,8 @@ enum Message {
     SoundEdge(usize, bool, f64),
     /// Add a text overlay at the playhead.
     AddText,
+    /// Cinematic bars at the playhead, on the overlay lane (gap 15).
+    AddBars,
     /// Add pictures to the overlay lane at the playhead.
     AddOverlay,
     OverlayPicked(Vec<PathBuf>),
@@ -1120,7 +1122,7 @@ impl App {
             m @ (Message::Tick | Message::TimelineZoom { .. } | Message::TimelineWheel { .. } | Message::TimelineZoomTo { .. } | Message::TimelinePan { .. } | Message::Toggle | Message::Scrub { .. } | Message::ScrubDone) => self.on_transport(m),
             m @ (Message::Select { .. } | Message::AddBlank | Message::SoundEdge { .. } | Message::Trim { .. } | Message::MoveCut { .. } | Message::AddMark | Message::SelectAtPlayhead | Message::MarkMove { .. } | Message::MarkSelect { .. } | Message::StepsRested { .. } | Message::ToastGone { .. } | Message::StepNoteGone { .. } | Message::TrimToPlayhead { .. } | Message::Crossfade { .. } | Message::ToggleCrossfade | Message::Split | Message::DeleteCut | Message::Undo | Message::Redo) => self.on_cuts(m),
             m @ (Message::LookDone | Message::Framing { .. } | Message::KeyMove { .. } | Message::KeyAdd | Message::KeyDelete | Message::KeyEase { .. } | Message::KeyFollow { .. } | Message::Stab { .. } | Message::Projection { .. } | Message::KeyJump { .. } | Message::Look { .. } | Message::Zoom { .. } | Message::Fov { .. } | Message::AngleInput { .. } | Message::AngleDone | Message::AngleScrubStart { .. } | Message::AngleScrubDone | Message::AngleScrub { .. } | Message::AngleNudge { .. } | Message::AngleArrow { .. } | Message::Source { .. } | Message::RollingShutter { .. } | Message::FullOnPause { .. } | Message::ResetView) => self.on_framing(m),
-            m @ (Message::AddOverlay | Message::OverlayPicked { .. } | Message::OverlaySelect { .. } | Message::OverlayMove { .. } | Message::OverlayTrim { .. } | Message::OverlayJump { .. } | Message::OverlayKeyMove { .. } | Message::OverlayPicture { .. } | Message::AddText) => self.on_overlay_ui(m),
+            m @ (Message::AddOverlay | Message::OverlayPicked { .. } | Message::OverlaySelect { .. } | Message::OverlayMove { .. } | Message::OverlayTrim { .. } | Message::OverlayJump { .. } | Message::OverlayKeyMove { .. } | Message::OverlayPicture { .. } | Message::AddText | Message::AddBars) => self.on_overlay_ui(m),
             m @ (Message::AddSound { .. } | Message::SoundPicked { .. } | Message::SoundProbed { .. } | Message::Waveform { .. } | Message::CutWave { .. } | Message::SelectMusic { .. } | Message::PointAdd { .. } | Message::PointSelect { .. } | Message::PointMove { .. } | Message::MusicMove { .. } | Message::MusicTrim { .. } | Message::Fade { .. } | Message::Level { .. } | Message::Listen { .. } | Message::SoundLevel { .. } | Message::TrackLevel { .. } | Message::DuckDepth { .. } | Message::Duck | Message::Ducked { .. } | Message::LevelDone) => self.on_tracks(m),
             Message::Snapped(at, inner) => {
                 self.snap_line = at;

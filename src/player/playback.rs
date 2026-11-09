@@ -233,6 +233,21 @@ impl Playback {
         }
     }
 
+    /// Its sound from `audio` (none: the clip's own) through `filter`,
+    /// on from where it is without stopping the picture: two voices of a
+    /// clip heard against each other (Dailix, gap 77).
+    pub fn hear(&mut self, audio: Option<std::path::PathBuf>, filter: Option<String>) {
+        let t = self.position();
+        self.media.has_audio |= audio.is_some();
+        (self.media.audio, self.media.filter, self.ready) = (audio, filter, None);
+        if self.playing {
+            (self.anchor_pts, self.anchor_at) = (t, Instant::now());
+            self.start_audio(t);
+        } else {
+            self.audio = None;
+        }
+    }
+
     /// Stops the sound until the next frame is shown, and the clock with it.
     fn hold_sound(&mut self) {
         self.audio = None;

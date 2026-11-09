@@ -94,6 +94,13 @@ impl Viewer {
     pub fn scrub_end(&mut self) {
         self.playback.scrub_end();
     }
+    /// Its sound from `audio` (none: the clip's own), `gain_db` louder,
+    /// on from where it is: a clip's voices compared at one loudness.
+    pub fn hear(&mut self, audio: Option<&Path>, gain_db: f64) {
+        let filter = (gain_db.abs() > 0.05).then(|| format!("volume={gain_db:.2}dB"));
+        self.playback.hear(audio.map(Path::to_path_buf), filter);
+    }
+
     /// One frame on (`frames` > 0) or back.
     pub fn step(&mut self, frames: f64) {
         self.playback.step(frames);

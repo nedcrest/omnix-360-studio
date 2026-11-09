@@ -109,6 +109,7 @@ done in part stays here until its last card is done.
 | 87 | Style looks (old film, VHS, neo-cyberpunk) for a video, an overlay picture or text; animation presets for text and pictures | below |
 | 88 | The Osmo 360 II: its calibration and 8K50 decoding | below |
 | 89 | Auto colour: exposure and white balance set from the picture (or by an AI), keyed where the camera misses | below |
+| 92 | Play a stretch: drag a range on the ruler, Shift+Space plays it once and comes back to its start, paused; a button beside Play | below |
 | 91 | Pictures from the bin or the file manager dragged onto the overlay lane; a «Pictures» folder in every project | below |
 | 90 | The Effects panel sorted: groups, a side panel for complex controls, one scope | [done](EDITOR-GAPS-DONE.md) |
 
@@ -1579,6 +1580,25 @@ at the playhead»; a file dropped on the window goes to the bin only.
   (its docs are shared with another agent: change only the layout line
   and say so).
 - Milestone «Матеріал і бін».
+
+### 92. Play a stretch marked on the ruler — idea (user, 2026-11-10)
+
+The user: "on the timeline's ruler you can select a range; Shift+Space
+plays only that range, plays it to its end, puts the cursor back at its
+start and pauses. Plain Space plays as it likes. A separate button with
+this beside our Play."
+
+- A range on the ruler: drag on it (today a click or drag there seeks;
+  a drag with a modifier, or a drag past a few pixels, marks a range
+  instead: settle which when it's built, the seek must stay easy).
+  Shown as a band on the ruler, kept until cleared (Esc, or a click
+  outside it).
+- Shift+Space: plays from the range's start to its end, then the
+  playhead goes back to the start, paused. Space unchanged.
+- A button beside Play doing the same, lit while a range is marked.
+- «Play the join» (transitions) already plays a stretch and stops: share
+  its stop-and-return.
+- Milestone «Зручний таймлайн».
 
 ## Format rule for all of these
 

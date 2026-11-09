@@ -421,10 +421,10 @@ impl App {
                     let motion = matches!(p, super::automation_ui::Param::Place(_));
                     *match (of, motion) {
                         (LaneOf::Cuts, _) => &mut self.folds.effects,
-                        (LaneOf::Track(crate::overlay::Track::Overlay), false) => &mut self.folds.overlay_effects,
-                        (LaneOf::Track(crate::overlay::Track::Overlay), true) => &mut self.folds.overlay_motion,
-                        (LaneOf::Track(crate::overlay::Track::Text), false) => &mut self.folds.text_effects,
-                        (LaneOf::Track(crate::overlay::Track::Text), true) => &mut self.folds.text_motion,
+                        (LaneOf::Track(crate::overlay::Track::Overlay, _), false) => &mut self.folds.overlay_effects,
+                        (LaneOf::Track(crate::overlay::Track::Overlay, _), true) => &mut self.folds.overlay_motion,
+                        (LaneOf::Track(crate::overlay::Track::Text, _), false) => &mut self.folds.text_effects,
+                        (LaneOf::Track(crate::overlay::Track::Text, _), true) => &mut self.folds.text_motion,
                     } = false;
                 }
             }
@@ -625,7 +625,7 @@ impl App {
         use super::automation_ui::LaneOf;
         match self.effect_target()? {
             (Target::Cut(_), _) => Some(LaneOf::Cuts),
-            (Target::Overlay((track, _, _)), _) => Some(LaneOf::Track(track)),
+            (Target::Overlay((track, l, _)), _) => Some(LaneOf::Track(track, l)),
         }
     }
 

@@ -356,9 +356,10 @@ pub struct Timeline {
     pub position: f64,
     /// The keyframe at the playhead (cut, keyframe), drawn highlighted.
     pub current: Option<(usize, usize)>,
-    /// The overlay track's lane and the text track's.
-    pub overlays: Vec<OverlayBlock>,
-    pub texts: Vec<OverlayBlock>,
+    /// The overlay track's lanes and the text track's (gap 70), 0 the
+    /// lowest, at least one each.
+    pub overlays: Vec<Vec<OverlayBlock>>,
+    pub texts: Vec<Vec<OverlayBlock>>,
     /// Moves on when Esc cancels a drag, so the canvases drop theirs.
     pub drag_epoch: u64,
     /// The playhead's last key step, said by it for a moment (gap 55).
@@ -381,9 +382,9 @@ pub struct Timeline {
     /// The automation lanes under the Effects row, by `grade::NAMES` index
     /// (gap 39).
     pub auto_lanes: Vec<super::automation_ui::Param>,
-    /// The overlay and text lanes' own automation lanes.
-    pub overlay_auto: Vec<super::automation_ui::Param>,
-    pub text_auto: Vec<super::automation_ui::Param>,
+    /// The overlay and text lanes' own automation lanes, lane by lane.
+    pub overlay_auto: Vec<Vec<super::automation_ui::Param>>,
+    pub text_auto: Vec<Vec<super::automation_ui::Param>>,
     /// The keys held (Shift, Ctrl), for canvases that don't follow them.
     pub held: iced::keyboard::Modifiers,
 }
@@ -399,7 +400,7 @@ enum Of {
     CutSound(usize),
     Mark(usize),
     Sound(usize, usize),
-    Item(Track, usize),
+    Item(Track, usize, usize),
 }
 
 /// The line where a drag has snapped, top to bottom of a canvas `h` high.
@@ -773,8 +774,10 @@ impl Timeline {
         for (li, l) in self.sounds.iter().enumerate() {
             at.extend(l.blocks.iter().enumerate().flat_map(|(i, m)| [(m.clip.at, Of::Sound(li, i)), (m.clip.at + m.len(), Of::Sound(li, i))]));
         }
-        for (track, items) in [(Track::Overlay, &self.overlays), (Track::Text, &self.texts)] {
-            at.extend(items.iter().enumerate().flat_map(|(i, o)| [(o.item.at, Of::Item(track, i)), (o.item.at + o.len(), Of::Item(track, i))]));
+        for track in [Track::Overlay, Track::Text] {
+            for (l, items) in self.track_blocks(track).iter().enumerate() {
+                at.extend(items.iter().enumerate().flat_map(|(i, o)| [(o.item.at, Of::Item(track, l, i)), (o.item.at + o.len(), Of::Item(track, l, i))]));
+            }
         }
         at
     }
@@ -962,6 +965,22 @@ impl Hit {
 }
 
 impl Timeline {
+    /// `track`'s lanes' blocks, 0 the lowest.
+    fn track_blocks(&self, track: Track) -> &[Vec<OverlayBlock>] {
+        match track {
+            Track::Overlay => &self.overlays,
+            Track::Text => &self.texts,
+        }
+    }
+
+    /// `track`'s lanes' automation lanes, lane by lane.
+    fn track_auto(&self, track: Track) -> &[Vec<super::automation_ui::Param>] {
+        match track {
+            Track::Overlay => &self.overlay_auto,
+            Track::Text => &self.text_auto,
+        }
+    }
+
     /// The two layers: block backgrounds with their thumbnails, and over them
     /// everything else, which also takes the mouse. Within one layer iced
     /// draws images over shapes, so the labels and handles need their own.
@@ -974,14 +993,25 @@ impl Timeline {
         ];
         // Zoomed in, what is outside the window is drawn outside the widget;
         // canvases don't clip, so the container does.
-        let lane = |track| {
-            let lane = OverlayLane(t.clone(), track);
+        let lane = |track, l| {
+            let lane = OverlayLane(t.clone(), track, l);
             let height = lane.height();
-            iced::widget::container(canvas(lane).width(iced::Length::Fill).height(height)).clip(true)
+            iced::widget::container(canvas(lane).width(iced::Length::Fill).height(height)).clip(true).into()
+        };
+        // A track's lanes, the top one first (what's above is drawn over);
+        // folded, the top one alone, a thin row of every lane's items.
+        let group = |track: Track| -> Vec<iced::Element<'a, Message>> {
+            let n = t.track_blocks(track).len().max(1);
+            let folded = OverlayLane(t.clone(), track, n - 1).folded();
+            (0..n).rev().take(if folded { 1 } else { n }).map(|l| lane(track, l)).collect()
         };
         let ruler = canvas(Ruler(t.clone())).width(iced::Length::Fill).height(t.ruler);
         let flags = canvas(Flags(t.clone())).width(iced::Length::Fill).height(t.flags_height());
-        iced::widget::column![iced::widget::container(flags).clip(true), iced::widget::container(ruler).clip(true), lane(Track::Text), lane(Track::Overlay), iced::widget::container(layers).clip(true)].into()
+        let mut rows: Vec<iced::Element<'a, Message>> = vec![iced::widget::container(flags).clip(true).into(), iced::widget::container(ruler).clip(true).into()];
+        rows.extend(group(Track::Text));
+        rows.extend(group(Track::Overlay));
+        rows.push(iced::widget::container(layers).clip(true).into());
+        iced::widget::column(rows).into()
     }
 
     /// The sound lanes: each one's clips with their waveforms and handles,
@@ -1363,7 +1393,9 @@ impl Timeline {
 
 /// An overlay track's lane (the text's on top, then the pictures'), over
 /// the cuts: a canvas of its own, so the rows under it keep their places.
-struct OverlayLane(Arc<Timeline>, Track);
+/// A lane of a text or overlay track (gap 70): the timeline, the track,
+/// the lane (0 the lowest).
+struct OverlayLane(Arc<Timeline>, Track, usize);
 
 #[derive(Default)]
 enum OverlayDrag {
@@ -1386,6 +1418,9 @@ enum OverlayHit {
     Nothing,
     /// The lane's name, or the folded lane: folds or opens it.
     Fold,
+    /// The track's «+»: a lane on top; an empty lane's «×»: taken away.
+    AddLane,
+    RemoveLane,
     /// A keyframe mark (see `OverlayLane::key_at`), at edit time `at`.
     Key { item: usize, effects: bool, key: usize, at: f64 },
     /// The keyframe rows away from a mark: the playhead goes there.
@@ -1408,7 +1443,7 @@ impl OverlayHit {
         use mouse::Interaction as I;
         match self {
             OverlayHit::Nothing | OverlayHit::Empty => I::default(),
-            OverlayHit::Fold | OverlayHit::Seek | OverlayHit::LanesFold(_) => I::Pointer,
+            OverlayHit::Fold | OverlayHit::AddLane | OverlayHit::RemoveLane | OverlayHit::Seek | OverlayHit::LanesFold(_) => I::Pointer,
             OverlayHit::Auto(_, h) => h.pointer(),
             OverlayHit::Key { .. } | OverlayHit::Item(_) => I::Grab,
             OverlayHit::Edge { .. } => I::ResizingHorizontally,
@@ -1418,10 +1453,29 @@ impl OverlayHit {
 
 impl OverlayLane {
     fn blocks(&self) -> &[OverlayBlock] {
-        match self.1 {
-            Track::Overlay => &self.0.overlays,
-            Track::Text => &self.0.texts,
-        }
+        self.0.track_blocks(self.1).get(self.2).map_or(&[], Vec::as_slice)
+    }
+
+    /// The item `i` on this lane, as the edit knows it.
+    fn r(&self, i: usize) -> crate::overlay::ItemRef {
+        (self.1, self.2, i)
+    }
+
+    /// How many lanes its track has, and whether this is the top one (it
+    /// carries the track's name, fold and «+»).
+    fn count(&self) -> usize {
+        self.0.track_blocks(self.1).len().max(1)
+    }
+    fn top(&self) -> bool {
+        self.2 + 1 == self.count()
+    }
+
+    /// Where the head column's «+» and «×» sit on this lane.
+    fn plus(&self) -> Rectangle {
+        Rectangle::new(Point::new(HEAD - 20.0, 4.0), Size::new(16.0, 16.0))
+    }
+    fn cross(&self) -> Option<Rectangle> {
+        (self.count() > 1 && self.blocks().is_empty()).then(|| Rectangle::new(Point::new(HEAD - if self.top() { 38.0 } else { 20.0 }, 4.0), Size::new(16.0, 16.0)))
     }
 
     fn item_at(&self, x: f32, b: Rectangle) -> Option<usize> {
@@ -1463,12 +1517,13 @@ impl OverlayLane {
     fn lanes(&self, motion: bool) -> auto::Lanes<'_> {
         use super::automation_ui::{AutoOn, Param};
         let t = &self.0;
-        let (all, folded) = match (self.1, motion) {
-            (Track::Overlay, false) => (&t.overlay_auto, t.folds.overlay_effects),
-            (Track::Overlay, true) => (&t.overlay_auto, t.folds.overlay_motion),
-            (Track::Text, false) => (&t.text_auto, t.folds.text_effects),
-            (Track::Text, true) => (&t.text_auto, t.folds.text_motion),
+        let folded = match (self.1, motion) {
+            (Track::Overlay, false) => t.folds.overlay_effects,
+            (Track::Overlay, true) => t.folds.overlay_motion,
+            (Track::Text, false) => t.folds.text_effects,
+            (Track::Text, true) => t.folds.text_motion,
         };
+        let all = t.track_auto(self.1).get(self.2).map_or(&[][..], Vec::as_slice);
         let params = all.iter().copied().filter(|p| matches!(p, Param::Place(_)) == motion).collect();
         let fixed_of = |it: &crate::overlay::Item| if motion { Vec::new() } else { super::automation_ui::fixed_of_item(it) };
         let owners: Vec<auto::Owner> = self.blocks().iter().map(|o| auto::Owner { on: AutoOn::Item(o.item.id), from: o.item.at, start: o.item.start, len: o.len(), clips: &o.item.automation, fixed: fixed_of(&o.item) }).collect();
@@ -1496,8 +1551,14 @@ impl OverlayLane {
     fn hit(&self, p: Point, b: Rectangle) -> OverlayHit {
         // Folded, anywhere opens it; open, its name folds it.
         let (name, _) = self.name();
-        if self.folded() || fold_tag(&self.tag_name(name), (self.0.rows.overlay - 4.0) / 2.0 + 2.0).contains(p) {
+        if self.folded() || (self.top() && fold_tag(&self.tag_name(name), (self.0.rows.overlay - 4.0) / 2.0 + 2.0).contains(p)) {
             return OverlayHit::Fold;
+        }
+        if self.top() && self.plus().contains(p) {
+            return OverlayHit::AddLane;
+        }
+        if self.cross().is_some_and(|c| c.contains(p)) {
+            return OverlayHit::RemoveLane;
         }
         // Its Effects and Motion rows' names, in the header column too.
         for motion in [false, true] {
@@ -1526,7 +1587,7 @@ impl OverlayLane {
         }
         match self.item_at(p.x, b) {
             None => OverlayHit::Empty,
-            Some(item) => match self.edge_at(item, p.x, b).filter(|_| self.0.picked.item() == Some((self.1, 0, item))) {
+            Some(item) => match self.edge_at(item, p.x, b).filter(|_| self.0.picked.item() == Some(self.r(item))) {
                 Some(start) => OverlayHit::Edge { item, start },
                 None => OverlayHit::Item(item),
             },
@@ -1562,9 +1623,17 @@ impl OverlayLane {
         }
     }
 
-    /// Its tag's words: «▸ Text (2)» folded, «▾ Text» open.
+    /// Its tag's words: «▸ Text (2)» folded (every lane's items), «▾ Text»
+    /// open on the top lane, numbered when there are several («▾ Text 2»,
+    /// «Text 1» under it).
     fn tag_name(&self, name: &str) -> String {
-        if self.folded() { format!("▸ {name} ({})", self.blocks().len()) } else { format!("▾ {name}") }
+        let all = self.0.track_blocks(self.1).iter().map(Vec::len).sum::<usize>();
+        match (self.folded(), self.count(), self.top()) {
+            (true, _, _) => format!("▸ {name} ({all})"),
+            (false, 1, _) => format!("▾ {name}"),
+            (false, _, true) => format!("▾ {name} {}", self.2 + 1),
+            (false, _, false) => format!("{name} {}", self.2 + 1),
+        }
     }
 }
 
@@ -1608,7 +1677,7 @@ impl canvas::Program<Message> for OverlayLane {
             Mouse(mouse::Event::ButtonPressed(mouse::Button::Right)) if self.1 == Track::Overlay => {
                 let p = cursor.position_in(bounds)?;
                 let item = self.item_at(p.x, bounds).filter(|_| p.y < self.0.rows.overlay)?;
-                Some(canvas::Action::publish(Message::Info(super::info::Of::Overlay((self.1, 0, item)))).and_capture())
+                Some(canvas::Action::publish(Message::Info(super::info::Of::Overlay(self.r(item)))).and_capture())
             }
             Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
                 let p = cursor.position_in(bounds)?;
@@ -1616,6 +1685,8 @@ impl canvas::Program<Message> for OverlayLane {
                 let message = match self.hit(p, bounds) {
                     OverlayHit::Nothing => return None,
                     OverlayHit::Fold => Message::Fold(self.fold_lane(), !self.folded()),
+                    OverlayHit::AddLane => Message::LaneAdd(self.1),
+                    OverlayHit::RemoveLane => Message::LaneRemove(self.1, self.2),
                     OverlayHit::LanesFold(motion) => Message::Fold(self.fold_of(motion), !self.lanes(motion).folded),
                     OverlayHit::Auto(motion, h) => match self.lanes(motion).press(h, p, t.held.command()) {
                         Ok(d) => {
@@ -1634,11 +1705,11 @@ impl canvas::Program<Message> for OverlayLane {
                     OverlayHit::Edge { item, start } => {
                         let o = &self.blocks()[item];
                         *drag = OverlayDrag::Trim { item, start, x0: p.x, from: if start { o.item.start } else { o.item.start + o.len() }, per_px };
-                        Message::OverlaySelect(Some((self.1, 0, item)))
+                        Message::OverlaySelect(Some(self.r(item)))
                     }
                     OverlayHit::Item(item) => {
                         *drag = OverlayDrag::Move { item, x0: p.x, at: self.blocks()[item].item.at, per_px };
-                        Message::OverlaySelect(Some((self.1, 0, item)))
+                        Message::OverlaySelect(Some(self.r(item)))
                     }
                 };
                 Some(canvas::Action::publish(message).and_capture())
@@ -1651,18 +1722,18 @@ impl canvas::Program<Message> for OverlayLane {
                         let (track, item) = (self.1, *item);
                         let at = *at + (x - *x0) as f64 * *per_px;
                         let len = self.blocks()[item].len();
-                        snapped(t.snap(&[at, at + len], *per_px, |of| of == Of::Item(track, item)), |by| Message::OverlayMove((track, 0, item), at + by))
+                        snapped(t.snap(&[at, at + len], *per_px, |of| of == Of::Item(track, self.2, item)), |by| Message::OverlayMove(self.r(item), at + by))
                     }
                     OverlayDrag::Trim { item, start, x0, from, per_px } => {
                         let (track, item, start) = (self.1, *item, *start);
                         let own_t = *from + (x - *x0) as f64 * *per_px;
                         let o = &self.blocks()[item];
-                        snapped(t.snap(&[o.item.at - o.item.start + own_t], *per_px, |of| of == Of::Item(track, item)), |by| Message::OverlayTrim((track, 0, item), start, own_t + by))
+                        snapped(t.snap(&[o.item.at - o.item.start + own_t], *per_px, |of| of == Of::Item(track, self.2, item)), |by| Message::OverlayTrim(self.r(item), start, own_t + by))
                     }
                     OverlayDrag::Key { item, effects, key } => {
                         let o = &self.blocks()[*item];
                         let at = self.0.t(x, bounds).clamp(o.item.at, o.item.at + o.len());
-                        Message::OverlayKeyMove((self.1, 0, *item), *effects, *key, o.item.start + at - o.item.at)
+                        Message::OverlayKeyMove(self.r(*item), *effects, *key, o.item.start + at - o.item.at)
                     }
                     OverlayDrag::Auto(motion, d) => {
                         let message = self.lanes(*motion).drag(d, Point::new(x, position.y - bounds.y), bounds, t.held.shift());
@@ -1688,7 +1759,7 @@ impl canvas::Program<Message> for OverlayLane {
         if self.folded() {
             // Folded: where its items are, thin, and its name to open it.
             let mid = FOLDED / 2.0;
-            folded_strips(&mut frame, t, bounds, mid, self.blocks().iter().map(|o| (o.item.at, o.len())), colour);
+            folded_strips(&mut frame, t, bounds, mid, t.track_blocks(self.1).iter().flatten().map(|o| (o.item.at, o.len())), colour);
             let at = t.x(t.position, bounds);
             frame.fill(&Path::rectangle(Point::new(at - 1.0, 0.0), Size::new(2.0, FOLDED)), palette.primary.strong.color);
             draw_head_ground(&mut frame, theme, FOLDED);
@@ -1703,7 +1774,7 @@ impl canvas::Program<Message> for OverlayLane {
             if r < 0.0 || l > bounds.width {
                 continue;
             }
-            let selected = Some((self.1, 0, i)) == t.picked.item();
+            let selected = Some(self.r(i)) == t.picked.item();
             coloured_block(&mut frame, (l, r), (top, h), colour, selected);
             if selected {
                 // A picture or text has no end of its own: footage both ways
@@ -1758,6 +1829,18 @@ impl canvas::Program<Message> for OverlayLane {
         draw_head_ground(&mut frame, theme, self.height());
         head_cell(&mut frame, 0.0, self.height(), colour);
         lane_tag(&mut frame, &self.tag_name(name), colour, top + h / 2.0);
+        // The track's «+» on its top lane; «×» on an empty one of several.
+        let ink = palette.background.base.text.scale_alpha(0.75);
+        let mut sign = |r: Rectangle, s: &str| {
+            frame.fill(&Path::rounded_rectangle(r.position(), r.size(), 3.0.into()), palette.background.strong.color.scale_alpha(0.6));
+            frame.fill_text(Text { content: s.to_owned(), position: r.center(), color: ink, size: 13.0.into(), align_x: iced::advanced::text::Alignment::Center, align_y: Vertical::Center, ..Default::default() });
+        };
+        if self.top() {
+            sign(self.plus(), "+");
+        }
+        if let Some(c) = self.cross() {
+            sign(c, "×");
+        }
         if !self.blocks().is_empty() {
             let (effects, motion) = (self.lanes(false), self.lanes(true));
             head_rows(&mut frame, theme, (self.0.rows.overlay, &effects.tag()), Some((self.motion_top(), &motion.tag())));
@@ -2872,14 +2955,30 @@ mod tests {
     }
 
     #[test]
+    fn a_track_shows_its_lanes_as_a_group() {
+        let (mut t, b) = timeline();
+        let item = crate::overlay::Item { id: 9, input: "".into(), text: Some(Default::default()), at: 2.0, start: 0.0, end: 4.0, motion: vec![], effects: vec![], bars: None, automation: vec![], kind: None, style: None };
+        t.texts = vec![vec![OverlayBlock { item, label: "hi".into(), thumb: None }], vec![]];
+        t.text_auto = vec![vec![], vec![]];
+        t.folds.text = false;
+        let t = Arc::new(t);
+        let (low, high) = (OverlayLane(t.clone(), Track::Text, 0), OverlayLane(t.clone(), Track::Text, 1));
+        assert_eq!((high.tag_name("Text"), low.tag_name("Text")), ("▾ Text 2".to_owned(), "Text 1".to_owned()), "the top lane carries the fold");
+        assert_eq!(high.hit(high.plus().center(), b), OverlayHit::AddLane);
+        assert_eq!(high.hit(high.cross().unwrap().center(), b), OverlayHit::RemoveLane, "an empty lane of two goes");
+        assert_eq!((low.cross(), low.blocks().len()), (None, 1), "one with items stays");
+        assert_eq!(low.r(0), (Track::Text, 0, 0));
+    }
+
+    #[test]
     fn one_key_is_a_value_with_no_mark() {
         let key = |t| crate::overlay::MotionKey { t, place: Default::default(), ease: Default::default() };
         let lane_with = |motion| {
             let (mut t, _) = timeline();
             let item = crate::overlay::Item { id: 9, input: "logo.png".into(), text: None, at: 2.0, start: 0.0, end: 4.0, motion, effects: vec![], bars: None, automation: vec![], kind: None, style: None };
-            t.overlays = vec![OverlayBlock { item, label: "logo".into(), thumb: None }];
+            t.overlays = vec![vec![OverlayBlock { item, label: "logo".into(), thumb: None }]];
             t.folds.overlay = false;
-            OverlayLane(Arc::new(t), Track::Overlay)
+            OverlayLane(Arc::new(t), Track::Overlay, 0)
         };
         let (_, b) = timeline();
         let at_start = |lane: &OverlayLane| Point::new(lane.0.x(2.0, b), lane.motion_top() + KEYS / 2.0);
@@ -2899,9 +2998,9 @@ mod tests {
             let (mut t, _) = timeline();
             let x = AutoClip { param: "x".into(), from: 0.0, to: 4.0, points: vec![AutoPoint { t: 1.0, v: 0.25, ease: Default::default() }], follows: None, animation: None };
             let item = crate::overlay::Item { id: 9, input: "logo.png".into(), text: None, at: 2.0, start: 0.0, end: 4.0, motion: vec![], effects: vec![], bars: None, automation: vec![x], kind: None, style: None };
-            t.overlays = vec![OverlayBlock { item, label: "logo".into(), thumb: None }];
-            (t.overlay_auto, t.folds.overlay, t.folds.overlay_motion, t.folds.overlay_effects) = (params, false, false, !effects_open);
-            OverlayLane(Arc::new(t), Track::Overlay)
+            t.overlays = vec![vec![OverlayBlock { item, label: "logo".into(), thumb: None }]];
+            (t.overlay_auto, t.folds.overlay, t.folds.overlay_motion, t.folds.overlay_effects) = (vec![params], false, false, !effects_open);
+            OverlayLane(Arc::new(t), Track::Overlay, 0)
         };
         let lane = lane_with(vec![Param::Place(0)], false);
         let lanes = lane.lanes(true);

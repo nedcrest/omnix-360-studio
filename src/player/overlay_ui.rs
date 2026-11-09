@@ -104,6 +104,21 @@ impl App {
         self.selection.item(&self.edit).filter(|r| r.0 == track).map_or(0, |r| r.1)
     }
 
+    /// How many lanes `track` shows: its own, one at least.
+    pub(super) fn shown_lanes(&self, track: crate::overlay::Track) -> usize {
+        self.edit.track_lanes(track).len().max(1)
+    }
+
+    /// The timeline's blocks for each lane of `track`, the lowest first.
+    pub(super) fn track_blocks(&self, track: crate::overlay::Track) -> Vec<Vec<timeline::OverlayBlock>> {
+        (0..self.shown_lanes(track)).map(|l| self.overlay_blocks(track, l)).collect()
+    }
+
+    /// The automation lanes of each lane of `track`.
+    pub(super) fn lanes_of_track(&self, track: crate::overlay::Track) -> Vec<Vec<super::automation_ui::Param>> {
+        (0..self.shown_lanes(track)).map(|l| self.lanes_of(super::automation_ui::LaneOf::Track(track, l))).collect()
+    }
+
     /// The timeline's blocks for lane `l` of `track`.
     pub(super) fn overlay_blocks(&self, track: crate::overlay::Track, l: usize) -> Vec<timeline::OverlayBlock> {
         self.edit.lane(track, l).map_or_else(Vec::new, |lane| {
@@ -153,6 +168,12 @@ impl App {
                     None if self.selection.item(&self.edit).is_some() => self.selection = Selection::None,
                     None => {}
                 }
+            }
+            Message::LaneAdd(track) => {
+                self.op(Op::Item(ItemOp::AddLane { track }));
+            }
+            Message::LaneRemove(track, lane) => {
+                self.op(Op::Item(ItemOp::RemoveLane { track, lane }));
             }
             Message::OverlayMove(r, at) => {
                 if let Some(item) = self.edit.item(r).map(|it| it.id) {

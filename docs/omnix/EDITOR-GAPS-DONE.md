@@ -1390,6 +1390,88 @@ radius plus a glow (the blurred highlights added back). CPU and GPU with a
 parity test. Blur is a multi-tap pass, so it costs more than a per-pixel
 effect.
 
+### 77. Dailix: voice clean-up and loudness for camera and phone sound — done, checked by the user 2026-11-10 (user, 2026-11-05)
+
+Most of the material has no lavalier: the voice is the camera's or the
+phone's own microphone, behind the speaker, under traffic, sea and wind.
+footage-agent's contact sheet already solved this
+(`footage_agent/voice.py`, `docs/VOICE.md`, measured on Kos): named
+recipes, `dnn6` (DeepFilterNet, at most 6 dB taken off) the default,
+an EQ and compression chain for wind, every variant made from the
+original, kept in `voice/<day>/<clip>/<recipe>.flac` with a stamp of
+how it was made, deletable without loss; the sheet's `audio` field picks
+which one the edit uses. Dailix needs the same, as its parity step 4
+(`dailix/docs/CONTEXT.md`) already plans:
+- the recipes as a tested module plus a CLI (`dailix voice …`), the
+  window only calling them; DeepFilterNet run as a CLI process (no
+  vendor SDK), ffmpeg as a CLI;
+- in the sheet: make a variant, listen to it against the original,
+  choose it (the `audio` field `from-sheet` already reads);
+- loudness normalisation of the chosen voice, also from the original,
+  never stacked (the sound rule);
+- the same `voice/` layout and recipe names, so Kos's variants made by
+  the web sheet stay valid.
+Milestone «Ефекти, колір і розумний звук».
+
+**Started 2026-11-10 with gap 83; the user's choices:** `deep-filter`
+found on PATH, then in Dailix's own tools folder (the binary copied
+there from footage-agent's `tools/`); loudness measured once per variant
+(LUFS in `_recipes.json`) and Omnix sets the cut's voice level from it,
+nothing re-rendered or stacked; speech found on the cleaned voice with
+Omnix's own finder (`duck::speech`), no new model, measured on Kos first.
+**Built and checked 2026-11-10** (the user on Kos: dnn12 chosen, the cut normalized, music lowered under the voice and auto-ducked under the speech found: «непогано і навіть гарно») (with gap 83):
+1. `dailix_sheet::voice` (recipes, folders, `_recipes.json` read as
+   footage-agent wrote it, plus `lufs`), the app's runner (`voice.rs`:
+   deep-filter in and out apart, the FLAC written whole, measured by
+   Omnix's meter), `dailix voice list | make | measure | speech`
+   (Dailix `15887a4`; Omnix's `sound` facade `134d9aa`).
+2. The sheet's Voice row under the player: the clip's own sound and each
+   voice with its loudness, heard from where the player is at −20 LUFS
+   (`voice::compare_gain`; `Viewer::hear`, Omnix `26bc7d0`), «Use for the
+   edit», a recipe made off the UI thread (Dailix `ef0ebb2`).
+3. «→ Omnix» sets a cut's loudness and gain from its voice's LUFS
+   (Omnix `1eb5e4c`). Kos's seven old variants measured (−35 … −21.5).
+deep-filter copied to `~/.config/dailix/tools/`.
+
+### 83. Dailix finds where people talk, even in bad sound — done, checked by the user 2026-11-10 (user, 2026-11-07)
+
+User: detecting speech in a clip belongs in Dailix, not Omnix (the roles
+split right: Dailix takes the material apart, Omnix edits with it), as
+modules that pull the voice and the talk out of bad sound (wind, road).
+With gap 77 (voice clean-up and loudness in Dailix); it ends gap 81 (the
+duck under a cut's own talk) and feeds the marking.
+Order (user, 2026-11-09): in milestone «Ефекти, колір і розумний звук», after
+transitions; the source viewer (71a) and beat cuts (13) went later.
+
+**Built and checked 2026-11-10** (the user on Kos: dnn12 chosen, the cut normalized, music lowered under the voice and auto-ducked under the speech found: «непогано і навіть гарно») (Dailix `d363819`, Omnix
+`b7e563b`): speech found in a cleaned voice with the auto-duck's own
+finder (`omnix::sound::speech`), in the one the edit uses if
+DeepFilterNet made it, else dnn6, else another (`voice::speech_source`;
+`eq` keeps the wind, never it); a green line under the player's strip;
+`dailix voice speech`. Not measured by ear yet: the user's listen on
+Kos says whether plain loudness on dnn6 is enough or a speech model is
+worth it. A clip needs a cleaned voice made first. Later, if wanted:
+speech on the tiles, voices made for a whole day at once.
+Gap 81 (the duck under a cut's own talk) works once a clip's voice is
+chosen: «→ Omnix» puts it on the cut, the duck reads it.
+
+### 81. Auto-duck under talk in a cut's own sound — done, checked by the user 2026-11-10 (user, 2026-11-06); no card of its own: «Dailix: де в кадрі говорять» closes it
+
+Found while checking: music over a Kos cut where people talk; «Auto-duck»
+says "No speech to lower the music under". By design (gap 3, `duck.rs`)
+speech is looked for only in cleaned voices (`Cut::audio`, made by
+footage-agent's web sheet) and Voice takes: a cut's own sound is wind
+and traffic as often as talk. Kos lives in Dailix now, which has no
+voice clean-up yet (gap 77), so no cut has a cleaned voice and the
+duck finds nothing. Ways (the user to choose):
+- a. The user marks a cut's sound as speech (the clip sound menu); the
+  duck reads its own sound then. Small, certain.
+- b. Speech found in any cut's own sound by its speech band (roughly
+  200–3500 Hz against the rest): automatic, fooled by wind sometimes.
+- c. Wait for gap 77: cleaned voices from Dailix, the duck as it is.
+Chosen (user, 2026-11-06): c. Nothing changes in Omnix; gap 77 closes
+this one. Milestone «Ефекти, колір і розумний звук».
+
 ### 93. Effects edit the selected clip, the playhead on it — done, checked by the user 2026-11-10 (user, 2026-11-10)
 
 The user: the Effects sliders work on the selected clip only while the

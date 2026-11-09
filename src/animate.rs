@@ -1,7 +1,8 @@
 //! Ready-made ins and outs for text and pictures (gap 87, the effects
-//! milestone's step 2a, the user, 2026-11-10): Fade, Slide four ways, Pop,
-//! Zoom, Spin. One is made into automation clips at the item's start
-//! (`In`) or end (`Out`) — its opacity, place, size, turn — so it plays as
+//! milestone's steps 2a and 2b, the user, 2026-11-10): Fade, Slide four
+//! ways, Pop, Zoom, Spin, Blur, Reveal. One is made into automation clips
+//! at the item's start (`In`) or end (`Out`) — its opacity, place, size,
+//! turn, blur, reveal — so it plays as
 //! any automation does and can be adjusted on the lanes; each clip says
 //! which animation it came from (`AutoClip::animation`), and a trim keeps
 //! them on their edge (`keep_on_edges`).
@@ -27,10 +28,15 @@ pub enum Anim {
     Zoom,
     /// Turning once as it grows.
     Spin,
+    /// Out of a blur, faded in.
+    Blur,
+    /// A picture wiped in from the left, text typed letter by letter, at
+    /// an even pace.
+    Reveal,
 }
 
 impl Anim {
-    pub const ALL: [Anim; 8] = [Anim::Fade, Anim::SlideLeft, Anim::SlideRight, Anim::SlideUp, Anim::SlideDown, Anim::Pop, Anim::Zoom, Anim::Spin];
+    pub const ALL: [Anim; 10] = [Anim::Fade, Anim::SlideLeft, Anim::SlideRight, Anim::SlideUp, Anim::SlideDown, Anim::Pop, Anim::Zoom, Anim::Spin, Anim::Blur, Anim::Reveal];
 
     pub fn name(self) -> &'static str {
         match self {
@@ -42,6 +48,8 @@ impl Anim {
             Anim::Pop => "Pop",
             Anim::Zoom => "Zoom",
             Anim::Spin => "Spin",
+            Anim::Blur => "Blur",
+            Anim::Reveal => "Reveal",
         }
     }
 }
@@ -61,8 +69,9 @@ const SLIDE: f64 = 0.75;
 
 /// The clips `anim` makes on `edge` of an item running `start`..`end` (own
 /// time), `seconds` long, from its values where it holds still: its
-/// opacity and its place (x, y, size, rotation).
-pub fn clips(animation: Animation, (start, end): (f64, f64), opacity: f64, place: crate::overlay::Place) -> Vec<AutoClip> {
+/// effects (opacity, blur, reveal) and its place (x, y, size, rotation).
+pub fn clips(animation: Animation, (start, end): (f64, f64), grade: &crate::grade::Grade, place: crate::overlay::Place) -> Vec<AutoClip> {
+    let opacity = grade.opacity;
     let d = animation.seconds.clamp(0.05, (end - start).max(0.05));
     let (from, to) = if animation.edge == End::In { (start, start + d) } else { (end - d, end) };
     // A value's run on this edge: its values from the start of the in (or
@@ -91,6 +100,12 @@ pub fn clips(animation: Animation, (start, end): (f64, f64), opacity: f64, place
         Anim::Pop => vec![pop("size", place.size, place.size * 1.15, 0.0)],
         Anim::Zoom => vec![swing("size", place.size, place.size * 1.6), swing("opacity", opacity, 0.0)],
         Anim::Spin => vec![swing("rotation", place.rotation, place.rotation - 360.0), swing("size", place.size, 0.0)],
+        Anim::Blur => vec![swing("blur", grade.blur, 1.0), swing("opacity", opacity, 0.0)],
+        Anim::Reveal => {
+            let mut c = swing("reveal", grade.reveal, 0.0);
+            c.points.iter_mut().for_each(|q| q.ease = Ease::Linear);
+            vec![c]
+        }
     }
 }
 
@@ -120,21 +135,23 @@ mod tests {
     #[test]
     fn an_in_comes_to_the_still_value_and_an_out_leaves_it() {
         let place = Place { x: 0.5, y: 0.8, size: 1.0, rotation: 0.0 };
-        let fade_in = clips(Animation { anim: Anim::Fade, edge: End::In, seconds: 1.0 }, (2.0, 8.0), 0.9, place);
+        let fade_in = clips(Animation { anim: Anim::Fade, edge: End::In, seconds: 1.0 }, (2.0, 8.0), &crate::grade::Grade { opacity: 0.9, ..Default::default() }, place);
         assert_eq!((at(&fade_in, "opacity", 2.0), at(&fade_in, "opacity", 3.0), at(&fade_in, "opacity", 5.0)), (Some(0.0), Some(0.9), None), "covered only over its second");
-        let slide_out = clips(Animation { anim: Anim::SlideLeft, edge: End::Out, seconds: 0.5 }, (2.0, 8.0), 1.0, place);
+        let slide_out = clips(Animation { anim: Anim::SlideLeft, edge: End::Out, seconds: 0.5 }, (2.0, 8.0), &crate::grade::Grade::default(), place);
         assert_eq!((at(&slide_out, "x", 7.5), at(&slide_out, "x", 8.0)), (Some(0.5), Some(0.5 - SLIDE)), "off to the left");
-        let slide_in = clips(Animation { anim: Anim::SlideLeft, edge: End::In, seconds: 0.5 }, (2.0, 8.0), 1.0, place);
+        let slide_in = clips(Animation { anim: Anim::SlideLeft, edge: End::In, seconds: 0.5 }, (2.0, 8.0), &crate::grade::Grade::default(), place);
         assert_eq!(at(&slide_in, "x", 2.0), Some(0.5 + SLIDE), "in from the right, moving left");
-        let pop = clips(Animation { anim: Anim::Pop, edge: End::In, seconds: 1.0 }, (0.0, 4.0), 1.0, place);
+        let pop = clips(Animation { anim: Anim::Pop, edge: End::In, seconds: 1.0 }, (0.0, 4.0), &crate::grade::Grade::default(), place);
         assert!(at(&pop, "size", 0.7).unwrap() > 1.1 && at(&pop, "size", 0.0) == Some(0.0));
-        assert!(Anim::ALL.iter().all(|&anim| clips(Animation { anim, edge: End::Out, seconds: 9.0 }, (0.0, 4.0), 1.0, place).iter().all(|c| c.from >= 0.0 && c.to <= 4.0)), "never longer than the item");
+        let typed = clips(Animation { anim: Anim::Reveal, edge: End::Out, seconds: 2.0 }, (0.0, 4.0), &crate::grade::Grade::default(), place);
+        assert_eq!((at(&typed, "reveal", 2.0), at(&typed, "reveal", 3.0), at(&typed, "reveal", 4.0)), (Some(1.0), Some(0.5), Some(0.0)), "typed away at an even pace");
+        assert!(Anim::ALL.iter().all(|&anim| clips(Animation { anim, edge: End::Out, seconds: 9.0 }, (0.0, 4.0), &crate::grade::Grade::default(), place).iter().all(|c| c.from >= 0.0 && c.to <= 4.0)), "never longer than the item");
     }
 
     #[test]
     fn a_trim_keeps_an_animation_on_its_edge() {
         let place = Place::default();
-        let mut all = [clips(Animation { anim: Anim::Fade, edge: End::In, seconds: 1.0 }, (0.0, 6.0), 1.0, place), clips(Animation { anim: Anim::Fade, edge: End::Out, seconds: 1.0 }, (0.0, 6.0), 1.0, place)].concat();
+        let mut all = [clips(Animation { anim: Anim::Fade, edge: End::In, seconds: 1.0 }, (0.0, 6.0), &crate::grade::Grade::default(), place), clips(Animation { anim: Anim::Fade, edge: End::Out, seconds: 1.0 }, (0.0, 6.0), &crate::grade::Grade::default(), place)].concat();
         keep_on_edges(&mut all, (0.0, 6.0), (0.5, 4.0));
         assert_eq!((all[0].from, all[0].to, all[1].from, all[1].to), (0.5, 1.5, 3.0, 4.0));
         assert_eq!(all[1].points.last().unwrap().t, 4.0);

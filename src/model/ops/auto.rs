@@ -254,8 +254,8 @@ fn animate(p: &mut Project, item: Id, edge: End, anim: Option<crate::animate::An
         return Err(OpError::Invalid(format!("an animation runs some time, not {seconds} s")));
     }
     let at = if edge == End::In { it.start } else { it.end };
-    let (opacity, place) = (crate::grade::grade_at(&it.effects, at).opacity, crate::overlay::place_at(&it.motion, at));
-    let made = crate::animate::clips(crate::animate::Animation { anim, edge, seconds }, (it.start, it.end), opacity, place);
+    let (grade, place) = (crate::grade::grade_at(&it.effects, at), crate::overlay::place_at(&it.motion, at));
+    let made = crate::animate::clips(crate::animate::Animation { anim, edge, seconds }, (it.start, it.end), &grade, place);
     for c in &made {
         it.automation.retain(|a| !(a.param == c.param && a.from < c.to && a.to > c.from));
     }

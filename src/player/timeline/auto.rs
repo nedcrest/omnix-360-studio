@@ -2,8 +2,10 @@
 //! overlay or text lane's rows. One lane per value that something there
 //! moves or the panel asked for (◆), each showing every owner's clips for
 //! it — a block over its stretch, its curve, its points with their values
-//! — the value's range the lane's height. One `Lanes` serves both
-//! canvases: its owners are the cuts or the lane's items.
+//! — the value's range the lane's height; under them a row for each thing
+//! fixed on a whole owner and set in the panel (a style, a LUT, a
+//! picture's kind), a named bar. One `Lanes` serves both canvases: its
+//! owners are the cuts or the lane's items.
 
 use super::*;
 use crate::automation::AutoClip;
@@ -27,6 +29,9 @@ pub(super) struct Lanes<'a> {
     pub top: f32,
     pub folded: bool,
     pub owners: Vec<Owner<'a>>,
+    /// The rows of what's fixed on the owners (`automation_ui::FIXED`),
+    /// under the value lanes: a bar each, set in the panel only.
+    pub fixed: Vec<&'static str>,
 }
 
 /// Whose clips a lane shows: where it starts on the edit, its own start
@@ -37,6 +42,8 @@ pub(super) struct Owner<'a> {
     pub start: f64,
     pub len: f64,
     pub clips: &'a [AutoClip],
+    /// What's fixed on it: (row, what), `automation_ui::fixed_of_cut`.
+    pub fixed: Vec<(&'static str, String)>,
 }
 
 /// What a press on a lane meets (an owner by its place in `owners`).
@@ -78,13 +85,18 @@ pub enum LaneDrag {
 impl Lanes<'_> {
     /// Their height together: none while folded.
     pub(super) fn height(&self) -> f32 {
-        if self.folded { 0.0 } else { self.params.len() as f32 * AUTO }
+        if self.folded { 0.0 } else { self.rows() as f32 * AUTO }
+    }
+
+    /// Its lanes: the values', then the fixed rows.
+    fn rows(&self) -> usize {
+        self.params.len() + self.fixed.len()
     }
 
     /// Their row's name: «▾ Effects» open, «▸ Effects (2)» folded with two
     /// lanes under it.
     pub(super) fn tag(&self) -> String {
-        match (self.folded, self.params.len()) {
+        match (self.folded, self.rows()) {
             (_, 0) => self.name.to_owned(),
             (true, n) => format!("▸ {} ({n})", self.name),
             (false, _) => format!("▾ {}", self.name),
@@ -156,7 +168,8 @@ impl Lanes<'_> {
     /// body, or empty lane over an owner. Through a crossfade either cut's
     /// clips are found.
     pub(super) fn hit(&self, p: Point, b: Rectangle) -> Option<LaneHit> {
-        let lane = self.lane_at(p.y)?;
+        // A fixed row is only shown: it's set in the panel.
+        let lane = self.lane_at(p.y).filter(|&l| l < self.params.len())?;
         let reach = |o: &Owner| p.x >= self.t.x(o.from, b) - 4.0 && p.x <= self.t.x(o.from + o.len, b) + 4.0;
         for (owner, o) in self.owners.iter().enumerate().rev().filter(|(_, o)| reach(o)) {
             if let Some(hit) = self.clip_hit(lane, owner, o, p, b) {
@@ -325,10 +338,33 @@ impl Lanes<'_> {
                 }
             }
         }
+        for (k, row) in self.fixed.iter().enumerate() {
+            let i = self.params.len() + k;
+            let (top, h) = self.lane(i);
+            frame.fill(&Path::rectangle(Point::new(0.0, top + 1.0), Size::new(b.width, h - 2.0)), ground);
+            for o in &self.owners {
+                if let Some((_, what)) = o.fixed.iter().find(|(r, _)| r == row) {
+                    self.fixed_bar(frame, i, (self.x(o, o.start, b), self.x(o, o.start + o.len, b)), what);
+                }
+            }
+        }
         if let Some(&LaneDrag::New { lane, x0, x1, .. }) = drag {
             let (top, h) = self.lane(lane);
             frame.stroke(&Path::rectangle(Point::new(x0.min(x1), top + 2.0), Size::new((x1 - x0).abs(), h - 4.0)), Stroke::default().with_width(1.5).with_color(EFFECT_MARK));
         }
+    }
+
+    /// A fixed effect's bar on lane `i`, from `l` to `r`, named: no curve,
+    /// no points, set in the panel.
+    fn fixed_bar(&self, frame: &mut Frame, i: usize, (l, r): (f32, f32), what: &str) {
+        let (top, h) = self.lane(i);
+        let bar = Path::rectangle(Point::new(l, top + 4.0), Size::new((r - l).max(1.0), h - 8.0));
+        frame.fill(&bar, EFFECT_MARK.scale_alpha(0.3));
+        // Named where it has room.
+        if r - l < 40.0 {
+            return;
+        }
+        frame.fill_text(Text { content: what.to_owned(), position: Point::new(l + 6.0, top + h / 2.0), color: iced::Color::WHITE, size: 11.0.into(), align_y: Vertical::Center, ..Default::default() });
     }
 
     /// A clip's block on lane `i`, from `l` to `r`.
@@ -367,6 +403,9 @@ impl Lanes<'_> {
     fn draw_folded(&self, frame: &mut Frame, b: Rectangle) {
         let mid = self.row_top + self.row_h / 2.0;
         for o in &self.owners {
+            if !o.fixed.is_empty() {
+                frame.fill(&Path::rectangle(Point::new(self.x(o, o.start, b), mid - 1.0), Size::new((self.x(o, o.start + o.len, b) - self.x(o, o.start, b)).max(1.0), 2.0)), EFFECT_MARK.scale_alpha(0.3));
+            }
             for i in 0..self.params.len() {
                 for (clip, l, r) in self.clips(i, o, b) {
                     frame.fill(&Path::rectangle(Point::new(l, mid - 1.0), Size::new((r - l).max(1.0), 2.0)), EFFECT_MARK.scale_alpha(0.45));
@@ -387,24 +426,26 @@ impl Lanes<'_> {
             return;
         }
         let ink = theme.extended_palette().background.base.text.scale_alpha(0.6);
-        for (i, param) in self.params.iter().enumerate() {
+        let names = self.params.iter().map(|p| p.title()).chain(self.fixed.iter().copied());
+        for (i, name) in names.enumerate() {
             let (top, h) = self.lane(i);
             head_cell(frame, top, h, EFFECT_MARK);
-            frame.fill_text(Text { content: param.title().to_owned(), position: Point::new(PICK + 14.0, top + h / 2.0), color: ink, size: 11.0.into(), align_y: Vertical::Center, ..Default::default() });
+            frame.fill_text(Text { content: name.to_owned(), position: Point::new(PICK + 14.0, top + h / 2.0), color: ink, size: 11.0.into(), align_y: Vertical::Center, ..Default::default() });
         }
     }
 
     /// Whether `p` is on the Effects row's name, folding the lanes (while
     /// there are any).
     pub(super) fn on_tag(&self, p: Point) -> bool {
-        !self.params.is_empty() && p.x < HEAD && fold_tag(&self.tag(), self.row_top + self.row_h / 2.0).contains(p)
+        self.rows() > 0 && p.x < HEAD && fold_tag(&self.tag(), self.row_top + self.row_h / 2.0).contains(p)
     }
 }
 
 impl Timeline {
     /// The cuts' automation lanes, under their Effects row.
     pub(super) fn cut_lanes(&self) -> Lanes<'_> {
-        let owners = self.blocks.iter().enumerate().map(|(i, c)| Owner { on: AutoOn::Cut(i), from: c.from, start: c.cut.start, len: c.len(), clips: &c.cut.automation }).collect();
-        Lanes { t: self, params: self.auto_lanes.clone(), name: "Effects", row_top: self.rows.effects_top, row_h: EFFECTS, top: self.rows.auto_top, folded: self.folds.effects, owners }
+        let owners: Vec<Owner> = self.blocks.iter().enumerate().map(|(i, c)| Owner { on: AutoOn::Cut(i), from: c.from, start: c.cut.start, len: c.len(), clips: &c.cut.automation, fixed: super::super::automation_ui::fixed_of_cut(&c.cut) }).collect();
+        let fixed = super::super::automation_ui::fixed_rows(owners.iter().map(|o| &o.fixed[..]));
+        Lanes { t: self, params: self.auto_lanes.clone(), name: "Effects", row_top: self.rows.effects_top, row_h: EFFECTS, top: self.rows.auto_top, folded: self.folds.effects, owners, fixed }
     }
 }

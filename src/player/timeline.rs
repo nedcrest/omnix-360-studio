@@ -1470,9 +1470,11 @@ impl OverlayLane {
             (Track::Text, true) => (&t.text_auto, t.folds.text_motion),
         };
         let params = all.iter().copied().filter(|p| matches!(p, Param::Place(_)) == motion).collect();
-        let owners = self.blocks().iter().map(|o| auto::Owner { on: AutoOn::Item(o.item.id), from: o.item.at, start: o.item.start, len: o.len(), clips: &o.item.automation }).collect();
+        let fixed_of = |it: &crate::overlay::Item| if motion { Vec::new() } else { super::automation_ui::fixed_of_item(it) };
+        let owners: Vec<auto::Owner> = self.blocks().iter().map(|o| auto::Owner { on: AutoOn::Item(o.item.id), from: o.item.at, start: o.item.start, len: o.len(), clips: &o.item.automation, fixed: fixed_of(&o.item) }).collect();
+        let fixed = super::automation_ui::fixed_rows(owners.iter().map(|o| &o.fixed[..]));
         let (name, row_top, row_h) = if motion { ("Motion", self.motion_top(), KEYS) } else { ("Effects", t.rows.overlay, EFFECTS) };
-        auto::Lanes { t, params, name, row_top, row_h, top: row_top + row_h, folded, owners }
+        auto::Lanes { t, params, name, row_top, row_h, top: row_top + row_h, folded, owners, fixed }
     }
 
     /// Where its Motion row starts: under its Effects row and lanes.
@@ -2855,6 +2857,18 @@ mod tests {
         let tag = lanes.value_tag(0, t.x(2.0, b), lanes.y(0, 1.5), 1.5);
         assert!(matches!(t.hit(tag.center(), b, false, false), Hit::Auto(LaneHit::Value { owner: 0, t, v, .. }) if t == 2.0 && v == 1.5));
         assert_eq!(lanes.tag(), "▾ Effects");
+    }
+
+    #[test]
+    fn a_style_shows_as_a_bar_in_a_row_of_its_own() {
+        let (mut t, b) = timeline();
+        t.blocks[1].cut.style = Some(crate::project::Style { look: crate::transition::Look::Vhs, params: Default::default() });
+        t.folds.effects = false;
+        let lanes = t.cut_lanes();
+        assert_eq!((lanes.fixed.clone(), lanes.tag()), (vec!["Style"], "▾ Effects".to_owned()));
+        assert_eq!(lanes.owners[1].fixed, [("Style", "VHS".to_owned())]);
+        let (top, h) = lanes.lane(0);
+        assert_eq!(lanes.hit(Point::new(t.x(t.blocks[1].from + 0.5, b), top + h / 2.0), b), None, "shown, not edited there");
     }
 
     #[test]

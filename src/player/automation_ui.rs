@@ -65,6 +65,29 @@ impl Param {
     }
 }
 
+/// What is put on a cut or item for its whole length and set only in the
+/// panel (a style, a LUT, a picture's kind): a row each under the Effects
+/// row, a bar with its name, so what's applied shows on the timeline too
+/// (the user, 2026-11-10). The rows' names, in their order.
+pub const FIXED: [&str; 3] = ["Style", "LUT", "Kind"];
+
+/// Cut `c`'s fixed effects: (row, what).
+pub fn fixed_of_cut(c: &crate::project::Cut) -> Vec<(&'static str, String)> {
+    let lut = c.lut.as_ref().map(|l| ("LUT", std::path::Path::new(l).file_stem().map_or_else(|| l.clone(), |s| s.to_string_lossy().into_owned())));
+    c.style.as_ref().map(|s| ("Style", s.look.name().to_owned())).into_iter().chain(lut).collect()
+}
+
+/// Item `it`'s fixed effects: (row, what).
+pub fn fixed_of_item(it: &crate::overlay::Item) -> Vec<(&'static str, String)> {
+    let kind = it.kind.map(|k| ("Kind", k.name().to_owned()));
+    it.style.as_ref().map(|s| ("Style", s.look.name().to_owned())).into_iter().chain(kind).collect()
+}
+
+/// The fixed rows `owners` need, in `FIXED`'s order.
+pub fn fixed_rows<'a>(owners: impl Iterator<Item = &'a [(&'static str, String)]> + Clone) -> Vec<&'static str> {
+    FIXED.into_iter().filter(|row| owners.clone().any(|f| f.iter().any(|(r, _)| r == row))).collect()
+}
+
 /// On `on`, value `param`; times are its clip (or own) time.
 #[derive(Clone, Debug)]
 pub enum AutoMsg {
@@ -94,6 +117,12 @@ impl App {
         let place = (0..4).map(Param::Place).filter(|_| of != LaneOf::Cuts);
         let all = place.chain((0..crate::grade::NAMES.len()).map(Param::Grade));
         all.filter(|p| clips.iter().any(|c| c.param == p.name()) || self.extra_lanes.contains(&(of, *p))).collect()
+    }
+
+    /// How many fixed rows the cuts' lanes have (`FIXED`).
+    pub(super) fn fixed_cut_rows(&self) -> usize {
+        let all: Vec<_> = self.edit.cuts.iter().map(fixed_of_cut).collect();
+        fixed_rows(all.iter().map(|f| &f[..])).len()
     }
 
     /// `on` as an op names it, and its automation clips.

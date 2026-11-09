@@ -1376,10 +1376,19 @@ there from footage-agent's `tools/`); loudness measured once per variant
 (LUFS in `_recipes.json`) and Omnix sets the cut's voice level from it,
 nothing re-rendered or stacked; speech found on the cleaned voice with
 Omnix's own finder (`duck::speech`), no new model, measured on Kos first.
-Steps: 1 the recipes in the sheet core (pure: table, paths, stamps) and
-the runner plus `dailix voice` in the app; 2 the sheet's Voice row
-(variants, make, listen against the original at equal loudness,
-choose); 3 the loudness; 4 the speech strip (gap 83).
+**Built 2026-11-10, waiting for the check** (with gap 83):
+1. `dailix_sheet::voice` (recipes, folders, `_recipes.json` read as
+   footage-agent wrote it, plus `lufs`), the app's runner (`voice.rs`:
+   deep-filter in and out apart, the FLAC written whole, measured by
+   Omnix's meter), `dailix voice list | make | measure | speech`
+   (Dailix `15887a4`; Omnix's `sound` facade `134d9aa`).
+2. The sheet's Voice row under the player: the clip's own sound and each
+   voice with its loudness, heard from where the player is at −20 LUFS
+   (`voice::compare_gain`; `Viewer::hear`, Omnix `26bc7d0`), «Use for the
+   edit», a recipe made off the UI thread (Dailix `ef0ebb2`).
+3. «→ Omnix» sets a cut's loudness and gain from its voice's LUFS
+   (Omnix `1eb5e4c`). Kos's seven old variants measured (−35 … −21.5).
+deep-filter copied to `~/.config/dailix/tools/`.
 
 ### 78. A vertical video in a wide edit: its sides filled from itself, not black — idea (user, 2026-11-05)
 
@@ -1418,6 +1427,18 @@ With gap 77 (voice clean-up and loudness in Dailix); it ends gap 81 (the
 duck under a cut's own talk) and feeds the marking.
 Order (user, 2026-11-09): in milestone «Ефекти, колір і розумний звук», after
 transitions; the source viewer (71a) and beat cuts (13) went later.
+
+**Built 2026-11-10, waiting for the check** (Dailix `d363819`, Omnix
+`b7e563b`): speech found in a cleaned voice with the auto-duck's own
+finder (`omnix::sound::speech`), in the one the edit uses if
+DeepFilterNet made it, else dnn6, else another (`voice::speech_source`;
+`eq` keeps the wind, never it); a green line under the player's strip;
+`dailix voice speech`. Not measured by ear yet: the user's listen on
+Kos says whether plain loudness on dnn6 is enough or a speech model is
+worth it. A clip needs a cleaned voice made first. Later, if wanted:
+speech on the tiles, voices made for a whole day at once.
+Gap 81 (the duck under a cut's own talk) works once a clip's voice is
+chosen: «→ Omnix» puts it on the cut, the duck reads it.
 
 ### 84. A video drawing on several trips («a year in review») — idea, backlog (user, 2026-11-07)
 

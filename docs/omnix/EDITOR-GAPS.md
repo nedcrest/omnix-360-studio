@@ -708,9 +708,10 @@ effect rows of their own: the same there. Old keys are read into clips.
 In the milestone «Ефекти, колір і розумний звук», after the Effects
 panel's layout is sorted (the user's next ask).
 
-**Built 2026-11-10, waiting for the check** (`60d1189` core, `9491af2`
+**Built and checked 2026-11-10** (`60d1189` core, `9491af2`
 cut lanes, `4203205` values on points and in the sliders, marks on the
-folded row, `29ce7cd` text and overlay lanes): `automation.rs`
+folded row, `29ce7cd` text and overlay lanes, `9557bd6` an item's place
+under its own Motion row, folding): `automation.rs`
 (`AutoClip`: the value's name, from..to in clip or own time, eased
 points, `follows` if made from a track); `graded`/`placed` over the set
 values, read through `Cut::grade_at` and `overlay::look`; old effect and

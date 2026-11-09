@@ -265,6 +265,12 @@ User: would split into video tracks and sound tracks.
 
 ### 6. Vignette shapes — idea (user, 2026-10-22)
 
+Built 2026-11-09 (`2a32621`), waiting for the check: `Grade::vignette_shape`
+(0 round, 1 top, 2 bottom, 3 sides; held from key to key), `vignette_reach`
+and `vignette_soft` (their defaults the old vignette); a fourth row of
+grade values in the shaders; the Effects panel's shapes and sliders under
+the Vignette slider; GPU and CPU tested per shape.
+
 Today there is one vignette: `Grade.vignette` (0..1, "Darker corners"),
 round, by distance from the centre (`grade.rs` ~136, mirrored in
 `grade.wgsl`). The user wants **types**, e.g. on a sunny day with a deep

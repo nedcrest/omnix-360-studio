@@ -634,6 +634,12 @@ shape, not only its ends.
 
 ### 37. Object tracking — large (user, 2026-11-01); part of gap 53 (53b) since 2026-11-02
 
+**What the user means by it** (2026-11-10, to keep it straight): «an
+animation tied to an object in the frame» is motion that follows
+someone or something — a smiley over a person, subtitles under a
+particular speaker, a label naming a thing — not the in/out presets
+(87).
+
 **The contract, built 2026-11-10** (`778c86c`, the user: "a contract for
 objects' motion, for future tracking and tying objects to it"): a
 tracker's output is `automation::ObjectTrack` on its cut (`Cut::tracks`:

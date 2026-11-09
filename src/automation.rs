@@ -122,6 +122,23 @@ impl AutoClip {
         t >= self.from && t <= self.to
     }
 
+    /// Trimmed to `from`..`to`: a point on an edge that moves goes with
+    /// it, points left outside are dropped (the user's find, 2026-11-10:
+    /// they stayed behind).
+    pub fn trim(&mut self, from: f64, to: f64) {
+        let on = |q: &AutoPoint, edge: f64| (q.t - edge).abs() < 1e-6;
+        let (was_from, was_to) = (self.from, self.to);
+        for q in &mut self.points {
+            if on(q, was_from) {
+                q.t = from;
+            } else if on(q, was_to) {
+                q.t = to;
+            }
+        }
+        self.points.retain(|q| q.t >= from - 1e-9 && q.t <= to + 1e-9);
+        (self.from, self.to) = (from, to);
+    }
+
     /// Its curve's value at `t`.
     pub fn value_at(&self, t: f64) -> f64 {
         let p = &self.points;

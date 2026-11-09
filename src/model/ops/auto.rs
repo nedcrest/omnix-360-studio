@@ -151,7 +151,7 @@ pub(super) fn apply(p: &mut Project, op: &AutoOp) -> Result<Outcome, OpError> {
             let (from, to) = (o.clips[i].from, o.clips[i].to);
             let (from, to) = if *end == End::In { (t.clamp(o.range.0, to - SHORTEST), to) } else { (from, t.clamp(from + SHORTEST, o.range.1)) };
             clear(o.clips, param, from, to, Some(i))?;
-            (o.clips[i].from, o.clips[i].to) = (from, to);
+            o.clips[i].trim(from, to);
             said(format!("{}: {param} clip {from:.2}-{to:.2} s", name(*on)))
         }
         AutoOp::Delete { on, param, at } => {
@@ -296,7 +296,11 @@ mod tests {
         let c = e.cuts[0].automation.iter().find(|c| c.param == "exposure").unwrap();
         assert_eq!((c.from, c.to, c.points[1].t), (6.0, 8.0, 7.0), "its points with it");
         e.apply(&op(AutoOp::Trim { on, param: "exposure".into(), at: 7.0, end: End::Out, t: 20.0 })).unwrap();
-        assert_eq!(e.cuts[0].automation.iter().find(|c| c.param == "exposure").unwrap().to, 9.0, "within the cut");
+        let c = e.cuts[0].automation.iter().find(|c| c.param == "exposure").unwrap();
+        assert_eq!((c.to, c.points.last().unwrap().t), (9.0, 9.0), "within the cut, its end point with its edge");
+        e.apply(&op(AutoOp::Trim { on, param: "exposure".into(), at: 7.0, end: End::In, t: 7.5 })).unwrap();
+        let c = e.cuts[0].automation.iter().find(|c| c.param == "exposure").unwrap();
+        assert_eq!(c.points.iter().map(|q| q.t).collect::<Vec<_>>(), [7.5, 9.0], "its start point too; the one left outside gone");
         assert!(e.apply(&op(AutoOp::Add { on, param: "sparkle".into(), from: 1.0, to: 2.0 })).is_err());
         assert!(e.apply(&op(AutoOp::Add { on, param: "x".into(), from: 1.0, to: 2.0 })).is_err(), "a cut has no place to move");
         assert!(e.apply(&op(AutoOp::Add { on, param: "reveal".into(), from: 1.0, to: 2.0 })).is_err(), "nor a reveal");

@@ -61,6 +61,8 @@ pub enum EffectMsg {
     ResetGroup(super::effects_view::Group),
     /// A complex control's knobs out beside the panel, or put away.
     Extra(Option<super::effects_view::Extra>),
+    /// The selected picture's kind (`dress::Kind`), or plain.
+    Kind(Option<crate::dress::Kind>),
     /// The selected item's in or out (`End`): an animation or none; its
     /// length (a slider's drag, one undo step).
     Animate(crate::model::ops::End, Option<crate::animate::Anim>),
@@ -329,6 +331,7 @@ impl App {
             }
             EffectMsg::ResetGroup(g) => self.reset_group(g),
             EffectMsg::Animate(edge, anim) => self.animate(edge, anim, None),
+            EffectMsg::Kind(kind) => self.dress(kind),
             EffectMsg::AnimateLength(edge, seconds) => {
                 self.edit.begin();
                 self.animate(edge, None, Some(seconds));
@@ -582,6 +585,15 @@ impl App {
         }
     }
 
+    /// The selected picture dressed as `kind`, or plain.
+    fn dress(&mut self, kind: Option<crate::dress::Kind>) {
+        let Some(it) = self.selection.item(&self.edit).and_then(|i| self.edit.item(i)) else { return };
+        if it.kind != kind {
+            let item = it.id;
+            self.op(Op::Item(crate::model::ops::items::ItemOp::Kind { item, kind }));
+        }
+    }
+
     /// Group `g`'s effects back to none, their automation gone (an
     /// overlay's place, the Look's style off too): one undo step.
     fn reset_group(&mut self, g: super::effects_view::Group) {
@@ -597,6 +609,9 @@ impl App {
             for p in 0..4 {
                 self.set_place(true, p, Place::default().values()[p]);
             }
+        }
+        if g == Group::Kind {
+            self.dress(None);
         }
         if g == Group::Animate {
             for edge in [crate::model::ops::End::In, crate::model::ops::End::Out] {

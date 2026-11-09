@@ -1,5 +1,6 @@
 //! The Effects panel's look (gap 90, agreed with the user 2026-11-09):
-//! folding groups, each with its own reset — Place or Bars for an overlay,
+//! folding groups, each with its own reset — Kind (a picture's), Place,
+//! Animate or Bars for an overlay,
 //! then Light, Colour (with the white-balance picker), Look (LUT and
 //! style), Finish (vignette, opacity), Whole edit (the film's fades,
 //! folded at first). A complex control only lights up in the list; its
@@ -19,6 +20,7 @@ const EXTRA_WIDTH: f32 = 220.0;
 /// The panel's folding groups, top to bottom.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Group {
+    Kind,
     Place,
     Animate,
     Bars,
@@ -33,6 +35,7 @@ impl Group {
     /// Its name, shown and kept in the settings while folded.
     pub fn name(self) -> &'static str {
         match self {
+            Group::Kind => "Kind",
             Group::Place => "Place",
             Group::Animate => "Animate",
             Group::Bars => "Bars",
@@ -52,7 +55,7 @@ impl Group {
             Group::Look => &[LUT],
             Group::Finish => &[8, 9, 11, 12, 13],
             Group::Animate => &crate::grade::ITEM_ONLY,
-            Group::Place | Group::Bars | Group::WholeEdit => &[],
+            Group::Kind | Group::Place | Group::Bars | Group::WholeEdit => &[],
         }
     }
 }
@@ -76,6 +79,9 @@ impl App {
             Some((Target::Overlay(i), t)) => match self.edit.item(i).and_then(|it| it.bars) {
                 Some(b) => body = body.push(self.group(Group::Bars, bars_controls(b))),
                 None => {
+                    if self.edit.item(i).is_some_and(|it| it.file().is_some()) {
+                        body = body.push(self.group(Group::Kind, self.kind_tiles(i)));
+                    }
                     body = body.push(self.group(Group::Place, self.place_sliders(i, t)));
                     let shown = column(crate::grade::ITEM_ONLY.map(|p| self.param_row(p, grade.values()[p], enabled))).spacing(6);
                     body = body.push(self.group(Group::Animate, column![shown, self.animate_controls(i)].spacing(12).into()));
@@ -125,7 +131,7 @@ impl App {
     fn group<'a>(&self, g: Group, content: Element<'a, Message>) -> Element<'a, Message> {
         let folded = self.effects_folded.iter().any(|n| n == g.name());
         let fold = button(text(format!("{} {}", if folded { "▸" } else { "▾" }, g.name())).size(15)).padding([2, 0]).style(button::text).on_press(Message::Effect(EffectMsg::Fold(g)));
-        let resets = !g.params().is_empty() || matches!(g, Group::Place | Group::Animate);
+        let resets = !g.params().is_empty() || matches!(g, Group::Kind | Group::Place | Group::Animate);
         let reset = tip(button(text("↺").size(13)).padding([0, 5]).style(button::text).on_press_maybe(resets.then_some(Message::Effect(EffectMsg::ResetGroup(g)))), text(format!("{} back to none", g.name())), tooltip::Position::Left);
         let head = row![fold, space().width(Length::Fill), reset].align_y(Alignment::Center);
         if folded { head.into() } else { column![head, content].spacing(8).into() }
@@ -172,6 +178,22 @@ impl App {
             tip(column![row![text(*name).width(Length::Fill), text(shown).size(13), reset, lane].spacing(4).align_y(Alignment::Center), control].spacing(2), text(*hint), tooltip::Position::Left)
         });
         column(rows).spacing(6).into()
+    }
+
+    /// A picture's kind (gap 87, step 2c): plain, or one of `dress::Kind`.
+    fn kind_tiles(&self, i: crate::overlay::ItemRef) -> Element<'static, Message> {
+        use crate::dress::Kind;
+        let now = self.edit.item(i).and_then(|it| it.kind);
+        let tile = |kind: Option<Kind>| {
+            let style = if now == kind { button::primary } else { button::secondary };
+            button(text(kind.map_or("Plain", Kind::name)).size(12)).padding([3, 7]).style(style).on_press(Message::Effect(EffectMsg::Kind(kind))).into()
+        };
+        let tiles = std::iter::once(tile(None)).chain(Kind::ALL.map(|k| tile(Some(k))));
+        tip(
+            iced::widget::row(tiles).spacing(4).wrap().vertical_spacing(4),
+            text("How it's dressed: a sticker's white cut-out edge, a polaroid's card, a picture in picture's rounded border; each with a shadow"),
+            tooltip::Position::Left,
+        )
     }
 
     /// The item's in and out (gap 87, step 2a): a tile each, ✕, how long.

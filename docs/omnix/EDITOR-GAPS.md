@@ -109,6 +109,7 @@ done in part stays here until its last card is done.
 | 87 | Style looks (old film, VHS, neo-cyberpunk) for a video, an overlay picture or text; animation presets for text and pictures | below |
 | 88 | The Osmo 360 II: its calibration and 8K50 decoding | below |
 | 89 | Auto colour: exposure and white balance set from the picture (or by an AI), keyed where the camera misses | below |
+| 91 | Pictures from the bin or the file manager dragged onto the overlay lane; a «Pictures» folder in every project | below |
 | 90 | The Effects panel sorted: groups, a side panel for complex controls, one scope | [done](EDITOR-GAPS-DONE.md) |
 
 ## Open gaps
@@ -1556,6 +1557,28 @@ keys).
   measure, through the same ops; nothing it does is hidden from undo.
 - In the milestone «Ефекти, колір і розумний звук», with the colour
   tools (after 69 scopes).
+
+### 91. Pictures dragged onto the overlay lane; a «Pictures» folder — idea (user, 2026-11-10)
+
+The user, asking how to put a picture on the overlay lane: there's no
+drag. Today a picture comes in by the toolbar's «Add pictures» (a file
+dialog, at the playhead) or the bin's right-click «Add over the picture
+at the playhead»; a file dropped on the window goes to the bin only.
+
+- Drag a picture from the bin onto the overlay lane, landing where it's
+  let go (as a clip from the bin onto the cuts, if that exists; the same
+  hit test as the lane's drop).
+- Drop a picture from the file manager onto the overlay lane: copied
+  into the project's pictures folder (as the bin copies), then placed.
+- Every project has a folder for pictures and photos, named simply
+  «Pictures» (the user). Today the bin's «Graphics» section reads
+  `08_graphics` (footage-agent's `layout.py`: «картинки поверх відео:
+  логотипи, підписи, стрілки»). Default to settle when it's built:
+  rename the section «Pictures» and the folder `08_pictures`, still
+  reading an old `08_graphics`; footage-agent's layout changed with it
+  (its docs are shared with another agent: change only the layout line
+  and say so).
+- Milestone «Матеріал і бін».
 
 ## Format rule for all of these
 

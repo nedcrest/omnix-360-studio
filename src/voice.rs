@@ -114,6 +114,12 @@ pub fn compare_gain(lufs: Option<f64>) -> f64 {
     lufs.map_or(0.0, |l| (HEARD_AT - l).min(MOST_LIFT))
 }
 
+/// The recipe a Make makes for a clip with voices `made`: the one
+/// `picked`, else the first not made yet; none when all are.
+pub fn to_make<'a>(picked: Option<&str>, made: impl IntoIterator<Item = &'a str> + Clone) -> Option<&'static Recipe> {
+    picked.and_then(recipe).or_else(|| RECIPES.iter().find(|r| !made.clone().into_iter().any(|n| n == r.name)))
+}
+
 /// Which made voice speech is looked for in (gap 83): one DeepFilterNet
 /// cleaned, as the noise is gone there and plain loudness finds the talk;
 /// the one the edit uses if it is such, else `DEFAULT`, else any. None
@@ -208,6 +214,8 @@ mod tests {
         assert_eq!(recipe(DEFAULT).map(|r| r.args), Some(&["-D", "-a", "6"][..]));
         let made = ["dnn24".to_owned(), "dnn6".to_owned(), "eq".to_owned()];
         assert_eq!((speech_source(&made, Some("eq")), speech_source(&made, Some("dnn24")), speech_source(&made[2..], None)), (Some("dnn6"), Some("dnn24"), None));
+        // Make makes the one picked, else the first not made.
+        assert_eq!((to_make(Some("eq"), ["eq"]).map(|r| r.name), to_make(None, ["dnn6"]).map(|r| r.name), to_make(None, RECIPES.map(|r| r.name))), (Some("eq"), Some("dnn12"), None));
         assert_eq!((compare_gain(Some(-26.0)), compare_gain(Some(-50.0)), compare_gain(Some(-14.0)), compare_gain(None)), (6.0, 15.0, -6.0, 0.0));
     }
 

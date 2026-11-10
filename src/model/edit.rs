@@ -42,6 +42,9 @@ pub struct Edit {
     /// A change made of many small ones under way (a drag, a run of
     /// typing): the edit before it, and the version then.
     open: Option<(Project, u64)>,
+    /// Counts projects put in by `replace`: what was begun for one isn't
+    /// finished on another (ids repeat from project to project).
+    opened: u64,
 }
 
 impl std::ops::Deref for Edit {
@@ -204,6 +207,12 @@ impl Edit {
         self.undo.clear();
         self.redo.clear();
         self.version += 1;
+        self.opened += 1;
+    }
+
+    /// How many projects `replace` has put in.
+    pub fn opened(&self) -> u64 {
+        self.opened
     }
 
 }

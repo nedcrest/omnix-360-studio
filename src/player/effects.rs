@@ -26,9 +26,9 @@ pub enum EffectMsg {
     /// The cut measured over a dozen frames across it and put right (gap
     /// 89): levels, exposure and white balance, or the levels alone.
     AutoColour(bool),
-    /// What that measure found: the cut, levels alone or not, its
-    /// correction.
-    AutoColoured(crate::project::Id, bool, Result<crate::autocolour::Correction, String>),
+    /// What that measure found: the cut and the project it's of
+    /// (`Edit::opened`), levels alone or not, its correction.
+    AutoColoured(crate::project::Id, u64, bool, Result<crate::autocolour::Correction, String>),
     /// The playhead onto the selected clip, the panel's to edit (gap 93).
     GoToSelected,
     /// Effect `i` (as in `PARAMS`) moved to this value.
@@ -370,10 +370,16 @@ impl App {
             EffectMsg::Toggle => self.toggle_side(super::Side::Effects),
             EffectMsg::Wide(on) => self.effects_wide = on,
             EffectMsg::AutoColour(levels) => return self.auto_colour(levels),
-            EffectMsg::AutoColoured(cut, levels, found) => {
+            EffectMsg::AutoColoured(cut, opened, levels, found) => {
                 self.auto_measuring = None;
+                // Of a project closed meanwhile: its cut's id may be another's here.
+                if opened != self.edit.opened() {
+                    return iced::Task::none();
+                }
                 match found {
                     Ok(c) => {
+                        // A drag under way is a step of its own, closed first.
+                        self.edit.commit();
                         self.edit.begin();
                         for op in crate::autocolour::ops(cut, &c, levels) {
                             self.op(op);
@@ -680,7 +686,10 @@ impl App {
         }
         let cut = self.edit.cuts[i].clone();
         self.auto_measuring = Some(cut.id);
-        iced::Task::perform(super::blocking(move || (cut.id, crate::autocolour::measure_cut(&cut).map(|m| crate::autocolour::correction(&m)).map_err(|e| format!("{e:#}")))), move |(id, found)| Message::Effect(EffectMsg::AutoColoured(id, levels, found)))
+        let opened = self.edit.opened();
+        iced::Task::perform(super::blocking(move || (cut.id, crate::autocolour::measure_cut(&cut).map(|m| crate::autocolour::correction(&m)).map_err(|e| format!("{e:#}")))), move |(id, found)| {
+            Message::Effect(EffectMsg::AutoColoured(id, opened, levels, found))
+        })
     }
 
     /// The selected picture dressed as `kind`, or plain.
@@ -804,6 +813,23 @@ mod tests {
         assert!(focus(14.0, Some(item), None) == Focus::On(item.target, 5.0), "its end counts");
         assert!(focus(15.0, Some(item), Some((3, 5.0))) == Focus::Apart(item.target), "off it: not the cut under the playhead");
         assert!(focus(15.0, None, Some((3, 5.0))) == Focus::On(Target::Cut(3), 5.0), "nothing selected: the playing cut");
+    }
+
+    #[test]
+    fn auto_colour_lands_on_its_own_project_in_its_own_step() {
+        let mut app = super::super::tests::app();
+        let c = crate::autocolour::Correction { black_in: 0.05, white_in: 0.9, exposure: 0.0, temperature: 0.0, tint: 0.0 };
+        let (cut, opened) = (app.edit.cuts[0].id, app.edit.opened());
+        // A slider's drag under way: the result is a step of its own.
+        app.edit.begin();
+        app.edit.cuts[1].note = Some("dragged".into());
+        let _ = app.effect_message(EffectMsg::AutoColoured(cut, opened, true, Ok(c)));
+        assert!(app.edit.undo() && app.edit.cuts[1].note.is_some(), "undo takes the levels alone");
+        // Another project opened meanwhile: nothing lands on it.
+        let other = (*app.edit).clone();
+        app.edit.replace(other);
+        let _ = app.effect_message(EffectMsg::AutoColoured(cut, opened, true, Ok(c)));
+        assert!(!app.edit.changing() && !app.edit.undo(), "left alone");
     }
 
     #[test]

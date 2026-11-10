@@ -13,6 +13,27 @@ pub(super) const PREROLL: f64 = 3.0;
 /// The timeline zooms in until this many seconds fill it.
 pub(super) const TIMELINE_SPAN: f64 = 2.0;
 
+/// Where a stretch playing (`play_stretch`) stands.
+#[derive(Debug, PartialEq)]
+enum Stretch {
+    Playing,
+    /// Stopped short of its end (paused, a seek): let go.
+    LetGo,
+    /// At its end: back to its start, paused.
+    Back,
+}
+
+/// A stretch ending at `stop` with the playhead at `at`, playing or not;
+/// `frame` long frames. Stopped within a frame of its end counts as there:
+/// a stretch to the edit's end is paused by the edit first (audit A15).
+fn stretch_step(playing: bool, at: f64, stop: f64, frame: f64) -> Stretch {
+    match (playing, at >= stop - if playing { 0.0 } else { frame }) {
+        (_, true) => Stretch::Back,
+        (true, false) => Stretch::Playing,
+        (false, false) => Stretch::LetGo,
+    }
+}
+
 impl App {
     /// Plays `start..stop` once (a join, a marked range): past its end it's
     /// paused back at its start (`follow_stretch`).
@@ -32,15 +53,18 @@ impl App {
     /// back at its start; stopped another way (paused, a seek), let go.
     pub(super) fn follow_stretch(&mut self) -> Task<Message> {
         let Some((stop, start)) = self.stretch_play else { return Task::none() };
-        if !self.playing() {
-            self.stretch_play = None;
-            return Task::none();
+        let playing = self.playing();
+        match stretch_step(playing, self.position(), stop, 1.0 / self.fps()) {
+            Stretch::Playing => return Task::none(),
+            Stretch::LetGo => self.stretch_play = None,
+            Stretch::Back => {
+                self.stretch_play = None;
+                // The edit's own end has paused it already.
+                let pause = if playing { self.update(Message::Toggle) } else { Task::none() };
+                return Task::batch([pause, self.update(Message::Scrub(start)), self.update(Message::ScrubDone)]);
+            }
         }
-        if self.position() < stop {
-            return Task::none();
-        }
-        self.stretch_play = None;
-        Task::batch([self.update(Message::Toggle), self.update(Message::Scrub(start)), self.update(Message::ScrubDone)])
+        Task::none()
     }
 
     /// Keeps the music in step with the edit: playing where playback is, at
@@ -593,4 +617,19 @@ fn cut_media(library: &[Media], opts: &Options, cut: &Cut) -> Option<Media> {
     media.osv_size = opts.osv_size;
     media.stab.set_mode(cut.stabilize.unwrap_or(opts.stabilize));
     Some(media)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_stretch_to_the_edits_end_comes_back_to_its_start() {
+        let frame = 1.0 / 25.0;
+        assert_eq!(stretch_step(true, 4.0, 5.0, frame), Stretch::Playing);
+        assert_eq!(stretch_step(true, 5.0, 5.0, frame), Stretch::Back, "past its end");
+        // The edit's end paused it on its last frame, short of the stop.
+        assert_eq!(stretch_step(false, 5.0 - frame / 2.0, 5.0, frame), Stretch::Back);
+        assert_eq!(stretch_step(false, 4.0, 5.0, frame), Stretch::LetGo, "paused by hand");
+    }
 }

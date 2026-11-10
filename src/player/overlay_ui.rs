@@ -174,29 +174,12 @@ impl App {
     /// Overlays and text: this area's messages, as `handle` passes them on.
     pub(super) fn on_overlay_ui(&mut self, message: Message) -> Task<Message> {
         match message {
-            Message::AddOverlay => {
-                let dir = self.project.as_ref().and_then(|p| p.parent().map(Path::to_owned));
-                return Task::perform(
-                    async move {
-                        let mut dialog = rfd::AsyncFileDialog::new()
-                            .set_title("Add overlay pictures")
-                            .add_filter("Pictures", &["png", "PNG", "jpg", "JPG", "jpeg", "JPEG", "webp", "WEBP", "bmp", "BMP", "tif", "TIF", "tiff", "TIFF"]);
-                        if let Some(dir) = dir {
-                            dialog = dialog.set_directory(dir);
-                        }
-                        dialog.pick_files().await.unwrap_or_default().iter().map(|f| f.path().to_owned()).collect()
-                    },
-                    Message::OverlayPicked,
-                );
-            }
+            Message::AddOverlay => return pick_overlays(self.project.as_deref()),
             Message::OverlayPicked(paths) if !paths.is_empty() => {
                 // Folded, the lane opens to show what came.
                 self.folds.overlay = false;
                 // One after another from the playhead, each where it fits.
-                let added = self.op(Op::Item(ItemOp::AddPictures { inputs: paths, at: self.position(), len: ffmpeg::PICTURE_SECONDS, lane: self.adding_lane(crate::overlay::Track::Overlay) }));
-                if let Some(id) = added.and_then(|o| o.made) {
-                    self.selection = Selection::Item(id);
-                }
+                self.add_item(ItemOp::AddPictures { inputs: paths, at: self.position(), len: ffmpeg::PICTURE_SECONDS, lane: self.adding_lane(crate::overlay::Track::Overlay) });
             }
             Message::OverlayPicked(_) => {}
             Message::OverlaySelect(i) => {
@@ -212,46 +195,7 @@ impl App {
                     None => {}
                 }
             }
-            Message::LaneAdd(track) => {
-                self.op(Op::Item(ItemOp::AddLane { track }));
-                self.active_lanes[track.index()] = self.edit.track_lanes(track).len() - 1;
-            }
-            Message::LaneRename(track, lane) => {
-                let now = self.edit.lane(track, lane).and_then(|l| l.name.clone()).unwrap_or_default();
-                return self.ask(super::ask::Ask {
-                    title: "Lane name".to_owned(),
-                    text: "What's on it: «Subtitles», «Place names»… Empty gives back its number.".to_owned(),
-                    answers: vec![("Name it".to_owned(), Message::LaneName(track, lane, String::new()))],
-                    cancel: Message::AskClosed,
-                    field: Some(now),
-                });
-            }
-            Message::LaneName(track, lane, name) => {
-                self.op(Op::Item(ItemOp::LaneName { track, lane, name: Some(name) }));
-            }
-            Message::LaneHide(track, lane, hidden) => {
-                self.op(Op::Item(ItemOp::LaneHidden { track, lane, hidden }));
-            }
-            Message::LaneActive(track, lane) => {
-                self.active_lanes[track.index()] = lane;
-                if self.selection.item(&self.edit).is_some() {
-                    self.selection = Selection::None;
-                }
-            }
-            Message::LaneRemove(track, lane) => {
-                if self.op(Op::Item(ItemOp::RemoveLane { track, lane })).is_some() {
-                    // What points at a lane follows the lanes down (audit A5).
-                    let active = &mut self.active_lanes[track.index()];
-                    *active = after_removing(*active, lane).unwrap_or(lane.saturating_sub(1));
-                    self.extra_lanes = std::mem::take(&mut self.extra_lanes)
-                        .into_iter()
-                        .filter_map(|(of, p)| match of {
-                            super::automation_ui::LaneOf::Track(t, l) if t == track => after_removing(l, lane).map(|l| (super::automation_ui::LaneOf::Track(t, l), p)),
-                            _ => Some((of, p)),
-                        })
-                        .collect();
-                }
-            }
+            m @ (Message::LaneAdd(_) | Message::LaneRename(..) | Message::LaneName(..) | Message::LaneHide(..) | Message::LaneActive(..) | Message::LaneRemove(..)) => return self.on_lane(m),
             Message::OverlayToLane(r, at, lane) => {
                 if let Some(item) = self.edit.item(r).map(|it| it.id) {
                     self.op(Op::Item(ItemOp::Move { item, at, lane: Some(lane) }));
@@ -279,40 +223,11 @@ impl App {
                     self.goto(i, t, false);
                 }
             }
-            Message::OverlayKeyMove(r, effects, key, t) => {
-                self.follow = true;
-                use crate::model::ops::keys::{EXACT, Graded, KeyOp, Line};
-                let keys = |it: &crate::overlay::Item| if effects { it.effects.get(key).map(|k| k.t) } else { it.motion.get(key).map(|k| k.t) };
-                let Some((id, from)) = self.edit.item(r).and_then(|it| Some((it.id, keys(it)?))) else { return Task::none() };
-                self.edit.begin();
-                let line = if effects { Line::Effects(Graded::Item(id)) } else { Line::Motion(id) };
-                self.op(Op::Key(KeyOp::Retime { line, from, t, gap: self.frame_len(), tolerance: EXACT }));
-                let Some(item) = self.edit.item(r) else { return Task::none() };
-                let local = keys(item);
-                // Follow the mark, so what it holds shows as it moves.
-                if let Some(at) = local.map(|t| item.at + t - item.start)
-                    && let Some((i, t)) = self.edit.locate(at)
-                {
-                    self.scrub_to(i, t);
-                }
-            }
-            Message::OverlayPicture(key, Ok((picture, missing))) => {
-                static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
-                if let Some(font) = missing {
-                    self.error = Some(format!("The font {font} isn't on this computer; its text shows in Inter"));
-                }
-                self.overlay_thumbs.insert(key.clone(), overlay_thumb(&picture));
-                self.overlay_pictures.insert(key, Some((NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed), picture)));
-            }
-            Message::OverlayPicture(key, Err(e)) => {
-                self.error = Some(format!("Couldn't read the overlay {}: {e}", key.trim_start_matches("file:")));
-            }
+            Message::OverlayKeyMove(r, effects, key, t) => self.overlay_key_move(r, effects, key, t),
+            Message::OverlayPicture(key, read) => self.overlay_picture(key, read),
             Message::AddText => {
                 self.folds.text = false;
-                let added = self.op(Op::Item(ItemOp::AddText { text: Default::default(), at: self.position(), len: ffmpeg::PICTURE_SECONDS, lane: self.adding_lane(crate::overlay::Track::Text) }));
-                if let Some(id) = added.and_then(|o| o.made) {
-                    self.selection = Selection::Item(id);
-                }
+                self.add_item(ItemOp::AddText { text: Default::default(), at: self.position(), len: ffmpeg::PICTURE_SECONDS, lane: self.adding_lane(crate::overlay::Track::Text) });
                 // Its words and look are set in the Effects panel, open now.
                 self.text_of = None;
                 self.side = Some(super::Side::Effects);
@@ -321,14 +236,107 @@ impl App {
             // in the Effects panel.
             Message::AddBars => {
                 self.folds.overlay = false;
-                let added = self.op(Op::Item(ItemOp::AddBars { bars: Default::default(), at: self.position(), len: 10.0, lane: self.adding_lane(crate::overlay::Track::Overlay) }));
-                if let Some(id) = added.and_then(|o| o.made) {
-                    self.selection = Selection::Item(id);
-                }
+                self.add_item(ItemOp::AddBars { bars: Default::default(), at: self.position(), len: 10.0, lane: self.adding_lane(crate::overlay::Track::Overlay) });
             }
             _ => {}
         }
         Task::none()
+    }
+
+    /// A track's lanes (gap 70, 97): one added on top, named, hidden,
+    /// made the one new things go on, removed.
+    fn on_lane(&mut self, message: Message) -> Task<Message> {
+        match message {
+            Message::LaneAdd(track) => {
+                self.op(Op::Item(ItemOp::AddLane { track }));
+                self.active_lanes[track.index()] = self.edit.track_lanes(track).len() - 1;
+            }
+            Message::LaneRename(track, lane) => {
+                let now = self.edit.lane(track, lane).and_then(|l| l.name.clone()).unwrap_or_default();
+                return self.ask(super::ask::Ask {
+                    title: "Lane name".to_owned(),
+                    text: "What's on it: «Subtitles», «Place names»… Empty gives back its number.".to_owned(),
+                    answers: vec![("Name it".to_owned(), Message::LaneName(track, lane, String::new()))],
+                    cancel: Message::AskClosed,
+                    field: Some(now),
+                });
+            }
+            Message::LaneName(track, lane, name) => {
+                self.op(Op::Item(ItemOp::LaneName { track, lane, name: Some(name) }));
+            }
+            Message::LaneHide(track, lane, hidden) => {
+                self.op(Op::Item(ItemOp::LaneHidden { track, lane, hidden }));
+            }
+            Message::LaneActive(track, lane) => {
+                self.active_lanes[track.index()] = lane;
+                if self.selection.item(&self.edit).is_some() {
+                    self.selection = Selection::None;
+                }
+            }
+            Message::LaneRemove(track, lane) => self.remove_lane(track, lane),
+            _ => {}
+        }
+        Task::none()
+    }
+
+    /// Lane `lane` of `track` removed (an empty one), and what points at a
+    /// lane following the lanes down (audit A5).
+    fn remove_lane(&mut self, track: crate::overlay::Track, lane: usize) {
+        if self.op(Op::Item(ItemOp::RemoveLane { track, lane })).is_none() {
+            return;
+        }
+        let active = &mut self.active_lanes[track.index()];
+        *active = after_removing(*active, lane).unwrap_or(lane.saturating_sub(1));
+        self.extra_lanes = std::mem::take(&mut self.extra_lanes)
+            .into_iter()
+            .filter_map(|(of, p)| match of {
+                super::automation_ui::LaneOf::Track(t, l) if t == track => after_removing(l, lane).map(|l| (super::automation_ui::LaneOf::Track(t, l), p)),
+                _ => Some((of, p)),
+            })
+            .collect();
+    }
+
+    /// Added by `op` (pictures, text, bars) and selected.
+    fn add_item(&mut self, op: ItemOp) {
+        if let Some(id) = self.op(Op::Item(op)).and_then(|o| o.made) {
+            self.selection = Selection::Item(id);
+        }
+    }
+
+    /// A picture read or drawn for overlay `key`, kept for the view and its
+    /// thumbnail; a text's missing font said.
+    fn overlay_picture(&mut self, key: String, read: Result<(Arc<crate::overlay::Picture>, Option<String>), String>) {
+        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+        match read {
+            Ok((picture, missing)) => {
+                if let Some(font) = missing {
+                    self.error = Some(format!("The font {font} isn't on this computer; its text shows in Inter"));
+                }
+                self.overlay_thumbs.insert(key.clone(), overlay_thumb(&picture));
+                self.overlay_pictures.insert(key, Some((NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed), picture)));
+            }
+            Err(e) => self.error = Some(format!("Couldn't read the overlay {}: {e}", key.trim_start_matches("file:"))),
+        }
+    }
+
+    /// Item `r`'s effect key (`effects`) or place key `key` moved to its
+    /// own time `t`, kept a frame clear; the playhead follows it.
+    fn overlay_key_move(&mut self, r: crate::overlay::ItemRef, effects: bool, key: usize, t: f64) {
+        self.follow = true;
+        use crate::model::ops::keys::{EXACT, Graded, KeyOp, Line};
+        let keys = |it: &crate::overlay::Item| if effects { it.effects.get(key).map(|k| k.t) } else { it.motion.get(key).map(|k| k.t) };
+        let Some((id, from)) = self.edit.item(r).and_then(|it| Some((it.id, keys(it)?))) else { return };
+        self.edit.begin();
+        let line = if effects { Line::Effects(Graded::Item(id)) } else { Line::Motion(id) };
+        self.op(Op::Key(KeyOp::Retime { line, from, t, gap: self.frame_len(), tolerance: EXACT }));
+        let Some(item) = self.edit.item(r) else { return };
+        let local = keys(item);
+        // Follow the mark, so what it holds shows as it moves.
+        if let Some(at) = local.map(|t| item.at + t - item.start)
+            && let Some((i, t)) = self.edit.locate(at)
+        {
+            self.scrub_to(i, t);
+        }
     }
 }
 
@@ -338,6 +346,22 @@ pub(super) fn active_lane(active: &[usize; 2], track: crate::overlay::Track, cou
     active[track.index()].min(count - 1)
 }
 
+/// The file dialog for overlay pictures, from the project's folder.
+fn pick_overlays(project: Option<&Path>) -> Task<Message> {
+    let dir = project.and_then(|p| p.parent().map(Path::to_owned));
+    Task::perform(
+        async move {
+            let mut dialog = rfd::AsyncFileDialog::new()
+                .set_title("Add overlay pictures")
+                .add_filter("Pictures", &["png", "PNG", "jpg", "JPG", "jpeg", "JPEG", "webp", "WEBP", "bmp", "BMP", "tif", "TIF", "tiff", "TIFF"]);
+            if let Some(dir) = dir {
+                dialog = dialog.set_directory(dir);
+            }
+            dialog.pick_files().await.unwrap_or_default().iter().map(|f| f.path().to_owned()).collect()
+        },
+        Message::OverlayPicked,
+    )
+}
 
 /// Lane `l`'s number once lane `removed` is taken away: one down above it,
 /// none for itself.
@@ -351,6 +375,20 @@ fn after_removing(l: usize, removed: usize) -> Option<usize> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn lanes_added_and_removed_carry_the_active_lane_and_text_lands_on_it() {
+        use crate::overlay::Track;
+        use super::super::{Message, Selection};
+        let mut app = super::super::tests::app();
+        let _ = app.update(Message::LaneAdd(Track::Text));
+        assert_eq!((app.edit.track_lanes(Track::Text).len(), app.active_lanes[Track::Text.index()]), (2, 1), "the new one on top, active");
+        let _ = app.update(Message::AddText);
+        assert!(matches!(app.selection, Selection::Item(_)) && app.edit.text[1].items.len() == 1, "on the active lane, selected");
+        let _ = app.update(Message::LaneAdd(Track::Text));
+        let _ = app.update(Message::LaneRemove(Track::Text, 2));
+        assert_eq!((app.edit.track_lanes(Track::Text).len(), app.active_lanes[Track::Text.index()]), (2, 1), "back to the one below");
+    }
+
     #[test]
     fn the_active_lane_is_the_top_one_once_its_own_is_gone() {
         use crate::overlay::Track;

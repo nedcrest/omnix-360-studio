@@ -1272,6 +1272,14 @@ impl Project {
         }
     }
 
+    /// What normalizing measured of `own`'s sound, LUFS.
+    pub fn own_loudness(&self, own: Own) -> Option<f64> {
+        match own {
+            Own::Cut(i) => self.cuts.get(i)?.loudness,
+            Own::Clip(which, i) => self.track(which).clips.get(i)?.loudness,
+        }
+    }
+
     /// `own`'s sound settings, to change.
     pub fn own_sound(&mut self, own: Own) -> Option<OwnSound<'_>> {
         match own {

@@ -155,10 +155,10 @@ impl Edit {
         after.settle_ids();
         if after != **self {
             if self.changing() {
-                **self = after;
+                self.put(after);
             } else {
                 self.attempt(|e| {
-                    **e = after;
+                    e.put(after);
                     true
                 });
             }
@@ -177,7 +177,7 @@ impl Edit {
         }
         if after != **self {
             self.attempt(|e| {
-                **e = after;
+                e.put(after);
                 true
             });
         }

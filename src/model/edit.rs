@@ -53,6 +53,11 @@ impl std::ops::Deref for Edit {
     }
 }
 
+
+/// Tests set a project up by hand; the program changes it by ops alone
+/// (`put`, through `apply` and `batch`) and what it learns (`learn`), so
+/// nothing writes past the undo history (audit B8).
+#[cfg(test)]
 impl std::ops::DerefMut for Edit {
     fn deref_mut(&mut self) -> &mut Project {
         &mut self.project
@@ -123,6 +128,31 @@ impl Edit {
 
     fn restore(&mut self, then: Project) -> Project {
         std::mem::replace(&mut self.project, then)
+    }
+
+    /// The project put in whole, as an op's result: the ops' way in (the
+    /// edit gives no `&mut Project` to anyone else, audit B8).
+    pub(super) fn put(&mut self, project: Project) {
+        self.project = project;
+    }
+
+    /// What the player learns of the cuts once their clips open: whether
+    /// each is an ordinary video (`flat_of` its clip, none if not open
+    /// yet) and its LUT loaded. Not a change to the edit: no undo step,
+    /// not saved (both fields are `serde(skip)`). The LUTs that couldn't
+    /// be found, by name.
+    pub fn learn(&mut self, flat_of: impl Fn(&std::path::Path) -> Option<bool>) -> Vec<String> {
+        let mut missing = Vec::new();
+        for cut in &mut self.project.cuts {
+            if let Some(flat) = flat_of(&cut.input) {
+                cut.flat = flat;
+            }
+            // A missing one leaves the cut as filmed.
+            if cut.resolve_lut().is_err() {
+                missing.extend(cut.lut.clone().filter(|n| !missing.contains(n)));
+            }
+        }
+        missing
     }
 
     /// Starts a change made of many small ones (a drag, a run of typing),
@@ -206,6 +236,8 @@ impl Edit {
 
     pub fn replace(&mut self, project: Project) {
         self.project = project;
+        // An older file's cuts and clips may have no ids yet.
+        self.project.settle_ids();
         self.open = None;
         self.undo.clear();
         self.redo.clear();
@@ -430,6 +462,19 @@ mod tests {
 
     fn edit() -> Edit {
         Edit { project: Project { cuts: vec![cut("a", 10.0, 14.0), cut("b", 2.0, 5.0)], ..Default::default() }, ..Default::default() }
+    }
+
+    #[test]
+    fn what_the_player_learns_is_no_change_and_a_loaded_file_gets_ids() {
+        let mut p = Project { cuts: vec![Cut::new("a.mp4".into(), 0.0, 4.0), Cut::new("b.mp4".into(), 0.0, 4.0)], ..Default::default() };
+        p.cuts[1].lut = Some("no such look".into());
+        let mut e = Edit::default();
+        e.replace(p);
+        assert_eq!(e.cuts.iter().map(|c| c.id).collect::<Vec<_>>(), [1, 2], "ids given on the way in");
+        let version = e.version;
+        let missing = e.learn(|input| (input == std::path::Path::new("a.mp4")).then_some(true));
+        assert_eq!((e.cuts[0].flat, e.cuts[1].flat, missing), (true, false, vec!["no such look".to_owned()]));
+        assert!(e.version == version && !e.undo(), "no undo step, nothing to save");
     }
 
     #[test]

@@ -1102,9 +1102,6 @@ impl App {
         if self.selection != selected && !opens_info {
             self.info = None;
         }
-        // What the message added or split gets its id (`OPS-API.md`; the
-        // operations' `Editor` will do it as it applies them).
-        self.edit.settle_ids();
         if looking {
             self.auto_key(before);
         }

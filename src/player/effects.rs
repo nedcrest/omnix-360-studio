@@ -437,9 +437,7 @@ impl App {
                 let cut = self.edit.cuts[i].id;
                 self.op(crate::model::ops::Op::Cut(crate::model::ops::cuts::CutOp::Lut { cut, lut: choice.name() }));
                 // Its file read here, in the player: the core only names it.
-                if let Err(e) = self.edit.cuts[i].resolve_lut() {
-                    self.error = Some(format!("{e:#}"));
-                }
+                self.mark_flat();
             }
             EffectMsg::TextEdit(action) => {
                 let edits = action.is_edit();

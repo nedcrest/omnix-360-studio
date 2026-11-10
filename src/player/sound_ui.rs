@@ -207,7 +207,7 @@ impl App {
             SoundMsg::Even1(own, on) => {
                 // Evening out changes how loud it is: measured again, as
                 // normalizing would.
-                if on || self.edit.own_sound(own).is_some_and(|s| s.loudness.is_some()) {
+                if on || self.edit.own_loudness(own).is_some() {
                     self.sound_menu = None;
                     self.normalize = Some(Dialog { scope: Scope::Own(own), even: on, state: State::Ready });
                     return self.sound_ui(SoundMsg::Start);

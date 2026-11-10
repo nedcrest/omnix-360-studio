@@ -157,16 +157,8 @@ impl App {
     /// Marks each cut whose clip has loaded as an ordinary video or not;
     /// the views of the two kinds are kept apart (`project::keyframed`).
     pub(super) fn mark_flat(&mut self) {
-        let mut missing = Vec::new();
-        for cut in &mut self.edit.cuts {
-            if let Some(m) = self.library.iter().find(|m| m.input == cut.input) {
-                cut.flat = m.flat.is_some();
-            }
-            // Its LUT loaded too; a missing one leaves the cut as filmed.
-            if cut.resolve_lut().is_err() {
-                missing.extend(cut.lut.clone().filter(|n| !missing.contains(n)));
-            }
-        }
+        let library = &self.library;
+        let missing = self.edit.learn(|input| library.iter().find(|m| m.input == input).map(|m| m.flat.is_some()));
         if !missing.is_empty() {
             self.error = Some(format!("Missing LUT, shown as filmed (add it in Settings): {}", missing.join(", ")));
         }

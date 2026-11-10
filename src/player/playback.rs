@@ -238,8 +238,8 @@ impl Playback {
     /// clip heard against each other (Dailix, gap 77).
     pub fn hear(&mut self, audio: Option<std::path::PathBuf>, filter: Option<String>) {
         let t = self.position();
-        self.media.has_audio |= audio.is_some();
-        (self.media.audio, self.media.filter, self.ready) = (audio, filter, None);
+        self.media.hear(audio);
+        (self.media.filter, self.ready) = (filter, None);
         if self.playing {
             (self.anchor_pts, self.anchor_at) = (t, Instant::now());
             self.start_audio(t);

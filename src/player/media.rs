@@ -14,7 +14,11 @@ pub struct Media {
     /// Pixels square of the OSV's lens tracks.
     pub osv_full: u32,
     pub hw: Hwaccel,
+    /// Whether there's sound to play: the clip's own or its audio file's;
+    /// false too once it failed to start.
     pub has_audio: bool,
+    /// Whether the clip's file has sound of its own, as loaded.
+    pub own_audio: bool,
     /// A sound file heard in place of the clip's own (`Cut::audio`), set on
     /// the copy a cut plays; the library's copy has none.
     pub audio: Option<PathBuf>,
@@ -46,10 +50,17 @@ impl Media {
     /// This clip as cut `cut` plays it: with the cut's audio file, if any.
     pub(super) fn for_cut(&self, cut: &Cut) -> Media {
         let mut media = self.clone();
-        media.audio = heard_audio(cut);
         media.filter = cut.sound_filter();
-        media.has_audio |= media.audio.is_some();
+        media.hear(heard_audio(cut));
         media
+    }
+
+    /// Its sound from `audio` (none: the clip's own): there's sound if
+    /// either has it. Set again each time, so a voice that failed or a
+    /// silent clip's voice taken away leaves no false answer (audit A15).
+    pub(super) fn hear(&mut self, audio: Option<PathBuf>) {
+        self.has_audio = self.own_audio || audio.is_some();
+        self.audio = audio;
     }
 }
 
@@ -72,13 +83,15 @@ impl Media {
                 hw
             }
         };
+        let own_audio = ffmpeg::has_audio(&input)?;
         Ok(Media {
             duration: ffmpeg::duration(&input)?,
             osv_full: match p.flat {
                 Some(f) => f.size().0.max(f.size().1),
                 None => ffmpeg::dimensions(&input, p.tracks[0])?.0 as u32,
             },
-            has_audio: ffmpeg::has_audio(&input)?,
+            has_audio: own_audio,
+            own_audio,
             audio: None,
             filter: None,
             proxy,
@@ -155,4 +168,27 @@ impl Options {
 /// timeline thumbnails (`omnix cache add`).
 pub fn cache_clip(input: &Path) -> Result<()> {
     thumbs::make(&Media::load(input.to_owned(), &Options::software(), &|_| {})?, |_, _| true)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_silent_clips_voice_taken_away_leaves_it_silent() {
+        let dir = std::env::temp_dir().join(format!("omnix-media-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let clip = dir.join("silent.mp4");
+        let made = std::process::Command::new("ffmpeg").args(["-v", "error", "-y", "-f", "lavfi", "-i", "color=c=gray:s=64x36:d=0.5", "-an"]).arg(&clip).status();
+        if !made.is_ok_and(|s| s.success()) {
+            return;
+        }
+        let mut m = Media::load(clip, &Options::default(), &|_| {}).unwrap();
+        assert!(!m.has_audio && !m.own_audio);
+        m.hear(Some(dir.join("voice.flac")));
+        assert!(m.has_audio, "a voice to play");
+        m.hear(None);
+        assert!(!m.has_audio, "back to the clip's own: none");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
 }

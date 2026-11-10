@@ -68,7 +68,7 @@ pub fn measure(input: &Path, start: f64, duration: f64, filter: Option<&str>) ->
     if !out.status.success() {
         bail!("ffmpeg couldn't read the sound of {}", input.display());
     }
-    let frames: Vec<[f32; 2]> = out.stdout.chunks_exact(8).map(|b| [f32::from_le_bytes([b[0], b[1], b[2], b[3]]), f32::from_le_bytes([b[4], b[5], b[6], b[7]])]).collect();
+    let frames: Vec<[f32; 2]> = out.stdout.as_chunks::<8>().0.iter().map(|b| [f32::from_le_bytes([b[0], b[1], b[2], b[3]]), f32::from_le_bytes([b[4], b[5], b[6], b[7]])]).collect();
     let mut meter = crate::lufs::Loudness::default();
     meter.feed(RATE, &frames);
     Ok(meter.integrated().filter(|&lufs| lufs > SILENT_LUFS))

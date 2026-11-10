@@ -1538,6 +1538,10 @@ wider and lays its groups out as framed blocks in columns side by side;
 off, the column as today. Kept in the settings. Milestone «Ефекти, колір
 і розумний звук».
 
+**Built 2026-11-10, waiting for the check** (`364b5dc`): the toggle «Extended
+view» at the panel's top (kept in the settings); on, the panel is three
+blocks wide, each group framed, wrapping to rows.
+
 ## Format rule for all of these
 
 New fields only, each `#[serde(default, skip_serializing_if = …)]`, so every

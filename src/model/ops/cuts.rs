@@ -104,148 +104,32 @@ pub const SAME_MARK: f64 = 1.0 / 60.0;
 
 pub(super) fn apply(p: &mut Project, op: &CutOp) -> Result<Outcome, OpError> {
     match op {
-        CutOp::Add { input, start, end, place, stabilize, lut } => {
-            if !(start.is_finite() && end - start >= MIN_CUT) {
-                return Err(OpError::Invalid(format!("a cut from {start} to {end} s is shorter than {MIN_CUT} s")));
-            }
-            let id = p.next_id();
-            let cut = Cut { id, stabilize: *stabilize, lut: lut.clone(), ..Cut::new(input.clone(), *start, *end) };
-            let at = match *place {
-                Place::End => p.insert_cut(usize::MAX, cut),
-                Place::At(t) => p.insert_at(t, cut),
-                Place::Join(t) => {
-                    let join = p.nearest_join(t);
-                    p.insert_cut(join, cut)
-                }
-            };
-            // Put in among the cuts, it may have split one: its second half
-            // gets an id of its own.
-            p.settle_ids();
-            Ok(Outcome { summary: format!("cut #{id} added, {}", position(at, p.cuts.len())), made: Some(id) })
-        }
+        CutOp::Add { input, start, end, place, stabilize, lut } => add(p, input, start, end, place, stabilize, lut),
         &CutOp::Trim { cut, end, t, most } => {
             let i = find(p, cut)?;
             p.trim(i, end == End::In, t, most);
             let c = &p.cuts[i];
             said(format!("cut #{cut}: {:.2}-{:.2} s", c.start, c.end))
         }
-        &CutOp::Move { cut, before } => {
-            let from = find(p, cut)?;
-            let to = match before {
-                Some(b) => find(p, b)?,
-                None => p.cuts.len(),
-            };
-            p.move_cut(from, to);
-            said(format!("cut #{cut} moved, {}", position(find(p, cut)?, p.cuts.len())))
-        }
-        CutOp::MoveTogether { cuts, before } => {
-            for &c in cuts {
-                find(p, c)?;
-            }
-            if let Some(b) = before {
-                find(p, *b)?;
-                if cuts.contains(b) {
-                    return Err(OpError::Invalid(format!("cut #{b} is one of those moved")));
-                }
-            }
-            p.move_cuts(cuts, *before);
-            said(format!("{} cuts moved together", cuts.len()))
-        }
-        &CutOp::Split { cut, t } => {
-            let i = find(p, cut)?;
-            if !p.split(i, t) {
-                let c = &p.cuts[i];
-                return Err(OpError::OutOfRange { what: "split time", value: t, least: c.start + MIN_CUT, most: c.end - MIN_CUT });
-            }
-            let id = p.next_id();
-            p.cuts[i + 1].id = id;
-            Ok(Outcome { summary: format!("cut #{cut} split at {t:.2} s; the second half is cut #{id}"), made: Some(id) })
-        }
-        &CutOp::Transition { cut, look } => {
-            let i = find(p, cut)?;
-            if i == 0 {
-                return Err(OpError::Invalid(format!("cut #{cut} is the first: no join before it")));
-            }
-            if look.is_some_and(|l| l.is_edge()) {
-                return Err(OpError::Invalid(format!("{} is an edge look: Edge puts it on a cut's start or end", look.unwrap().name())));
-            }
-            // The settings were the old look's.
-            if p.cuts[i].transition != look {
-                p.cuts[i].transition_params.clear();
-            }
-            p.cuts[i].transition = look;
-            said(format!("cut #{cut}: transition {}", look.map_or("dissolve", |l| l.name())))
-        }
+        &CutOp::Move { cut, before } => move_cut(p, cut, before),
+        CutOp::MoveTogether { cuts, before } => move_together(p, cuts, before),
+        &CutOp::Split { cut, t } => split(p, cut, t),
+        &CutOp::Transition { cut, look } => transition(p, cut, look),
         CutOp::TransitionKnob { cut, key, value } => {
             let i = find(p, *cut)?;
             let look = p.cuts[i].transition.ok_or_else(|| OpError::Invalid(format!("cut #{cut}'s join has no look to set")))?;
             let said_ = set_knob(look, &mut p.cuts[i].transition_params, key, *value)?;
             said(format!("cut #{cut}: {said_}"))
         }
-        &CutOp::Edge { cut, end, look, seconds } => {
-            let i = find(p, cut)?;
-            let c = &mut p.cuts[i];
-            let edge = if end == End::In { &mut c.edge_in } else { &mut c.edge_out };
-            let Some(look) = look else {
-                *edge = None;
-                return said(format!("cut #{cut}: no look on its {}", if end == End::In { "start" } else { "end" }));
-            };
-            if !look.is_edge() {
-                return Err(OpError::Invalid(format!("{} goes across a join (Transition), not on an edge", look.name())));
-            }
-            let seconds = crate::transition::stepped(seconds).min(c.end - c.start);
-            // The settings were the old look's.
-            let params = edge.take().filter(|e| e.look == look).map(|e| e.params).unwrap_or_default();
-            *edge = Some(crate::project::Edge { look, seconds, params });
-            said(format!("cut #{cut}: {} {seconds:.2} s on its {}", look.name(), if end == End::In { "start" } else { "end" }))
-        }
-        CutOp::Template { cut, template } => {
-            let i = find(p, *cut)?;
-            if i == 0 {
-                return Err(OpError::Invalid(format!("cut #{cut} is the first: no join before it")));
-            }
-            let before = p.cuts[i - 1].id;
-            let overlap = template.overlap.as_ref();
-            apply(p, &CutOp::Transition { cut: *cut, look: None })?;
-            apply(p, &CutOp::Transition { cut: *cut, look: overlap.and_then(|o| o.look) })?;
-            apply(p, &CutOp::Crossfade { cut: *cut, seconds: overlap.map_or(0.0, |o| o.seconds) })?;
-            for (key, &value) in overlap.iter().flat_map(|o| &o.params) {
-                apply(p, &CutOp::TransitionKnob { cut: *cut, key: key.clone(), value: Some(value) })?;
-            }
-            for (on, end, edge) in [(before, End::Out, &template.edge_out), (*cut, End::In, &template.edge_in)] {
-                apply(p, &CutOp::Edge { cut: on, end, look: None, seconds: 0.0 })?;
-                let Some(e) = edge else { continue };
-                apply(p, &CutOp::Edge { cut: on, end, look: Some(e.look), seconds: e.seconds })?;
-                for (key, &value) in &e.params {
-                    apply(p, &CutOp::EdgeKnob { cut: on, end, key: key.clone(), value: Some(value) })?;
-                }
-            }
-            said(format!("the join before cut #{cut} set from a template"))
-        }
+        &CutOp::Edge { cut, end, look, seconds } => edge(p, cut, end, look, seconds),
+        CutOp::Template { cut, template } => set_template(p, cut, template),
         &CutOp::Style { cut, look } => {
             let i = find(p, cut)?;
             set_style(&mut p.cuts[i].style, look)?;
             said(format!("cut #{cut}: style {}", look.map_or("none", |l| l.name())))
         }
-        CutOp::Track { cut, track } => {
-            let i = find(p, *cut)?;
-            if track.name.trim().is_empty() || track.samples.iter().any(|s| ![s.t, s.x, s.y].iter().all(|v| v.is_finite())) || track.samples.windows(2).any(|w| w[0].t > w[1].t) {
-                return Err(OpError::Invalid("a track needs a name and samples that are numbers in time order".into()));
-            }
-            let tracks = &mut p.cuts[i].tracks;
-            tracks.retain(|t| t.name != track.name);
-            tracks.push(track.clone());
-            said(format!("cut #{cut}: track «{}», {} samples", track.name, track.samples.len()))
-        }
-        CutOp::Untrack { cut, name } => {
-            let i = find(p, *cut)?;
-            let before = p.cuts[i].tracks.len();
-            p.cuts[i].tracks.retain(|t| t.name != *name);
-            if p.cuts[i].tracks.len() == before {
-                return Err(OpError::NotFound(format!("track «{name}» on cut #{cut}")));
-            }
-            said(format!("cut #{cut}: track «{name}» gone"))
-        }
+        CutOp::Track { cut, track } => add_track(p, cut, track),
+        CutOp::Untrack { cut, name } => untrack(p, cut, name),
         CutOp::StyleKnob { cut, key, value } => {
             let i = find(p, *cut)?;
             let style = p.cuts[i].style.as_mut().ok_or_else(|| OpError::Invalid(format!("cut #{cut} has no style to set")))?;
@@ -279,60 +163,218 @@ pub(super) fn apply(p: &mut Project, op: &CutOp) -> Result<Outcome, OpError> {
             p.remove(i);
             said(format!("cut #{cut} removed"))
         }
-        CutOp::Mark { cut, t, note } => {
-            let i = find(p, *cut)?;
-            let c = &mut p.cuts[i];
-            if !t.is_finite() {
-                return Err(OpError::Invalid(format!("a marker at {t} s")));
-            }
-            match mark_at(&c.marks, *t) {
-                Some(k) => c.marks[k].note = note.clone(),
-                None => {
-                    let k = c.marks.partition_point(|m| m.t <= *t);
-                    c.marks.insert(k, crate::project::Mark { t: *t, note: note.clone() });
-                }
-            }
-            said(format!("cut #{cut}: marker at {t:.2} s{}", if note.is_empty() { String::new() } else { format!(" «{note}»") }))
+        CutOp::Mark { cut, t, note } => mark(p, cut, t, note),
+        &CutOp::MoveMark { cut, from, t } => move_mark(p, cut, from, t),
+        &CutOp::SoundEdge { cut, end, t, most } => sound_edge(p, cut, end, t, most),
+        &CutOp::SoundToPicture { cut } => sound_to_picture(p, cut),
+        &CutOp::Unmark { cut, t } => unmark(p, cut, t),
+    }
+}
+
+/// Cut `cut` moved to play just before `before`, or last.
+fn move_cut(p: &mut Project, cut: Id, before: Option<Id>) -> Result<Outcome, OpError> {
+    let from = find(p, cut)?;
+    let to = match before {
+        Some(b) => find(p, b)?,
+        None => p.cuts.len(),
+    };
+    p.move_cut(from, to);
+    said(format!("cut #{cut} moved, {}", position(find(p, cut)?, p.cuts.len())))
+}
+
+/// Cut `cut`'s sound back to its picture's edges.
+fn sound_to_picture(p: &mut Project, cut: Id) -> Result<Outcome, OpError> {
+    let i = find(p, cut)?;
+    let c = &mut p.cuts[i];
+    (c.sound_before, c.sound_after) = (0.0, 0.0);
+    said(format!("cut #{cut}: sound back to its picture"))
+}
+
+/// Cut `cut`'s marker at `t` gone.
+fn unmark(p: &mut Project, cut: Id, t: f64) -> Result<Outcome, OpError> {
+    let i = find(p, cut)?;
+    let c = &mut p.cuts[i];
+    let k = mark_at(&c.marks, t).ok_or_else(|| OpError::NotFound(format!("marker at {t:.2} s on cut #{cut}")))?;
+    c.marks.remove(k);
+    said(format!("cut #{cut}: marker at {t:.2} s removed"))
+}
+
+/// A cut added.
+fn add(p: &mut Project, input: &std::path::Path, start: &f64, end: &f64, place: &Place, stabilize: &Option<Mode>, lut: &Option<String>) -> Result<Outcome, OpError> {
+    if !(start.is_finite() && end - start >= MIN_CUT) {
+        return Err(OpError::Invalid(format!("a cut from {start} to {end} s is shorter than {MIN_CUT} s")));
+    }
+    let id = p.next_id();
+    let cut = Cut { id, stabilize: *stabilize, lut: lut.clone(), ..Cut::new(input.to_path_buf(), *start, *end) };
+    let at = match *place {
+        Place::End => p.insert_cut(usize::MAX, cut),
+        Place::At(t) => p.insert_at(t, cut),
+        Place::Join(t) => {
+            let join = p.nearest_join(t);
+            p.insert_cut(join, cut)
         }
-        &CutOp::MoveMark { cut, from, t } => {
-            let i = find(p, cut)?;
-            let c = &mut p.cuts[i];
-            let k = mark_at(&c.marks, from).ok_or_else(|| OpError::NotFound(format!("marker at {from:.2} s on cut #{cut}")))?;
-            let mut m = c.marks.remove(k);
-            m.t = t.clamp(c.start, c.end);
-            let to = c.marks.partition_point(|n| n.t <= m.t);
-            let at = m.t;
-            c.marks.insert(to, m);
-            said(format!("cut #{cut}: marker {from:.2} s → {at:.2} s"))
-        }
-        &CutOp::SoundEdge { cut, end, t, most } => {
-            let i = find(p, cut)?;
-            if !t.is_finite() {
-                return Err(OpError::Invalid(format!("a sound edge at {t} s")));
-            }
-            let c = &mut p.cuts[i];
-            let (from, to) = c.sound_span();
-            match end {
-                End::In => c.sound_before = c.start - t.clamp(0.0, (to - MIN_CUT).max(0.0)),
-                End::Out => c.sound_after = t.clamp(from + MIN_CUT, most.max(from + MIN_CUT)) - c.end,
-            }
-            let (from, to) = c.sound_span();
-            said(format!("cut #{cut}: sound {from:.2}-{to:.2} s (picture {:.2}-{:.2})", c.start, c.end))
-        }
-        &CutOp::SoundToPicture { cut } => {
-            let i = find(p, cut)?;
-            let c = &mut p.cuts[i];
-            (c.sound_before, c.sound_after) = (0.0, 0.0);
-            said(format!("cut #{cut}: sound back to its picture"))
-        }
-        &CutOp::Unmark { cut, t } => {
-            let i = find(p, cut)?;
-            let c = &mut p.cuts[i];
-            let k = mark_at(&c.marks, t).ok_or_else(|| OpError::NotFound(format!("marker at {t:.2} s on cut #{cut}")))?;
-            c.marks.remove(k);
-            said(format!("cut #{cut}: marker at {t:.2} s removed"))
+    };
+    // Put in among the cuts, it may have split one: its second half
+    // gets an id of its own.
+    p.settle_ids();
+    Ok(Outcome { summary: format!("cut #{id} added, {}", position(at, p.cuts.len())), made: Some(id) })
+}
+
+/// Several cuts moved together.
+fn move_together(p: &mut Project, cuts: &[Id], before: &Option<Id>) -> Result<Outcome, OpError> {
+    for &c in cuts {
+        find(p, c)?;
+    }
+    if let Some(b) = before {
+        find(p, *b)?;
+        if cuts.contains(b) {
+            return Err(OpError::Invalid(format!("cut #{b} is one of those moved")));
         }
     }
+    p.move_cuts(cuts, *before);
+    said(format!("{} cuts moved together", cuts.len()))
+}
+
+/// Cut `cut` split at clip time `t`: its second half a new id.
+fn split(p: &mut Project, cut: Id, t: f64) -> Result<Outcome, OpError> {
+    let i = find(p, cut)?;
+    if !p.split(i, t) {
+        let c = &p.cuts[i];
+        return Err(OpError::OutOfRange { what: "split time", value: t, least: c.start + MIN_CUT, most: c.end - MIN_CUT });
+    }
+    let id = p.next_id();
+    p.cuts[i + 1].id = id;
+    Ok(Outcome { summary: format!("cut #{cut} split at {t:.2} s; the second half is cut #{id}"), made: Some(id) })
+}
+
+/// The join before cut `cut`: its look.
+fn transition(p: &mut Project, cut: Id, look: Option<crate::transition::Look>) -> Result<Outcome, OpError> {
+    let i = find(p, cut)?;
+    if i == 0 {
+        return Err(OpError::Invalid(format!("cut #{cut} is the first: no join before it")));
+    }
+    if look.is_some_and(|l| l.is_edge()) {
+        return Err(OpError::Invalid(format!("{} is an edge look: Edge puts it on a cut's start or end", look.unwrap().name())));
+    }
+    // The settings were the old look's.
+    if p.cuts[i].transition != look {
+        p.cuts[i].transition_params.clear();
+    }
+    p.cuts[i].transition = look;
+    said(format!("cut #{cut}: transition {}", look.map_or("dissolve", |l| l.name())))
+}
+
+/// A look on cut `cut`'s start or end.
+fn edge(p: &mut Project, cut: Id, end: End, look: Option<crate::transition::Look>, seconds: f64) -> Result<Outcome, OpError> {
+    let i = find(p, cut)?;
+    let c = &mut p.cuts[i];
+    let edge = if end == End::In { &mut c.edge_in } else { &mut c.edge_out };
+    let Some(look) = look else {
+        *edge = None;
+        return said(format!("cut #{cut}: no look on its {}", if end == End::In { "start" } else { "end" }));
+    };
+    if !look.is_edge() {
+        return Err(OpError::Invalid(format!("{} goes across a join (Transition), not on an edge", look.name())));
+    }
+    let seconds = crate::transition::stepped(seconds).min(c.end - c.start);
+    // The settings were the old look's.
+    let params = edge.take().filter(|e| e.look == look).map(|e| e.params).unwrap_or_default();
+    *edge = Some(crate::project::Edge { look, seconds, params });
+    said(format!("cut #{cut}: {} {seconds:.2} s on its {}", look.name(), if end == End::In { "start" } else { "end" }))
+}
+
+/// The join before cut `cut` set whole from a template.
+fn set_template(p: &mut Project, cut: &Id, template: &crate::template::Template) -> Result<Outcome, OpError> {
+    let i = find(p, *cut)?;
+    if i == 0 {
+        return Err(OpError::Invalid(format!("cut #{cut} is the first: no join before it")));
+    }
+    let before = p.cuts[i - 1].id;
+    let overlap = template.overlap.as_ref();
+    apply(p, &CutOp::Transition { cut: *cut, look: None })?;
+    apply(p, &CutOp::Transition { cut: *cut, look: overlap.and_then(|o| o.look) })?;
+    apply(p, &CutOp::Crossfade { cut: *cut, seconds: overlap.map_or(0.0, |o| o.seconds) })?;
+    for (key, &value) in overlap.iter().flat_map(|o| &o.params) {
+        apply(p, &CutOp::TransitionKnob { cut: *cut, key: key.clone(), value: Some(value) })?;
+    }
+    for (on, end, edge) in [(before, End::Out, &template.edge_out), (*cut, End::In, &template.edge_in)] {
+        apply(p, &CutOp::Edge { cut: on, end, look: None, seconds: 0.0 })?;
+        let Some(e) = edge else { continue };
+        apply(p, &CutOp::Edge { cut: on, end, look: Some(e.look), seconds: e.seconds })?;
+        for (key, &value) in &e.params {
+            apply(p, &CutOp::EdgeKnob { cut: on, end, key: key.clone(), value: Some(value) })?;
+        }
+    }
+    said(format!("the join before cut #{cut} set from a template"))
+}
+
+/// An object's track on cut `cut`, over one of its name.
+fn add_track(p: &mut Project, cut: &Id, track: &crate::automation::ObjectTrack) -> Result<Outcome, OpError> {
+    let i = find(p, *cut)?;
+    if track.name.trim().is_empty() || track.samples.iter().any(|s| ![s.t, s.x, s.y].iter().all(|v| v.is_finite())) || track.samples.windows(2).any(|w| w[0].t > w[1].t) {
+        return Err(OpError::Invalid("a track needs a name and samples that are numbers in time order".into()));
+    }
+    let tracks = &mut p.cuts[i].tracks;
+    tracks.retain(|t| t.name != track.name);
+    tracks.push(track.clone());
+    said(format!("cut #{cut}: track «{}», {} samples", track.name, track.samples.len()))
+}
+
+/// Cut `cut`'s track `name` gone.
+fn untrack(p: &mut Project, cut: &Id, name: &str) -> Result<Outcome, OpError> {
+    let i = find(p, *cut)?;
+    let before = p.cuts[i].tracks.len();
+    p.cuts[i].tracks.retain(|t| t.name != *name);
+    if p.cuts[i].tracks.len() == before {
+        return Err(OpError::NotFound(format!("track «{name}» on cut #{cut}")));
+    }
+    said(format!("cut #{cut}: track «{name}» gone"))
+}
+
+/// A marker on cut `cut`.
+fn mark(p: &mut Project, cut: &Id, t: &f64, note: &str) -> Result<Outcome, OpError> {
+    let i = find(p, *cut)?;
+    let c = &mut p.cuts[i];
+    if !t.is_finite() {
+        return Err(OpError::Invalid(format!("a marker at {t} s")));
+    }
+    match mark_at(&c.marks, *t) {
+        Some(k) => c.marks[k].note = note.to_owned(),
+        None => {
+            let k = c.marks.partition_point(|m| m.t <= *t);
+            c.marks.insert(k, crate::project::Mark { t: *t, note: note.to_owned() });
+        }
+    }
+    said(format!("cut #{cut}: marker at {t:.2} s{}", if note.is_empty() { String::new() } else { format!(" «{note}»") }))
+}
+
+/// Cut `cut`'s marker at `from` moved to `t`.
+fn move_mark(p: &mut Project, cut: Id, from: f64, t: f64) -> Result<Outcome, OpError> {
+    let i = find(p, cut)?;
+    let c = &mut p.cuts[i];
+    let k = mark_at(&c.marks, from).ok_or_else(|| OpError::NotFound(format!("marker at {from:.2} s on cut #{cut}")))?;
+    let mut m = c.marks.remove(k);
+    m.t = t.clamp(c.start, c.end);
+    let to = c.marks.partition_point(|n| n.t <= m.t);
+    let at = m.t;
+    c.marks.insert(to, m);
+    said(format!("cut #{cut}: marker {from:.2} s → {at:.2} s"))
+}
+
+/// Cut `cut`'s sound's own start or end (a J- or L-cut).
+fn sound_edge(p: &mut Project, cut: Id, end: End, t: f64, most: f64) -> Result<Outcome, OpError> {
+    let i = find(p, cut)?;
+    if !t.is_finite() {
+        return Err(OpError::Invalid(format!("a sound edge at {t} s")));
+    }
+    let c = &mut p.cuts[i];
+    let (from, to) = c.sound_span();
+    match end {
+        End::In => c.sound_before = c.start - t.clamp(0.0, (to - MIN_CUT).max(0.0)),
+        End::Out => c.sound_after = t.clamp(from + MIN_CUT, most.max(from + MIN_CUT)) - c.end,
+    }
+    let (from, to) = c.sound_span();
+    said(format!("cut #{cut}: sound {from:.2}-{to:.2} s (picture {:.2}-{:.2})", c.start, c.end))
 }
 
 /// The marker within `SAME_MARK` of `t`.

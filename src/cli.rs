@@ -394,6 +394,18 @@ pub(crate) enum Cmd {
         #[command(flatten)]
         opts: StitchOpts,
     },
+    /// The scopes of one frame of a project's edit at --at seconds, as
+    /// `frame` draws it: its darkest and brightest, what's crushed and
+    /// blown, the luma in sixteen bands.
+    Scopes {
+        project: PathBuf,
+        #[arg(long)]
+        at: f64,
+        #[arg(long)]
+        full: bool,
+        #[command(flatten)]
+        opts: StitchOpts,
+    },
     /// Summarise the clip over time as CSV, to find moments worth a look:
     /// the camera's heading and tilt, how fast it turns or shakes, and how
     /// loud it is.
@@ -754,6 +766,10 @@ pub(crate) fn run() -> Result<()> {
                 eprintln!("wrote {}{size}", path.display());
             }
             eprintln!("{} file(s), {:.2} s of edit", written.len(), project.duration());
+        }
+        Cmd::Scopes { project, at, full, opts } => {
+            let frame = crate::preview::frame_at(&project::Project::load(&project)?, &opts, at, 640, !full)?;
+            print!("{}", crate::scopes::describe(&crate::scopes::of_frame(&frame)));
         }
         Cmd::Frame { project, at, width, output, full, opts } => {
             let frame = crate::preview::frame_at(&project::Project::load(&project)?, &opts, at, width, !full)?;

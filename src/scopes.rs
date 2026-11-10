@@ -78,6 +78,28 @@ pub fn measure(data: &[u8], (w, h): (usize, usize), row: usize, bgra: bool, step
     }
 }
 
+/// Measures an RGB frame (8 bits a sample, or `deep` 16): the CLI's
+/// scopes of `omnix frame`'s picture (audit C10).
+pub fn of_frame(f: &crate::stitch::Frame) -> Scopes {
+    let step = if f.deep { 6 } else { 3 };
+    // The high byte of a deep sample is its 8-bit value.
+    let at = |k: usize| if f.deep { f.rgb[k + 1] } else { f.rgb[k] };
+    let rgba: Vec<u8> = (0..f.width * f.height).flat_map(|p| {
+        let k = p * step;
+        let o = if f.deep { 2 } else { 1 };
+        [at(k), at(k + o), at(k + 2 * o), 255]
+    }).collect();
+    measure(&rgba, (f.width, f.height), f.width * 4, false, 1)
+}
+
+/// The scopes as `omnix scopes` says them: the ends, what's crushed and
+/// blown, and the luma histogram in sixteen bands, each its share.
+pub fn describe(s: &Scopes) -> String {
+    let share = |n: u32| if s.pixels == 0 { 0.0 } else { n as f64 / s.pixels as f64 * 100.0 };
+    let bands: Vec<String> = s.histogram[3].chunks(LEVELS / 16).enumerate().map(|(k, b)| format!("{:>3}-{:<3} {:5.1} %", k * 16, k * 16 + 15, share(b.iter().sum()))).collect();
+    format!("black {} white {}  crushed {:.1} %  blown {:.1} %\nluma:\n  {}\n", s.black, s.white, s.crushed * 100.0, s.blown * 100.0, bands.join("\n  "))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -105,6 +127,15 @@ mod tests {
         assert_eq!((s.waveform[14], s.waveform[128], s.waveform[255 * LEVELS + 255]), (1, 1, 1));
         // Blue first reads the same of grey, and a step skips pixels.
         assert_eq!(measure(&picture(256), (256, 2), 1024, true, 2).pixels, 128);
+    }
+
+    #[test]
+    fn a_frame_is_measured_in_8_or_16_bits_alike() {
+        let flat = crate::stitch::Frame { width: 2, height: 1, rgb: vec![14, 14, 14, 200, 200, 200], deep: false };
+        let deep = crate::stitch::Frame { width: 2, height: 1, rgb: vec![0, 14, 0, 14, 0, 14, 0, 200, 0, 200, 0, 200], deep: true };
+        assert_eq!(of_frame(&flat), of_frame(&deep));
+        assert_eq!((of_frame(&flat).histogram[3][14], of_frame(&flat).histogram[3][200]), (1, 1));
+        assert!(describe(&of_frame(&flat)).contains("  0-15   50.0 %"), "{}", describe(&of_frame(&flat)));
     }
 
     #[test]

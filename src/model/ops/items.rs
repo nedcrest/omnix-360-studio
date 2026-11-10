@@ -95,6 +95,7 @@ pub(super) fn apply(p: &mut Project, op: &ItemOp) -> Result<Outcome, OpError> {
     match op {
         ItemOp::AddPictures { inputs, at, len, lane } => {
             positive(*len)?;
+            reachable(p, Track::Overlay, *lane)?;
             let mut at = *at;
             let mut last = None;
             for input in inputs {
@@ -107,12 +108,14 @@ pub(super) fn apply(p: &mut Project, op: &ItemOp) -> Result<Outcome, OpError> {
         }
         ItemOp::AddText { text, at, len, lane } => {
             positive(*len)?;
+            reachable(p, Track::Text, *lane)?;
             let id = p.next_id();
             add(p, Track::Text, *lane, Item { id, input: PathBuf::new(), text: Some(text.clone()), at: *at, start: 0.0, end: *len, motion: Vec::new(), effects: Vec::new(), bars: None, automation: Vec::new(), kind: None, style: None });
             Ok(Outcome { summary: format!("text item #{id} added"), made: Some(id) })
         }
         ItemOp::AddBars { bars, at, len, lane } => {
             positive(*len)?;
+            reachable(p, Track::Overlay, *lane)?;
             check_bars(bars)?;
             let id = p.next_id();
             add(p, Track::Overlay, *lane, Item { id, input: PathBuf::new(), text: None, at: *at, start: 0.0, end: *len, motion: Vec::new(), effects: Vec::new(), bars: Some(*bars), automation: Vec::new(), kind: None, style: None });
@@ -243,6 +246,17 @@ fn lanes(p: &mut Project, track: Track) -> &mut Vec<crate::overlay::Lane> {
 }
 
 /// Which track, lane and place item `id` is in.
+/// Whether something can be added on lane `l` of `track`: one there, or
+/// the next on top. A far one would make every lane below it (audit A6:
+/// `lane: 1e9` ran out of memory).
+fn reachable(p: &Project, track: Track, l: usize) -> Result<(), OpError> {
+    let n = p.track_lanes(track).len().max(1);
+    if l > n {
+        return Err(OpError::Invalid(format!("lane {l} of the {track:?} track: it has {n}, a new one goes at {n}")));
+    }
+    Ok(())
+}
+
 /// `track`'s lanes as the timeline shows them: one at least, made if the
 /// project has none yet (a new project's lane is shown before anything is
 /// on it; naming, hiding or adding over it failed, audit A3).
@@ -300,6 +314,7 @@ mod tests {
         e.apply(&Op::Item(ItemOp::RemoveLane { track: Track::Text, lane: 1 })).unwrap();
         assert!(e.apply(&Op::Item(ItemOp::RemoveLane { track: Track::Text, lane: 0 })).is_err(), "the last stays");
         assert!(e.apply(&Op::Item(ItemOp::Move { item: low, at: 0.0, lane: Some(3) })).is_err(), "no such lane");
+        assert!(e.apply(&add(5)).is_err(), "not past the next on top");
         check(&e).unwrap();
     }
 

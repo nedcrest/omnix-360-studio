@@ -7,6 +7,7 @@
 //! Animating an effect is the automation lanes' (gap 39); keys from
 //! before still play, and a slider moved sets its effect in all of them.
 
+use crate::model::ops::items::{OUTLINE_WIDTH, TEXT_SIZE};
 use super::{App, Message, Selection, tip};
 use crate::grade::EffectKey;
 use crate::overlay::{Place, place_at};
@@ -590,7 +591,7 @@ impl App {
             .spacing(8)
             .align_y(Alignment::Center),
             row![text("Size").width(Length::Fill), text(format!("{:.0} %", words.size * 100.0)).size(13)],
-            slider(0.02..=0.3, words.size, move |v| Message::Effect(EffectMsg::Text(TextChange::Size(v)))).step(0.005).on_release(Message::Effect(EffectMsg::Done)),
+            slider(TEXT_SIZE.0..=TEXT_SIZE.1, words.size, move |v| Message::Effect(EffectMsg::Text(TextChange::Size(v)))).step(0.005).on_release(Message::Effect(EffectMsg::Done)),
             row![text("Align").width(Length::Fill), pick_list(&TextAlign::ALL[..], Some(words.align), move |a| t(TextChange::Align(a))).width(110)].align_y(Alignment::Center),
             text("Colour"),
             swatches(words.colour, TextChange::Colour),
@@ -600,7 +601,7 @@ impl App {
         .spacing(6);
         if let Some(o) = words.outline {
             controls = controls.push(row![text("Outline width").width(Length::Fill), text(format!("{:.0} %", o.width * 100.0)).size(13)]);
-            controls = controls.push(slider(0.01..=0.3, o.width, move |v| Message::Effect(EffectMsg::Text(TextChange::OutlineWidth(v)))).step(0.005).on_release(Message::Effect(EffectMsg::Done)));
+            controls = controls.push(slider(OUTLINE_WIDTH.0..=OUTLINE_WIDTH.1, o.width, move |v| Message::Effect(EffectMsg::Text(TextChange::OutlineWidth(v)))).step(0.005).on_release(Message::Effect(EffectMsg::Done)));
             controls = controls.push(swatches(o.colour, TextChange::OutlineColour));
         }
         controls.spacing(8).into()

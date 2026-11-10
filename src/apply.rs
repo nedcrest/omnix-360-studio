@@ -117,6 +117,9 @@ fn describe_lines(p: &Project) -> Vec<String> {
                 (None, None) => format!("{}{}", name(&i.input), i.kind.map_or(String::new(), |k| format!(" as a {}", k.name().to_lowercase()))),
             };
             println(format!("  item #{:<2} {:7.2}-{:7.2} s  {label}", i.id, i.at, i.ends()));
+            if let Some(t) = &i.text {
+                println(format!("    {}", text_line(t)));
+            }
             if let Some(s) = &i.style {
                 println(format!("    {}", style_line(s)));
             }
@@ -126,6 +129,14 @@ fn describe_lines(p: &Project) -> Vec<String> {
         }
     }
     out
+}
+
+/// A text's look as `describe` says it: each field but its words, as the
+/// project and `text_field` write them.
+fn text_line(t: &crate::text::Text) -> String {
+    let all = serde_json::to_value(t).unwrap_or_default();
+    let fields: Vec<String> = crate::model::ops::items::TEXT_FIELDS.iter().skip(1).filter_map(|&k| all.get(k).map(|v| format!("{k} {v}"))).collect();
+    format!("text: {}", fields.join(", "))
 }
 
 /// A cut's own settings as `describe` says them: its view keys,
@@ -285,6 +296,10 @@ pub fn looks(template: Option<&str>) -> Result<String> {
     out += &format!("kinds of picture (op item `kind`, or none for plain): {}\n", kinds.join("; "));
     let anims: Vec<String> = crate::animate::Anim::ALL.iter().map(|a| serde_json::to_string(a).expect("an animation is JSON").trim_matches('"').to_owned()).collect();
     out += &format!("ins and outs of text and pictures (op auto `animate`, edge in or out, seconds): {}\n", anims.join(", "));
+    let luts = crate::lut::library_names();
+    let dir = crate::lut::library().map_or_else(|| "none".to_owned(), |d| d.display().to_string());
+    out += &format!("LUTs in {dir} (op cut `lut`, by name; or a .cube file): {}\n", if luts.is_empty() { "none".to_owned() } else { luts.join(", ") });
+    out += &format!("fonts (op item `text_field`, field `font`): {}\n", crate::text::families().join(", "));
     let names = crate::template::names();
     let dir = crate::template::library().map_or_else(|| "none".to_owned(), |d| d.display().to_string());
     out += &format!("templates in {dir}: {}\n", if names.is_empty() { "none".to_owned() } else { names.join(", ") });
@@ -293,6 +308,22 @@ pub fn looks(template: Option<&str>) -> Result<String> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_texts_look_is_said_and_one_field_changed() {
+        use crate::model::ops::{Op, items::ItemOp};
+        let item = crate::overlay::Item { id: 0, input: "".into(), text: Some(Default::default()), at: 0.0, start: 0.0, end: 3.0, motion: Vec::new(), effects: Vec::new(), bars: None, automation: Vec::new(), kind: None, style: None };
+        let mut p = crate::project::Project::default();
+        p.text.push(crate::overlay::Lane { items: vec![item], ..Default::default() });
+        p.settle_ids();
+        let mut e = crate::model::edit::Edit::new(p);
+        let field = |field: &str, value: serde_json::Value| Op::Item(ItemOp::TextField { item: 1, field: field.into(), value });
+        e.apply(&field("size", serde_json::json!(0.1))).unwrap();
+        e.apply(&field("content", serde_json::json!("Kos"))).unwrap();
+        assert!(e.apply(&field("size", serde_json::json!(5))).is_err() && e.apply(&field("weight", serde_json::json!(1))).is_err() && e.apply(&field("bold", serde_json::json!("yes"))).is_err());
+        let said = super::describe_lines(&e).join("\n");
+        assert!(said.contains("«Kos»") && said.contains("text: font \"Inter\", size 0.1, colour") && said.contains("bold true"), "{said}");
+    }
+
     #[test]
     fn apply_warns_of_what_isnt_there() {
         let mut c = crate::project::Cut::new("nowhere/a.mp4".into(), 0.0, 4.0);

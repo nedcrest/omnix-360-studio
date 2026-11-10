@@ -74,8 +74,36 @@ pub enum ItemOp {
     Trim { item: Id, end: End, t: f64, most: f64 },
     /// A text item's words and look, all of it.
     SetText { item: Id, text: Text },
+    /// One of a text item's fields (`content`, `font`, `size`, `colour`,
+    /// `bold`, `align`, `outline`, `shadow`, as `describe` says them) to
+    /// `value`, the rest as they are (audit C5).
+    TextField { item: Id, field: String, value: serde_json::Value },
     Delete { item: Id },
 }
+
+/// `text` with `field` set to `value`, read as the project reads it (a
+/// wrong name or kind of value refused); its size and an outline's width
+/// held to the panel's ranges.
+fn text_with(text: &Text, field: &str, value: &serde_json::Value) -> Result<Text, OpError> {
+    let mut all = serde_json::to_value(text).map_err(|e| OpError::Invalid(e.to_string()))?;
+    let map = all.as_object_mut().expect("a text is a JSON object");
+    if !TEXT_FIELDS.contains(&field) {
+        return Err(OpError::NotFound(format!("text field {field:?} (one of {})", TEXT_FIELDS.join(", "))));
+    }
+    map.insert(field.to_owned(), value.clone());
+    let new: Text = serde_json::from_value(all).map_err(|e| OpError::Invalid(format!("{field} {value}: {e}")))?;
+    if !(TEXT_SIZE.0..=TEXT_SIZE.1).contains(&new.size) || new.outline.is_some_and(|o| !(OUTLINE_WIDTH.0..=OUTLINE_WIDTH.1).contains(&o.width)) {
+        return Err(OpError::Invalid(format!("size {} ({}..{}) or outline width ({}..{}) out of range", new.size, TEXT_SIZE.0, TEXT_SIZE.1, OUTLINE_WIDTH.0, OUTLINE_WIDTH.1)));
+    }
+    Ok(new)
+}
+
+/// A text's fields, as the project writes them.
+pub const TEXT_FIELDS: [&str; 8] = ["content", "font", "size", "colour", "bold", "align", "outline", "shadow"];
+/// A text's size, of the frame's height, and an outline's width, of the
+/// text's size: the panel's sliders.
+pub const TEXT_SIZE: (f64, f64) = (0.02, 0.3);
+pub const OUTLINE_WIDTH: (f64, f64) = (0.01, 0.3);
 
 /// Bars wider than tall, a slide of none or more, a colour in 0..1.
 fn check_bars(b: &crate::overlay::Bars) -> Result<(), OpError> {
@@ -215,6 +243,13 @@ pub(super) fn apply(p: &mut Project, op: &ItemOp) -> Result<Outcome, OpError> {
             }
             it.text = Some(text.clone());
             said(format!("text item #{item}: «{}»", text.content))
+        }
+        ItemOp::TextField { item, field, value } => {
+            let (track, lane, i) = find(p, *item)?;
+            let it = &mut p.track_lanes_mut(track)[lane].items[i];
+            let text = it.text.as_mut().ok_or_else(|| OpError::Invalid(format!("item #{item} is a picture, not text")))?;
+            *text = text_with(text, field, value)?;
+            said(format!("text item #{item}: {field} {value}"))
         }
         &ItemOp::Delete { item } => {
             let (track, lane, i) = find(p, item)?;

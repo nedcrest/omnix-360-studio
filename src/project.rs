@@ -1227,10 +1227,7 @@ impl Project {
     /// Which track (overlays or text), lane and place the item with id `id`
     /// is at.
     pub fn item_index(&self, id: Id) -> Option<(crate::overlay::Track, usize, usize)> {
-        use crate::overlay::Track;
-        [(Track::Overlay, &self.overlays), (Track::Text, &self.text)]
-            .into_iter()
-            .find_map(|(track, lanes)| lanes.iter().enumerate().find_map(|(l, lane)| lane.items.iter().position(|it| it.id == id).map(|i| (track, l, i))))
+        crate::overlay::Track::ALL.into_iter().find_map(|track| self.track_lanes(track).iter().enumerate().find_map(|(l, lane)| lane.items.iter().position(|it| it.id == id).map(|i| (track, l, i))))
     }
 
     pub fn track(&self, which: SoundTrack) -> &Music {

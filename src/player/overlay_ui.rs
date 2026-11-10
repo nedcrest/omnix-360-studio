@@ -334,10 +334,7 @@ impl App {
 
 /// `track`'s place in `App::active_lanes`.
 pub(super) fn track_index(track: crate::overlay::Track) -> usize {
-    match track {
-        crate::overlay::Track::Overlay => 0,
-        crate::overlay::Track::Text => 1,
-    }
+    track.index()
 }
 
 /// Lane `l`'s number once lane `removed` is taken away: one down above it,

@@ -28,6 +28,24 @@ pub enum Track {
     Text,
 }
 
+impl Track {
+    /// Both, lowest first: text lies over the pictures.
+    pub const ALL: [Track; 2] = [Track::Overlay, Track::Text];
+
+    /// As the timeline and the bin name it.
+    pub fn name(self) -> &'static str {
+        match self {
+            Track::Overlay => "Overlay",
+            Track::Text => "Text",
+        }
+    }
+
+    /// Its place in `ALL`.
+    pub fn index(self) -> usize {
+        self as usize
+    }
+}
+
 /// An item of the edit's overlays: its track, its lane there (0 the
 /// lowest, gap 70) and its place in it.
 pub type ItemRef = (Track, usize, usize);

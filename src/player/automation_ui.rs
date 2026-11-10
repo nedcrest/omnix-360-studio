@@ -131,12 +131,7 @@ impl App {
         match on {
             AutoOn::Cut(i) => self.edit.cuts.get(i).map(|c| (Graded::Cut(c.id), &c.automation[..])),
             AutoOn::Item(id) => {
-                let (track, l, i) = self.edit.item_index(id)?;
-                let lanes = match track {
-                    crate::overlay::Track::Overlay => &self.edit.overlays,
-                    crate::overlay::Track::Text => &self.edit.text,
-                };
-                Some((Graded::Item(id), &lanes.get(l)?.items.get(i)?.automation[..]))
+                Some((Graded::Item(id), &self.edit.item_by_id(id)?.automation[..]))
             }
         }
     }

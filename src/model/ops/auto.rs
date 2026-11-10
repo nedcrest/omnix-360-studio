@@ -74,12 +74,7 @@ fn owner(p: &mut Project, on: Graded) -> Result<Owner<'_>, OpError> {
             Ok(Owner { clips: &mut c.automation, range, base: Box::new(move |param, t| grade_value(&effects, param, t)), item: false })
         }
         Graded::Item(id) => {
-            let (track, l, i) = p.item_index(id).ok_or_else(|| OpError::NotFound(format!("item #{id}")))?;
-            let lanes = match track {
-                crate::overlay::Track::Overlay => &mut p.overlays,
-                crate::overlay::Track::Text => &mut p.text,
-            };
-            let it = &mut lanes[l].items[i];
+            let it = p.item_mut(id).ok_or_else(|| OpError::NotFound(format!("item #{id}")))?;
             let (effects, motion, range) = (it.effects.clone(), it.motion.clone(), (it.start, it.end));
             let base = move |param: &str, t: f64| match crate::overlay::Place::NAMES.iter().position(|n| *n == param) {
                 Some(k) => crate::overlay::place_at(&motion, t).values()[k],
@@ -217,12 +212,7 @@ fn follow(p: &mut Project, item: Id, cut: Id, track: &str, params: &[String], of
     let c = &p.cuts[ci];
     let tr = c.tracks.iter().find(|t| t.name == track).ok_or_else(|| OpError::NotFound(format!("track «{track}» on cut #{cut}")))?;
     let samples: Vec<(f64, crate::automation::TrackSample)> = tr.samples.iter().filter(|s| s.t >= c.start && s.t <= c.end).map(|s| (at + s.t - c.start, *s)).collect();
-    let (track_at, l, i) = p.item_index(item).ok_or_else(|| OpError::NotFound(format!("item #{item}")))?;
-    let lanes = match track_at {
-        crate::overlay::Track::Overlay => &mut p.overlays,
-        crate::overlay::Track::Text => &mut p.text,
-    };
-    let it = &mut lanes[l].items[i];
+    let it = p.item_mut(item).ok_or_else(|| OpError::NotFound(format!("item #{item}")))?;
     let own = |edit: f64| it.start + edit - it.at;
     let within: Vec<(f64, crate::automation::TrackSample)> = samples.into_iter().map(|(e, s)| (own(e), s)).filter(|(t, _)| *t >= it.start && *t <= it.end).collect();
     for (k, param) in params.iter().enumerate() {
@@ -246,12 +236,7 @@ fn follow(p: &mut Project, item: Id, cut: Id, track: &str, params: &[String], of
 /// `AutoOp::Animate`: item `item`'s `edge` animated by `anim`, from its
 /// values where it holds still.
 fn animate(p: &mut Project, item: Id, edge: End, anim: Option<crate::animate::Anim>, seconds: f64) -> Result<Outcome, OpError> {
-    let (track, l, i) = p.item_index(item).ok_or_else(|| OpError::NotFound(format!("item #{item}")))?;
-    let lanes = match track {
-        crate::overlay::Track::Overlay => &mut p.overlays,
-        crate::overlay::Track::Text => &mut p.text,
-    };
-    let it = &mut lanes[l].items[i];
+    let it = p.item_mut(item).ok_or_else(|| OpError::NotFound(format!("item #{item}")))?;
     it.automation.retain(|a| a.animation.is_none_or(|x| x.edge != edge));
     let Some(anim) = anim else { return said(format!("item #{item}: no {}", if edge == End::In { "in" } else { "out" })) };
     if !(seconds.is_finite() && seconds > 0.0) {

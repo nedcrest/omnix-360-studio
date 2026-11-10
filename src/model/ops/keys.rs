@@ -219,12 +219,7 @@ fn effects(p: &mut Project, on: Graded) -> Result<&mut Vec<EffectKey>, OpError> 
 }
 
 fn find_item(p: &mut Project, id: Id) -> Result<&mut Item, OpError> {
-    let (track, l, i) = p.item_index(id).ok_or_else(|| OpError::NotFound(format!("item #{id}")))?;
-    let lanes = match track {
-        crate::overlay::Track::Overlay => &mut p.overlays,
-        crate::overlay::Track::Text => &mut p.text,
-    };
-    Ok(&mut lanes[l].items[i])
+    p.item_mut(id).ok_or_else(|| OpError::NotFound(format!("item #{id}")))
 }
 
 /// Where the key at `t` on `line` is.

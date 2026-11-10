@@ -132,8 +132,9 @@ pub fn uses(edit: &crate::project::Project, path: &Path) -> Option<String> {
             parts.push(if n == 1 { which.name().to_owned() } else { format!("{} ×{n}", which.name()) });
         }
     }
-    for (name, lanes) in [("Overlay", &edit.overlays), ("Text", &edit.text)] {
-        let n = lanes.iter().flat_map(|l| &l.items).filter(|it| it.input == path).count();
+    for track in crate::overlay::Track::ALL {
+        let name = track.name();
+        let n = edit.track_lanes(track).iter().flat_map(|l| &l.items).filter(|it| it.input == path).count();
         if n > 0 {
             parts.push(if n == 1 { name.to_owned() } else { format!("{name} ×{n}") });
         }

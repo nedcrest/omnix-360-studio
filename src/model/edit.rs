@@ -232,7 +232,7 @@ impl Project {
     /// the view's handles reach alike (audit A2: a hidden lane's items
     /// could still be dragged).
     pub fn shown_lane_refs(&self) -> impl Iterator<Item = (Track, usize, &Lane)> {
-        [Track::Overlay, Track::Text].into_iter().flat_map(move |track| self.track_lanes(track).iter().enumerate().map(move |(l, lane)| (track, l, lane))).filter(|(_, _, lane)| !lane.hidden)
+        Track::ALL.into_iter().flat_map(move |track| self.track_lanes(track).iter().enumerate().map(move |(l, lane)| (track, l, lane))).filter(|(_, _, lane)| !lane.hidden)
     }
 
     /// `track`'s lanes (gap 70), lowest first: a lane is drawn over the
@@ -249,12 +249,17 @@ impl Project {
         self.track_lanes(track).get(l)
     }
 
-    /// Lane `l` of `track`, made (with any below it) if it isn't there yet.
-    pub fn lane_mut(&mut self, track: Track, l: usize) -> &mut Lane {
-        let lanes = match track {
+    /// `track`'s lanes, to change.
+    pub fn track_lanes_mut(&mut self, track: Track) -> &mut Vec<Lane> {
+        match track {
             Track::Overlay => &mut self.overlays,
             Track::Text => &mut self.text,
-        };
+        }
+    }
+
+    /// Lane `l` of `track`, made (with any below it) if it isn't there yet.
+    pub fn lane_mut(&mut self, track: Track, l: usize) -> &mut Lane {
+        let lanes = self.track_lanes_mut(track);
         while lanes.len() <= l {
             lanes.push(Lane::default());
         }
@@ -263,6 +268,17 @@ impl Project {
 
     pub fn item(&self, (track, l, i): ItemRef) -> Option<&Item> {
         self.lane(track, l)?.items.get(i)
+    }
+
+    /// The item with id `id`, wherever it is.
+    pub fn item_by_id(&self, id: crate::project::Id) -> Option<&Item> {
+        self.item(self.item_index(id)?)
+    }
+
+    /// The item with id `id`, to change.
+    pub fn item_mut(&mut self, id: crate::project::Id) -> Option<&mut Item> {
+        let (track, l, i) = self.item_index(id)?;
+        self.track_lanes_mut(track).get_mut(l)?.items.get_mut(i)
     }
 
     /// Splits cut `i` at clip time `t`. Both halves keep all its keyframes,

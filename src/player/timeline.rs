@@ -794,7 +794,7 @@ impl Timeline {
         for (li, l) in self.sounds.iter().enumerate() {
             at.extend(l.blocks.iter().enumerate().flat_map(|(i, m)| [(m.clip.at, Of::Sound(li, i)), (m.clip.at + m.len(), Of::Sound(li, i))]));
         }
-        for track in [Track::Overlay, Track::Text] {
+        for track in Track::ALL {
             for (l, items) in self.track_blocks(track).iter().enumerate() {
                 at.extend(items.iter().enumerate().flat_map(|(i, o)| [(o.item.at, Of::Item(track, l, i)), (o.item.at + o.len(), Of::Item(track, l, i))]));
             }
@@ -1669,8 +1669,8 @@ impl OverlayLane {
     /// Its name and colour.
     fn name(&self) -> (&'static str, iced::Color) {
         match self.1 {
-            Track::Overlay => ("Overlay", OVERLAY_COLOUR),
-            Track::Text => ("Text", TEXT_COLOUR),
+            Track::Overlay => (self.1.name(), OVERLAY_COLOUR),
+            Track::Text => (self.1.name(), TEXT_COLOUR),
         }
     }
 

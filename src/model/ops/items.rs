@@ -124,7 +124,7 @@ pub(super) fn apply(p: &mut Project, op: &ItemOp) -> Result<Outcome, OpError> {
         ItemOp::SetBars { item, bars } => {
             check_bars(bars)?;
             let (track, lane, i) = find(p, *item)?;
-            let it = &mut lanes(p, track)[lane].items[i];
+            let it = &mut p.track_lanes_mut(track)[lane].items[i];
             if it.bars.is_none() {
                 return Err(OpError::Invalid(format!("item #{item} isn't bars")));
             }
@@ -133,7 +133,7 @@ pub(super) fn apply(p: &mut Project, op: &ItemOp) -> Result<Outcome, OpError> {
         }
         &ItemOp::Kind { item, kind } => {
             let (track, lane, i) = find(p, item)?;
-            let it = &mut lanes(p, track)[lane].items[i];
+            let it = &mut p.track_lanes_mut(track)[lane].items[i];
             if it.file().is_none() {
                 return Err(OpError::Invalid(format!("item #{item} isn't a picture")));
             }
@@ -153,11 +153,11 @@ pub(super) fn apply(p: &mut Project, op: &ItemOp) -> Result<Outcome, OpError> {
             let (track, l, i) = find(p, item)?;
             match onto.filter(|&to| to != l) {
                 Some(to) => {
-                    if to >= lanes(p, track).len() {
+                    if to >= p.track_lanes_mut(track).len() {
                         return Err(OpError::NotFound(format!("lane {to} of the {track:?} track")));
                     }
-                    let moved = lanes(p, track)[l].items.remove(i);
-                    let lane = &mut lanes(p, track)[to];
+                    let moved = p.track_lanes_mut(track)[l].items.remove(i);
+                    let lane = &mut p.track_lanes_mut(track)[to];
                     lane.items.push(moved);
                     let i = lane.items.len() - 1;
                     lane.items[i].at = lane.place(i, at);
@@ -166,7 +166,7 @@ pub(super) fn apply(p: &mut Project, op: &ItemOp) -> Result<Outcome, OpError> {
                     said(format!("item #{item} on lane {to} at {now:.2} s"))
                 }
                 None => {
-                    let lane = &mut lanes(p, track)[l];
+                    let lane = &mut p.track_lanes_mut(track)[l];
                     lane.move_to(i, at);
                     said(format!("item #{item} at {:.2} s", lane.items[i].at))
                 }
@@ -174,7 +174,7 @@ pub(super) fn apply(p: &mut Project, op: &ItemOp) -> Result<Outcome, OpError> {
         }
         &ItemOp::AddLane { track } => {
             shown(p, track).push(crate::overlay::Lane::default());
-            said(format!("{track:?} track: lane {} added on top", lanes(p, track).len() - 1))
+            said(format!("{track:?} track: lane {} added on top", p.track_lanes_mut(track).len() - 1))
         }
         ItemOp::LaneName { track, lane, name } => {
             let l = shown(p, *track).get_mut(*lane).ok_or_else(|| OpError::NotFound(format!("lane {lane} of the {track:?} track")))?;
@@ -187,7 +187,7 @@ pub(super) fn apply(p: &mut Project, op: &ItemOp) -> Result<Outcome, OpError> {
             said(format!("{track:?} lane {lane}: {}", if hidden { "hidden" } else { "shown" }))
         }
         &ItemOp::RemoveLane { track, lane } => {
-            let all = lanes(p, track);
+            let all = p.track_lanes_mut(track);
             match all.get(lane) {
                 None => return Err(OpError::NotFound(format!("lane {lane} of the {track:?} track"))),
                 Some(_) if all.len() == 1 => return Err(OpError::Invalid("a track keeps one lane".into())),
@@ -199,7 +199,7 @@ pub(super) fn apply(p: &mut Project, op: &ItemOp) -> Result<Outcome, OpError> {
         }
         &ItemOp::Trim { item, end, t, most } => {
             let (track, lane, i) = find(p, item)?;
-            let lane = &mut lanes(p, track)[lane];
+            let lane = &mut p.track_lanes_mut(track)[lane];
             let was = (lane.items[i].start, lane.items[i].end);
             lane.trim(i, end == End::In, t, MIN_CUT, most);
             let it = &mut lane.items[i];
@@ -209,7 +209,7 @@ pub(super) fn apply(p: &mut Project, op: &ItemOp) -> Result<Outcome, OpError> {
         }
         ItemOp::SetText { item, text } => {
             let (track, lane, i) = find(p, *item)?;
-            let it = &mut lanes(p, track)[lane].items[i];
+            let it = &mut p.track_lanes_mut(track)[lane].items[i];
             if it.text.is_none() {
                 return Err(OpError::Invalid(format!("item #{item} is a picture, not text")));
             }
@@ -218,7 +218,7 @@ pub(super) fn apply(p: &mut Project, op: &ItemOp) -> Result<Outcome, OpError> {
         }
         &ItemOp::Delete { item } => {
             let (track, lane, i) = find(p, item)?;
-            lanes(p, track)[lane].items.remove(i);
+            p.track_lanes_mut(track)[lane].items.remove(i);
             said(format!("item #{item} removed"))
         }
     }
@@ -238,14 +238,6 @@ fn add(p: &mut Project, track: Track, l: usize, item: Item) -> f64 {
     lane.items[i].ends()
 }
 
-fn lanes(p: &mut Project, track: Track) -> &mut Vec<crate::overlay::Lane> {
-    match track {
-        Track::Overlay => &mut p.overlays,
-        Track::Text => &mut p.text,
-    }
-}
-
-/// Which track, lane and place item `id` is in.
 /// Whether something can be added on lane `l` of `track`: one there, or
 /// the next on top. A far one would make every lane below it (audit A6:
 /// `lane: 1e9` ran out of memory).
@@ -262,13 +254,13 @@ fn reachable(p: &Project, track: Track, l: usize) -> Result<(), OpError> {
 /// on it; naming, hiding or adding over it failed, audit A3).
 fn shown(p: &mut Project, track: Track) -> &mut Vec<crate::overlay::Lane> {
     p.lane_mut(track, 0);
-    lanes(p, track)
+    p.track_lanes_mut(track)
 }
 
 /// Item `id`, a text or a picture (bars take no style).
 fn styleable(p: &mut Project, id: Id) -> Result<&mut Item, OpError> {
     let (track, lane, i) = find(p, id)?;
-    let it = &mut lanes(p, track)[lane].items[i];
+    let it = &mut p.track_lanes_mut(track)[lane].items[i];
     if it.bars.is_some() {
         return Err(OpError::Invalid(format!("item #{id} is bars: no style")));
     }

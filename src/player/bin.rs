@@ -141,6 +141,9 @@ impl Preview {
     }
 }
 
+/// What Info read of a file: its facts, or why not.
+pub type About = Result<std::sync::Arc<super::info::File>, String>;
+
 /// The bin's state in the app.
 #[derive(Default)]
 pub struct Bin {
@@ -172,7 +175,7 @@ pub struct Bin {
     pub gripping: bool,
     pub size: std::cell::Cell<iced::Size>,
     /// What Info read of the file shown there (`None` while reading).
-    pub about: Option<(PathBuf, Option<Result<std::sync::Arc<super::info::File>, String>>)>,
+    pub about: Option<(PathBuf, Option<About>)>,
     /// Clips being added as one segment of them (the bin player's picked
     /// one), till they're in.
     pub spans: HashMap<PathBuf, (f64, f64)>,
@@ -572,54 +575,6 @@ pub(super) fn add_buttons<'a>(path: &Path, kind: Kind) -> Element<'a, Message> {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn root_is_the_trip_or_above_04_project() {
-        let trip = std::env::temp_dir().join(format!("omnix-bin-root-{}", std::process::id()));
-        let l = dailix_sheet::Layout::new(&trip);
-        std::fs::create_dir_all(l.data()).unwrap();
-        dailix_sheet::project::update(&l, |_| {}).unwrap();
-        assert_eq!(root(&l.video_edit("2030-05-01")), Some(trip.clone()), "a video's edit: its trip");
-        std::fs::remove_dir_all(&trip).unwrap();
-        assert_eq!(root(Path::new("/v/kos/04_project/den2.json")), Some(PathBuf::from("/v/kos")));
-        assert_eq!(root(Path::new("/v/edit.json")), Some(PathBuf::from("/v")));
-    }
-
-    #[test]
-    fn scan_sorts_files_into_sections() {
-        let dir = std::env::temp_dir().join(format!("omnix-bin-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        let make = |rel: &str| {
-            let p = dir.join(rel);
-            std::fs::create_dir_all(p.parent().unwrap()).unwrap();
-            std::fs::write(p, b"").unwrap();
-        };
-        make("01_footage/DJI_0001.MP4");
-        make("01_footage/DJI_0001.LRF");
-        make("02_audio/music/song.wav");
-        make("02_audio/music/LICENSES.md");
-        make("07_sfx/boom.mp3");
-        make("voice/2026-08-22/DJI_0001/dnn6.flac");
-        make("08_graphics/logo.png");
-        // A Dailix project files its clips by day.
-        make("01_footage/2030-05-02/B.MP4");
-        make("01_footage/2030-05-01/A.MP4");
-        make("01_footage/_old/skip.MP4");
-        make("_trash/old.mp3");
-        let s = scan(&dir);
-        let titles: Vec<_> = s.iter().map(|s| s.title).collect();
-        // Cleaned voice belongs to its clip: not listed.
-        assert_eq!(titles, ["Footage", "Footage", "Footage", "Music", "Sound effects", "Pictures"]);
-        assert_eq!(s[0].files, [dir.join("01_footage/DJI_0001.MP4")]);
-        assert_eq!(s.iter().map(Section::heading).take(3).collect::<Vec<_>>(), ["Footage", "Footage · 2030-05-01", "Footage · 2030-05-02"]);
-        assert_eq!(s[1].files, [dir.join("01_footage/2030-05-01/A.MP4")]);
-        std::fs::remove_dir_all(&dir).unwrap();
-    }
-}
-
 impl App {
     /// The bin: this area's messages, as `handle` passes them on.
     pub(super) fn on_bin(&mut self, message: Message) -> Task<Message> {
@@ -668,5 +623,53 @@ impl App {
             _ => {}
         }
         Task::none()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn root_is_the_trip_or_above_04_project() {
+        let trip = std::env::temp_dir().join(format!("omnix-bin-root-{}", std::process::id()));
+        let l = dailix_sheet::Layout::new(&trip);
+        std::fs::create_dir_all(l.data()).unwrap();
+        dailix_sheet::project::update(&l, |_| {}).unwrap();
+        assert_eq!(root(&l.video_edit("2030-05-01")), Some(trip.clone()), "a video's edit: its trip");
+        std::fs::remove_dir_all(&trip).unwrap();
+        assert_eq!(root(Path::new("/v/kos/04_project/den2.json")), Some(PathBuf::from("/v/kos")));
+        assert_eq!(root(Path::new("/v/edit.json")), Some(PathBuf::from("/v")));
+    }
+
+    #[test]
+    fn scan_sorts_files_into_sections() {
+        let dir = std::env::temp_dir().join(format!("omnix-bin-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let make = |rel: &str| {
+            let p = dir.join(rel);
+            std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+            std::fs::write(p, b"").unwrap();
+        };
+        make("01_footage/DJI_0001.MP4");
+        make("01_footage/DJI_0001.LRF");
+        make("02_audio/music/song.wav");
+        make("02_audio/music/LICENSES.md");
+        make("07_sfx/boom.mp3");
+        make("voice/2026-08-22/DJI_0001/dnn6.flac");
+        make("08_graphics/logo.png");
+        // A Dailix project files its clips by day.
+        make("01_footage/2030-05-02/B.MP4");
+        make("01_footage/2030-05-01/A.MP4");
+        make("01_footage/_old/skip.MP4");
+        make("_trash/old.mp3");
+        let s = scan(&dir);
+        let titles: Vec<_> = s.iter().map(|s| s.title).collect();
+        // Cleaned voice belongs to its clip: not listed.
+        assert_eq!(titles, ["Footage", "Footage", "Footage", "Music", "Sound effects", "Pictures"]);
+        assert_eq!(s[0].files, [dir.join("01_footage/DJI_0001.MP4")]);
+        assert_eq!(s.iter().map(Section::heading).take(3).collect::<Vec<_>>(), ["Footage", "Footage · 2030-05-01", "Footage · 2030-05-02"]);
+        assert_eq!(s[1].files, [dir.join("01_footage/2030-05-01/A.MP4")]);
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 }

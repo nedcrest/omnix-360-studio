@@ -300,8 +300,17 @@ together when one is dragged; its cuts stay where the magnetic edit puts
 them. Made as Premiere does: Shift+click adds a clip to the selection
 (Ctrl+click already puts a volume point on a sound), Ctrl+G groups,
 Ctrl+Shift+G ungroups. Steps: (1) the core — group ids,
-the project's groups, ops, `describe`; (2) Ctrl+click selecting several;
+the project's groups, ops, `describe`; (2) Shift+click selecting several;
 (3) the frame and band; (4) together — select, delete, move.
+
+**Built 2026-11-11, waits for the user's check:** `Cut`/`MusicClip`/`Item`
+`group`, `Project::groups`, `ProjectOp::Group`/`Ungroup`/`GroupLook`,
+`describe`; `player/groups.rs` (Shift+click, Ctrl+G, Ctrl+Shift+G, a
+click selects the group, Alt+click one clip); frames and bands on the
+timeline; a dragged sound clip or item moves the group's others; Del
+takes all. Not yet: merging a clip's pieces back into one, effects set
+on all of a group at once, naming or recolouring a group in the window
+(the op is there).
 
 ### 9. Timeline ease and accessibility — research done (user, 2026-10-23)
 

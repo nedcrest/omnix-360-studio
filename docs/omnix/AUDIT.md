@@ -30,11 +30,11 @@ items one way each) done.
 
 ## C. Core API gaps (what an agent can't see or do)
 
+C1, C2 (`describe` says a cut's view, settings and sound, and the
+edit's own) and C3 (the aspect an op) done.
+
 | # | What | Fix |
 |---|---|---|
-| C1 | `describe` hides a cut's view keys, stabilisation, LUT, note, audio file, «flat» | Lines for each in `look_lines` |
-| C2 | `describe` hides most sound: volume points, fades, J/L sound, even/low cut/clean, loudness, duck spans, track and clip-sound levels, the edit's fades | A header line, a line per track, a `sound:` and `points:` line per cut and clip |
-| C3 | The project's aspect is GUI state, not an op, not described | `ProjectOp::Aspect`; in `describe` |
 | C4 | Ops take values out of range (exposure 1000, view at 500 s, place x 99, trims past the file, missing files and LUTs); `check` doesn't catch them | Range checks in the ops; key invariants in `check`; `apply` warns of missing inputs |
 | C5 | No list of LUTs or fonts; a text's style isn't described; `set_text` needs the whole text | `looks` lists them; `describe` the style |
 | C6 | Items: `describe` drops place keys, effect keys, source range | Lines as cuts have |

@@ -12,8 +12,7 @@ use super::{App, Message, Selection, tip};
 use crate::grade::EffectKey;
 use crate::overlay::{Place, place_at};
 use crate::model::ops::keys::{EXACT, Graded, KeyOp, Line};
-use crate::model::ops::sound::SoundOp;
-use crate::model::ops::{End, Op, items::ItemOp};
+use crate::model::ops::{Op, items::ItemOp};
 use crate::text::{Colour, Outline, Text, TextAlign};
 use iced::widget::{button, column, pick_list, row, slider, text, tooltip};
 use iced::{Alignment, Element, Length};
@@ -51,8 +50,6 @@ pub enum EffectMsg {
     ToAll,
     /// Draw a box over something grey or white to set the white balance.
     PickWhite,
-    FadeIn(f64),
-    FadeOut(f64),
     /// The selection's style look, a cut's or an item's (none: off), one
     /// of its settings moved (a slider's drag one undo step, closed by
     /// `Done`), all of them back.
@@ -513,14 +510,6 @@ impl App {
                     self.picking_white = false;
                     self.save_status = None;
                 }
-            }
-            EffectMsg::FadeIn(seconds) => {
-                self.edit.begin();
-                self.op(Op::Sound(SoundOp::EditFade { end: End::In, seconds }));
-            }
-            EffectMsg::FadeOut(seconds) => {
-                self.edit.begin();
-                self.op(Op::Sound(SoundOp::EditFade { end: End::Out, seconds }));
             }
             EffectMsg::Jump(cut, t) => {
                 self.follow = true;

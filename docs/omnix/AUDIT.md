@@ -16,11 +16,11 @@ B1 (the grade's values by name, one `EFFECTS` table), B2 (tracks and
 items one way each) B3 (the timeline's `LaneHead`, one
 `active_lane`) B4 (one `project_root`, `inside_project`, pictures
 through `folder_for`) and B5 (`grade::luma`, `grade::level`,
-`MusicClip::local`, `App::frame_len`) done.
+`MusicClip::local`, `App::frame_len`) and B6 (the film's fades in the
+Transitions panel's own code) done.
 
 | # | What | Fix |
 |---|---|---|
-| B6 | The film's fades drawn by `effects_view::whole_edit` for the Transitions panel, on `EffectMsg` | Move them into `transitions_panel.rs` |
 | B7 | Rules in UI code without tests: the sound menu's entries, `Message::Range`'s clamp, Dailix's `recipe_to_make`, the pane's speech (a copy of `voice::speech` that swallows errors) | Pure functions with tests in the core |
 | B8 | `cut.flat` written directly by the player and kept in the project (undo can bring back a stale one); `Edit` derefs mutably, so nothing stops direct writes | `flat` out of the project; drop `DerefMut` and let the compiler list the rest |
 | B9 | Long functions: 29 in `player/` over 80 lines; four grew past it this week (`key` 209, `effect_message` 200, `on_overlay_ui` 145, `sound_menu_layer` 109) | Split those four first, by area |

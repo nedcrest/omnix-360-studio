@@ -391,28 +391,6 @@ impl App {
         col.into()
     }
 
-    /// The film's fades (in the Transitions panel).
-    pub(super) fn whole_edit(&self) -> Element<'static, Message> {
-        let fades = &self.edit.fades;
-        let fade = |name: &'static str, v: f64, f: fn(f64) -> EffectMsg, hint: &'static str| {
-            tip(
-                column![
-                    row![text(name).width(Length::Fill), text(if v > 0.0 { format!("{v:.1} s") } else { "none".to_owned() }).size(13)],
-                    slider(0.0..=5.0, v, move |v| Message::Effect(f(v))).step(0.1).on_release(Message::Effect(EffectMsg::Done)),
-                ]
-                .spacing(2),
-                text(hint),
-                tooltip::Position::Left,
-            )
-        };
-        column![
-            fade("Fade in", fades.fade_in, EffectMsg::FadeIn, "From black at the start of the film, the sound with it"),
-            fade("Fade out", fades.fade_out, EffectMsg::FadeOut, "To black at the end of the film, the sound with it"),
-        ]
-        .spacing(8)
-        .into()
-    }
-
     /// Beside the Effects panel while a complex control's knobs are out:
     /// the cut's or item's style's settings, or the vignette's shape, reach and
     /// softness.

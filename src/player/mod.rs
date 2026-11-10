@@ -425,6 +425,10 @@ enum Message {
     TransitionKnobDone,
     TransitionKnobsReset,
     TransitionsTab(transitions_panel::Kind),
+    /// The film's fade in or out from or to black, seconds (a slider's
+    /// drag one undo step, ended by `FilmFadeDone`).
+    FilmFade(crate::model::ops::End, f64),
+    FilmFadeDone,
     /// The Edges tab: a look on the out or in (none: off), its length by
     /// steps, which of the two the settings panel shows.
     EdgeLook(crate::model::ops::End, Option<crate::transition::Look>),
@@ -1198,7 +1202,7 @@ impl App {
     fn handle(&mut self, message: Message) -> Task<Message> {
         // Each area handles its own messages (`on_*` in its module).
         match message {
-            m @ (Message::TransitionsPanel | Message::SelectJoin(_) | Message::TransitionJoin(_) | Message::TransitionLook(_) | Message::TransitionLength(_) | Message::TransitionRemove | Message::TransitionAll | Message::TransitionPreview | Message::TransitionsTab(_)) => self.on_transitions(m),
+            m @ (Message::TransitionsPanel | Message::SelectJoin(_) | Message::TransitionJoin(_) | Message::TransitionLook(_) | Message::TransitionLength(_) | Message::TransitionRemove | Message::TransitionAll | Message::TransitionPreview | Message::TransitionsTab(_) | Message::FilmFade(..) | Message::FilmFadeDone) => self.on_transitions(m),
             m @ (Message::TransitionKnob(..) | Message::TransitionKnobDone | Message::TransitionKnobsReset) => {
                 self.on_knobs(m);
                 Task::none()
@@ -1349,6 +1353,17 @@ pub(super) mod tests {
         app.edit.cuts = vec![crate::project::Cut::new("nowhere/a.mp4".into(), 0.0, 2.0), crate::project::Cut::new("nowhere/b.mp4".into(), 0.0, 2.0)];
         app.edit.settle_ids();
         app
+    }
+
+    #[test]
+    fn the_films_fade_is_one_undo_step_however_long_the_drag() {
+        let mut app = app();
+        for v in [0.5, 1.0, 1.5] {
+            let _ = app.update(Message::FilmFade(crate::model::ops::End::In, v));
+        }
+        let _ = app.update(Message::FilmFadeDone);
+        assert_eq!(app.edit.fades.fade_in, 1.5);
+        assert!(app.edit.undo() && app.edit.fades.fade_in == 0.0 && !app.edit.undo(), "one step");
     }
 
     #[test]

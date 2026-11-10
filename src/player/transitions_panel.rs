@@ -55,6 +55,28 @@ impl Knobs {
 }
 
 impl App {
+    /// The film's fades from and to black, the sound with them.
+    fn film_fades(&self) -> Element<'static, Message> {
+        let fades = &self.edit.fades;
+        let fade = |name: &'static str, v: f64, end: End, hint: &'static str| {
+            tip(
+                column![
+                    row![text(name).width(Length::Fill), text(if v > 0.0 { format!("{v:.1} s") } else { "none".to_owned() }).size(13)],
+                    slider(0.0..=5.0, v, move |v| Message::FilmFade(end, v)).step(0.1).on_release(Message::FilmFadeDone),
+                ]
+                .spacing(2),
+                text(hint),
+                tooltip::Position::Left,
+            )
+        };
+        column![
+            fade("Fade in", fades.fade_in, End::In, "From black at the start of the film, the sound with it"),
+            fade("Fade out", fades.fade_out, End::Out, "To black at the end of the film, the sound with it"),
+        ]
+        .spacing(8)
+        .into()
+    }
+
     /// The panel's messages.
     pub(super) fn on_transitions(&mut self, message: Message) -> Task<Message> {
         match message {
@@ -85,6 +107,11 @@ impl App {
                     return Task::batch([self.update(Message::Scrub(at)), self.update(Message::ScrubDone)]);
                 }
             }
+            Message::FilmFade(end, seconds) => {
+                self.edit.begin();
+                self.op(Op::Sound(crate::model::ops::sound::SoundOp::EditFade { end, seconds }));
+            }
+            Message::FilmFadeDone => self.edit.commit(),
             Message::TransitionLook(look) => {
                 self.last_overlap = look.unwrap_or(self.last_overlap);
                 let Some(cut) = self.join else { return Task::none() };
@@ -236,7 +263,7 @@ impl App {
         }
         // The film's own ends: from and to black (gap 94: they were in the
         // Effects panel, which is a clip's).
-        body = body.push(rule::horizontal(1)).push(text("The film's start and end").size(15)).push(self.whole_edit());
+        body = body.push(rule::horizontal(1)).push(text("The film's start and end").size(15)).push(self.film_fades());
         container(scrollable(body.padding(12))).width(WIDTH).height(Length::Fill).into()
     }
 

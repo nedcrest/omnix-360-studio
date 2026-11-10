@@ -239,7 +239,18 @@ impl App {
                 }
             }
             Message::LaneRemove(track, lane) => {
-                self.op(Op::Item(ItemOp::RemoveLane { track, lane }));
+                if self.op(Op::Item(ItemOp::RemoveLane { track, lane })).is_some() {
+                    // What points at a lane follows the lanes down (audit A5).
+                    let active = &mut self.active_lanes[track_index(track)];
+                    *active = after_removing(*active, lane).unwrap_or(lane.saturating_sub(1));
+                    self.extra_lanes = std::mem::take(&mut self.extra_lanes)
+                        .into_iter()
+                        .filter_map(|(of, p)| match of {
+                            super::automation_ui::LaneOf::Track(t, l) if t == track => after_removing(l, lane).map(|l| (super::automation_ui::LaneOf::Track(t, l), p)),
+                            _ => Some((of, p)),
+                        })
+                        .collect();
+                }
             }
             Message::OverlayToLane(r, at, lane) => {
                 if let Some(item) = self.edit.item(r).map(|it| it.id) {
@@ -326,5 +337,23 @@ pub(super) fn track_index(track: crate::overlay::Track) -> usize {
     match track {
         crate::overlay::Track::Overlay => 0,
         crate::overlay::Track::Text => 1,
+    }
+}
+
+/// Lane `l`'s number once lane `removed` is taken away: one down above it,
+/// none for itself.
+fn after_removing(l: usize, removed: usize) -> Option<usize> {
+    match l.cmp(&removed) {
+        std::cmp::Ordering::Less => Some(l),
+        std::cmp::Ordering::Equal => None,
+        std::cmp::Ordering::Greater => Some(l - 1),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn lanes_above_a_removed_one_move_down() {
+        assert_eq!([0, 1, 2].map(|l| super::after_removing(l, 1)), [Some(0), None, Some(1)]);
     }
 }

@@ -124,92 +124,11 @@ impl App {
     /// Sound tracks and volume points: this area's messages, as `handle` passes them on.
     pub(super) fn on_tracks(&mut self, message: Message) -> Task<Message> {
         match message {
-            Message::AddSound(which) => {
-                // The track's own folder in the project (made if missing:
-                // the project's tree is footage-agent's layout), else the
-                // project's folder.
-                let dir = self.project.as_deref().and_then(bin::root).map(|root| {
-                    let dir = root.join(which.folder());
-                    if std::fs::create_dir_all(&dir).is_ok() { dir } else { root }
-                });
-                let (title, filter) = match which {
-                    SoundTrack::Music => ("Add music", "Music"),
-                    SoundTrack::Sfx | SoundTrack::Sfx2 => ("Add a sound effect", "Sounds"),
-                    SoundTrack::Voice => ("Add a voice-over", "Sounds"),
-                };
-                return Task::perform(
-                    async move {
-                        let mut dialog = rfd::AsyncFileDialog::new().set_title(title).add_filter(filter, &["mp3", "MP3", "flac", "wav", "WAV", "m4a", "aac", "ogg", "opus", "wma"]);
-                        if let Some(dir) = dir {
-                            dialog = dialog.set_directory(dir);
-                        }
-                        dialog.pick_file().await.map(|f| f.path().to_owned())
-                    },
-                    move |picked| Message::SoundPicked(which, picked),
-                );
-            }
-            Message::SoundPicked(_, None) => {}
-            Message::SoundPicked(which, Some(path)) => {
-                // A song after the music already there, whole; a sound
-                // effect or a voice-over at the playhead, where it's wanted.
-                let at = match which {
-                    SoundTrack::Music => None,
-                    SoundTrack::Sfx | SoundTrack::Sfx2 | SoundTrack::Voice => Some(self.position()),
-                };
-                return probe_sound(which, path, at);
-            }
-            Message::SoundProbed(_, path, _, Err(e)) => self.error = Some(format!("Can't add {}: {e}", path.display())),
-            Message::SoundProbed(which, path, at, Ok(len)) => {
-                let at = at.unwrap_or_else(|| self.edit.track(which).end());
-                // An SFX over another lands on SFX 2 (the op's rule): open it.
-                let added = self.op(Op::Clip(ClipOp::Add { track: which, input: path.clone(), at, start: 0.0, end: len }));
-                if let Some((w, i)) = added.and_then(|o| o.made).and_then(|id| self.edit.clip_index(id)) {
-                    if w == SoundTrack::Sfx2 {
-                        self.folds.sfx2 = false;
-                    }
-                    self.selection = Selection::clip_at(&self.edit, w, i);
-                }
-                return self.load_waveform(&path);
-            }
-            Message::Waveform(path, Ok(wave)) => {
-                self.waveforms.insert(path, wave);
-            }
-            Message::Waveform(path, Err(e)) => self.error = Some(format!("Can't read {}: {e}", path.display())),
-            Message::Beats(path, read) => match read {
-                Ok(beats) => {
-                    self.beats.insert(path, Some(beats));
-                }
-                // Left as being read: not tried again over and over.
-                Err(e) => self.error = Some(format!("Can't find the beats of {}: {e}", path.display())),
-            },
-            Message::CutWave(path, even, wave) => {
-                self.cut_waves_reading = self.cut_waves_reading.saturating_sub(1);
-                if let Some(wave) = wave {
-                    (if even { &mut self.even_waves } else { &mut self.waveforms }).insert(path, wave);
-                }
-            }
+            m @ (Message::AddSound(_) | Message::SoundPicked(..) | Message::SoundProbed(..) | Message::Waveform(..) | Message::Beats(..) | Message::CutWave(..)) => return self.on_sound_files(m),
             Message::SelectMusic(which, i) => {
                 self.pick(Selection::clip_at(&self.edit, which, i));
             }
-            Message::PointAdd(own, t, db) => {
-                let Some((_, (start, end))) = self.edit.own_line(own) else { return Task::none() };
-                // The drag that follows moves it: one undo step for both.
-                self.edit.begin();
-                let t = t.clamp(start, end);
-                self.sound_op(own, |sound| SoundOp::AddPoint { sound, t, db });
-                self.select_point_at(own, t);
-            }
-            Message::PointSelect(own, i) => self.select_point(own, i),
-            // A point gone mid-drag (an undo) is no undo step, nor an index panic.
-            Message::PointMove(own, i, ..) if self.edit.own_line(own).is_none_or(|(keys, _)| i >= keys.len()) => {}
-            Message::PointMove(own, i, t, db) => {
-                self.edit.begin();
-                let from = self.edit.own_line(own).map_or(t, |(keys, _)| keys[i].t);
-                self.sound_op(own, |sound| SoundOp::MovePoint { sound, from, t, db });
-                // The selection names the point by its time, which moved;
-                // its place on the line didn't (points keep their order).
-                self.select_point(own, i);
-            }
+            m @ (Message::PointAdd(..) | Message::PointSelect(..) | Message::PointMove(..)) => self.on_points(m),
             // A stale index (the clip gone mid-drag) is no undo step.
             Message::MusicMove(which, i, _, _) if i >= self.edit.track(which).clips.len() => {}
             Message::MusicTrim(which, i, ..) if i >= self.edit.track(which).clips.len() => {}
@@ -238,13 +157,7 @@ impl App {
                 self.sound_op(own, |sound| SoundOp::Fade { sound, end, seconds });
             }
             Message::DuckDepth(db) => self.duck_db = db,
-            Message::Duck if !self.ducking => {
-                self.sound_menu = None;
-                self.ducking = true;
-                // Each voice's waveform (cached, or read once), off the UI thread.
-                let (project, version) = ((*self.edit).clone(), self.edit.version);
-                return Task::perform(blocking(move || crate::duck::find_speech(&project).map_err(|e| format!("{e:#}"))), move |r| Message::Ducked(version, r));
-            }
+            Message::Duck if !self.ducking => return self.find_speech(),
             // The edit changed while the speech was found (a take moved):
             // found again, so the music isn't lowered where speech was.
             Message::Ducked(version, _) if version != self.edit.version => {
@@ -252,20 +165,7 @@ impl App {
                 return self.on_tracks(Message::Duck);
             }
             Message::Duck => {}
-            Message::Ducked(_, result) => {
-                self.ducking = false;
-                match result {
-                    Err(e) => self.error = Some(format!("Can't find the speech: {e}")),
-                    Ok(spans) if spans.is_empty() => self.error = Some("No speech to lower the music under: it's found in cleaned voices and on the Voice lane.".into()),
-                    Ok(speech) => {
-                        // One undo step; the line stays editable point by point.
-                        match self.edit.apply(&Op::Sound(SoundOp::Duck { depth: self.duck_db, speech })) {
-                            Ok(_) => self.selection = self.selection.still_valid(&self.edit),
-                            Err(e) => self.error = Some(e.to_string()),
-                        }
-                    }
-                }
-            }
+            Message::Ducked(_, result) => self.ducked(result),
             Message::SoundLevel(db) => {
                 self.edit.begin();
                 self.op(Op::Sound(SoundOp::TrackLevel { track: None, db }));
@@ -290,5 +190,137 @@ impl App {
             _ => {}
         }
         Task::none()
+    }
+
+    /// A volume point added, selected or dragged on a sound's own line.
+    fn on_points(&mut self, message: Message) {
+        match message {
+            Message::PointAdd(own, t, db) => {
+                let Some((_, (start, end))) = self.edit.own_line(own) else { return };
+                // The drag that follows moves it: one undo step for both.
+                self.edit.begin();
+                let t = t.clamp(start, end);
+                self.sound_op(own, |sound| SoundOp::AddPoint { sound, t, db });
+                self.select_point_at(own, t);
+            }
+            Message::PointSelect(own, i) => self.select_point(own, i),
+            // A point gone mid-drag (an undo) is no undo step, nor an index panic.
+            Message::PointMove(own, i, ..) if self.edit.own_line(own).is_none_or(|(keys, _)| i >= keys.len()) => {}
+            Message::PointMove(own, i, t, db) => {
+                self.edit.begin();
+                let from = self.edit.own_line(own).map_or(t, |(keys, _)| keys[i].t);
+                self.sound_op(own, |sound| SoundOp::MovePoint { sound, from, t, db });
+                // The selection names the point by its time, which moved;
+                // its place on the line didn't (points keep their order).
+                self.select_point(own, i);
+            }
+            _ => {}
+        }
+    }
+
+    /// A sound file asked for, read, its waveform or beats come back.
+    fn on_sound_files(&mut self, message: Message) -> Task<Message> {
+        match message {
+            Message::AddSound(which) => return self.pick_sound_file(which),
+            Message::SoundPicked(_, None) => {}
+            Message::SoundPicked(which, Some(path)) => {
+                // A song after the music already there, whole; a sound
+                // effect or a voice-over at the playhead, where it's wanted.
+                let at = match which {
+                    SoundTrack::Music => None,
+                    SoundTrack::Sfx | SoundTrack::Sfx2 | SoundTrack::Voice => Some(self.position()),
+                };
+                return probe_sound(which, path, at);
+            }
+            Message::SoundProbed(_, path, _, Err(e)) => self.error = Some(format!("Can't add {}: {e}", path.display())),
+            Message::SoundProbed(which, path, at, Ok(len)) => return self.sound_added(which, path, at, len),
+            Message::Waveform(path, Ok(wave)) => {
+                self.waveforms.insert(path, wave);
+            }
+            Message::Waveform(path, Err(e)) => self.error = Some(format!("Can't read {}: {e}", path.display())),
+            Message::Beats(path, read) => match read {
+                Ok(beats) => {
+                    self.beats.insert(path, Some(beats));
+                }
+                // Left as being read: not tried again over and over.
+                Err(e) => self.error = Some(format!("Can't find the beats of {}: {e}", path.display())),
+            },
+            Message::CutWave(path, even, wave) => {
+                self.cut_waves_reading = self.cut_waves_reading.saturating_sub(1);
+                if let Some(wave) = wave {
+                    (if even { &mut self.even_waves } else { &mut self.waveforms }).insert(path, wave);
+                }
+            }
+            _ => {}
+        }
+        Task::none()
+    }
+
+    /// The file dialog for a sound on track `which`, in its folder of the
+    /// project.
+    fn pick_sound_file(&self, which: SoundTrack) -> Task<Message> {
+        // The track's own folder in the project (made if missing:
+        // the project's tree is footage-agent's layout), else the
+        // project's folder.
+        let dir = self.project.as_deref().and_then(bin::root).map(|root| {
+            let dir = root.join(which.folder());
+            if std::fs::create_dir_all(&dir).is_ok() { dir } else { root }
+        });
+        let (title, filter) = match which {
+            SoundTrack::Music => ("Add music", "Music"),
+            SoundTrack::Sfx | SoundTrack::Sfx2 => ("Add a sound effect", "Sounds"),
+            SoundTrack::Voice => ("Add a voice-over", "Sounds"),
+        };
+        Task::perform(
+            async move {
+                let mut dialog = rfd::AsyncFileDialog::new().set_title(title).add_filter(filter, &["mp3", "MP3", "flac", "wav", "WAV", "m4a", "aac", "ogg", "opus", "wma"]);
+                if let Some(dir) = dir {
+                    dialog = dialog.set_directory(dir);
+                }
+                dialog.pick_file().await.map(|f| f.path().to_owned())
+            },
+            move |picked| Message::SoundPicked(which, picked),
+        )
+    }
+
+    /// A sound read, `len` long, added to track `which` at `at` (none:
+    /// after the music there), selected; its waveform read.
+    fn sound_added(&mut self, which: SoundTrack, path: PathBuf, at: Option<f64>, len: f64) -> Task<Message> {
+        let at = at.unwrap_or_else(|| self.edit.track(which).end());
+        // An SFX over another lands on SFX 2 (the op's rule): open it.
+        let added = self.op(Op::Clip(ClipOp::Add { track: which, input: path.clone(), at, start: 0.0, end: len }));
+        if let Some((w, i)) = added.and_then(|o| o.made).and_then(|id| self.edit.clip_index(id)) {
+            if w == SoundTrack::Sfx2 {
+                self.folds.sfx2 = false;
+            }
+            self.selection = Selection::clip_at(&self.edit, w, i);
+        }
+        self.load_waveform(&path)
+    }
+
+    /// Auto-duck: the speech found off the UI thread, each voice's
+    /// waveform cached or read once.
+    fn find_speech(&mut self) -> Task<Message> {
+        self.sound_menu = None;
+        self.ducking = true;
+        // Each voice's waveform (cached, or read once), off the UI thread.
+        let (project, version) = ((*self.edit).clone(), self.edit.version);
+        Task::perform(blocking(move || crate::duck::find_speech(&project).map_err(|e| format!("{e:#}"))), move |r| Message::Ducked(version, r))
+    }
+
+    /// The speech found: the music lowered under it, one undo step.
+    fn ducked(&mut self, result: Result<Vec<(f64, f64)>, String>) {
+        self.ducking = false;
+        match result {
+            Err(e) => self.error = Some(format!("Can't find the speech: {e}")),
+            Ok(spans) if spans.is_empty() => self.error = Some("No speech to lower the music under: it's found in cleaned voices and on the Voice lane.".into()),
+            Ok(speech) => {
+                // One undo step; the line stays editable point by point.
+                match self.edit.apply(&Op::Sound(SoundOp::Duck { depth: self.duck_db, speech })) {
+                    Ok(_) => self.selection = self.selection.still_valid(&self.edit),
+                    Err(e) => self.error = Some(e.to_string()),
+                }
+            }
+        }
     }
 }

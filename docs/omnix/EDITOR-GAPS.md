@@ -1475,6 +1475,14 @@ at the film's end when dragged or trimmed (red, a hint), the ops hold
 them there, `apply` and the mix check warn of what's past it, «Trim to
 the film's end» on a lane's menu. Milestone «Зручний таймлайн».
 
+**Built 2026-11-11, waits for a check.** Decided on the way: a project
+with no pictures has no end (a song laid down first runs free); a
+thing already past the end (longer than the film, or the film cut
+shorter) may move earlier or get shorter, never later or longer — else
+a long song would jump to 0 on any drag; a dragged group stops whole.
+Adding a clip doesn't trim it: the warning, the red mark and the trim
+say it instead. `TrimToEnd` takes away what starts at the end or later.
+
 ### 100. Outside material in Dailix: by link and dragged in — medium (recorded 2026-11-04, «Далі» 2026-11-11)
 
 From footage-agent's `grab.py`, recorded in Dailix's CONTEXT: yt-dlp

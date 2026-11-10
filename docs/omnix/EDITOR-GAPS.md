@@ -109,7 +109,7 @@ done in part stays here until its last card is done.
 | 87 | Style looks (old film, VHS, neo-cyberpunk) for a video, an overlay picture or text; animation presets for text and pictures | [done](EDITOR-GAPS-DONE.md) |
 | 88 | The Osmo 360 II: its calibration and 8K50 decoding | below |
 | 89 | Auto colour: exposure and white balance set from the picture (or by an AI), keyed where the camera misses | [done](EDITOR-GAPS-DONE.md) |
-| 100 | Dailix fetches music, sound effects and video from a link (YouTube and the like) into the project, with its licence noted | below |
+| 100 | Outside material in Dailix: music, sound effects and video by link (YouTube and the like), pictures dragged in or by link and converted, each with its licence noted | below |
 | 99 | Sync lock on a sound track: when the picture's edit gets shorter or longer, the music after that point moves with it | below |
 | 98 | The Effects panel's extended view: its groups as framed blocks side by side, for a wide monitor | [done](EDITOR-GAPS-DONE.md) |
 | 97 | The text and overlay lanes: names, dragging an item between them, hiding one | [done](EDITOR-GAPS-DONE.md) |
@@ -1454,7 +1454,7 @@ every cut op; «Sync lock» on a sound lane's menu, «· sync» on its name;
 it (a trim dragged there and back puts it back). Beats found to the
 sample on the way (gap 13).
 
-### 100. Fetching outside material in Dailix — medium (recorded 2026-11-04, «Далі» 2026-11-11)
+### 100. Outside material in Dailix: by link and dragged in — medium (recorded 2026-11-04, «Далі» 2026-11-11)
 
 From footage-agent's `grab.py`, recorded in Dailix's CONTEXT: yt-dlp
 run as a CLI program (never linked); a URL, an optional span and a
@@ -1462,7 +1462,9 @@ name; music into `02_audio/music`, sound effects into `07_sfx`, video
 into `06_external`; a line in that folder's `LICENSES.md` (where from,
 the licence, the date). In the window: paste a link, pick the kind;
 `dailix fetch` by command. Omnix's bin shows them in its sections.
-Milestone «Матеріал і бін». The user moved it to «Далі» (2026-11-11).
+The user moved it to «Далі» and grew it (2026-11-11): pictures too, dragged
+into the window or by link, converted to what the project keeps (JPEG,
+WebP and the like → PNG); a milestone of its own, «Додаткові матеріали».
 
 ## Format rule for all of these
 
@@ -1491,12 +1493,17 @@ whenever a better grouping shows. `ROADMAP.md` shows the same as cards (field
    from Dailix, LUTs, E/W in the bin (2); ingest in Dailix (74 with 34;
    one's own videos first); the source viewer beside the edit (71a)
    later (user, 2026-11-09: re-cutting is done in Dailix for now).
-4. **Ритм і переходи**: 25a basic transitions with quick placement →
+4. **Додаткові матеріали** (user, 2026-11-11: filling a project with
+   outside material): 100 — music, sound effects and video by link
+   (yt-dlp), pictures dragged in or by link, converted to the format the
+   project keeps (JPEG, WebP → PNG and so on), each with its licence in
+   `LICENSES.md`.
+5. **Ритм і переходи**: 25a basic transitions with quick placement →
    25g a look's settings → 25b edge transitions → 25c templates → 25f
    the lane (all built 2026-11-08) → 25d stingers → 25e 360 looks (with
    footage); 13 beats later (the user, 2026-11-09: re-cutting can be done
    in Dailix, not the most needed now).
-5. **Ефекти, колір і розумний звук** (user, 2026-11-09: next after
+6. **Ефекти, колір і розумний звук** (user, 2026-11-09: next after
    transitions; "effects, colour, animation, texts, pictures, object
    tracking, understanding speech, better sound through Dailix's analysis
    and suggestions from different models, so text/music auto-ducking
@@ -1512,21 +1519,21 @@ whenever a better grouping shows. `ROADMAP.md` shows the same as cards (field
    text and picture animations and overlay kinds (87, 70) → colour tools
    (69 scopes → 14 levels → 68 curves, 71b) → speech and sound in Dailix
    (83 + 77 → 81 → 29 → 16 subtitles, text-based editing) → tracking (37).
-6. **Розуміння матеріалу**: 30 who is in the frame (names from Immich);
+7. **Розуміння матеріалу**: 30 who is in the frame (names from Immich);
    speech (83, 29) moved into 5.
-7. **B-roll і групи**: video on the overlay lane (cheap cutaway) → 4B
+8. **B-roll і групи**: video on the overlay lane (cheap cutaway) → 4B
    group/ungroup + connected clips + 8 multi-select, one format change,
    designed as one.
-8. **Кадрування** (gap 53, user 2026-11-02): framing grown up from gap
+9. **Кадрування** (gap 53, user 2026-11-02): framing grown up from gap
    10's switch: research the best practices first (Insta360 Studio, DJI
    Studio, GoPro, Auto/Smart Reframe), then faces and people (53a, with
    Dailix's 30), framing aids; object tracking (37) moved into 5, angles
    as a multicam (49, now 73e) a card of its own.
-9. **Мультикамерність** (gap 73, user 2026-11-04): 73a the multicam
+10. **Мультикамерність** (gap 73, user 2026-11-04): 73a the multicam
    clip (a file naming its angles, synced by time, then sound) → 73b in
    the bin → 73c cuts of it → 73d the module → 73e 360 angles the same
    way (gap 49 / 53c).
-10. **Швидкість і автоматизація** (gap 31): constant speed per cut with
+11. **Швидкість і автоматизація** (gap 31): constant speed per cut with
    its sound following (atempo), measured for drift → speed ramps →
    automation lanes per value (the user's FL Studio idea). Large and
    careful; after B-roll and groups, since it touches the same time
@@ -1534,19 +1541,19 @@ whenever a better grouping shows. `ROADMAP.md` shows the same as cards (field
    main timeline, 31c the speed editor window, 31d right-click keyframes,
    and the automation idea that 37 object tracking (in milestone 5) keys
    into.
-11. **Якість 360** (from `OPENOSV.md`, mostly needs 360 footage: one public
+12. **Якість 360** (from `OPENOSV.md`, mostly needs 360 footage: one public
    sample now, the user's camera ~2027-02): 17 easing presets and 18 bundled
    LUT any time (small, useful now) → 24 file facts → 19 lens protectors →
    20 mask release → 21 tilt diagnostic → 22 sky seam field (patents first)
    → 23 DJI presets → Osmo 360 II.
-12. **Експорт** (gaps 51, 52; user, 2026-11-02): what the export makes
+13. **Експорт** (gaps 51, 52; user, 2026-11-02): what the export makes
    (4K and 8K, HEVC and AV1, bitrates, frame rates, sound, presets, HDR
    and 360 out) and how fast (the frames' path through the GPU). Before
    the AI edit, which needs it; reordered freely.
-13. **ШІ-монтаж** (gap 28, `AUTO-EDIT.md`): the user's main wish, but put
+14. **ШІ-монтаж** (gap 28, `AUTO-EDIT.md`): the user's main wish, but put
    last on purpose (user, 2026-10-23: "I wouldn't do AI functions yet:
    Omnix doesn't have its full working functionality"). The design stays
    ready. The pieces it needs arrive with the milestones above.
-14. **Інші платформи** (gap 40, user's question 2026-11-01): Mac and
+15. **Інші платформи** (gap 40, user's question 2026-11-01): Mac and
    Windows realistic (upstream builds both), Android a new UI over the
    same core. Not planned; no new Linux-only code without a stub.

@@ -195,15 +195,22 @@ fn describe_lines(p: &Project) -> Vec<String> {
             }
         }
     }
+    out.extend(whole_lines(p));
+    out
+}
+
+/// `describe`'s last lines: the groups, and what runs past the film's end.
+fn whole_lines(p: &Project) -> Vec<String> {
+    let mut out = Vec::new();
     for g in &p.groups {
         let name = if g.name.is_empty() { String::new() } else { format!(" «{}»", g.name) };
         let members: Vec<String> = p.members(g.id).iter().map(|m| format!("#{m}")).collect();
-        println(format!("group #{}{name} {}: {}", g.id, g.colour.hex(), members.join(", ")));
+        out.push(format!("group #{}{name} {}: {}", g.id, g.colour.hex(), members.join(", ")));
     }
     // Gap 101: what an agent should trim (the trim_to_end op).
     let past: Vec<String> = p.past_end().iter().map(|(id, by)| format!("#{id} by {by:.2} s")).collect();
     if let (false, Some(end)) = (past.is_empty(), p.film_end()) {
-        println(format!("past the film's end at {end:.2} s: {}", past.join(", ")));
+        out.push(format!("past the film's end at {end:.2} s: {}", past.join(", ")));
     }
     out
 }

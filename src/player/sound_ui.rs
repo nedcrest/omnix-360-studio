@@ -42,6 +42,8 @@ pub enum Menu {
     ClipSound,
     Point(Own, usize),
     Line(Own),
+    /// A cut that's one of a clip's pieces («This was one clip»).
+    Pieces(usize),
 }
 
 
@@ -371,6 +373,10 @@ impl App {
             // On their own, so a misplaced right-click only opens a menu.
             Menu::Point(own, i) => items.push(sound("Delete point".into(), SoundMsg::DeletePoint(own, i))),
             Menu::Line(own) => items.push(sound("Delete the whole line".into(), SoundMsg::DeleteLine(own))),
+            Menu::Pieces(i) => {
+                items.push(item(format!("Join the pieces back ({})", self.edit.pieces(i).len()), Message::JoinPieces(i)));
+                items.push(item("Info".into(), Message::Info(super::info::Of::Cut(i))));
+            }
         }
         if items.is_empty() {
             return below;
@@ -645,5 +651,17 @@ mod tests {
         let _ = app.update(Message::TrimToEnd(vec![boom]));
         assert_eq!(app.edit.sfx.clips[0].ends(), 4.0);
         assert!(app.edit.past_end().is_empty());
+    }
+
+    #[test]
+    fn a_pieces_menu_joins_them_back() {
+        use super::super::Message;
+        let mut app = app();
+        let a = app.edit.cuts[0].id;
+        app.op(Op::Cut(crate::model::ops::cuts::CutOp::Split { cut: a, t: 1.0 }));
+        assert_eq!(app.edit.pieces(1), [0, 1]);
+        app.sound_menu = Some((Menu::Pieces(1), iced::Point::ORIGIN));
+        let _ = app.update(Message::JoinPieces(1));
+        assert_eq!((app.edit.cuts.len(), app.edit.cuts[0].end, app.sound_menu), (2, 2.0, None));
     }
 }

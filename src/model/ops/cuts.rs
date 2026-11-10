@@ -642,7 +642,7 @@ mod tests {
         assert!(c.edge_out.is_some(), "its out end's look back from the last piece");
         check(&e).unwrap();
         assert!(e.undo() && e.cuts.len() == before && e.pieces(0).len() == 3);
-        assert!(matches!(e.apply(&Op::Cut(CutOp::JoinPieces { cut: e.cuts[1].id })), Ok(_)));
+        assert!(e.apply(&Op::Cut(CutOp::JoinPieces { cut: e.cuts[1].id })).is_ok());
         let b = e.cuts.iter().find(|c| c.input == std::path::Path::new("b.mp4")).unwrap().id;
         assert!(e.apply(&Op::Cut(CutOp::JoinPieces { cut: b })).is_err(), "one piece: nothing to join");
     }

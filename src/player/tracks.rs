@@ -125,6 +125,23 @@ impl App {
 }
 
 impl App {
+    /// The film's end and a clip's pieces, from a menu or a lane's sign
+    /// (gap 101, «This was one clip»): the menu closes.
+    pub(super) fn on_mending(&mut self, message: Message) {
+        self.sound_menu = None;
+        match message {
+            Message::TrimToEnd(things) if !things.is_empty() => {
+                self.op(Op::Project(crate::model::ops::project::ProjectOp::TrimToEnd { things }));
+            }
+            Message::JoinPieces(i) => {
+                if let Some(cut) = self.edit.cuts.get(i).map(|c| c.id) {
+                    self.op(Op::Cut(crate::model::ops::cuts::CutOp::JoinPieces { cut }));
+                }
+            }
+            _ => {}
+        }
+    }
+
     /// Sound tracks and volume points: this area's messages, as `handle` passes them on.
     pub(super) fn on_tracks(&mut self, message: Message) -> Task<Message> {
         match message {
@@ -183,9 +200,6 @@ impl App {
                 self.op(Op::Sound(SoundOp::TrackLevel { track: Some(which), db }));
             }
             Message::LevelDone => self.edit.commit(),
-            Message::TrimToEnd(things) if !things.is_empty() => {
-                self.op(Op::Project(crate::model::ops::project::ProjectOp::TrimToEnd { things }));
-            }
             Message::TrackSync(track, on) => {
                 self.op(Op::Sound(SoundOp::SyncLock { track, on }));
             }

@@ -816,12 +816,26 @@ impl Timeline {
         Some((start + self.t(p.x, b) - from, Self::volume_db(lane, p.y)))
     }
 
+    /// The colour of the line under cut `i` when it's one of a clip's
+    /// pieces («This was one clip»): one per clip; none if it's whole.
+    fn piece_colour(&self, i: usize) -> Option<iced::Color> {
+        const LINES: [[u8; 3]; 5] = [[255, 255, 255], [120, 200, 255], [255, 170, 120], [170, 255, 150], [230, 150, 255]];
+        let origin = self.blocks.get(i)?.cut.origin?;
+        let others = self.blocks.iter().filter(|b| b.cut.origin == Some(origin)).count();
+        let [r, g, b] = LINES[origin as usize % LINES.len()];
+        (others > 1).then(|| iced::Color::from_rgb8(r, g, b).scale_alpha(0.85))
+    }
+
     /// Over the cuts: their frames (selected, grouped), labels, effect
     /// keys, edge looks and crossfades.
     fn draw_cut_marks(&self, frame: &mut Frame, theme: &Theme, bounds: Rectangle) {
         for (i, c) in self.blocks.iter().enumerate() {
             let (l, r) = self.block_x(c, bounds);
             belonging(frame, self, theme, (l, r), (0.0, self.rows.cuts), (c.cut.id, c.cut.group));
+            // Pieces of one clip: a thin line under each, the clip's colour.
+            if let Some(colour) = self.piece_colour(i) {
+                frame.fill(&Path::rectangle(Point::new(l + 2.0, self.rows.cuts - 3.0), Size::new((r - l - 4.0).max(1.0), 2.0)), colour);
+            }
             if Some(i) == self.picked.cut() {
                 selected_block(frame, theme, (l, r), (0.0, self.rows.cuts), (c.cut.start > 1e-3, c.cut.start + c.len() < c.most - 1e-3));
             }
@@ -2560,7 +2574,12 @@ impl Timeline {
             let which = self.sounds[lane].which;
             self.music_at(lane, p.x, bounds).map_or(Menu::Track(which), |i| Menu::Own(Own::Clip(which, i)))
         } else if p.y < self.rows.effects_top {
-            return Some(canvas::Action::publish(Message::Info(super::info::Of::Cut(self.block_at(p.x, bounds)?))).and_capture());
+            // A clip's piece: a menu to join them back; else its info.
+            let i = self.block_at(p.x, bounds)?;
+            if self.piece_colour(i).is_none() {
+                return Some(canvas::Action::publish(Message::Info(super::info::Of::Cut(i))).and_capture());
+            }
+            Menu::Pieces(i)
         } else {
             return None;
         };
@@ -3302,6 +3321,17 @@ mod tests {
         assert_eq!(low.r(0), (Track::Text, 0, 0));
         // A drag's lane by height: above the low lane is the high one.
         assert_eq!((low.lane_at_y(5.0), low.lane_at_y(-5.0), high.lane_at_y(high.height() + 5.0), high.lane_at_y(-50.0)), (0, 1, 0, 1), "none above the top");
+    }
+
+    #[test]
+    fn a_clips_pieces_get_one_lines_colour_and_a_whole_clip_none() {
+        let (mut t, _) = timeline();
+        t.blocks[0].cut.origin = Some(7);
+        assert_eq!(t.piece_colour(0), None, "its other pieces gone: whole again to the eye");
+        t.blocks[2].cut.origin = Some(7);
+        t.blocks[1].cut.origin = Some(8);
+        assert!(t.piece_colour(0).is_some() && t.piece_colour(0) == t.piece_colour(2));
+        assert_eq!(t.piece_colour(1), None);
     }
 
     #[test]

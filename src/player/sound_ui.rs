@@ -16,11 +16,11 @@
 //! The user's design (2026-10-24/28): "so I don't have to fiddle with
 //! levels myself"; a modal with Start and a progress bar.
 
-use super::{App, Message, Selection, blocking};
+use super::{App, Message, Selection, blocking, tip};
 use crate::model::ops::sound::{SoundOp, VOICE_OVER_DIP, normal_gain};
 use crate::model::ops::{Op, SoundRef};
 use crate::project::{Own, SoundTrack};
-use iced::widget::{button, checkbox, column, container, mouse_area, opaque, pin, progress_bar, radio, row, rule, space, stack, text};
+use iced::widget::{button, checkbox, column, container, mouse_area, opaque, pin, progress_bar, radio, row, rule, space, stack, text, tooltip};
 use iced::{Element, Length, Point, Task};
 
 /// What the dialog works on: every cut, one cut's sound or sound clip, or
@@ -340,6 +340,7 @@ impl App {
                 }
                 if which == SoundTrack::Music && !track.clips.is_empty() {
                     items.push(item(format!("Lower the music under speech (−{:.0} dB)", self.duck_db), Message::Duck));
+                    items.extend(beat_entries(which, track.beats));
                 }
             }
             Menu::ClipSound => {
@@ -432,6 +433,31 @@ fn own_entries(p: &crate::project::Project, own: Own, duck_db: f64) -> Option<Ve
     Some(groups.into_iter().filter(|(_, g)| !g.is_empty()).collect())
 }
 
+/// A track's beats in its menu (gap 13): shown or not; shown, how strong
+/// a hit must be to show (a slider, one undo step a drag) and snapping.
+fn beat_entries<'a>(which: SoundTrack, beats: Option<crate::project::Beats>) -> Vec<Element<'a, Message>> {
+    let entry = |label: String, msg: Message| -> Element<'a, Message> { button(text(label).size(13)).style(button::text).width(Length::Fill).padding([5, 10]).on_press(msg).into() };
+    let tick = |on: bool, label: &str| format!("{}{label}", if on { "✓ " } else { "" });
+    let Some(b) = beats else {
+        return vec![entry(tick(false, "Show the beats"), Message::TrackBeats(which, Some(crate::project::Beats { threshold: BEATS_FIRST, snap: false }), true))];
+    };
+    let slider = column![
+        text(format!("Beats at {:.0} % of the strongest and up", b.threshold * 100.0)).size(13),
+        iced::widget::slider(0.0..=1.0, b.threshold, move |threshold| Message::TrackBeats(which, Some(crate::project::Beats { threshold, ..b }), false)).step(0.05).on_release(Message::LevelDone),
+    ]
+    .spacing(4)
+    .padding([5, 10]);
+    vec![
+        entry(tick(true, "Show the beats"), Message::TrackBeats(which, None, true)),
+        tip(slider, text("Lower: every beat; higher: the strong hits only"), tooltip::Position::Right),
+        entry(tick(b.snap, "Snap to the beats"), Message::TrackBeats(which, Some(crate::project::Beats { snap: !b.snap, ..b }), true)),
+    ]
+}
+
+/// A threshold the beats start at once shown: about the main beats of a
+/// song, the off-beats left out (on the songs tried).
+const BEATS_FIRST: f64 = 0.4;
+
 /// A lane's own level in its menu: the name and level, and a slider (the
 /// Audio panel's, one undo step a drag).
 fn lane_level<'a>(name: &str, db: f64, set: impl Fn(f64) -> Message + 'a) -> Element<'a, Message> {
@@ -464,6 +490,25 @@ fn summary(done: usize, total: usize, gains: &[f64], silent: usize, failed: &[St
 mod tests {
     use super::*;
     use super::super::tests::app;
+
+    #[test]
+    fn the_music_lanes_menu_turns_beats_on_sets_them_and_snaps_in_steps() {
+        use super::super::Message;
+        let mut app = app();
+        let on = crate::project::Beats { threshold: BEATS_FIRST, snap: false };
+        let _ = app.update(Message::TrackBeats(SoundTrack::Music, Some(on), true));
+        // A drag of the threshold, then snapping pressed.
+        for threshold in [0.5, 0.6, 0.7] {
+            let _ = app.update(Message::TrackBeats(SoundTrack::Music, Some(crate::project::Beats { threshold, ..on }), false));
+        }
+        let _ = app.update(Message::LevelDone);
+        let _ = app.update(Message::TrackBeats(SoundTrack::Music, Some(crate::project::Beats { threshold: 0.7, snap: true }), true));
+        assert_eq!(app.edit.music.beats, Some(crate::project::Beats { threshold: 0.7, snap: true }));
+        assert!(app.edit.undo() && app.edit.music.beats.is_some_and(|b| !b.snap && b.threshold == 0.7), "snapping its own step");
+        assert!(app.edit.undo() && app.edit.music.beats == Some(on), "the drag one step");
+        assert_eq!(beat_entries(SoundTrack::Music, None).len(), 1, "off: «Show the beats» alone");
+        assert_eq!(beat_entries(SoundTrack::Music, Some(on)).len(), 3);
+    }
 
     #[test]
     fn beats_are_read_once_a_track_shows_them() {

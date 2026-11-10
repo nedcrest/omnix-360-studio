@@ -277,6 +277,13 @@ impl App {
                 self.op(Op::Sound(SoundOp::TrackLevel { track: Some(which), db }));
             }
             Message::LevelDone => self.edit.commit(),
+            Message::TrackBeats(track, beats, press) => {
+                self.edit.begin();
+                self.op(Op::Sound(SoundOp::Beats { track, beats }));
+                if press {
+                    self.edit.commit();
+                }
+            }
             _ => {}
         }
         Task::none()

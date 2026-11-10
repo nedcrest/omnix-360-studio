@@ -383,10 +383,10 @@ mod tests {
         let mut e = crate::model::edit::Edit::new(p);
         let field = |field: &str, value: serde_json::Value| Op::Item(ItemOp::TextField { item: 1, field: field.into(), value });
         e.apply(&field("size", serde_json::json!(0.1))).unwrap();
-        e.apply(&field("content", serde_json::json!("Kos"))).unwrap();
+        e.apply(&field("content", serde_json::json!("Sea"))).unwrap();
         assert!(e.apply(&field("size", serde_json::json!(5))).is_err() && e.apply(&field("weight", serde_json::json!(1))).is_err() && e.apply(&field("bold", serde_json::json!("yes"))).is_err());
         let said = super::describe_lines(&e).join("\n");
-        assert!(said.contains("«Kos»") && said.contains("text: font \"Inter\", size 0.1, colour") && said.contains("bold true"), "{said}");
+        assert!(said.contains("«Sea»") && said.contains("text: font \"Inter\", size 0.1, colour") && said.contains("bold true"), "{said}");
         // Its own time, and a place and an effect for the whole of it.
         e.apply(&Op::Key(crate::model::ops::keys::KeyOp::PlaceValue { item: 1, param: "x".into(), value: 0.25 })).unwrap();
         e.apply(&Op::Key(crate::model::ops::keys::KeyOp::EffectValue { on: crate::model::ops::keys::Graded::Item(1), param: "blur".into(), value: 0.5 })).unwrap();

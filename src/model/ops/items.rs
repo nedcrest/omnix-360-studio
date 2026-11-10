@@ -360,7 +360,7 @@ mod tests {
         assert_eq!(e.overlays[0].items[1].style.as_ref().map(|s| (s.look, s.params.len())), Some((Look::Vhs, 1)));
         assert!(e.apply(&Op::Item(ItemOp::Style { item: last, look: Some(Look::WhipPan) })).is_err(), "a transition isn't a style");
         let words = e.apply(&Op::Item(ItemOp::AddText { text: Text::default(), at: 2.0, len: 3.0, lane: 0 })).unwrap().made.unwrap();
-        let text = Text { content: "Kos".into(), bold: false, ..Text::default() };
+        let text = Text { content: "Sea".into(), bold: false, ..Text::default() };
         let set = Op::Item(ItemOp::SetText { item: words, text: text.clone() });
         e.apply(&set).unwrap();
         e.apply(&set).unwrap();

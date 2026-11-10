@@ -393,7 +393,7 @@ impl Lane {
             item.at += t - item.start;
             item.start = t;
         } else {
-            let latest = (item.start + (hi - item.at)).min(item.start + most);
+            let latest = item.local(hi).min(item.start + most);
             item.end = t.clamp(item.start + min, latest.max(item.start + min));
         }
     }

@@ -74,7 +74,7 @@ impl Player {
         let now: Vec<usize> = (0..track.clips.len()).filter(|&i| t >= track.clips[i].at && t < track.clips[i].ends() && t < video_end).collect();
         for &i in &now {
             let clip = &track.clips[i];
-            let want = clip.start + (t - clip.at);
+            let want = clip.local(t);
             // Playing and in step (a split song's second half plays on in its
             // first half's stream), else made ready for it, else started.
             let in_step = old.iter().position(|o| o.started && o.input == clip.input && o.filter == clip.sound_filter() && (o.from + o.audio.elapsed() - want).abs() < DRIFT);

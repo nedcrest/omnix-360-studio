@@ -248,7 +248,7 @@ impl Music {
         }
         for c in &mut self.clips {
             let edit = |file_t: f64| c.at + file_t - c.start;
-            let mut times: Vec<f64> = [c.start, c.end].into_iter().chain(line.iter().map(|k| c.start + k.t - c.at).filter(|&t| t > c.start && t < c.end)).chain(c.volume.iter().map(|k| k.t)).collect();
+            let mut times: Vec<f64> = [c.start, c.end].into_iter().chain(line.iter().map(|k| c.local(k.t)).filter(|&t| t > c.start && t < c.end)).chain(c.volume.iter().map(|k| k.t)).collect();
             times.sort_by(f64::total_cmp);
             times.dedup_by(|a, b| (*a - *b).abs() < SAME_POINT);
             if times.iter().all(|&t| volume_at(&line, edit(t)).abs() < 1e-9) {
@@ -382,7 +382,7 @@ impl Music {
     /// edit; false if `t` leaves either half shorter than `min`.
     pub fn split(&mut self, i: usize, t: f64, min: f64) -> bool {
         let Some(c) = self.clips.get(i) else { return false };
-        let song = c.start + t - c.at;
+        let song = c.local(t);
         if song - c.start < min || c.end - song < min {
             return false;
         }
@@ -461,6 +461,11 @@ fn overlap_of(a0: f64, a1: f64, b0: f64, b1: f64) -> f64 {
 }
 
 impl MusicClip {
+    /// Its file's time at edit time `t`.
+    pub fn local(&self, t: f64) -> f64 {
+        self.start + t - self.at
+    }
+
     /// Where it ends on the edit.
     pub fn ends(&self) -> f64 {
         self.at + self.end - self.start
@@ -479,7 +484,7 @@ impl MusicClip {
     /// Its own level at edit time `t`, dB: its level and its volume
     /// points (in the file's time), off when muted (`mixdown::own_level`).
     pub fn own_db_at(&self, t: f64) -> f64 {
-        crate::mixdown::own_level(self.sound_db(), volume_at(&self.volume, self.start + t - self.at))
+        crate::mixdown::own_level(self.sound_db(), volume_at(&self.volume, self.local(t)))
     }
 }
 
@@ -1448,6 +1453,12 @@ mod tests {
         assert_eq!(c.sound_fades(), (0.0, 2.0), "the blur keeps the sound, the black takes it");
         c.edge_out.as_mut().unwrap().params.insert("colour".into(), 1.0);
         assert_eq!(c.sound_fades(), (0.0, 0.5), "a fade to white leaves it");
+    }
+
+    #[test]
+    fn a_sound_clips_own_time_runs_from_its_start() {
+        let c = MusicClip { at: 10.0, start: 3.0, end: 9.0, ..MusicClip::default() };
+        assert_eq!((c.local(10.0), c.local(12.5), c.ends()), (3.0, 5.5, 16.0));
     }
 
     #[test]

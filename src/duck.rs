@@ -112,7 +112,7 @@ pub fn run(path: &std::path::Path, depth: f64, ops: bool, output: Option<&std::p
 /// by hand since keep their change.
 pub fn duck_music(music: &mut crate::project::Music, speech: &[(f64, f64)], depth: f64) {
     for c in &mut music.clips {
-        let to_file = |t: f64| c.start + t - c.at;
+        let to_file = |t: f64| c.local(t);
         let reach = ATTACK + RELEASE;
         let on: Vec<(f64, f64)> = speech.iter().filter(|&&(a, b)| b > c.at - reach && a < c.ends() + reach).map(|&(a, b)| (to_file(a), to_file(b))).collect();
         let base = match c.ducked.take() {

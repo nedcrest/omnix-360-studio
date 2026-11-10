@@ -193,7 +193,7 @@ pub(crate) fn sheet_music(project: &project::Project) -> Option<impl Fn(f64) -> 
                 if t < clip.at || t >= clip.ends() {
                     continue;
                 }
-                let peak = wave.peaks.get(((clip.start + t - clip.at) / crate::waveform::WAVE_STEP) as usize).copied().unwrap_or(0.0);
+                let peak = wave.peaks.get((clip.local(t) / crate::waveform::WAVE_STEP) as usize).copied().unwrap_or(0.0);
                 let level = crate::mixdown::clip_gain(track, i, t, end) as f32;
                 loudest = loudest.max(peak * level);
             }

@@ -212,8 +212,7 @@ fn follow(p: &mut Project, item: Id, cut: Id, track: &str, params: &[String], of
     let tr = c.tracks.iter().find(|t| t.name == track).ok_or_else(|| OpError::NotFound(format!("track «{track}» on cut #{cut}")))?;
     let samples: Vec<(f64, crate::automation::TrackSample)> = tr.samples.iter().filter(|s| s.t >= c.start && s.t <= c.end).map(|s| (at + s.t - c.start, *s)).collect();
     let it = p.item_mut(item).ok_or_else(|| OpError::NotFound(format!("item #{item}")))?;
-    let own = |edit: f64| it.start + edit - it.at;
-    let within: Vec<(f64, crate::automation::TrackSample)> = samples.into_iter().map(|(e, s)| (own(e), s)).filter(|(t, _)| *t >= it.start && *t <= it.end).collect();
+    let within: Vec<(f64, crate::automation::TrackSample)> = samples.into_iter().map(|(e, s)| (it.local(e), s)).filter(|(t, _)| *t >= it.start && *t <= it.end).collect();
     for (k, param) in params.iter().enumerate() {
         if !crate::overlay::Place::NAMES.contains(&param.as_str()) {
             return Err(OpError::NotFound(format!("place value {param:?} to follow with")));

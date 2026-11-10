@@ -1830,7 +1830,7 @@ impl canvas::Program<Message> for OverlayLane {
                     OverlayDrag::Key { item, effects, key } => {
                         let o = &self.blocks()[*item];
                         let at = self.0.t(x, bounds).clamp(o.item.at, o.item.at + o.len());
-                        Message::OverlayKeyMove(self.r(*item), *effects, *key, o.item.start + at - o.item.at)
+                        Message::OverlayKeyMove(self.r(*item), *effects, *key, o.item.local(at))
                     }
                     OverlayDrag::Auto(motion, d) => {
                         let message = self.lanes(*motion).drag(d, Point::new(x, position.y - bounds.y), bounds, t.held.shift());

@@ -16,12 +16,12 @@ B1 (the grade's values by name, one `EFFECTS` table), B2 (tracks and
 items one way each) B3 (the timeline's `LaneHead`, one
 `active_lane`) B4 (one `project_root`, `inside_project`, pictures
 through `folder_for`) and B5 (`grade::luma`, `grade::level`,
-`MusicClip::local`, `App::frame_len`) and B6 (the film's fades in the
-Transitions panel's own code) done.
+`MusicClip::local`, `App::frame_len`) B6 (the film's fades in the
+Transitions panel's own code) and B7 (the range, the sound menu,
+Dailix's Make recipe and speech as tested functions) done.
 
 | # | What | Fix |
 |---|---|---|
-| B7 | Rules in UI code without tests: the sound menu's entries, `Message::Range`'s clamp, Dailix's `recipe_to_make`, the pane's speech (a copy of `voice::speech` that swallows errors) | Pure functions with tests in the core |
 | B8 | `cut.flat` written directly by the player and kept in the project (undo can bring back a stale one); `Edit` derefs mutably, so nothing stops direct writes | `flat` out of the project; drop `DerefMut` and let the compiler list the rest |
 | B9 | Long functions: 29 in `player/` over 80 lines; four grew past it this week (`key` 209, `effect_message` 200, `on_overlay_ui` 145, `sound_menu_layer` 109) | Split those four first, by area |
 | B10 | CPU/GPU tests miss most of the grade (highlights, shadows, contrast, temperature, tint, vibrance on colour) and the overlay's blur, reveal and letter order beyond the two cases; `grade.wgsl` hard-codes the knee | One test with every value on a coloured picture; name the knee |

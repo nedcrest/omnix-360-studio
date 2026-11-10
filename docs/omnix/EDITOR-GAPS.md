@@ -1416,6 +1416,19 @@ keys).
 - In the milestone «Ефекти, колір і розумний звук», with the colour
   tools (after 69 scopes).
 
+**Built 2026-11-10, waiting for the check** (`3075b8f`, `2b212f9` and
+the panel's commit): `autocolour.rs` measures a cut over 12 frames
+(GPU-decoded where it can, through its LUT): its darkest and brightest
+(specks aside), its middle, the mean of the pixels nearly grey for their
+brightness; the correction is careful (levels only short of black or
+white; exposure only for a middle outside 0.33–0.58, within a stop;
+white balance only with 1 % grey or more; nothing for a small
+difference). `omnix autocolour [--cuts] [--levels] [-o]` says and sets
+it; the Effects header's «Auto» and Levels' «Auto» (levels alone) run
+it off the UI thread, one undo step. Ordinary video only (a 360 clip
+would need stitching first); 6–7 s a cut. Not yet: keyed where the
+light changes, an agent's or a model's choice.
+
 ### 91. Pictures dragged onto the overlay lane; a «Pictures» folder — idea (user, 2026-11-10)
 
 The user, asking how to put a picture on the overlay lane: there's no

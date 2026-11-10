@@ -109,6 +109,7 @@ done in part stays here until its last card is done.
 | 87 | Style looks (old film, VHS, neo-cyberpunk) for a video, an overlay picture or text; animation presets for text and pictures | [done](EDITOR-GAPS-DONE.md) |
 | 88 | The Osmo 360 II: its calibration and 8K50 decoding | below |
 | 89 | Auto colour: exposure and white balance set from the picture (or by an AI), keyed where the camera misses | [done](EDITOR-GAPS-DONE.md) |
+| 101 | Nothing longer than the film: sound clips, text and pictures stop at its end; a warning for those past it | below |
 | 100 | Outside material in Dailix: music, sound effects and video by link (YouTube and the like), pictures dragged in or by link and converted, each with its licence noted | below |
 | 99 | Sync lock on a sound track: when the picture's edit gets shorter or longer, the music after that point moves with it | below |
 | 98 | The Effects panel's extended view: its groups as framed blocks side by side, for a wide monitor | [done](EDITOR-GAPS-DONE.md) |
@@ -1463,6 +1464,16 @@ every cut op; «Sync lock» on a sound lane's menu, «· sync» on its name;
 `describe` says it. A clip starting right at the point counts as across
 it (a trim dragged there and back puts it back). Beats found to the
 sample on the way (gap 13).
+
+### 101. Nothing longer than the film — medium (user, 2026-11-11)
+
+The user, grouping clips: music, text, an overlay — anything beside the
+pictures — must never run past the film's end (its length at most the
+film's), so no pieces of music, effects or overlays are left hanging
+over other videos. Planned (step 4 of the plan in CONTEXT): they stop
+at the film's end when dragged or trimmed (red, a hint), the ops hold
+them there, `apply` and the mix check warn of what's past it, «Trim to
+the film's end» on a lane's menu. Milestone «Зручний таймлайн».
 
 ### 100. Outside material in Dailix: by link and dragged in — medium (recorded 2026-11-04, «Далі» 2026-11-11)
 

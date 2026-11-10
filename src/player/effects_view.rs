@@ -293,11 +293,11 @@ impl App {
     /// The overlay's place: across, down, size, rotation.
     fn place_sliders(&self, i: crate::overlay::ItemRef, t: f64) -> Element<'static, Message> {
         let place = self.edit.item(i).map_or_else(Place::default, |it| crate::automation::placed(place_at(&it.motion, t), &it.automation, t));
-        let rows = PLACE.iter().enumerate().map(|(p, (name, lo, hi, hint))| {
+        let rows = PLACE.iter().zip(crate::overlay::Place::RANGES).enumerate().map(|(p, ((name, hint), (lo, hi)))| {
             let v = place.values()[p];
             let shown = if p == 3 { format!("{v:+.0}°") } else { format!("{v:.2}") };
             let reset = button(text("↺").size(13)).padding([0, 5]).style(button::text).on_press_maybe((v != Place::default().values()[p]).then_some(Message::Effect(EffectMsg::ResetPlace(p))));
-            let control = slider(*lo..=*hi, v, move |v| Message::Effect(EffectMsg::Place(p, v))).step(if p == 3 { 1.0 } else { 0.01 }).on_release(Message::Effect(EffectMsg::Done));
+            let control = slider(lo..=hi, v, move |v| Message::Effect(EffectMsg::Place(p, v))).step(if p == 3 { 1.0 } else { 0.01 }).on_release(Message::Effect(EffectMsg::Done));
             let lane = self.lane_button(super::automation_ui::Param::Place(p));
             tip(column![row![text(*name).width(Length::Fill), text(shown).size(13), reset, lane].spacing(4).align_y(Alignment::Center), control].spacing(2), text(*hint), tooltip::Position::Left)
         });

@@ -52,7 +52,7 @@ impl Param {
     pub fn range(self) -> (f64, f64) {
         match self {
             Param::Grade(k) => crate::grade::RANGES[k],
-            Param::Place(k) => (super::effects::PLACE[k].1, super::effects::PLACE[k].2),
+            Param::Place(k) => crate::overlay::Place::RANGES[k],
         }
     }
 

@@ -182,12 +182,13 @@ impl Pin {
     }
 }
 
-/// Where an overlay is, as sliders: its name, range and what it does.
-pub(super) const PLACE: [(&str, f64, f64, &str); 4] = [
-    ("Across", 0.0, 1.0, "Where its centre is, from the left edge to the right"),
-    ("Down", 0.0, 1.0, "Where its centre is, from the top to the bottom"),
-    ("Size", 0.05, 2.0, "1 fills the frame as far as its shape allows"),
-    ("Rotation", -180.0, 180.0, "Degrees, clockwise"),
+/// Where an overlay is, as sliders: its name and what it does (its range
+/// `Place::RANGES`).
+pub(super) const PLACE: [(&str, &str); 4] = [
+    ("Across", "Where its centre is, from the left edge to the right"),
+    ("Down", "Where its centre is, from the top to the bottom"),
+    ("Size", "1 fills the frame as far as its shape allows"),
+    ("Rotation", "Degrees, clockwise"),
 ];
 
 /// A selected cut or item: where it starts on the edit, how long, and its

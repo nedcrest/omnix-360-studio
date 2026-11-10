@@ -275,6 +275,9 @@ impl Place {
 
     /// Each of `values` by its name in the project (`KeyOp::PlaceValue`).
     pub const NAMES: [&str; 4] = ["x", "y", "size", "rotation"];
+    /// Each one's range: the centre within the frame, a twentieth of it
+    /// to twice it, degrees either way.
+    pub const RANGES: [(f64, f64); 4] = [(0.0, 1.0), (0.0, 1.0), (0.05, 2.0), (-180.0, 180.0)];
 
     pub fn from_values([x, y, size, rotation]: [f64; 4]) -> Place {
         Place { x, y, size, rotation }

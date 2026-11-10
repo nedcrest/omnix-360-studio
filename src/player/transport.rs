@@ -54,7 +54,7 @@ impl App {
     pub(super) fn follow_stretch(&mut self) -> Task<Message> {
         let Some((stop, start)) = self.stretch_play else { return Task::none() };
         let playing = self.playing();
-        match stretch_step(playing, self.position(), stop, 1.0 / self.fps()) {
+        match stretch_step(playing, self.position(), stop, self.frame_len()) {
             Stretch::Playing => return Task::none(),
             Stretch::LetGo => self.stretch_play = None,
             Stretch::Back => {
@@ -457,6 +457,12 @@ impl App {
 
     pub(super) fn fps(&self) -> f64 {
         self.clip.as_ref().map_or(30.0, |c| c.playback.media.fps)
+    }
+
+    /// One frame's length, seconds, at the playing clip's rate: the step
+    /// of a nudge, a key's least gap, the last frame before a cut's end.
+    pub(super) fn frame_len(&self) -> f64 {
+        1.0 / self.fps()
     }
 
     /// The playhead in edit time.

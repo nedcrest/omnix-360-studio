@@ -187,7 +187,7 @@ impl App {
         let out_end = at + c.crossfade;
         let from = (out_end - before.edge_out.as_ref().map_or(0.0, |e| e.seconds)).min(at);
         let to = (at + c.edge_in.as_ref().map_or(0.0, |e| e.seconds)).max(out_end);
-        let frame = 1.0 / self.fps();
+        let frame = self.frame_len();
         Some(((from - BEFORE * frame).max(0.0), to + AFTER * frame))
     }
 

@@ -345,7 +345,7 @@ impl App {
                 self.follow = true;
                 let Some((cut, from)) = self.edit.cuts.get(i).and_then(|c| Some((c.id, c.keyframes.get(k)?.t))) else { return Task::none() };
                 self.edit.begin();
-                self.op(Op::Key(KeyOp::Retime { line: Line::View(cut), from, t, gap: 1.0 / self.fps(), tolerance: EXACT }));
+                self.op(Op::Key(KeyOp::Retime { line: Line::View(cut), from, t, gap: self.frame_len(), tolerance: EXACT }));
                 let t = self.edit.cuts[i].keyframes[k].t;
                 self.scrub_to(i, t);
             }

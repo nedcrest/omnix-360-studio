@@ -127,7 +127,7 @@ impl App {
                 self.op(Op::Cut(CutOp::Trim { cut, end: if start { End::In } else { End::Out }, t, most: clip_len }));
                 let c = &self.edit.cuts[i];
                 // Show the frame at the edge being trimmed.
-                let t = if start { c.start } else { c.end - 1.0 / self.fps() };
+                let t = if start { c.start } else { c.end - self.frame_len() };
                 self.follow = true;
                 self.scrub_to(i, t);
             }
@@ -146,7 +146,7 @@ impl App {
                     // On the frame trimmed to: the cut's new start, or its
                     // end, where the playhead already was.
                     self.follow = true;
-                    let at = if start { self.edit.cuts[i].start } else { self.edit.cuts[i].end - 1.0 / self.fps() };
+                    let at = if start { self.edit.cuts[i].start } else { self.edit.cuts[i].end - self.frame_len() };
                     self.goto(i, at, false);
                 }
             }

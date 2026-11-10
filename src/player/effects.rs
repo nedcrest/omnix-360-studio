@@ -231,7 +231,7 @@ impl App {
     /// The playhead onto `target`: its nearer end, a frame inside.
     fn go_to(&mut self, target: Target) {
         let t = self.position();
-        let frame = 1.0 / self.fps();
+        let frame = self.frame_len();
         let span = match target {
             Target::Cut(i) => {
                 let c = &self.edit.cuts[i];
@@ -531,7 +531,7 @@ impl App {
                 self.follow = true;
                 let Some((id, from)) = self.edit.cuts.get(cut).and_then(|c| Some((c.id, c.effects.get(key)?.t))) else { return iced::Task::none() };
                 self.edit.begin();
-                let gap = 1.0 / self.fps();
+                let gap = self.frame_len();
                 self.op(Op::Key(KeyOp::Retime { line: Line::Effects(Graded::Cut(id)), from, t, gap, tolerance: EXACT }));
                 if let Some(t) = self.edit.cuts[cut].effects.get(key).map(|k| k.t) {
                     self.scrub_to(cut, t);

@@ -328,7 +328,7 @@ impl App {
     fn seek_to(&mut self, t: f64, note: &'static str) -> Task<Message> {
         self.follow = true;
         // The edit's end shows its last frame.
-        let t = t.clamp(0.0, (self.edit.duration() - 1.0 / self.fps()).max(0.0));
+        let t = t.clamp(0.0, (self.edit.duration() - self.frame_len()).max(0.0));
         if let Some((i, t)) = self.edit.locate(t) {
             let playing = self.playing();
             self.goto(i, t, playing);
@@ -340,7 +340,7 @@ impl App {
     /// cut's edge, the edit's ends. Said by the playhead as what it is
     /// («← marker»).
     pub(super) fn go_to_join(&mut self, dir: f64) -> Task<Message> {
-        match next_stop(&stops(&self.edit), self.aimed(), dir, 1.0 / self.fps()) {
+        match next_stop(&stops(&self.edit), self.aimed(), dir, self.frame_len()) {
             Some((t, stop)) => {
                 let note = match (stop, dir < 0.0) {
                     (Stop::Marker, true) => "← marker",

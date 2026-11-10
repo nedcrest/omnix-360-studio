@@ -286,7 +286,7 @@ impl App {
                 let Some((id, from)) = self.edit.item(r).and_then(|it| Some((it.id, keys(it)?))) else { return Task::none() };
                 self.edit.begin();
                 let line = if effects { Line::Effects(Graded::Item(id)) } else { Line::Motion(id) };
-                self.op(Op::Key(KeyOp::Retime { line, from, t, gap: 1.0 / self.fps(), tolerance: EXACT }));
+                self.op(Op::Key(KeyOp::Retime { line, from, t, gap: self.frame_len(), tolerance: EXACT }));
                 let Some(item) = self.edit.item(r) else { return Task::none() };
                 let local = keys(item);
                 // Follow the mark, so what it holds shows as it moves.

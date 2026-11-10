@@ -1352,6 +1352,11 @@ pub(super) mod tests {
     }
 
     #[test]
+    fn a_frame_is_a_thirtieth_before_a_clip_says_otherwise() {
+        assert!((app().frame_len() - 1.0 / 30.0).abs() < 1e-12);
+    }
+
+    #[test]
     fn the_aspect_is_an_edit_saved_and_undone() {
         let mut app = app();
         app.saved_version = app.edit.version;

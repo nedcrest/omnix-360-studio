@@ -14,12 +14,12 @@ and Dailix).
 
 B1 (the grade's values by name, one `EFFECTS` table), B2 (tracks and
 items one way each) B3 (the timeline's `LaneHead`, one
-`active_lane`) and B4 (one `project_root`, `inside_project`, pictures
-through `folder_for`) done.
+`active_lane`) B4 (one `project_root`, `inside_project`, pictures
+through `folder_for`) and B5 (`grade::luma`, `grade::level`,
+`MusicClip::local`, `App::frame_len`) done.
 
 | # | What | Fix |
 |---|---|---|
-| B5 | Derived values written out: a music clip's own time ×7, the levels' span ×3 (auto colour must match `Grade::apply`), `luma` ×4, `1.0 / fps()` ×11 | Methods: `MusicClip::local`, `Grade::level`, one `luma`, `App::frame_len` |
 | B6 | The film's fades drawn by `effects_view::whole_edit` for the Transitions panel, on `EffectMsg` | Move them into `transitions_panel.rs` |
 | B7 | Rules in UI code without tests: the sound menu's entries, `Message::Range`'s clamp, Dailix's `recipe_to_make`, the pane's speech (a copy of `voice::speech` that swallows errors) | Pure functions with tests in the core |
 | B8 | `cut.flat` written directly by the player and kept in the project (undo can bring back a stale one); `Edit` derefs mutably, so nothing stops direct writes | `flat` out of the project; drop `DerefMut` and let the compiler list the rest |

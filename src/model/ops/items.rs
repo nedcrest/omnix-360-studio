@@ -278,6 +278,7 @@ mod tests {
         e.apply(&Op::Item(ItemOp::LaneName { track: Track::Text, lane: 1, name: Some(" Subtitles ".into()) })).unwrap();
         e.apply(&Op::Item(ItemOp::LaneHidden { track: Track::Text, lane: 0, hidden: true })).unwrap();
         assert_eq!((e.text[1].name.as_deref(), e.shown_lanes().count()), (Some("Subtitles"), 1), "named, the hidden lane not drawn");
+        assert_eq!(e.shown_lane_refs().map(|(t, l, _)| (t, l)).collect::<Vec<_>>(), [(Track::Text, 1)], "nor reached by the handles");
         e.apply(&Op::Item(ItemOp::LaneHidden { track: Track::Text, lane: 0, hidden: false })).unwrap();
         e.apply(&Op::Item(ItemOp::RemoveLane { track: Track::Text, lane: 1 })).unwrap();
         assert!(e.apply(&Op::Item(ItemOp::RemoveLane { track: Track::Text, lane: 0 })).is_err(), "the last stays");

@@ -86,12 +86,13 @@ impl App {
     pub(super) fn overlay_handles(&self) -> handles::Handles {
         let t = self.position();
         let playing = self.playing();
-        let lanes = [crate::overlay::Track::Overlay, crate::overlay::Track::Text].into_iter().flat_map(|track| (0..self.edit.track_lanes(track).len()).map(move |l| (track, l)));
-        let items = lanes
+        let items = self
+            .edit
+            .shown_lane_refs()
             .filter(|_| !playing)
-            .filter_map(|(track, l)| {
+            .filter_map(|(track, l, lane)| {
                 // Bars have no place to drag.
-                let (i, item) = self.edit.lane(track, l)?.at(t).filter(|(_, it)| it.bars.is_none())?;
+                let (i, item) = lane.at(t).filter(|(_, it)| it.bars.is_none())?;
                 let (_, picture) = self.overlay_pictures.get(&item.key())?.clone()?;
                 Some(((track, l, i), crate::overlay::look(item, t).0, picture))
             })

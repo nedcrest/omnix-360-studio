@@ -216,7 +216,14 @@ impl Project {
 
     /// The lanes drawn over the picture: every one but the hidden (gap 97).
     pub fn shown_lanes(&self) -> impl Iterator<Item = &Lane> {
-        self.lanes().filter(|l| !l.hidden)
+        self.shown_lane_refs().map(|(_, _, l)| l)
+    }
+
+    /// The same, each with its track and lane: what the picture draws and
+    /// the view's handles reach alike (audit A2: a hidden lane's items
+    /// could still be dragged).
+    pub fn shown_lane_refs(&self) -> impl Iterator<Item = (Track, usize, &Lane)> {
+        [Track::Overlay, Track::Text].into_iter().flat_map(move |track| self.track_lanes(track).iter().enumerate().map(move |(l, lane)| (track, l, lane))).filter(|(_, _, lane)| !lane.hidden)
     }
 
     /// `track`'s lanes (gap 70), lowest first: a lane is drawn over the

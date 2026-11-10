@@ -351,7 +351,7 @@ impl App {
             listen: self.listen,
             check_marks: self.check_marks(),
             ruler: if self.ruler_large { timeline::RULER_LARGE } else { timeline::RULER_COMPACT },
-            snapping: self.snapping && !self.modifiers.shift(),
+            snapping: self.snapping && !self.modifiers.alt(),
             snap_line: self.snap_line,
             auto_lanes: self.lanes_of(super::automation_ui::LaneOf::Cuts),
             overlay_auto: self.lanes_of_track(crate::overlay::Track::Overlay),

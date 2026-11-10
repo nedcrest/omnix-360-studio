@@ -472,6 +472,9 @@ pub enum Drag {
     #[default]
     None,
     Playhead,
+    /// Shift and a drag on the lanes' empty stretch: the play range marked
+    /// from `from` (gap 92; it was on the ruler).
+    Range { from: f64 },
     Key { cut: usize, key: usize },
     /// Trimming a cut's in (`start`) or out point. The scale is kept from
     /// the press: the timeline rescales as the edit's length changes.
@@ -850,6 +853,13 @@ impl Timeline {
                 selection_frame(frame, &block_path((l, r), 0.0, self.rows.cuts), theme);
             }
         }
+    }
+
+    /// The playhead dragged to `x`, snapping to what's in reach (Alt held
+    /// lets it go free): the lanes' and the ruler's drag alike.
+    fn playhead_to(&self, x: f32, bounds: Rectangle) -> Message {
+        let t = self.t(x, bounds);
+        snapped(self.snap(&[t], self.span / Timeline::width(bounds) as f64, |of| of == Of::Playhead), |by| Message::Scrub(t + by))
     }
 
     /// Edit time `t` on the frame nearest it of the cut there, as the
@@ -1972,7 +1982,7 @@ impl canvas::Program<Message> for OverlayLane {
                         Message::OverlayKeyMove(self.r(*item), *effects, *key, o.item.local(at))
                     }
                     OverlayDrag::Auto(motion, d) => {
-                        let message = self.lanes(*motion).drag(d, Point::new(x, position.y - bounds.y), bounds, t.held.shift());
+                        let message = self.lanes(*motion).drag(d, Point::new(x, position.y - bounds.y), bounds, t.held);
                         return Some(message.map_or_else(canvas::Action::request_redraw, canvas::Action::publish).and_capture());
                     }
                 };
@@ -2551,25 +2561,8 @@ impl Timeline {
                 *drag = Drag::Effect { cut, key };
                 Message::Effect(super::effects::EffectMsg::Jump(cut, t))
             }
-            Hit::CutFade { cut, in_edge } => {
-                let c = &self.blocks[cut];
-                *drag = Drag::Fade { own: Own::Cut(cut), in_edge, x0: p.x, from: if in_edge { c.cut.sound_fade_in } else { c.cut.sound_fade_out }, per_px };
-                Message::Select(cut)
-            }
-            Hit::SoundEdge { cut, start } => {
-                // Its sound alone runs on past the picture or stops
-                // short (a J- or L-cut).
-                let c = &self.blocks[cut];
-                let from = if start { c.cut.start - c.cut.sound_before } else { c.cut.start + c.len() + c.cut.sound_after };
-                *drag = Drag::SoundEdge { cut, start, x0: p.x, from, per_px };
-                Message::Select(cut)
-            }
+            h @ (Hit::CutFade { .. } | Hit::SoundEdge { .. } | Hit::Point { delete: false, .. } | Hit::ClipFade { .. } | Hit::Clip { .. }) => self.press_sound(h, drag, p.x, per_px)?,
             Hit::Point { own, key, delete: true } => Message::Sound(super::sound_ui::SoundMsg::DeletePoint(own, key)),
-            Hit::Point { own, key, .. } => {
-                *drag = Drag::Point { own, key };
-                Message::PointSelect(own, key)
-            }
-            // The clip's level knob.
             Hit::LevelTag(own) => self.tag_press(drag, &mut state.tag_click, own, p)?,
             // A sound point where clicked, dragged on.
             Hit::NewPoint(own) => self.add_point(drag, own, p, bounds)?,
@@ -2589,17 +2582,8 @@ impl Timeline {
                 Message::Select(cut)
             }
             Hit::Join(cut) => Message::SelectJoin(cut),
+            h @ Hit::ZoneEdge { .. } => self.press_zone(h, drag, p.x, per_px)?,
             Hit::Zone { join, side } => Message::TransitionZone(join, side),
-            Hit::ZoneEdge { cut, side: None } => {
-                *drag = Drag::Crossfade { cut, x0: p.x, from: self.blocks[cut].cut.crossfade, per_px };
-                Message::TransitionZone(cut, None)
-            }
-            Hit::ZoneEdge { cut, side: Some(end) } => {
-                let c = &self.blocks[cut].cut;
-                let from = if end == End::In { c.edge_in.as_ref() } else { c.edge_out.as_ref() }.map_or(0.0, |e| e.seconds);
-                *drag = Drag::EdgeLength { cut, end, x0: p.x, from, per_px };
-                Message::TransitionZone(if end == End::Out { cut + 1 } else { cut }, Some(end))
-            }
             Hit::Auto(h) => match self.cut_lanes().press(h, p, state.ctrl) {
                 Ok(d) => {
                     *drag = Drag::Auto(d);
@@ -2611,22 +2595,13 @@ impl Timeline {
                 *drag = Drag::Zone { x0: p.x, x1: p.x };
                 return Some(canvas::Action::request_redraw().and_capture());
             }
-            Hit::ClipFade { lane, clip, in_edge } => {
-                let m = &self.sounds[lane].blocks[clip];
-                *drag = Drag::Fade { own: Own::Clip(self.sounds[lane].which, clip), in_edge, x0: p.x, from: if in_edge { m.clip.fade_in } else { m.clip.fade_out }, per_px };
-                Message::SelectMusic(self.sounds[lane].which, clip)
-            }
-            Hit::Clip { lane, clip, edge } => {
-                let m = &self.sounds[lane].blocks[clip];
-                *drag = match edge {
-                    Some(start) => Drag::MusicTrim { lane, clip, start, x0: p.x, from: if start { m.clip.start } else { m.clip.start + m.len() }, per_px },
-                    None => Drag::MusicMove { lane, clip, x0: p.x, at: m.clip.at, per_px },
-                };
-                Message::SelectMusic(self.sounds[lane].which, clip)
-            }
             Hit::Key { cut, key } => {
                 *drag = Drag::Key { cut, key };
                 Message::KeyJump(cut, key)
+            }
+            Hit::Playhead if state.shift => {
+                *drag = Drag::Range { from: self.t(p.x, bounds) };
+                Message::Range(None)
             }
             Hit::Playhead => {
                 *drag = Drag::Playhead;
@@ -2636,16 +2611,70 @@ impl Timeline {
         Some(canvas::Action::publish(message).and_capture())
     }
 
+    /// A press on a sound: a cut's sound fade or edge, a volume point, a
+    /// sound clip, its fade or edge: the drag it starts, and what it says.
+    fn press_sound(&self, hit: Hit, drag: &mut Drag, x: f32, per_px: f64) -> Option<Message> {
+        Some(match hit {
+            Hit::CutFade { cut, in_edge } => {
+                let c = &self.blocks[cut];
+                *drag = Drag::Fade { own: Own::Cut(cut), in_edge, x0: x, from: if in_edge { c.cut.sound_fade_in } else { c.cut.sound_fade_out }, per_px };
+                Message::Select(cut)
+            }
+            Hit::SoundEdge { cut, start } => {
+                // Its sound alone runs on past the picture or stops
+                // short (a J- or L-cut).
+                let c = &self.blocks[cut];
+                let from = if start { c.cut.start - c.cut.sound_before } else { c.cut.start + c.len() + c.cut.sound_after };
+                *drag = Drag::SoundEdge { cut, start, x0: x, from, per_px };
+                Message::Select(cut)
+            }
+            Hit::Point { own, key, .. } => {
+                *drag = Drag::Point { own, key };
+                Message::PointSelect(own, key)
+            }
+            // The clip's level knob.
+            Hit::ClipFade { lane, clip, in_edge } => {
+                let m = &self.sounds[lane].blocks[clip];
+                *drag = Drag::Fade { own: Own::Clip(self.sounds[lane].which, clip), in_edge, x0: x, from: if in_edge { m.clip.fade_in } else { m.clip.fade_out }, per_px };
+                Message::SelectMusic(self.sounds[lane].which, clip)
+            }
+            Hit::Clip { lane, clip, edge } => {
+                let m = &self.sounds[lane].blocks[clip];
+                *drag = match edge {
+                    Some(start) => Drag::MusicTrim { lane, clip, start, x0: x, from: if start { m.clip.start } else { m.clip.start + m.len() }, per_px },
+                    None => Drag::MusicMove { lane, clip, x0: x, at: m.clip.at, per_px },
+                };
+                Message::SelectMusic(self.sounds[lane].which, clip)
+            }
+            _ => return None,
+        })
+    }
+
+    /// A press on a join's zone edge: its overlap or an edge look's length.
+    fn press_zone(&self, hit: Hit, drag: &mut Drag, x: f32, per_px: f64) -> Option<Message> {
+        Some(match hit {
+            Hit::ZoneEdge { cut, side: None } => {
+                *drag = Drag::Crossfade { cut, x0: x, from: self.blocks[cut].cut.crossfade, per_px };
+                Message::TransitionZone(cut, None)
+            }
+            Hit::ZoneEdge { cut, side: Some(end) } => {
+                let c = &self.blocks[cut].cut;
+                let from = if end == End::In { c.edge_in.as_ref() } else { c.edge_out.as_ref() }.map_or(0.0, |e| e.seconds);
+                *drag = Drag::EdgeLength { cut, end, x0: x, from, per_px };
+                Message::TransitionZone(if end == End::Out { cut + 1 } else { cut }, Some(end))
+            }
+            _ => return None,
+        })
+    }
+
     /// The pointer moved during a drag: what the drag does at `position`.
     fn drag_to(&self, state: &mut State, position: Point, bounds: Rectangle) -> Option<canvas::Action<Message>> {
         let x = position.x - bounds.x;
         let drag = &mut state.drag;
         let message = match drag {
             Drag::None => return None,
-            Drag::Playhead => {
-                let t = self.t(x, bounds);
-                snapped(self.snap(&[t], self.span / Timeline::width(bounds) as f64, |of| of == Of::Playhead), |by| Message::Scrub(t + by))
-            }
+            Drag::Playhead => self.playhead_to(x, bounds),
+            Drag::Range { from } => Message::Range(Some((*from, self.t(x, bounds)))),
             Drag::Key { cut, key } => {
                 let c = &self.blocks[*cut];
                 let edit_t = self.t(x, bounds).clamp(c.from, c.from + c.len());
@@ -2693,7 +2722,7 @@ impl Timeline {
                 return Some(canvas::Action::request_redraw().and_capture());
             }
             Drag::Auto(d) => {
-                let message = self.cut_lanes().drag(d, Point::new(x, position.y - bounds.y), bounds, state.shift);
+                let message = self.cut_lanes().drag(d, Point::new(x, position.y - bounds.y), bounds, self.held);
                 return Some(message.map_or_else(canvas::Action::request_redraw, canvas::Action::publish).and_capture());
             }
             // Inward lengthens: rightwards on a start, leftwards on an end.
@@ -2740,7 +2769,7 @@ fn release(drag: Drag) -> Option<canvas::Action<Message>> {
         Drag::Move { .. } | Drag::Scroll { .. } => Some(canvas::Action::request_redraw().and_capture()),
         // The drawn zone and the lanes' drags are let go in `Marks::update`,
         // which knows the times.
-        Drag::Zone { .. } | Drag::Auto(_) => Some(canvas::Action::request_redraw().and_capture()),
+        Drag::Zone { .. } | Drag::Auto(_) | Drag::Range { .. } => Some(canvas::Action::request_redraw().and_capture()),
         Drag::Playhead | Drag::Key { .. } | Drag::Effect { .. } | Drag::Trim { .. } | Drag::MusicMove { .. } | Drag::MusicTrim { .. } | Drag::Fade { .. } | Drag::Point { .. } | Drag::Level { .. } | Drag::Crossfade { .. } | Drag::SoundEdge { .. } | Drag::EdgeLength { .. } => {
             Some(canvas::Action::publish(Message::ScrubDone).and_capture())
         }
@@ -2989,6 +3018,21 @@ mod tests {
         assert!(near(&t));
         assert!(t.snap(&[7.32], 0.01, |of| of == Of::Sound(li, 0)).is_none(), "the song itself doesn't snap to its own");
         assert!(t.snap(&[7.32], 0.01, |_| false).is_some_and(|(by, _)| (by + 0.02).abs() < 1e-9), "a cut's edge does");
+    }
+
+    #[test]
+    fn shift_on_the_lanes_marks_a_range_and_the_playhead_snaps() {
+        let (t, b) = timeline();
+        // The seek row between the picture's lanes and the sound's.
+        let p = Point::new(t.x(5.0, b), t.rows.seek_top + 1.0);
+        assert!(matches!(t.hit(p, b, false, true), Hit::Playhead), "{:?}", t.hit(p, b, false, true));
+        let mut state = State { shift: true, ..State::default() };
+        let pressed = t.press(&mut state, b, mouse::Cursor::Available(Point::new(b.x + p.x, b.y + p.y)));
+        assert!(pressed.is_some() && matches!(state.drag, Drag::Range { .. }), "Shift: a range");
+        // The playhead dragged next to a cut's start lands on it.
+        let join = t.blocks[1].from;
+        let msg = t.playhead_to(t.x(join, b) + 3.0, b);
+        assert!(matches!(&msg, Message::Snapped(Some(at), _) if (*at - join).abs() < 1e-9), "{msg:?}");
     }
 
     #[test]
@@ -3519,8 +3563,6 @@ fn ruler_label(t: f64, step: f64) -> String {
 #[derive(Default)]
 pub struct RulerState {
     dragging: bool,
-    /// Shift held when pressed: a range marked from here (gap 92).
-    marking: Option<f64>,
 }
 
 /// Markers' colour: apart from the playhead's and the lanes'.
@@ -3751,27 +3793,14 @@ impl canvas::Program<Message> for Ruler {
         use iced::Event::Mouse;
         match event {
             Mouse(mouse::Event::WheelScrolled { delta }) => wheel(delta, &self.0, cursor, bounds),
-            // Shift and a drag: a range marked (gap 92); else the playhead.
-            Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) if self.0.held.shift() => {
-                let p = cursor.position_in(bounds).filter(|p| p.x >= HEAD)?;
-                let t = self.0.t(p.x, bounds);
-                state.marking = Some(t);
-                Some(canvas::Action::publish(Message::Range(None)).and_capture())
-            }
-            Mouse(mouse::Event::CursorMoved { position }) if state.marking.is_some() => {
-                let from = state.marking?;
-                Some(canvas::Action::publish(Message::Range(Some((from, self.0.t(position.x - bounds.x, bounds))))).and_capture())
-            }
-            Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) if state.marking.is_some() => {
-                state.marking = None;
-                Some(canvas::Action::request_redraw().and_capture())
-            }
+            // The playhead alone (the user, 2026-11-11: a range is marked on
+            // the lanes), snapping as on the lanes.
             Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
                 let p = cursor.position_in(bounds).filter(|p| p.x >= HEAD)?;
                 state.dragging = true;
-                Some(canvas::Action::publish(Message::Scrub(self.0.t(p.x, bounds))).and_capture())
+                Some(canvas::Action::publish(self.0.playhead_to(p.x, bounds)).and_capture())
             }
-            Mouse(mouse::Event::CursorMoved { position }) if state.dragging => Some(canvas::Action::publish(Message::Scrub(self.0.t(position.x - bounds.x, bounds))).and_capture()),
+            Mouse(mouse::Event::CursorMoved { position }) if state.dragging => Some(canvas::Action::publish(self.0.playhead_to(position.x - bounds.x, bounds)).and_capture()),
             Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) if state.dragging => {
                 state.dragging = false;
                 Some(canvas::Action::publish(Message::ScrubDone).and_capture())

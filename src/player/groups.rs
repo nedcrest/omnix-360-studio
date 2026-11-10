@@ -121,6 +121,15 @@ mod tests {
     use super::*;
 
     #[test]
+    fn alt_frees_a_drag_from_snapping_and_shift_no_longer_does() {
+        let mut app = app();
+        app.modifiers = iced::keyboard::Modifiers::SHIFT;
+        assert!(app.timeline_data().snapping);
+        app.modifiers = iced::keyboard::Modifiers::ALT;
+        assert!(!app.timeline_data().snapping);
+    }
+
+    #[test]
     fn the_timeline_gets_the_groups_colours_and_the_clips_beside_the_first() {
         let mut app = app();
         let (a, b) = (app.edit.cuts[0].id, app.edit.cuts[1].id);

@@ -241,12 +241,14 @@ impl Lanes<'_> {
     }
 
     /// A drag moved to `p`: the message it sends, its state kept on the
-    /// clip as the clip moves. `shift`: a value tag's finer steps.
-    pub(super) fn drag(&self, drag: &mut LaneDrag, p: Point, b: Rectangle, shift: bool) -> Option<Message> {
+    /// clip as the clip moves. Shift held: a value tag's finer steps; Alt:
+    /// free of snapping.
+    pub(super) fn drag(&self, drag: &mut LaneDrag, p: Point, b: Rectangle, held: iced::keyboard::Modifiers) -> Option<Message> {
+        let (fine, free) = (held.shift(), held.alt());
         match drag {
             LaneDrag::New { owner, x0, x1, .. } => {
                 let o = &self.owners[*owner];
-                let snap = |x: f32| self.x(o, self.snapped(o, self.own_time(o, x, b), b, shift), b);
+                let snap = |x: f32| self.x(o, self.snapped(o, self.own_time(o, x, b), b, free), b);
                 (*x0, *x1) = (snap(*x0), snap(p.x));
                 None
             }
@@ -255,7 +257,7 @@ impl Lanes<'_> {
             LaneDrag::Value { lane, owner, t, y0, from } => {
                 let param = self.params[*lane];
                 let (lo, hi) = param.range();
-                let (per_px, step) = if shift { ((hi - lo) / 1200.0, (hi - lo) / 1000.0) } else { ((hi - lo) / 120.0, (hi - lo) / 200.0) };
+                let (per_px, step) = if fine { ((hi - lo) / 1200.0, (hi - lo) / 1000.0) } else { ((hi - lo) / 120.0, (hi - lo) / 200.0) };
                 let v = (*from + ((*y0 - p.y) as f64 * per_px / step).round() * step).clamp(lo, hi);
                 Some(Message::Auto(AutoMsg::Point { on: self.owners[*owner].on, param, from: Some(*t), t: *t, v }))
             }
@@ -273,7 +275,7 @@ impl Lanes<'_> {
                 let clip = self.clip_at(*lane, *owner, *at)?;
                 let o = &self.owners[*owner];
                 let shortest = crate::model::ops::auto::SHORTEST;
-                let t = self.snapped(o, self.own_time(o, p.x, b), b, shift);
+                let t = self.snapped(o, self.own_time(o, p.x, b), b, free);
                 if let Some(t) = crate::automation::trim_to(*start, (clip.from, clip.to), (o.start, o.start + o.len), shortest, t) {
                     *to = t;
                 }
@@ -289,8 +291,8 @@ impl Lanes<'_> {
                 let len = clip.to - clip.from;
                 let from = clip.from + self.own_time(o, p.x, b) - self.own_time(o, *x0, b);
                 // Its start onto an edge, else its end.
-                let start = self.snapped(o, from, b, shift);
-                let from = if start != from { start } else { self.snapped(o, from + len, b, shift) - len };
+                let start = self.snapped(o, from, b, free);
+                let from = if start != from { start } else { self.snapped(o, from + len, b, free) - len };
                 let from = from.clamp(o.start, (o.start + o.len - len).max(o.start));
                 let message = AutoMsg::Move { on: o.on, param: self.params[*lane], at: *at, from };
                 *at += from - clip.from;

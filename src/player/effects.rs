@@ -337,25 +337,7 @@ impl App {
             EffectMsg::Toggle => self.toggle_side(super::Side::Effects),
             EffectMsg::Wide(on) => self.effects_wide = on,
             EffectMsg::AutoColour(levels) => return self.auto_colour(levels),
-            EffectMsg::AutoColoured(cut, opened, levels, found) => {
-                self.auto_measuring = None;
-                // Of a project closed meanwhile: its cut's id may be another's here.
-                if opened != self.edit.opened() {
-                    return iced::Task::none();
-                }
-                match found {
-                    Ok(c) => {
-                        // A drag under way is a step of its own, closed first.
-                        self.edit.commit();
-                        self.edit.begin();
-                        for op in crate::autocolour::ops(cut, &c, levels) {
-                            self.op(op);
-                        }
-                        self.edit.commit();
-                    }
-                    Err(e) => self.error = Some(e),
-                }
-            }
+            EffectMsg::AutoColoured(cut, opened, levels, found) => self.auto_coloured(cut, opened, levels, found),
             EffectMsg::GoToSelected => {
                 if let Focus::Apart(target) = self.effect_focus() {
                     self.go_to(target);
@@ -375,25 +357,9 @@ impl App {
                 self.edit.begin();
                 self.set_place(starting, p, v);
             }
-            EffectMsg::Drag(to) => {
-                let starting = !self.edit.changing();
-                self.edit.begin();
-                // Each value it changed, for the whole item.
-                let Some((Target::Overlay(i), t)) = self.pinned(starting) else { return iced::Task::none() };
-                let Some(it) = self.edit.item(i) else { return iced::Task::none() };
-                let (was, now) = (crate::automation::placed(place_at(&it.motion, t), &it.automation, t).values(), to.values());
-                for p in (0..4).filter(|&p| was[p] != now[p]) {
-                    self.set_place(false, p, now[p]);
-                }
-            }
+            EffectMsg::Drag(to) => self.drag_place(to),
             EffectMsg::Done => self.edit.commit(),
-            EffectMsg::Fold(name) => {
-                if self.effects_folded.contains(&name) {
-                    self.effects_folded.retain(|n| *n != name);
-                } else {
-                    self.effects_folded.push(name);
-                }
-            }
+            EffectMsg::Fold(name) => self.toggle_fold(name),
             EffectMsg::ResetGroup(g) => self.reset_group(g),
             EffectMsg::Animate(edge, anim) => self.animate(edge, anim, None),
             EffectMsg::Kind(kind) => self.dress(kind),
@@ -402,92 +368,21 @@ impl App {
                 self.animate(edge, None, Some(seconds));
             }
             EffectMsg::Extra(extra) => self.effect_extra = extra,
-            EffectMsg::AutoLane(p) => {
-                use super::automation_ui::LaneOf;
-                let Some(of) = self.lane_owner() else { return iced::Task::none() };
-                if self.extra_lanes.contains(&(of, p)) {
-                    self.extra_lanes.retain(|&q| q != (of, p));
-                } else {
-                    self.extra_lanes.push((of, p));
-                    // Its row opened: a place value's is the Motion row.
-                    let motion = matches!(p, super::automation_ui::Param::Place(_));
-                    *match (of, motion) {
-                        (LaneOf::Cuts, _) => &mut self.folds.effects,
-                        (LaneOf::Track(crate::overlay::Track::Overlay, _), false) => &mut self.folds.overlay_effects,
-                        (LaneOf::Track(crate::overlay::Track::Overlay, _), true) => &mut self.folds.overlay_motion,
-                        (LaneOf::Track(crate::overlay::Track::Text, _), false) => &mut self.folds.text_effects,
-                        (LaneOf::Track(crate::overlay::Track::Text, _), true) => &mut self.folds.text_motion,
-                    } = false;
-                }
-            }
-            EffectMsg::Bars(bars, press) => {
-                let Some(item) = self.selection.item(&self.edit).and_then(|i| self.edit.item(i)).map(|it| it.id) else { return iced::Task::none() };
-                self.edit.begin();
-                self.op(Op::Item(crate::model::ops::items::ItemOp::SetBars { item, bars }));
-                if press {
-                    self.edit.commit();
-                }
-            }
+            EffectMsg::AutoLane(p) => self.toggle_auto_lane(p),
+            EffectMsg::Bars(bars, press) => self.set_bars(bars, press),
             m @ (EffectMsg::Style(_) | EffectMsg::StyleKnob(..) | EffectMsg::StyleReset) => {
                 let Some((target, _)) = target else { return iced::Task::none() };
                 self.on_style(target, m);
             }
             EffectMsg::Lut(choice) => {
-                let Some((Target::Cut(i), _)) = target else { return iced::Task::none() };
-                let cut = self.edit.cuts[i].id;
-                self.op(crate::model::ops::Op::Cut(crate::model::ops::cuts::CutOp::Lut { cut, lut: choice.name() }));
-                // Its file read here, in the player: the core only names it.
-                self.mark_flat();
-            }
-            EffectMsg::TextEdit(action) => {
-                let edits = action.is_edit();
-                self.text_content.perform(action);
-                let words = self.text_content.text().trim_end_matches('\n').to_owned();
-                if edits && let Some((item, text)) = self.selected_text().filter(|(_, t)| t.content != words) {
-                    // A run of typing is one undo step, until something else is done.
-                    self.edit.begin();
-                    self.op(Op::Item(ItemOp::SetText { item, text: Text { content: words, ..text } }));
+                if let Some((Target::Cut(i), _)) = target {
+                    self.set_lut(i, choice);
                 }
             }
-            EffectMsg::Text(change) => {
-                let Some((item, mut text)) = self.selected_text() else { return iced::Task::none() };
-                // Sliders are one undo step a drag, the rest one a click.
-                if matches!(change, TextChange::Size(_) | TextChange::OutlineWidth(_)) {
-                    self.edit.begin();
-                }
-                match change {
-                    TextChange::Font(f) => text.font = f,
-                    TextChange::Size(v) => text.size = v,
-                    TextChange::Colour(c) => text.colour = c,
-                    TextChange::Bold(b) => text.bold = b,
-                    TextChange::Align(a) => text.align = a,
-                    TextChange::Outline(on) => text.outline = on.then_some(Outline { colour: Colour([0, 0, 0]), width: 0.08 }),
-                    TextChange::OutlineWidth(w) => {
-                        if let Some(o) = &mut text.outline {
-                            o.width = w;
-                        }
-                    }
-                    TextChange::OutlineColour(c) => {
-                        if let Some(o) = &mut text.outline {
-                            o.colour = c;
-                        }
-                    }
-                    TextChange::Shadow(on) => text.shadow = on,
-                }
-                self.op(Op::Item(ItemOp::SetText { item, text }));
-            }
-            EffectMsg::Reset(Some(p)) => {
-                self.edit.begin();
-                self.unautomate(vec![crate::grade::NAMES[p].to_owned()]);
-                self.set_effect(true, p, crate::grade::NEUTRAL[p]);
-                self.edit.commit();
-            }
-            EffectMsg::ResetPlace(p) => {
-                self.edit.begin();
-                self.unautomate(vec![Place::NAMES[p].to_owned()]);
-                self.set_place(true, p, Place::default().values()[p]);
-                self.edit.commit();
-            }
+            EffectMsg::TextEdit(action) => self.text_typed(action),
+            EffectMsg::Text(change) => self.text_changed(change),
+            EffectMsg::Reset(Some(p)) => self.reset_value(super::automation_ui::Param::Grade(p)),
+            EffectMsg::ResetPlace(p) => self.reset_value(super::automation_ui::Param::Place(p)),
             EffectMsg::Reset(None) => {
                 let Some((target, _)) = target else { return iced::Task::none() };
                 let on = self.graded(target);
@@ -498,34 +393,185 @@ impl App {
                 let cut = self.edit.cuts[self.current].id;
                 self.op(Op::Key(KeyOp::LookToAll { cut, t }));
             }
-            EffectMsg::PickWhite => {
-                if self.picking.take().is_none() && self.clip.is_some() {
-                    self.with_playback(super::Playback::pause);
-                    self.picking = Some(None);
-                    self.picking_white = true;
-                    self.save_status = Some("Draw a box over something that should be grey or white (Esc cancels)".to_owned());
-                } else {
-                    self.picking_white = false;
-                    self.save_status = None;
-                }
-            }
+            EffectMsg::PickWhite => self.pick_white(),
             EffectMsg::Jump(cut, t) => {
                 self.follow = true;
                 self.selection = Selection::cut_at(&self.edit, cut);
                 self.goto(cut, t, false);
             }
-            EffectMsg::KeyMove(cut, key, t) => {
-                self.follow = true;
-                let Some((id, from)) = self.edit.cuts.get(cut).and_then(|c| Some((c.id, c.effects.get(key)?.t))) else { return iced::Task::none() };
-                self.edit.begin();
-                let gap = self.frame_len();
-                self.op(Op::Key(KeyOp::Retime { line: Line::Effects(Graded::Cut(id)), from, t, gap, tolerance: EXACT }));
-                if let Some(t) = self.edit.cuts[cut].effects.get(key).map(|k| k.t) {
-                    self.scrub_to(cut, t);
-                }
-            }
+            EffectMsg::KeyMove(cut, key, t) => self.effect_key_move(cut, key, t),
         }
         iced::Task::none()
+    }
+
+    /// Group `name` folded or opened.
+    fn toggle_fold(&mut self, name: String) {
+        if self.effects_folded.contains(&name) {
+            self.effects_folded.retain(|n| *n != name);
+        } else {
+            self.effects_folded.push(name);
+        }
+    }
+
+    /// The selected item's bars set: a slider's drag one undo step, a
+    /// press one of its own.
+    fn set_bars(&mut self, bars: crate::overlay::Bars, press: bool) {
+        let Some(item) = self.selection.item(&self.edit).and_then(|i| self.edit.item(i)).map(|it| it.id) else { return };
+        self.edit.begin();
+        self.op(Op::Item(crate::model::ops::items::ItemOp::SetBars { item, bars }));
+        if press {
+            self.edit.commit();
+        }
+    }
+
+    /// Cut `i`'s LUT, its file read here, in the player (the core only
+    /// names it).
+    fn set_lut(&mut self, i: usize, choice: LutChoice) {
+        let cut = self.edit.cuts[i].id;
+        self.op(Op::Cut(crate::model::ops::cuts::CutOp::Lut { cut, lut: choice.name() }));
+        self.mark_flat();
+    }
+
+    /// One value (↺) back to its default here, its automation gone: one
+    /// undo step.
+    fn reset_value(&mut self, p: super::automation_ui::Param) {
+        use super::automation_ui::Param;
+        self.edit.begin();
+        match p {
+            Param::Grade(k) => {
+                self.unautomate(vec![crate::grade::NAMES[k].to_owned()]);
+                self.set_effect(true, k, crate::grade::NEUTRAL[k]);
+            }
+            Param::Place(k) => {
+                self.unautomate(vec![Place::NAMES[k].to_owned()]);
+                self.set_place(true, k, Place::default().values()[k]);
+            }
+        }
+        self.edit.commit();
+    }
+
+    /// Auto colour's result: its values as one undo step of their own, on the
+    /// project it was measured for alone (audit A14).
+    fn auto_coloured(&mut self, cut: crate::project::Id, opened: u64, levels: bool, found: Result<crate::autocolour::Correction, String>) {
+        self.auto_measuring = None;
+        // Of a project closed meanwhile: its cut's id may be another's here.
+        if opened != self.edit.opened() {
+            return;
+        }
+        match found {
+            Ok(c) => {
+                // A drag under way is a step of its own, closed first.
+                self.edit.commit();
+                self.edit.begin();
+                for op in crate::autocolour::ops(cut, &c, levels) {
+                    self.op(op);
+                }
+                self.edit.commit();
+            }
+            Err(e) => self.error = Some(e),
+        }
+    }
+
+    /// The selected overlay dragged on the view to `to`: each value it
+    /// changed, for the whole item.
+    fn drag_place(&mut self, to: Place) {
+        let starting = !self.edit.changing();
+        self.edit.begin();
+        // Each value it changed, for the whole item.
+        let Some((Target::Overlay(i), t)) = self.pinned(starting) else { return };
+        let Some(it) = self.edit.item(i) else { return };
+        let (was, now) = (crate::automation::placed(place_at(&it.motion, t), &it.automation, t).values(), to.values());
+        for p in (0..4).filter(|&p| was[p] != now[p]) {
+            self.set_place(false, p, now[p]);
+        }
+    }
+
+    /// Value `p`'s automation lane shown or hidden; shown, its row opened.
+    fn toggle_auto_lane(&mut self, p: super::automation_ui::Param) {
+        use super::automation_ui::LaneOf;
+        let Some(of) = self.lane_owner() else { return };
+        if self.extra_lanes.contains(&(of, p)) {
+            self.extra_lanes.retain(|&q| q != (of, p));
+        } else {
+            self.extra_lanes.push((of, p));
+            // Its row opened: a place value's is the Motion row.
+            let motion = matches!(p, super::automation_ui::Param::Place(_));
+            *match (of, motion) {
+                (LaneOf::Cuts, _) => &mut self.folds.effects,
+                (LaneOf::Track(crate::overlay::Track::Overlay, _), false) => &mut self.folds.overlay_effects,
+                (LaneOf::Track(crate::overlay::Track::Overlay, _), true) => &mut self.folds.overlay_motion,
+                (LaneOf::Track(crate::overlay::Track::Text, _), false) => &mut self.folds.text_effects,
+                (LaneOf::Track(crate::overlay::Track::Text, _), true) => &mut self.folds.text_motion,
+            } = false;
+        }
+    }
+
+    /// The selected text's words typed: a run of typing one undo step.
+    fn text_typed(&mut self, action: iced::widget::text_editor::Action) {
+        let edits = action.is_edit();
+        self.text_content.perform(action);
+        let words = self.text_content.text().trim_end_matches('\n').to_owned();
+        if edits && let Some((item, text)) = self.selected_text().filter(|(_, t)| t.content != words) {
+            // A run of typing is one undo step, until something else is done.
+            self.edit.begin();
+            self.op(Op::Item(ItemOp::SetText { item, text: Text { content: words, ..text } }));
+        }
+    }
+
+    /// The selected text's look changed: a slider's drag one undo step, the
+    /// rest one a click.
+    fn text_changed(&mut self, change: TextChange) {
+        let Some((item, mut text)) = self.selected_text() else { return };
+        // Sliders are one undo step a drag, the rest one a click.
+        if matches!(change, TextChange::Size(_) | TextChange::OutlineWidth(_)) {
+            self.edit.begin();
+        }
+        match change {
+            TextChange::Font(f) => text.font = f,
+            TextChange::Size(v) => text.size = v,
+            TextChange::Colour(c) => text.colour = c,
+            TextChange::Bold(b) => text.bold = b,
+            TextChange::Align(a) => text.align = a,
+            TextChange::Outline(on) => text.outline = on.then_some(Outline { colour: Colour([0, 0, 0]), width: 0.08 }),
+            TextChange::OutlineWidth(w) => {
+                if let Some(o) = &mut text.outline {
+                    o.width = w;
+                }
+            }
+            TextChange::OutlineColour(c) => {
+                if let Some(o) = &mut text.outline {
+                    o.colour = c;
+                }
+            }
+            TextChange::Shadow(on) => text.shadow = on,
+        }
+        self.op(Op::Item(ItemOp::SetText { item, text }));
+    }
+
+    /// Draw a box over something grey or white, or stop.
+    fn pick_white(&mut self) {
+        if self.picking.take().is_none() && self.clip.is_some() {
+            self.with_playback(super::Playback::pause);
+            self.picking = Some(None);
+            self.picking_white = true;
+            self.save_status = Some("Draw a box over something that should be grey or white (Esc cancels)".to_owned());
+        } else {
+            self.picking_white = false;
+            self.save_status = None;
+        }
+    }
+
+    /// Cut `cut`'s effect key `key` moved to clip time `t`, kept a frame clear
+    /// of its neighbours, the playhead with it.
+    fn effect_key_move(&mut self, cut: usize, key: usize, t: f64) {
+        self.follow = true;
+        let Some((id, from)) = self.edit.cuts.get(cut).and_then(|c| Some((c.id, c.effects.get(key)?.t))) else { return };
+        self.edit.begin();
+        let gap = self.frame_len();
+        self.op(Op::Key(KeyOp::Retime { line: Line::Effects(Graded::Cut(id)), from, t, gap, tolerance: EXACT }));
+        if let Some(t) = self.edit.cuts[cut].effects.get(key).map(|k| k.t) {
+            self.scrub_to(cut, t);
+        }
     }
 
     /// The selected item's id and text, if it's a text item.
@@ -768,6 +814,25 @@ mod tests {
         assert!(focus(14.0, Some(item), None) == Focus::On(item.target, 5.0), "its end counts");
         assert!(focus(15.0, Some(item), Some((3, 5.0))) == Focus::Apart(item.target), "off it: not the cut under the playhead");
         assert!(focus(15.0, None, Some((3, 5.0))) == Focus::On(Target::Cut(3), 5.0), "nothing selected: the playing cut");
+    }
+
+    #[test]
+    fn a_value_reset_goes_back_to_its_default_in_one_step() {
+        let mut app = super::super::tests::app();
+        let item = crate::overlay::Item { id: 0, input: "".into(), text: Some(Default::default()), at: 0.0, start: 0.0, end: 3.0, motion: Vec::new(), effects: Vec::new(), bars: None, automation: Vec::new(), kind: None, style: None };
+        app.edit.text.push(crate::overlay::Lane { items: vec![item], ..Default::default() });
+        app.edit.settle_ids();
+        let id = app.edit.text[0].items[0].id;
+        app.selection = Selection::Item(id);
+        let _ = app.effect_message(EffectMsg::Set(crate::grade::BLUR, 0.6));
+        let _ = app.effect_message(EffectMsg::Place(0, 0.2));
+        let _ = app.effect_message(EffectMsg::Done);
+        let it = |app: &App| app.edit.text[0].items[0].clone();
+        assert!(crate::grade::grade_at(&it(&app).effects, 1.0).blur == 0.6 && it(&app).motion[0].place.x == 0.2, "{:?}", it(&app));
+        let _ = app.effect_message(EffectMsg::Reset(Some(crate::grade::BLUR)));
+        let _ = app.effect_message(EffectMsg::ResetPlace(0));
+        assert!(crate::grade::grade_at(&it(&app).effects, 1.0).blur == 0.0 && it(&app).motion[0].place.x == 0.5);
+        assert!(app.edit.undo() && it(&app).motion[0].place.x == 0.2, "each reset its own step");
     }
 
     #[test]

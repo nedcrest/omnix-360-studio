@@ -128,7 +128,7 @@ pub fn measure_cut(cut: &crate::project::Cut) -> Result<Measure> {
             Err(_) => continue,
         };
         let strength = crate::grade::grade_at(&cut.effects, t).lut.clamp(0.0, 1.0);
-        pixels.extend(frame.rgb.chunks_exact(3).map(|p| {
+        pixels.extend(frame.rgb.as_chunks::<3>().0.iter().map(|p| {
             let c = [p[0], p[1], p[2]].map(|v| v as f64 / 255.0);
             lut.as_ref().map_or(c, |l| l.blend(c, strength))
         }));

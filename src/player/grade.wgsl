@@ -1,10 +1,14 @@
 // Shared by the stitch (shader.wgsl) and the overlays (overlay.wgsl), each
 // source having this appended: `Grade::uniforms`' rows in g0..g4.
 
+// Where brightening light starts to roll off: `grade::KNEE`, the same
+// number (a test holds the two together).
+const KNEE: f32 = 0.4;
+
 // Mirrors `grade::shoulder`: brightened light rolled off above the knee
 // so the source's white lands on white instead of clipping early.
 fn shoulder(x: vec3f, gain: vec3f) -> vec3f {
-    let k = 0.4;
+    let k = KNEE;
     let a = 1.0 / (1.0 - k) - 1.0 / max(gain - vec3f(k), vec3f(1e-6));
     let t = x - vec3f(k);
     let rolled = vec3f(k) + t / (vec3f(1.0) + a * t);

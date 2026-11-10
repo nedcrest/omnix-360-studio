@@ -505,6 +505,49 @@ mod tests {
         }
     }
 
+    /// A 10-bit video-range Y′CbCr code as the shader decodes it: BT.709.
+    fn bt709(y: u16, cb: u16, cr: u16) -> [f64; 3] {
+        let [yy, u, v] = [(y as f64 - 64.0) / 876.0, (cb as f64 - 512.0) / 896.0, (cr as f64 - 512.0) / 896.0];
+        [yy + 1.5748 * v, yy - 0.1873 * u - 0.4681 * v, yy + 1.8556 * u].map(|c| c.clamp(0.0, 1.0))
+    }
+
+    /// Every value of the grade at once, on coloured pictures, darker and
+    /// lighter, at the middle and towards a corner: the GPU does what
+    /// `Grade::apply` does (audit B10: the tests had levels, the vignette
+    /// and the LUT alone).
+    #[test]
+    fn gpu_grade_matches_the_cpu_with_every_value() {
+        let Ok(mut gpu) = Gpu::new(false) else { return };
+        let (w, h) = (64, 32);
+        let mut camera = crate::view::View::home(crate::view::Projection::Perspective).camera();
+        camera.grade = crate::grade::Grade {
+            exposure: 0.6,
+            contrast: 0.3,
+            highlights: -0.4,
+            shadows: 0.35,
+            temperature: 0.3,
+            tint: -0.2,
+            saturation: 0.25,
+            vibrance: 0.4,
+            vignette: 0.3,
+            black_in: 0.05,
+            white_in: 0.92,
+            ..Default::default()
+        };
+        // Grey, sky blue, green, a warm skin tone, a bright near-white.
+        for [y, cb, cr] in [[502, 512, 512], [600, 640, 440], [420, 420, 470], [560, 470, 590], [880, 520, 505]] {
+            let got = draw_flat_as(&mut gpu, p010(w, h, |_| y, cb, cr), crate::hdr::Hdr::None, (w, h), camera);
+            for (x, row) in [(32usize, 16usize), (6, 4)] {
+                let at = [(x as f64 + 0.5) / w as f64 * 2.0 - 1.0, (row as f64 + 0.5) / h as f64 * 2.0 - 1.0];
+                let want = camera.grade.apply(bt709(y, cb, cr), at, w as f64 / h as f64).map(|v| (v * 255.0).round() as i32);
+                let px = [0, 1, 2].map(|c| got.rgb[(row * w + x) * 3 + c] as i32);
+                assert!(px.iter().zip(want).all(|(a, b)| (a - b).abs() <= 2), "{:?} at ({x}, {row}): GPU {px:?}, CPU {want:?}", [y, cb, cr]);
+            }
+        }
+        // The two knees are one.
+        assert!(include_str!("grade.wgsl").contains(&format!("const KNEE: f32 = {};", crate::grade::KNEE)));
+    }
+
     /// Levels (gap 14) move black and white where `Grade::apply` does: a
     /// dark grey, a mid one and a light one, with exposure after them.
     #[test]
@@ -568,9 +611,7 @@ mod tests {
         camera.grade.lut = 0.7;
         for [y, cb, cr] in [[502, 512, 512], [600, 640, 440], [420, 420, 470], [800, 540, 560]] {
             let got = draw_flat_as(&mut gpu, p010(w, h, |_| y, cb, cr), crate::hdr::Hdr::None, (w, h), camera);
-            // As the shader decodes it: BT.709, video range.
-            let [yy, u, v] = [(y as f64 - 64.0) / 876.0, (cb as f64 - 512.0) / 896.0, (cr as f64 - 512.0) / 896.0];
-            let rgb = [yy + 1.5748 * v, yy - 0.1873 * u - 0.4681 * v, yy + 1.8556 * u].map(|c| c.clamp(0.0, 1.0));
+            let rgb = bt709(y, cb, cr);
             let want = lut.blend(rgb, 0.7).map(|v| (v * 255.0).round() as i32);
             let mid = ((h / 2) * w + w / 2) * 3;
             let px = [0, 1, 2].map(|c| got.rgb[mid + c] as i32);

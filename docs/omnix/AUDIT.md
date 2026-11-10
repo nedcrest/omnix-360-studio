@@ -24,11 +24,11 @@ learns of a clip through `learn`; `flat` stays a `serde(skip)` field of
 the cut, as the core's view keys read it) and B9 (the four long
 functions of that week split: `key`, `effect_message`, `on_overlay_ui`,
 `sound_menu_layer`; the older long ones are split as they're next
-touched) done.
+touched) and B10 (the GPU against the CPU with every grade value on
+coloured pictures; the knee named in the shader) done.
 
 | # | What | Fix |
 |---|---|---|
-| B10 | CPU/GPU tests miss most of the grade (highlights, shadows, contrast, temperature, tint, vibrance on colour) and the overlay's blur, reveal and letter order beyond the two cases; `grade.wgsl` hard-codes the knee | One test with every value on a coloured picture; name the knee |
 | B11 | `from_sheet` puts a whole file's loudness into `cut.loudness`, which means «what the cut plays» | Measure the segment, or say what it is |
 | B12 | Two loudness rules: Dailix compares at −20 LUFS (lift ≤ 15), Omnix plays at −16 (≤ 24) | Decide in one place, or say why they differ |
 

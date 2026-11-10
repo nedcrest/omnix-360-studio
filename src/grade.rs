@@ -372,7 +372,7 @@ impl Grade {
 
 /// Where brightening light starts to roll off, in linear light (about
 /// 0.66 displayed).
-const KNEE: f64 = 0.4;
+pub(crate) const KNEE: f64 = 0.4;
 
 /// Linear light `x` brightened by `gain`, rolled off above `KNEE` so the
 /// source's white (now `gain`) lands on white instead of everything above

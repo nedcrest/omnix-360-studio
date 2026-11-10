@@ -867,6 +867,12 @@ Items that toggle show their state (a tick) instead of changing their
 words. The lane's own menu (empty stretch) and the point and line menus
 keep their one or two items.
 
+**Built 2026-11-10, waiting for the check** (`ffd2583`): Level (lower for
+voice-over, back to normal, ✓ Mute, Normalize…), Volume line (show,
+continue the one before, back to the original), Clean up (✓ even out,
+✓ low rumble, ✓ steady noise), Placement (back to the picture's edges,
+to the other SFX lane), Music (lower under speech), Info.
+
 ### 48. Insta360 clips — idea, very far off (user, 2026-11-02)
 
 Asked about after «what format does our 360 stitch?» (DJI Osmo 360 `.OSV`

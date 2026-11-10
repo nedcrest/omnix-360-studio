@@ -65,6 +65,7 @@ impl App {
             text: format!("Save the changes to {name} first?"),
             answers: vec![("Save".to_owned(), Message::Confirmed(then, Choice::Save)), ("Don't save".to_owned(), Message::Confirmed(then, Choice::Discard))],
             cancel: Message::Confirmed(then, Choice::Cancel),
+            field: None,
         })
     }
 

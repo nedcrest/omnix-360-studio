@@ -213,7 +213,7 @@ pub(crate) fn export(project: &project::Project, opts: &StitchOpts, out: &Export
         let mix = matches!(out.target, Target::One(_)).then_some(&mix);
         let mut encoder = ffmpeg::Encoder::new(&path, out.size, fps, &sound, mix, out.format, out.format == ffmpeg::Format::Resolve && gpu.is_some())?;
         // Overlays over the whole edit only; a file per cut has none.
-        let lanes = if matches!(out.target, Target::One(_)) { project.overlays.iter().chain(&project.text).collect() } else { Vec::new() };
+        let lanes = if matches!(out.target, Target::One(_)) { project.shown_lanes().collect() } else { Vec::new() };
         let mut burn = overlay::Burn::new(&mut encoder, lanes, out.size, fps, project.fades, project.duration())?;
         let mut sink = dissolve::Dissolve::new(&mut burn);
         for (n, &(i, start, frames)) in cuts.clone().zip(&plan[cuts.clone()]) {

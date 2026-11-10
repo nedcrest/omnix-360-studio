@@ -389,6 +389,20 @@ pub struct Timeline {
     pub held: iced::keyboard::Modifiers,
     /// The lane new things go on, of the overlay track and of the text's.
     pub active_lanes: [usize; 2],
+    /// Each lane's name and whether it's hidden (gap 97), of the overlay
+    /// track and of the text's, lane by lane.
+    pub lane_meta: [Vec<(Option<String>, bool)>; 2],
+}
+
+/// A lane head's buttons (gap 70, 97).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Sign {
+    /// A lane on top (the top lane's).
+    Add,
+    /// The lane taken away (an empty one of several).
+    Remove,
+    /// The lane hidden from the picture, or shown.
+    Eye,
 }
 
 /// What a snap target belongs to, so a drag never snaps to its own edges
@@ -1420,9 +1434,8 @@ enum OverlayHit {
     Nothing,
     /// The lane's name, or the folded lane: folds or opens it.
     Fold,
-    /// The track's «+»: a lane on top; an empty lane's «×»: taken away.
-    AddLane,
-    RemoveLane,
+    /// A button in the lane's head (`Sign`).
+    Sign(Sign),
     /// A keyframe mark (see `OverlayLane::key_at`), at edit time `at`.
     Key { item: usize, effects: bool, key: usize, at: f64 },
     /// The keyframe rows away from a mark: the playhead goes there.
@@ -1445,7 +1458,7 @@ impl OverlayHit {
         use mouse::Interaction as I;
         match self {
             OverlayHit::Nothing | OverlayHit::Empty => I::default(),
-            OverlayHit::Fold | OverlayHit::AddLane | OverlayHit::RemoveLane | OverlayHit::Seek | OverlayHit::LanesFold(_) => I::Pointer,
+            OverlayHit::Fold | OverlayHit::Sign(_) | OverlayHit::Seek | OverlayHit::LanesFold(_) => I::Pointer,
             OverlayHit::Auto(_, h) => h.pointer(),
             OverlayHit::Key { .. } | OverlayHit::Item(_) => I::Grab,
             OverlayHit::Edge { .. } => I::ResizingHorizontally,
@@ -1472,12 +1485,23 @@ impl OverlayLane {
         self.2 + 1 == self.count()
     }
 
-    /// Where the head column's «+» and «×» sit on this lane.
-    fn plus(&self) -> Rectangle {
-        Rectangle::new(Point::new(HEAD - 20.0, 4.0), Size::new(16.0, 16.0))
+    /// Its name and whether it's hidden (gap 97).
+    fn meta(&self) -> (Option<&str>, bool) {
+        self.0.lane_meta[super::overlay_ui::track_index(self.1)].get(self.2).map_or((None, false), |(n, h)| (n.as_deref(), *h))
     }
-    fn cross(&self) -> Option<Rectangle> {
-        (self.count() > 1 && self.blocks().is_empty()).then(|| Rectangle::new(Point::new(HEAD - if self.top() { 38.0 } else { 20.0 }, 4.0), Size::new(16.0, 16.0)))
+
+    /// The buttons in its head, right to left, and where they sit: the
+    /// top lane's «+», an empty lane's «×» (of several), the eye.
+    fn signs(&self) -> Vec<(Sign, Rectangle)> {
+        let mut signs = Vec::new();
+        if self.top() {
+            signs.push(Sign::Add);
+        }
+        if self.count() > 1 && self.blocks().is_empty() {
+            signs.push(Sign::Remove);
+        }
+        signs.push(Sign::Eye);
+        signs.into_iter().enumerate().map(|(k, s)| (s, Rectangle::new(Point::new(HEAD - 20.0 - 18.0 * k as f32, 4.0), Size::new(16.0, 16.0)))).collect()
     }
 
     fn item_at(&self, x: f32, b: Rectangle) -> Option<usize> {
@@ -1556,11 +1580,8 @@ impl OverlayLane {
         if self.folded() || (self.top() && fold_tag(&self.tag_name(name), (self.0.rows.overlay - 4.0) / 2.0 + 2.0).contains(p)) {
             return OverlayHit::Fold;
         }
-        if self.top() && self.plus().contains(p) {
-            return OverlayHit::AddLane;
-        }
-        if self.cross().is_some_and(|c| c.contains(p)) {
-            return OverlayHit::RemoveLane;
+        if let Some((sign, _)) = self.signs().into_iter().find(|(_, r)| r.contains(p)) {
+            return OverlayHit::Sign(sign);
         }
         // Its Effects and Motion rows' names, in the header column too.
         for motion in [false, true] {
@@ -1630,11 +1651,16 @@ impl OverlayLane {
     /// «Text 1» under it).
     fn tag_name(&self, name: &str) -> String {
         let all = self.0.track_blocks(self.1).iter().map(Vec::len).sum::<usize>();
-        match (self.folded(), self.count(), self.top()) {
-            (true, _, _) => format!("▸ {name} ({all})"),
-            (false, 1, _) => format!("▾ {name}"),
-            (false, _, true) => format!("▾ {name} {}", self.2 + 1),
-            (false, _, false) => format!("{name} {}", self.2 + 1),
+        // The user's name for it, else its track's (numbered of several).
+        let label = match (self.meta().0, self.count()) {
+            (Some(own), _) => own.to_owned(),
+            (None, 1) => name.to_owned(),
+            (None, _) => format!("{name} {}", self.2 + 1),
+        };
+        match (self.folded(), self.top()) {
+            (true, _) => format!("▸ {name} ({all})"),
+            (false, true) => format!("▾ {label}"),
+            (false, false) => label,
         }
     }
 }
@@ -1675,6 +1701,10 @@ impl canvas::Program<Message> for OverlayLane {
                 let message = [false, true].into_iter().find_map(|m| Some(self.lanes(m)).filter(|l| l.lane_at(p.y).is_some())?.right(p, bounds))?;
                 Some(canvas::Action::publish(message).and_capture())
             }
+            // Right-click its name: the lane named (gap 97).
+            Mouse(mouse::Event::ButtonPressed(mouse::Button::Right)) if cursor.position_in(bounds).is_some_and(|p| p.x < HEAD && p.y < self.0.rows.overlay && !self.folded() && !self.signs().iter().any(|(_, r)| r.contains(p))) => {
+                Some(canvas::Action::publish(Message::LaneRename(self.1, self.2)).and_capture())
+            }
             // Right-click an overlay picture: what file it is (text has none).
             Mouse(mouse::Event::ButtonPressed(mouse::Button::Right)) if self.1 == Track::Overlay => {
                 let p = cursor.position_in(bounds)?;
@@ -1687,8 +1717,9 @@ impl canvas::Program<Message> for OverlayLane {
                 let message = match self.hit(p, bounds) {
                     OverlayHit::Nothing => return None,
                     OverlayHit::Fold => Message::Fold(self.fold_lane(), !self.folded()),
-                    OverlayHit::AddLane => Message::LaneAdd(self.1),
-                    OverlayHit::RemoveLane => Message::LaneRemove(self.1, self.2),
+                    OverlayHit::Sign(Sign::Add) => Message::LaneAdd(self.1),
+                    OverlayHit::Sign(Sign::Remove) => Message::LaneRemove(self.1, self.2),
+                    OverlayHit::Sign(Sign::Eye) => Message::LaneHide(self.1, self.2, !self.meta().1),
                     OverlayHit::LanesFold(motion) => Message::Fold(self.fold_of(motion), !self.lanes(motion).folded),
                     OverlayHit::Auto(motion, h) => match self.lanes(motion).press(h, p, t.held.command()) {
                         Ok(d) => {
@@ -1777,6 +1808,8 @@ impl canvas::Program<Message> for OverlayLane {
                 continue;
             }
             let selected = Some(self.r(i)) == t.picked.item();
+            // A hidden lane's items faint: they aren't in the picture.
+            let colour = if self.meta().1 { colour.scale_alpha(0.35) } else { colour };
             coloured_block(&mut frame, (l, r), (top, h), colour, selected);
             if selected {
                 // A picture or text has no end of its own: footage both ways
@@ -1837,15 +1870,16 @@ impl canvas::Program<Message> for OverlayLane {
         }
         // The track's «+» on its top lane; «×» on an empty one of several.
         let ink = palette.background.base.text.scale_alpha(0.75);
-        let mut sign = |r: Rectangle, s: &str| {
+        let hidden = self.meta().1;
+        for (s, r) in self.signs() {
+            let glyph = match s {
+                Sign::Add => "+",
+                Sign::Remove => "×",
+                Sign::Eye if hidden => "○",
+                Sign::Eye => "◉",
+            };
             frame.fill(&Path::rounded_rectangle(r.position(), r.size(), 3.0.into()), palette.background.strong.color.scale_alpha(0.6));
-            frame.fill_text(Text { content: s.to_owned(), position: r.center(), color: ink, size: 13.0.into(), align_x: iced::advanced::text::Alignment::Center, align_y: Vertical::Center, ..Default::default() });
-        };
-        if self.top() {
-            sign(self.plus(), "+");
-        }
-        if let Some(c) = self.cross() {
-            sign(c, "×");
+            frame.fill_text(Text { content: glyph.to_owned(), position: r.center(), color: ink, size: 13.0.into(), align_x: iced::advanced::text::Alignment::Center, align_y: Vertical::Center, ..Default::default() });
         }
         if !self.blocks().is_empty() {
             let (effects, motion) = (self.lanes(false), self.lanes(true));
@@ -2777,6 +2811,7 @@ mod tests {
             overlay_auto: vec![],
             text_auto: vec![],
             active_lanes: [0; 2],
+            lane_meta: [vec![], vec![]],
             held: Default::default(),
         };
         (t, Rectangle::new(Point::ORIGIN, Size::new(1000.0 + 2.0 * PICK, 300.0)))
@@ -2971,9 +3006,11 @@ mod tests {
         let t = Arc::new(t);
         let (low, high) = (OverlayLane(t.clone(), Track::Text, 0), OverlayLane(t.clone(), Track::Text, 1));
         assert_eq!((high.tag_name("Text"), low.tag_name("Text")), ("▾ Text 2".to_owned(), "Text 1".to_owned()), "the top lane carries the fold");
-        assert_eq!(high.hit(high.plus().center(), b), OverlayHit::AddLane);
-        assert_eq!(high.hit(high.cross().unwrap().center(), b), OverlayHit::RemoveLane, "an empty lane of two goes");
-        assert_eq!((low.cross(), low.blocks().len()), (None, 1), "one with items stays");
+        let at = |lane: &OverlayLane, s: Sign| lane.signs().into_iter().find(|(k, _)| *k == s).map(|(_, r)| r.center());
+        assert_eq!(high.hit(at(&high, Sign::Add).unwrap(), b), OverlayHit::Sign(Sign::Add));
+        assert_eq!(high.hit(at(&high, Sign::Remove).unwrap(), b), OverlayHit::Sign(Sign::Remove), "an empty lane of two goes");
+        assert_eq!((at(&low, Sign::Remove), low.blocks().len()), (None, 1), "one with items stays");
+        assert_eq!(low.hit(at(&low, Sign::Eye).unwrap(), b), OverlayHit::Sign(Sign::Eye), "each can be hidden");
         assert_eq!(low.r(0), (Track::Text, 0, 0));
     }
 

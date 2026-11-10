@@ -111,7 +111,7 @@ pub(crate) fn preview_project(project: &project::Project, opts: &StitchOpts, eve
     }
     // Overlays and text as the export burns them in, so a title's place
     // shows on the sheet; the tiles leave out the edit's fades, so do they.
-    let overlays = overlay::Overlays::new(project.overlays.iter().chain(&project.text).collect(), size, Default::default(), project.duration())?;
+    let overlays = overlay::Overlays::new(project.shown_lanes().collect(), size, Default::default(), project.duration())?;
     let tiles = shots
         .par_iter()
         .map(|shot| {

@@ -16,6 +16,9 @@ pub struct Ask {
     pub text: String,
     pub answers: Vec<(String, Message)>,
     pub cancel: Message,
+    /// A line to type in, what it holds now (a lane's name, gap 97); the
+    /// answer given it is `Message::LaneName`'s.
+    pub field: Option<String>,
 }
 
 impl App {
@@ -27,10 +30,22 @@ impl App {
         Task::none()
     }
 
-    /// Answers the question up: it closes, then the answer is done.
+    /// Answers the question up: it closes, then the answer is done, with
+    /// what was typed in its field.
     pub(super) fn answer(&mut self, message: Message) -> Task<Message> {
-        self.asking = None;
+        let typed = self.asking.take().and_then(|a| a.field);
+        let message = match (message, typed) {
+            (Message::LaneName(track, lane, _), Some(name)) => Message::LaneName(track, lane, name),
+            (m, _) => m,
+        };
         self.update(message)
+    }
+
+    /// The question's field typed in.
+    pub(super) fn ask_typed(&mut self, typed: String) {
+        if let Some(field) = self.asking.as_mut().and_then(|a| a.field.as_mut()) {
+            *field = typed;
+        }
     }
 
     /// Esc while a question is up.
@@ -57,7 +72,12 @@ impl App {
             buttons = buttons.push(answer(label, msg, i == 0));
         }
         buttons = buttons.push(answer("Cancel", &ask.cancel, false));
-        let card = container(column![text(ask.title.clone()).size(18), text(ask.text.clone()).size(14), buttons].spacing(14).width(460)).padding(18).style(container::rounded_box);
+        let mut body = column![text(ask.title.clone()).size(18), text(ask.text.clone()).size(14)].spacing(14);
+        if let Some(field) = &ask.field {
+            let first = ask.answers.first().map(|(_, m)| Message::Answer(Box::new(m.clone())));
+            body = body.push(iced::widget::text_input("", field).on_input(Message::AskTyped).on_submit_maybe(first).padding(6));
+        }
+        let card = container(body.push(buttons).width(460)).padding(18).style(container::rounded_box);
         modal(card, None)
     }
 }

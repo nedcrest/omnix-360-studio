@@ -214,6 +214,11 @@ impl Project {
         self.overlays.iter().chain(&self.text)
     }
 
+    /// The lanes drawn over the picture: every one but the hidden (gap 97).
+    pub fn shown_lanes(&self) -> impl Iterator<Item = &Lane> {
+        self.lanes().filter(|l| !l.hidden)
+    }
+
     /// `track`'s lanes (gap 70), lowest first: a lane is drawn over the
     /// ones before it, and shown above them on the timeline.
     pub fn track_lanes(&self, track: Track) -> &[Lane] {

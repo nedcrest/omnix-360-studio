@@ -38,6 +38,14 @@ pub type ItemRef = (Track, usize, usize);
 pub struct Lane {
     #[serde(default)]
     pub items: Vec<Item>,
+    /// The user's name for it («Subtitles», gap 97); its track's and
+    /// number when left out.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// Left out of the picture, the player's and the export's alike, as a
+    /// muted sound lane is of the mix.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub hidden: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -693,7 +701,7 @@ mod tests {
 
     #[test]
     fn items_keep_out_of_each_others_way() {
-        let lane = Lane { items: vec![item(0.0, 4.0), item(10.0, 4.0), item(20.0, 2.0)] };
+        let lane = Lane { items: vec![item(0.0, 4.0), item(10.0, 4.0), item(20.0, 2.0)], ..Default::default() };
         assert_eq!(lane.at(11.0).map(|(i, _)| i), Some(1));
         assert!(lane.at(5.0).is_none());
         // Pushed into its neighbour it stops at its edge, past halfway it hops over.
@@ -704,7 +712,7 @@ mod tests {
 
     #[test]
     fn items_trim_in_place_within_their_room() {
-        let mut lane = Lane { items: vec![item(0.0, 4.0), item(10.0, 4.0), item(20.0, 2.0)] };
+        let mut lane = Lane { items: vec![item(0.0, 4.0), item(10.0, 4.0), item(20.0, 2.0)], ..Default::default() };
         // The in edge 1 s in: it starts 1 s later on the edit.
         lane.trim(1, true, 1.0, 0.2, 3600.0);
         assert_eq!((lane.items[1].at, lane.items[1].start), (11.0, 1.0));

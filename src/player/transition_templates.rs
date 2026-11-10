@@ -51,6 +51,7 @@ impl App {
                     text: format!("Take «{name}» out of the templates? Joins it was put on keep their transitions."),
                     answers: vec![("Remove".to_owned(), Message::Template(TemplateMsg::Removed(name.clone(), true)))],
                     cancel: Message::Template(TemplateMsg::Removed(name, false)),
+                    field: None,
                 });
             }
             TemplateMsg::Removed(name, true) => {

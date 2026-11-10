@@ -268,6 +268,7 @@ impl App {
                     text: format!("Move {name} from the project's folder to the trash? It can be restored from there."),
                     answers: vec![("Move to trash".to_owned(), Message::BinView(BinMsg::TrashAnswered(path.clone(), true)))],
                     cancel: Message::BinView(BinMsg::TrashAnswered(path, false)),
+                    field: None,
                 });
             }
             BinMsg::TrashAnswered(path, true) => {

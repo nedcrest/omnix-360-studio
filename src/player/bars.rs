@@ -352,6 +352,7 @@ impl App {
             held: self.modifiers,
             text_auto: self.lanes_of_track(crate::overlay::Track::Text),
             active_lanes: self.active_lanes,
+            lane_meta: [crate::overlay::Track::Overlay, crate::overlay::Track::Text].map(|track| (0..self.shown_lanes(track)).map(|l| self.edit.lane(track, l).map_or((None, false), |ln| (ln.name.clone(), ln.hidden))).collect()),
             folds: self.folds,
             video: self.edit.duration(),
             clips_db: self.edit.sound.volume,

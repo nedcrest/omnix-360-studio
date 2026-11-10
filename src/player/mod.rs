@@ -346,6 +346,11 @@ enum Message {
     /// A press on a lane away from its items: nothing selected, that lane
     /// the one new things go on.
     LaneActive(crate::overlay::Track, usize),
+    /// A lane's name asked for (a right-click on its head), and given.
+    LaneRename(crate::overlay::Track, usize),
+    LaneName(crate::overlay::Track, usize, String),
+    /// A lane hidden from the picture or shown again (its eye).
+    LaneHide(crate::overlay::Track, usize, bool),
     /// An overlay's in (`true`) or out edge dragged to own time `t`.
     OverlayTrim(crate::overlay::ItemRef, bool, f64),
     /// To an overlay keyframe's edit time.
@@ -505,8 +510,11 @@ enum Message {
     BinRefresh,
     /// The bin as a view of tiles in the picture's place.
     BinView(bin_view::BinMsg),
-    /// A question in the window answered (`ask.rs`).
+    /// A question in the window answered (`ask.rs`), its field typed in.
     Answer(Box<Message>),
+    AskTyped(String),
+    /// A question let go with nothing to do.
+    AskClosed,
     /// The bin view's own player.
     BinPlayer(bin_player::SourceMsg),
     /// Add a file from the bin where its kind goes.
@@ -1160,11 +1168,16 @@ impl App {
             Message::BinView(msg) => self.on_bin_view(msg),
             Message::BinPlayer(msg) => self.on_source(msg),
             Message::Answer(msg) => self.answer(*msg),
+            Message::AskTyped(typed) => {
+                self.ask_typed(typed);
+                Task::none()
+            }
+            Message::AskClosed => Task::none(),
             m @ (Message::MarkEdit { .. } | Message::MarkNote { .. } | Message::MarkSave | Message::MarkDelete | Message::MarkClose) => self.on_marks(m),
             m @ (Message::Tick | Message::TimelineZoom { .. } | Message::TimelineWheel { .. } | Message::TimelineZoomTo { .. } | Message::TimelinePan { .. } | Message::Toggle | Message::Scrub { .. } | Message::ScrubDone) => self.on_transport(m),
             m @ (Message::Select { .. } | Message::AddBlank | Message::SoundEdge { .. } | Message::Trim { .. } | Message::MoveCut { .. } | Message::AddMark | Message::SelectAtPlayhead | Message::MarkMove { .. } | Message::MarkSelect { .. } | Message::StepsRested { .. } | Message::ToastGone { .. } | Message::StepNoteGone { .. } | Message::TrimToPlayhead { .. } | Message::Crossfade { .. } | Message::ToggleCrossfade | Message::Split | Message::DeleteCut | Message::Undo | Message::Redo) => self.on_cuts(m),
             m @ (Message::LookDone | Message::Framing { .. } | Message::KeyMove { .. } | Message::KeyAdd | Message::KeyDelete | Message::KeyEase { .. } | Message::KeyFollow { .. } | Message::Stab { .. } | Message::Projection { .. } | Message::KeyJump { .. } | Message::Look { .. } | Message::Zoom { .. } | Message::Fov { .. } | Message::AngleInput { .. } | Message::AngleDone | Message::AngleScrubStart { .. } | Message::AngleScrubDone | Message::AngleScrub { .. } | Message::AngleNudge { .. } | Message::AngleArrow { .. } | Message::Source { .. } | Message::RollingShutter { .. } | Message::FullOnPause { .. } | Message::ResetView) => self.on_framing(m),
-            m @ (Message::AddOverlay | Message::OverlayPicked { .. } | Message::OverlaySelect { .. } | Message::OverlayMove { .. } | Message::OverlayTrim { .. } | Message::OverlayJump { .. } | Message::OverlayKeyMove { .. } | Message::OverlayPicture { .. } | Message::AddText | Message::AddBars | Message::LaneAdd(_) | Message::LaneRemove(..) | Message::LaneActive(..)) => self.on_overlay_ui(m),
+            m @ (Message::AddOverlay | Message::OverlayPicked { .. } | Message::OverlaySelect { .. } | Message::OverlayMove { .. } | Message::OverlayTrim { .. } | Message::OverlayJump { .. } | Message::OverlayKeyMove { .. } | Message::OverlayPicture { .. } | Message::AddText | Message::AddBars | Message::LaneAdd(_) | Message::LaneRemove(..) | Message::LaneActive(..) | Message::LaneRename(..) | Message::LaneName(..) | Message::LaneHide(..)) => self.on_overlay_ui(m),
             m @ (Message::AddSound { .. } | Message::SoundPicked { .. } | Message::SoundProbed { .. } | Message::Waveform { .. } | Message::CutWave { .. } | Message::SelectMusic { .. } | Message::PointAdd { .. } | Message::PointSelect { .. } | Message::PointMove { .. } | Message::MusicMove { .. } | Message::MusicTrim { .. } | Message::Fade { .. } | Message::Level { .. } | Message::Listen { .. } | Message::SoundLevel { .. } | Message::TrackLevel { .. } | Message::DuckDepth { .. } | Message::Duck | Message::Ducked { .. } | Message::LevelDone) => self.on_tracks(m),
             Message::Snapped(at, inner) => {
                 self.snap_line = at;

@@ -67,8 +67,9 @@ pub fn describe(project: &Path) -> Result<()> {
         println!("{what}:");
         // Lane by lane when there are several, 0 the lowest (gap 70).
         for (n, i) in lanes.iter().enumerate().flat_map(|(n, l)| l.items.iter().map(move |i| (n, i))) {
-            if lanes.len() > 1 && lanes[n].items.first().is_some_and(|f| f.id == i.id) {
-                println!("  lane {n}:");
+            if (lanes.len() > 1 || lanes[n].name.is_some() || lanes[n].hidden) && lanes[n].items.first().is_some_and(|f| f.id == i.id) {
+                let name = lanes[n].name.as_ref().map_or(String::new(), |s| format!(" «{s}»"));
+                println!("  lane {n}{name}{}:", if lanes[n].hidden { " (hidden)" } else { "" });
             }
             let label = match (&i.text, i.bars) {
                 (Some(t), _) => format!("«{}»", t.content),

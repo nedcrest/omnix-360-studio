@@ -70,7 +70,7 @@ impl App {
         let t = self.position();
         let black = self.edit.fades.black(t, self.edit.duration());
         self.edit
-            .lanes()
+            .shown_lanes()
             .filter_map(|lane| lane.at(t).map(|(_, it)| it))
             .filter_map(|item| Some((item, self.overlay_pictures.get(&item.key())?.clone()?)))
             .flat_map(|(item, (id, picture))| {
@@ -191,6 +191,22 @@ impl App {
             Message::LaneAdd(track) => {
                 self.op(Op::Item(ItemOp::AddLane { track }));
                 self.active_lanes[track_index(track)] = self.edit.track_lanes(track).len() - 1;
+            }
+            Message::LaneRename(track, lane) => {
+                let now = self.edit.lane(track, lane).and_then(|l| l.name.clone()).unwrap_or_default();
+                return self.ask(super::ask::Ask {
+                    title: "Lane name".to_owned(),
+                    text: "What's on it: «Subtitles», «Place names»… Empty gives back its number.".to_owned(),
+                    answers: vec![("Name it".to_owned(), Message::LaneName(track, lane, String::new()))],
+                    cancel: Message::AskClosed,
+                    field: Some(now),
+                });
+            }
+            Message::LaneName(track, lane, name) => {
+                self.op(Op::Item(ItemOp::LaneName { track, lane, name: Some(name) }));
+            }
+            Message::LaneHide(track, lane, hidden) => {
+                self.op(Op::Item(ItemOp::LaneHidden { track, lane, hidden }));
             }
             Message::LaneActive(track, lane) => {
                 self.active_lanes[track_index(track)] = lane;

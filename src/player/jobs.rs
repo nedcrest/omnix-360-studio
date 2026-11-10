@@ -248,6 +248,7 @@ impl App {
             text: format!("{what} is still running. Stop it and quit?"),
             answers: vec![("Stop and quit".to_owned(), Message::StopAndClose(true))],
             cancel: Message::StopAndClose(false),
+            field: None,
         })
     }
 

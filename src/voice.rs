@@ -171,9 +171,20 @@ pub fn made(dir: &Path) -> BTreeMap<String, Made> {
 
 /// `made` written whole, or not at all.
 pub fn write_made(dir: &Path, made: &BTreeMap<String, Made>) -> std::io::Result<()> {
-    let tmp = dir.join(format!("{MADE}.tmp"));
-    std::fs::write(&tmp, serde_json::to_string_pretty(made).map_err(std::io::Error::other)?)?;
-    std::fs::rename(tmp, dir.join(MADE))
+    crate::store::replace(&dir.join(MADE), serde_json::to_string_pretty(made).map_err(std::io::Error::other)?.as_bytes())
+}
+
+/// Held while `_recipes.json` is read and written again.
+static RECORDING: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// Variant `name`'s entry in `dir`'s `_recipes.json`, the file read again
+/// just before it's written and under a lock: two voices made at once
+/// don't lose each other's entry (audit A9).
+pub fn record(dir: &Path, name: &str, entry: Made) -> std::io::Result<()> {
+    let _held = RECORDING.lock().unwrap_or_else(|e| e.into_inner());
+    let mut all = made(dir);
+    all.insert(name.to_owned(), entry);
+    write_made(dir, &all)
 }
 
 #[cfg(test)]
@@ -209,6 +220,9 @@ mod tests {
         let old = r#"{"dnn6": {"recipe": "dnn6", "kind": "dnn", "args": ["-D", "-a", "6"], "note": "n", "source": "/x/a.mp4", "source_size": 12, "source_mtime": 1}}"#;
         std::fs::write(tmp.join(MADE), old).unwrap();
         assert!(made(&tmp)["dnn6"].is_current(dnn6, 12));
+        // Two recorded one after another: both kept.
+        record(&tmp, "eq", Made::stamp(recipe("eq").unwrap(), &src).unwrap()).unwrap();
+        assert_eq!(made(&tmp).keys().collect::<Vec<_>>(), ["dnn6", "eq"]);
         std::fs::remove_dir_all(&tmp).unwrap();
     }
 }

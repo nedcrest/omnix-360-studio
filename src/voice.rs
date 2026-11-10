@@ -103,9 +103,13 @@ impl Made {
 }
 
 /// Voices are compared at this loudness, LUFS: a louder one would pass for
-/// better (footage-agent's VOICE.md).
+/// better (footage-agent's VOICE.md). Only for choosing between them: the
+/// edit's level is Omnix's (`model::level::TARGET_LUFS`, −16, set from
+/// the voice when the edit is built); two purposes, two rules (Omnix
+/// audit B12, decided by the user 2026-11-11).
 pub const HEARD_AT: f64 = -20.0;
-/// None is lifted more than this, dB: a near-silent one would roar.
+/// None is lifted more than this, dB, while comparing: a near-silent one
+/// would roar (Omnix lifts up to 24 for the film).
 const MOST_LIFT: f64 = 15.0;
 
 /// The gain, dB, that brings a voice `lufs` loud to `HEARD_AT`; none

@@ -4,7 +4,7 @@
 //! Ctrl+G groups what's selected, Ctrl+Shift+G undoes the group.
 
 use super::{App, Selection};
-use crate::model::ops::{Op, project::ProjectOp};
+use crate::model::ops::{Op, clips::ClipOp, cuts::CutOp, items::ItemOp, project::ProjectOp};
 use crate::project::Id;
 
 impl App {
@@ -47,6 +47,55 @@ impl App {
         self.also = kept;
     }
 
+    /// The clip that was dragged `by` seconds took the sound clips, text
+    /// and pictures selected beside it along, by as much (a group moves
+    /// together; its cuts stay where the magnetic edit puts them).
+    pub(super) fn move_also(&mut self, by: f64) {
+        if by == 0.0 {
+            return;
+        }
+        for id in self.also.clone() {
+            let op = if let Some((w, i)) = self.edit.clip_index(id) {
+                Op::Clip(ClipOp::Move { clip: id, at: self.edit.track(w).clips[i].at + by, overlap: false })
+            } else if let Some(at) = self.edit.item_by_id(id).map(|it| it.at) {
+                Op::Item(ItemOp::Move { item: id, at: at + by, lane: None })
+            } else {
+                continue;
+            };
+            self.op(op);
+        }
+    }
+
+    /// Del with clips selected beside the first: all of them gone, one undo
+    /// step. Whether there were any.
+    pub(super) fn delete_picked(&mut self) -> bool {
+        if self.also.is_empty() {
+            return false;
+        }
+        let ops: Vec<Op> = self
+            .picked_ids()
+            .into_iter()
+            .filter_map(|id| {
+                if self.edit.cut_index(id).is_some() {
+                    Some(Op::Cut(CutOp::Delete { cut: id }))
+                } else if self.edit.clip_index(id).is_some() {
+                    Some(Op::Clip(ClipOp::Delete { clip: id }))
+                } else {
+                    self.edit.item_by_id(id).map(|_| Op::Item(ItemOp::Delete { item: id }))
+                }
+            })
+            .collect();
+        match self.edit.batch(&ops) {
+            Ok(_) => {
+                self.selection = Selection::None;
+                self.also.clear();
+                self.save_status = Some(format!("{} clips deleted (Ctrl+Z brings them back)", ops.len()));
+            }
+            Err((_, e)) => self.error = Some(e.to_string()),
+        }
+        true
+    }
+
     /// Ctrl+G: what's selected made a group; Ctrl+Shift+G: the selected
     /// clip's group undone.
     pub(super) fn group_selected(&mut self, undo: bool) {
@@ -80,6 +129,27 @@ mod tests {
         let t = app.timeline_data();
         assert_eq!((t.groups.len(), t.groups[0].1, t.also.as_slice()), (1, iced::Color::from_rgb8(10, 20, 30), &[b][..]));
         assert_eq!(t.blocks[1].cut.group, app.edit.group_of(b));
+    }
+
+    #[test]
+    fn a_group_moves_together_and_is_deleted_together() {
+        use crate::project::SoundTrack;
+        let mut app = app();
+        app.edit.music.clips.push(crate::project::MusicClip { input: "song.wav".into(), at: 1.0, end: 9.0, ..Default::default() });
+        let item = crate::overlay::Item { id: 0, input: "".into(), text: Some(Default::default()), at: 2.0, start: 0.0, end: 1.0, motion: Vec::new(), effects: Vec::new(), bars: None, automation: Vec::new(), kind: None, style: None, group: None };
+        app.edit.text.push(crate::overlay::Lane { items: vec![item], ..Default::default() });
+        app.edit.settle_ids();
+        let (cut, song, words) = (app.edit.cuts[0].id, app.edit.music.clips[0].id, app.edit.text[0].items[0].id);
+        app.op(Op::Project(ProjectOp::Group { members: vec![cut, song, words], name: None, colour: None }));
+        // The song clicked (its group with it) and dragged 0.5 s on.
+        let _ = app.update(Message::SelectMusic(SoundTrack::Music, 0));
+        let _ = app.update(Message::MusicMove(SoundTrack::Music, 0, 1.5, false));
+        let _ = app.update(Message::ScrubDone);
+        assert_eq!((app.edit.music.clips[0].at, app.edit.text[0].items[0].at, app.edit.offset(0)), (1.5, 2.5, 0.0), "the text along, the cut where it is");
+        // Del: all three, one undo step back.
+        let _ = app.update(Message::DeleteCut);
+        assert!(app.edit.music.clips.is_empty() && app.edit.text[0].items.is_empty() && app.edit.cut_index(cut).is_none());
+        assert!(app.edit.undo() && app.edit.cut_index(cut).is_some() && app.edit.music.clips.len() == 1 && app.edit.text[0].items.len() == 1);
     }
 
     #[test]

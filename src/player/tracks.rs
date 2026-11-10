@@ -134,8 +134,10 @@ impl App {
             Message::MusicTrim(which, i, ..) if i >= self.edit.track(which).clips.len() => {}
             Message::MusicMove(which, i, want, overlap) => {
                 self.edit.begin();
-                let clip = self.edit.track(which).clips[i].id;
+                let (clip, was) = (self.edit.track(which).clips[i].id, self.edit.track(which).clips[i].at);
                 self.op(Op::Clip(ClipOp::Move { clip, at: want, overlap }));
+                let now = self.edit.clip_index(clip).map_or(was, |(w, i)| self.edit.track(w).clips[i].at);
+                self.move_also(now - was);
             }
             Message::MusicTrim(which, i, in_edge, t, overlap) => {
                 self.edit.begin();

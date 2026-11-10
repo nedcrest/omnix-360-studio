@@ -234,6 +234,9 @@ impl App {
     /// the playhead), said in a toast with Undo a moment.
     fn delete_selected(&mut self) -> Task<Message> {
         self.sound_menu = None;
+        if self.delete_picked() {
+            return Task::none();
+        }
         // With nothing selected, the cut under the playhead.
         let s = match self.selection {
             Selection::None if self.clip.is_some() => Selection::cut_at(&self.edit, self.current),

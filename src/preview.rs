@@ -2,7 +2,7 @@
 
 use crate::{overlay, project, sheet, stitch, view};
 use crate::{pipeline::{Shot, StitchOpts, Carry}, cut_pipelines};
-use anyhow::Result;
+use anyhow::{Context, Result};
 use rayon::prelude::*;
 use std::path::Path;
 
@@ -126,6 +126,41 @@ pub(crate) fn preview_project(project: &project::Project, opts: &StitchOpts, eve
         })
         .collect::<Result<Vec<_>>>()?;
     Ok((sheet::compose_rows(&tiles, columns, &bands), shots.iter().flatten().count()))
+}
+
+/// The edit's frame at edit time `t`, `width` wide in the edit's aspect,
+/// as the export makes it (audit C10: the sheet's tiles leave out styles,
+/// edge looks and fades): framed by its keys, graded with its LUT, styled,
+/// its edge look, faded, with the overlays and text. A join's overlap
+/// shows the cut under `t` alone. Only that cut's clip is opened.
+pub(crate) fn frame_at(project: &project::Project, opts: &StitchOpts, t: f64, width: usize, proxy: bool) -> Result<stitch::Frame> {
+    let mut project = project.clone();
+    let (n, at) = project.locate(t).context("an edit with no cuts")?;
+    let cut = &mut project.cuts[n];
+    let mode = cut.stabilize.or(opts.stabilize).unwrap_or(crate::stab::Mode::Horizon);
+    let mut p = crate::Pipeline::new(&cut.input, &StitchOpts { stabilize: Some(mode), ..opts.clone() }, mode)?;
+    if proxy {
+        p.use_proxy();
+    }
+    cut.flat = p.flat.is_some();
+    if let Err(e) = cut.resolve_lut() {
+        eprintln!("warning: {e:#}; {} is left as filmed", cut.input.display());
+    }
+    let project = &project;
+    let cut = &project.cuts[n];
+    let at = p.snap(at).clamp(cut.start, cut.end);
+    let size = (width.max(2) / 2 * 2, tile_height(width, project.aspect));
+    let mut camera = project::camera_at(&project.cuts, n, at, &|f, t| p.aim(f, t));
+    camera.grade.black = project.black_at(n, at);
+    let mut f = p.render(&p.stills(at)?, at, &mut Carry::default(), &Shot::View { camera: Box::new(camera), size });
+    if let Some(s) = &cut.style {
+        f = crate::transition::blend(&s.spec(), at as f32, &f, &f);
+    }
+    if let Some((spec, q)) = cut.edge_at(at) {
+        f = crate::transition::blend(&spec, q, &f, &f);
+    }
+    overlay::Overlays::new(project.shown_lanes().collect(), size, project.fades, project.duration())?.draw(&mut f, t);
+    Ok(f)
 }
 
 /// A clip's number for a sheet's headings, which draw only digits: the

@@ -346,3 +346,28 @@ fn a_cuts_sound_runs_under_the_next_picture_or_stops_short() {
     assert!((l_b - tone).abs() < 1.5, "L {l_b:.1} against the tone {tone:.1}");
     assert!((short_a - tone).abs() < 1.5 && short_after < -60.0, "short: {short_a:.1} then {short_after:.1}");
 }
+
+/// The mean of a PNG's bytes, 0..255.
+fn mean(dir: &Path, file: &str) -> f64 {
+    let img = image::open(dir.join(file)).unwrap().to_rgb8();
+    img.as_raw().iter().map(|&v| v as f64).sum::<f64>() / img.as_raw().len() as f64
+}
+
+#[test]
+fn a_frame_of_the_edit_is_graded_and_faded_as_the_export_makes_it() {
+    if !has_ffmpeg() {
+        return;
+    }
+    let d = dir("frame");
+    clip(&d, "a.mp4", 4.0, 440);
+    std::fs::write(d.join("edit.json"), r#"{"cuts": [{"input": "a.mp4", "in": 0, "out": 4}], "fades": {"in": 1, "out": 0}}"#).unwrap();
+    std::fs::write(d.join("dark.json"), r#"[{"area": "key", "op": "effect_value", "on": {"cut": 1}, "param": "exposure", "value": -3}]"#).unwrap();
+    omnix(&d, &["apply", "edit.json", "dark.json", "-o", "dark.edit.json"]);
+    omnix(&d, &["frame", "edit.json", "--at", "0", "--width", "320", "-o", "start.png"]);
+    omnix(&d, &["frame", "edit.json", "--at", "2", "--width", "320", "-o", "plain.png"]);
+    omnix(&d, &["frame", "dark.edit.json", "--at", "2", "--width", "320", "-o", "dark.png"]);
+    let (start, plain, dark) = (mean(&d, "start.png"), mean(&d, "plain.png"), mean(&d, "dark.png"));
+    std::fs::remove_dir_all(&d).unwrap();
+    assert!(start < 2.0, "faded in from black: {start}");
+    assert!(plain > 40.0 && dark < plain / 2.0, "graded: {dark} against {plain}");
+}

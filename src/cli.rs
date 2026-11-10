@@ -374,6 +374,23 @@ pub(crate) enum Cmd {
         #[command(flatten)]
         opts: StitchOpts,
     },
+    /// One frame of a project's edit at --at seconds, as the export makes
+    /// it: framed, graded with its LUT, styled, its edge look, faded, with
+    /// overlays and text. From the proxy unless --full.
+    Frame {
+        project: PathBuf,
+        /// Edit time, seconds.
+        #[arg(long)]
+        at: f64,
+        #[arg(long, default_value_t = 1280)]
+        width: usize,
+        #[arg(short, long, default_value = "frame.png")]
+        output: PathBuf,
+        #[arg(long)]
+        full: bool,
+        #[command(flatten)]
+        opts: StitchOpts,
+    },
     /// Summarise the clip over time as CSV, to find moments worth a look:
     /// the camera's heading and tilt, how fast it turns or shakes, and how
     /// loud it is.
@@ -734,6 +751,11 @@ pub(crate) fn run() -> Result<()> {
                 eprintln!("wrote {}{size}", path.display());
             }
             eprintln!("{} file(s), {:.2} s of edit", written.len(), project.duration());
+        }
+        Cmd::Frame { project, at, width, output, full, opts } => {
+            let frame = crate::preview::frame_at(&project::Project::load(&project)?, &opts, at, width, !full)?;
+            save_png(&output, &frame)?;
+            eprintln!("wrote {} ({}×{})", output.display(), frame.width, frame.height);
         }
         Cmd::Preview { input, framing, start, duration, every, tile, columns, output, full, opts } if is_project(&input) => {
             clip_options_unused(&framing, start, duration)?;

@@ -254,18 +254,42 @@ pub struct ScopeFeed {
 
 pub type Scope = Arc<std::sync::Mutex<ScopeFeed>>;
 
+impl ScopeFeed {
+    /// Whether a picture is due at `now` (none yet, or `SCOPE_EVERY` since
+    /// the last); if so, asked. Not asked for `SCOPE_STALE`, the scopes were
+    /// closed: what they hold is of another picture, dropped (audit A13).
+    fn ask(&mut self, now: std::time::Instant) -> bool {
+        let since = self.asked.map(|t| now.saturating_duration_since(t));
+        if since.is_some_and(|d| d >= SCOPE_STALE) {
+            (self.latest, self.waveform) = (None, None);
+        }
+        let due = since.is_none_or(|d| d >= SCOPE_EVERY);
+        if due {
+            self.asked = Some(now);
+        }
+        due
+    }
+}
+
 /// How often the scopes take a picture.
 const SCOPE_EVERY: std::time::Duration = std::time::Duration::from_millis(250);
+/// Not asked for this long, the scopes were closed.
+const SCOPE_STALE: std::time::Duration = std::time::Duration::from_secs(2);
 
 /// The scopes' readback: idle, copied this frame (mapped next, once the
-/// copy is submitted), or being mapped.
+/// copy is submitted), or being mapped (`MAP_*`).
 #[derive(Default)]
 enum ScopeRead {
     #[default]
     Idle,
     Copied,
-    Mapping(Arc<std::sync::atomic::AtomicBool>),
+    Mapping(Arc<std::sync::atomic::AtomicU8>),
 }
+
+/// A mapping's state: waiting, done, failed (back to idle: audit A13).
+const MAP_WAITING: u8 = 0;
+const MAP_DONE: u8 = 1;
+const MAP_FAILED: u8 = 2;
 
 /// Where the scopes read the cut's picture back: the buffer, the
 /// picture's size and its rows' bytes.
@@ -671,22 +695,24 @@ impl Pipeline {
         let Some(b) = &self.scope_buffer else { return self.ask(feed) };
         let next = match read {
             ScopeRead::Copied => {
-                let done = Arc::new(std::sync::atomic::AtomicBool::new(false));
-                let flag = done.clone();
-                b.buffer.slice(..).map_async(wgpu::MapMode::Read, move |r| flag.store(r.is_ok(), Ordering::Release));
-                ScopeRead::Mapping(done)
+                let state = Arc::new(std::sync::atomic::AtomicU8::new(MAP_WAITING));
+                let flag = state.clone();
+                b.buffer.slice(..).map_async(wgpu::MapMode::Read, move |r| flag.store(if r.is_ok() { MAP_DONE } else { MAP_FAILED }, Ordering::Release));
+                ScopeRead::Mapping(state)
             }
-            ScopeRead::Mapping(done) => {
+            ScopeRead::Mapping(state) => {
                 let _ = device.poll(wgpu::PollType::Poll);
-                if !done.load(Ordering::Acquire) {
-                    ScopeRead::Mapping(done)
-                } else {
-                    let bgra = matches!(self.format, wgpu::TextureFormat::Bgra8Unorm | wgpu::TextureFormat::Bgra8UnormSrgb);
-                    let measured = crate::scopes::measure(&b.buffer.slice(..).get_mapped_range(), (b.size.0 as usize, b.size.1 as usize), b.row as usize, bgra, 2);
-                    b.buffer.unmap();
-                    let mut f = feed.lock().expect("the scopes' feed");
-                    (f.latest, f.waveform) = (Some(Arc::new(measured)), None);
-                    ScopeRead::Idle
+                match state.load(Ordering::Acquire) {
+                    MAP_WAITING => ScopeRead::Mapping(state),
+                    MAP_FAILED => ScopeRead::Idle,
+                    _ => {
+                        let bgra = matches!(self.format, wgpu::TextureFormat::Bgra8Unorm | wgpu::TextureFormat::Bgra8UnormSrgb);
+                        let measured = crate::scopes::measure(&b.buffer.slice(..).get_mapped_range(), (b.size.0 as usize, b.size.1 as usize), b.row as usize, bgra, 2);
+                        b.buffer.unmap();
+                        let mut f = feed.lock().expect("the scopes' feed");
+                        (f.latest, f.waveform) = (Some(Arc::new(measured)), None);
+                        ScopeRead::Idle
+                    }
                 }
             }
             ScopeRead::Idle => return self.ask(feed),
@@ -697,12 +723,7 @@ impl Pipeline {
 
     /// Whether the scopes want a picture now; if so, asked.
     fn ask(&self, feed: &Scope) -> bool {
-        let mut f = feed.lock().expect("the scopes' feed");
-        let due = f.asked.is_none_or(|t| t.elapsed() >= SCOPE_EVERY);
-        if due {
-            f.asked = Some(std::time::Instant::now());
-        }
-        due
+        feed.lock().expect("the scopes' feed").ask(std::time::Instant::now())
     }
 
     /// A buffer to read a `size` picture back into.
@@ -1205,4 +1226,20 @@ fn to_half(v: f32) -> u16 {
         return sign | ((m + 0x1000) >> 13) as u16;
     }
     sign | ((((exp as u32) << 10) | (man >> 13)) + ((man >> 12) & 1)) as u16
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_scopes_ask_every_so_often_and_forget_when_closed() {
+        let t0 = std::time::Instant::now();
+        let mut f = ScopeFeed::default();
+        assert!(f.ask(t0), "the first at once");
+        assert!(!f.ask(t0 + SCOPE_EVERY / 2) && f.ask(t0 + SCOPE_EVERY));
+        f.latest = Some(Arc::new(crate::scopes::measure(&[0; 4], (1, 1), 4, false, 1)));
+        assert!(f.ask(t0 + SCOPE_EVERY * 2) && f.latest.is_some(), "kept while open");
+        assert!(f.ask(t0 + SCOPE_EVERY * 2 + SCOPE_STALE) && f.latest.is_none(), "reopened: the old picture's measure gone");
+    }
 }

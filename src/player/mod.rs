@@ -1230,7 +1230,7 @@ impl App {
             }
             Message::AskClosed => Task::none(),
             Message::Range(range) => {
-                self.range = range.map(|(a, b)| (a.min(b).max(0.0), a.max(b).min(self.edit.duration()))).filter(|(a, b)| b - a > 1e-3);
+                self.range = range.and_then(|r| transport::marked(r, self.edit.duration()));
                 Task::none()
             }
             Message::PlayRange => self.play_stretch(self.range),

@@ -13,6 +13,13 @@ pub(super) const PREROLL: f64 = 3.0;
 /// The timeline zooms in until this many seconds fill it.
 pub(super) const TIMELINE_SPAN: f64 = 2.0;
 
+/// A range marked on the ruler from `a` to `b`, either way, within an
+/// edit `length` long (gap 92); none if next to nothing is left.
+pub(super) fn marked((a, b): (f64, f64), length: f64) -> Option<(f64, f64)> {
+    let (from, to) = (a.min(b).max(0.0), a.max(b).min(length));
+    (to - from > 1e-3).then_some((from, to))
+}
+
 /// Where a stretch playing (`play_stretch`) stands.
 #[derive(Debug, PartialEq)]
 enum Stretch {
@@ -628,6 +635,13 @@ fn cut_media(library: &[Media], opts: &Options, cut: &Cut) -> Option<Media> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_range_is_marked_either_way_within_the_edit() {
+        assert_eq!(marked((5.0, 2.0), 10.0), Some((2.0, 5.0)), "dragged back");
+        assert_eq!(marked((-1.0, 12.0), 10.0), Some((0.0, 10.0)), "held to the edit");
+        assert_eq!((marked((3.0, 3.0), 10.0), marked((11.0, 12.0), 10.0)), (None, None), "nothing left");
+    }
 
     #[test]
     fn a_stretch_to_the_edits_end_comes_back_to_its_start() {

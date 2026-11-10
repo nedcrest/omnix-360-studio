@@ -54,6 +54,73 @@ impl From<CheckOpts> for StitchOpts {
     }
 }
 
+/// `omnix export`'s arguments (see `Cmd::Export`).
+#[derive(clap::Args)]
+pub(crate) struct ExportArgs {
+    /// A clip (.OSV), or a project (.json): {"aspect": "9:16", "cuts":
+    /// [{"input": "a.OSV", "in": 28, "out": 37, "keyframes": [...]}, ...]}.
+    input: PathBuf,
+    #[command(flatten)]
+    framing: Framing,
+    /// Start time in seconds.
+    #[arg(short, long)]
+    start: Option<f64>,
+    /// Duration in seconds.
+    #[arg(short, long)]
+    duration: Option<f64>,
+    /// Picture height for landscape, width for portrait: 1080p is
+    /// 1920×1080 at 16:9 and 1080×1920 at 9:16.
+    #[arg(short, long, value_enum, default_value_t = Resolution::P1080)]
+    resolution: Resolution,
+    /// Shape, W:H (16:9, 9:16, 1:1, 4:5, ...); else the reframe's, else 16:9.
+    #[arg(short, long)]
+    aspect: Option<view::Aspect>,
+    /// Exact size, WIDTHxHEIGHT, instead of a resolution and aspect.
+    #[arg(long, value_parser = parse_size, conflicts_with_all = ["resolution", "aspect"])]
+    size: Option<[u32; 2]>,
+    /// The file to write; with --clips, the folder for the clips.
+    /// [default: clip.mp4, clip.mov for --format resolve, or the
+    /// project's or clip's name for --clips]
+    #[arg(short, long)]
+    output: Option<PathBuf>,
+    /// mp4: H.264 and AAC, plays anywhere. resolve: 10-bit DNxHR HQX and
+    /// PCM in MOV, which DaVinci Resolve's free Linux version can read
+    /// (about 28 MB a second at 1080p).
+    #[arg(long, value_enum, default_value_t = ffmpeg::Format::Mp4)]
+    format: ffmpeg::Format,
+    /// Write each cut to its own file for another editor, named after
+    /// the project: "<name> - 001.mp4" and on, in the folder -o; and each
+    /// music clip as "<name> - music 001.wav", each sound effect as
+    /// "<name> - sfx 001.wav" (48 kHz 24-bit, unfaded, at the file's
+    /// own level).
+    #[arg(long)]
+    clips: bool,
+    /// With --clips, seconds of extra footage either side of each cut
+    /// (and song either side of each music clip), where there is some,
+    /// for the other editor's transitions.
+    #[arg(long, default_value_t = 0.0, requires = "clips")]
+    handles: f64,
+    /// With --clips, apply the cuts' colour effects too (the whole edit
+    /// always has them; left off, the clips are as shot, to grade in
+    /// the other editor).
+    #[arg(long, requires = "clips")]
+    graded: bool,
+    /// Bring the whole film's sound to this loudness, LUFS integrated
+    /// (YouTube and most streaming: -14; Apple and podcasts: -16;
+    /// broadcast: -23). Not with --clips.
+    #[arg(long, allow_negative_numbers = true, conflicts_with = "clips")]
+    loudness: Option<f64>,
+    /// Stitch from the low-resolution proxy (LRF): a quick, soft draft.
+    #[arg(long)]
+    draft: bool,
+    /// Stitch on the CPU, the reference the GPU shader must match.
+    /// Without a usable GPU this happens anyway.
+    #[arg(long)]
+    cpu: bool,
+    #[command(flatten)]
+    opts: StitchOpts,
+}
+
 #[derive(Subcommand)]
 pub(crate) enum Cmd {
     /// Dump the camera rig (DJI Studio's default stitch geometry) as JSON.
@@ -298,70 +365,7 @@ pub(crate) enum Cmd {
     ///
     /// For a clip without -s/-d, the keyframes' span is rendered.
     /// Stabilisation defaults to horizon.
-    Export {
-        /// A clip (.OSV), or a project (.json): {"aspect": "9:16", "cuts":
-        /// [{"input": "a.OSV", "in": 28, "out": 37, "keyframes": [...]}, ...]}.
-        input: PathBuf,
-        #[command(flatten)]
-        framing: Framing,
-        /// Start time in seconds.
-        #[arg(short, long)]
-        start: Option<f64>,
-        /// Duration in seconds.
-        #[arg(short, long)]
-        duration: Option<f64>,
-        /// Picture height for landscape, width for portrait: 1080p is
-        /// 1920×1080 at 16:9 and 1080×1920 at 9:16.
-        #[arg(short, long, value_enum, default_value_t = Resolution::P1080)]
-        resolution: Resolution,
-        /// Shape, W:H (16:9, 9:16, 1:1, 4:5, ...); else the reframe's, else 16:9.
-        #[arg(short, long)]
-        aspect: Option<view::Aspect>,
-        /// Exact size, WIDTHxHEIGHT, instead of a resolution and aspect.
-        #[arg(long, value_parser = parse_size, conflicts_with_all = ["resolution", "aspect"])]
-        size: Option<[u32; 2]>,
-        /// The file to write; with --clips, the folder for the clips.
-        /// [default: clip.mp4, clip.mov for --format resolve, or the
-        /// project's or clip's name for --clips]
-        #[arg(short, long)]
-        output: Option<PathBuf>,
-        /// mp4: H.264 and AAC, plays anywhere. resolve: 10-bit DNxHR HQX and
-        /// PCM in MOV, which DaVinci Resolve's free Linux version can read
-        /// (about 28 MB a second at 1080p).
-        #[arg(long, value_enum, default_value_t = ffmpeg::Format::Mp4)]
-        format: ffmpeg::Format,
-        /// Write each cut to its own file for another editor, named after
-        /// the project: "<name> - 001.mp4" and on, in the folder -o; and each
-        /// music clip as "<name> - music 001.wav", each sound effect as
-        /// "<name> - sfx 001.wav" (48 kHz 24-bit, unfaded, at the file's
-        /// own level).
-        #[arg(long)]
-        clips: bool,
-        /// With --clips, seconds of extra footage either side of each cut
-        /// (and song either side of each music clip), where there is some,
-        /// for the other editor's transitions.
-        #[arg(long, default_value_t = 0.0, requires = "clips")]
-        handles: f64,
-        /// With --clips, apply the cuts' colour effects too (the whole edit
-        /// always has them; left off, the clips are as shot, to grade in
-        /// the other editor).
-        #[arg(long, requires = "clips")]
-        graded: bool,
-        /// Bring the whole film's sound to this loudness, LUFS integrated
-        /// (YouTube and most streaming: -14; Apple and podcasts: -16;
-        /// broadcast: -23). Not with --clips.
-        #[arg(long, allow_negative_numbers = true, conflicts_with = "clips")]
-        loudness: Option<f64>,
-        /// Stitch from the low-resolution proxy (LRF): a quick, soft draft.
-        #[arg(long)]
-        draft: bool,
-        /// Stitch on the CPU, the reference the GPU shader must match.
-        /// Without a usable GPU this happens anyway.
-        #[arg(long)]
-        cpu: bool,
-        #[command(flatten)]
-        opts: StitchOpts,
-    },
+    Export(ExportArgs),
     /// Stitch evenly spaced moments onto one contact-sheet PNG, each tile
     /// labelled with its time, to skim a clip. Tiles show the whole sphere,
     /// marked at yaw −90/0/90° and the horizon, unless a framing is given.
@@ -700,42 +704,19 @@ pub(crate) fn run() -> Result<()> {
             let rig = cache::telemetry(&input, &|_| {})?.rig.context("no camera rig in file")?;
             println!("{}", serde_json::to_string_pretty(&rig)?);
         }
-        Cmd::Imu { input } => {
-            needs_360(&input, "motion data")?;
-            let imu = imu::read(&load_input(&input, &|_| {})?);
-            println!("kind,t,w,x,y,z");
-            for (t, q) in &imu.quats {
-                println!("q,{t},{},{},{},{}", q[0], q[1], q[2], q[3]);
-            }
-            for (kind, series) in [("g", &imu.gyro), ("a", &imu.accel)] {
-                for (t, v) in series {
-                    println!("{kind},{t},,{},{},{}", v[0], v[1], v[2]);
-                }
-            }
-        }
+        Cmd::Imu { input } => imu_csv(&input)?,
         Cmd::Info { input } => info(&input)?,
         Cmd::Check { project, fast_pan, opts } => check::check(&project, &opts.into(), fast_pan)?,
         Cmd::Autocolour { project, cuts, levels, ops, output } => crate::autocolour::run(&project, &cuts, levels, ops, output.as_deref())?,
         Cmd::Normalize { project, cuts, track, even, ops, output } => loudness::normalize(&project, &cuts, track, even, ops, output.as_deref())?,
-        Cmd::Beats { song, threshold } => {
-            let beats = crate::beats::read(&song)?;
-            for b in crate::beats::at_least(&beats, threshold) {
-                println!("{:8.3} s  {:.2}", b.t, b.strength);
-            }
-            eprintln!("{} of {} hits at {threshold} or stronger", crate::beats::at_least(&beats, threshold).count(), beats.len());
-        }
+        Cmd::Beats { song, threshold } => print_beats(&song, threshold)?,
         Cmd::Duck { project, depth, ops, output } => crate::duck::run(&project, depth, ops, output.as_deref())?,
         Cmd::Apply { project, ops, output } => crate::apply::run(&project, &ops, output.as_deref())?,
         Cmd::Describe { project } => crate::apply::describe(&project)?,
         Cmd::OpsSchema => println!("{}", crate::apply::schema()),
         Cmd::Looks { save_template: Some(name), project: Some(project), cut: Some(cut), .. } => crate::apply::save_template(&project, cut, &name)?,
         Cmd::Looks { template, .. } => print!("{}", crate::apply::looks(template.as_deref())?),
-        Cmd::Install => {
-            let written = crate::desktop::install("omnix", &crate::desktop::omnix_entry(&std::env::current_exe()?), crate::desktop::OMNIX_ICON).map_err(|e| anyhow::anyhow!("{e}"))?;
-            for f in written {
-                println!("{}", f.display());
-            }
-        }
+        Cmd::Install => install()?,
         Cmd::Blank { dir } => println!("{}", crate::blank::ensure(&dir)?.display()),
         Cmd::FromSheet { project, day, empty: true } => println!("{}", crate::from_sheet::write_empty(&project, day.as_deref())?.display()),
         Cmd::FromSheet { project, day, empty: false } => println!("{}", crate::from_sheet::write(&project, day.as_deref())?.display()),
@@ -744,65 +725,14 @@ pub(crate) fn run() -> Result<()> {
             player::run(input, player::Launch { osv_size, hw: hwaccel, stabilize, imu_axes, world_z_down })?;
         }
         Cmd::Seam { input, start, duration, dump } => needs_360(&input, "a seam").and_then(|_| seam_report(&input, start, duration, dump.as_deref()))?,
-        Cmd::Stitch { input, time, output, width, opts } => {
-            let p = Pipeline::new(&input, &opts, stab::Mode::Off)?;
-            let time = p.snap(time);
-            let out = p.render(&p.stills(time)?, time, &mut Carry::default(), &Shot::Equirect(width));
-            save_png(&output, &out)?;
-            eprintln!("wrote {}", output.display());
-        }
-        Cmd::Render { input, start, duration, output, width, opts } => {
-            let p = Pipeline::new(&input, &opts, stab::Mode::Off)?;
-            let start = p.snap(start);
-            let total = duration.map(|d| (d * p.fps).round() as usize);
-            let mut encoder = ffmpeg::Encoder::new(&output, (width, width / 2), p.fps, &[ffmpeg::Sound::plain(&input, start, duration)], None, ffmpeg::Format::Mp4, false)?;
-            let began = Instant::now();
-            let mut tick = |n: usize| {
-                if n.is_multiple_of(10) {
-                    eprint!("\rframe {n}{}  {:.2} fps", total.map_or(String::new(), |t| format!("/{t}")), n as f64 / began.elapsed().as_secs_f64());
-                }
-                Ok(())
-            };
-            encode(&p, start, total, &mut encoder, |_| Shot::Equirect(width), &mut tick)?;
-            eprintln!();
-            encoder.finish()?;
-            eprintln!("wrote {}", output.display());
-        }
-        Cmd::Export { input, framing, start, duration, resolution, aspect, size, output, format, clips, handles, graded, loudness, draft, cpu, opts } => {
-            let name = input.file_stem().map_or_else(|| "export".to_owned(), |s| s.to_string_lossy().into_owned());
-            let project = if is_project(&input) {
-                clip_options_unused(&framing, start, duration)?;
-                project::Project::load(&input)?
-            } else {
-                // One clip is a project of one cut.
-                let reframe = framing.reframe()?.unwrap_or_else(|| Reframe::fixed(View::home(Projection::Perspective)));
-                let (start, end) = span(&input, start, duration, Some(&reframe))?;
-                project::Project { aspect: reframe.aspect, cuts: vec![project::Cut { keyframes: reframe.keyframes, ..project::Cut::new(input, start, end) }], ..Default::default() }
-            };
-            let aspect = aspect.or(project.aspect).unwrap_or(view::Aspect(16, 9));
-            let [w, h] = size.unwrap_or_else(|| aspect.size(resolution.short_side())).map(|v| v as usize);
-            let target = if clips {
-                Target::Clips { dir: output.unwrap_or_else(|| PathBuf::from(&name)), name, handles, graded }
-            } else {
-                Target::One(output.unwrap_or_else(|| PathBuf::from(format!("clip.{}", format.extension()))))
-            };
-            let written = export(&project, &opts, &ExportOpts { size: (w, h), draft, cpu, format, target, loudness }, &mut print_progress())?;
-            for path in &written {
-                // The music and sound effects beside clips are sound only.
-                let size = if path.extension().is_some_and(|e| e == "wav") { String::new() } else { format!(" ({w}×{h})") };
-                eprintln!("wrote {}{size}", path.display());
-            }
-            eprintln!("{} file(s), {:.2} s of edit", written.len(), project.duration());
-        }
+        Cmd::Stitch { input, time, output, width, opts } => stitch_png(&input, time, &output, width, &opts)?,
+        Cmd::Render { input, start, duration, output, width, opts } => render_equirect(&input, start, duration, &output, width, &opts)?,
+        Cmd::Export(args) => export_cmd(args)?,
         Cmd::Scopes { project, at, full, opts } => {
             let frame = crate::preview::frame_at(&project::Project::load(&project)?, &opts, at, 640, !full)?;
             print!("{}", crate::scopes::describe(&crate::scopes::of_frame(&frame)));
         }
-        Cmd::Frame { project, at, width, output, full, opts } => {
-            let frame = crate::preview::frame_at(&project::Project::load(&project)?, &opts, at, width, !full)?;
-            save_png(&output, &frame)?;
-            eprintln!("wrote {} ({}×{})", output.display(), frame.width, frame.height);
-        }
+        Cmd::Frame { project, at, width, output, full, opts } => frame_png(&project, at, width, &output, full, &opts)?,
         Cmd::Preview { input, framing, start, duration, every, tile, columns, output, full, opts } if is_project(&input) => {
             clip_options_unused(&framing, start, duration)?;
             let project = project::Project::load(&input)?;
@@ -820,13 +750,122 @@ pub(crate) fn run() -> Result<()> {
             (_, None) => bail!("several clips (or a folder) need --output, a folder for a CSV per clip"),
             (_, Some(dir)) => scan_many(&inputs, &dir, jobs, every, image)?,
         },
-        Cmd::Track { input, colour, tolerance, near, start, duration, every } => {
-            needs_360(&input, "a sphere to track in")?;
-            let near = near.map(|(yaw, pitch)| track::Near::Level(yaw, pitch));
-            let (found, rows) = track_to(&input, &track::Colour::parse(&colour, tolerance)?, near, start, duration, every, &mut std::io::stdout().lock(), &mut |_, _| Ok(()))?;
-            eprintln!("found the colour in {found} of {rows} samples");
+        Cmd::Track { input, colour, tolerance, near, start, duration, every } => track_cmd(&input, &colour, tolerance, near, (start, duration), every)?,
+    }
+    Ok(())
+}
+
+/// `omnix imu`: the clip's motion data as CSV.
+fn imu_csv(input: &Path) -> Result<()> {
+    needs_360(input, "motion data")?;
+    let imu = imu::read(&load_input(input, &|_| {})?);
+    println!("kind,t,w,x,y,z");
+    for (t, q) in &imu.quats {
+        println!("q,{t},{},{},{},{}", q[0], q[1], q[2], q[3]);
+    }
+    for (kind, series) in [("g", &imu.gyro), ("a", &imu.accel)] {
+        for (t, v) in series {
+            println!("{kind},{t},,{},{},{}", v[0], v[1], v[2]);
         }
     }
+    Ok(())
+}
+
+/// `omnix beats`: a song's hits at `threshold` or stronger, a line each.
+fn print_beats(song: &Path, threshold: f64) -> Result<()> {
+    let beats = crate::beats::read(song)?;
+    for b in crate::beats::at_least(&beats, threshold) {
+        println!("{:8.3} s  {:.2}", b.t, b.strength);
+    }
+    eprintln!("{} of {} hits at {threshold} or stronger", crate::beats::at_least(&beats, threshold).count(), beats.len());
+    Ok(())
+}
+
+/// `omnix install`: the icon and a desktop entry starting this binary.
+fn install() -> Result<()> {
+    let written = crate::desktop::install("omnix", &crate::desktop::omnix_entry(&std::env::current_exe()?), crate::desktop::OMNIX_ICON).map_err(|e| anyhow::anyhow!("{e}"))?;
+    for f in written {
+        println!("{}", f.display());
+    }
+    Ok(())
+}
+
+/// `omnix stitch`: one equirect frame as a PNG.
+fn stitch_png(input: &Path, time: f64, output: &Path, width: usize, opts: &StitchOpts) -> Result<()> {
+    let p = Pipeline::new(input, opts, stab::Mode::Off)?;
+    let time = p.snap(time);
+    let out = p.render(&p.stills(time)?, time, &mut Carry::default(), &Shot::Equirect(width));
+    save_png(output, &out)?;
+    eprintln!("wrote {}", output.display());
+    Ok(())
+}
+
+/// `omnix render`: an equirect video with its sound.
+fn render_equirect(input: &Path, start: f64, duration: Option<f64>, output: &Path, width: usize, opts: &StitchOpts) -> Result<()> {
+    let p = Pipeline::new(input, opts, stab::Mode::Off)?;
+    let start = p.snap(start);
+    let total = duration.map(|d| (d * p.fps).round() as usize);
+    let mut encoder = ffmpeg::Encoder::new(output, (width, width / 2), p.fps, &[ffmpeg::Sound::plain(input, start, duration)], None, ffmpeg::Format::Mp4, false)?;
+    let began = Instant::now();
+    let mut tick = |n: usize| {
+        if n.is_multiple_of(10) {
+            eprint!("\rframe {n}{}  {:.2} fps", total.map_or(String::new(), |t| format!("/{t}")), n as f64 / began.elapsed().as_secs_f64());
+        }
+        Ok(())
+    };
+    encode(&p, start, total, &mut encoder, |_| Shot::Equirect(width), &mut tick)?;
+    eprintln!();
+    encoder.finish()?;
+    eprintln!("wrote {}", output.display());
+    Ok(())
+}
+
+/// `omnix export`: a clip or a project framed and graded, to one file or
+/// a file per cut.
+fn export_cmd(args: ExportArgs) -> Result<()> {
+    let ExportArgs { input, framing, start, duration, resolution, aspect, size, output, format, clips, handles, graded, loudness, draft, cpu, opts } = args;
+    let name = input.file_stem().map_or_else(|| "export".to_owned(), |s| s.to_string_lossy().into_owned());
+    let project = if is_project(&input) {
+        clip_options_unused(&framing, start, duration)?;
+        project::Project::load(&input)?
+    } else {
+        // One clip is a project of one cut.
+        let reframe = framing.reframe()?.unwrap_or_else(|| Reframe::fixed(View::home(Projection::Perspective)));
+        let (start, end) = span(&input, start, duration, Some(&reframe))?;
+        project::Project { aspect: reframe.aspect, cuts: vec![project::Cut { keyframes: reframe.keyframes, ..project::Cut::new(input, start, end) }], ..Default::default() }
+    };
+    let aspect = aspect.or(project.aspect).unwrap_or(view::Aspect(16, 9));
+    let [w, h] = size.unwrap_or_else(|| aspect.size(resolution.short_side())).map(|v| v as usize);
+    let target = if clips {
+        Target::Clips { dir: output.unwrap_or_else(|| PathBuf::from(&name)), name, handles, graded }
+    } else {
+        Target::One(output.unwrap_or_else(|| PathBuf::from(format!("clip.{}", format.extension()))))
+    };
+    let written = export(&project, &opts, &ExportOpts { size: (w, h), draft, cpu, format, target, loudness }, &mut print_progress())?;
+    for path in &written {
+        // The music and sound effects beside clips are sound only.
+        let size = if path.extension().is_some_and(|e| e == "wav") { String::new() } else { format!(" ({w}×{h})") };
+        eprintln!("wrote {}{size}", path.display());
+    }
+    eprintln!("{} file(s), {:.2} s of edit", written.len(), project.duration());
+    Ok(())
+}
+
+/// `omnix frame`: one frame of the edit at `at` as the export makes it.
+fn frame_png(project: &Path, at: f64, width: usize, output: &Path, full: bool, opts: &StitchOpts) -> Result<()> {
+    let frame = crate::preview::frame_at(&project::Project::load(project)?, opts, at, width, !full)?;
+    save_png(output, &frame)?;
+    eprintln!("wrote {} ({}×{})", output.display(), frame.width, frame.height);
+    Ok(())
+}
+
+/// `omnix track`: a colour followed through a 360 clip, a CSV line per
+/// sample.
+fn track_cmd(input: &Path, colour: &str, tolerance: f64, near: Option<(f64, f64)>, (start, duration): (Option<f64>, Option<f64>), every: f64) -> Result<()> {
+    needs_360(input, "a sphere to track in")?;
+    let near = near.map(|(yaw, pitch)| track::Near::Level(yaw, pitch));
+    let (found, rows) = track_to(input, &track::Colour::parse(colour, tolerance)?, near, start, duration, every, &mut std::io::stdout().lock(), &mut |_, _| Ok(()))?;
+    eprintln!("found the colour in {found} of {rows} samples");
     Ok(())
 }
 

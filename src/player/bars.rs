@@ -240,7 +240,7 @@ impl App {
     pub(super) fn picture(&self) -> Element<'_, Message> {
         let view: Element<'_, Message> = match self.held.clone().or_else(|| self.sphere()) {
             Some(sphere) => {
-                let (aspect, picking) = (self.aspect, self.picking);
+                let (aspect, picking) = (self.aspect(), self.picking);
                 let handles = self.overlay_handles();
                 // A locked aspect is the largest box of that shape that fits.
                 responsive(move |room| {

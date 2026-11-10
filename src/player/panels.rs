@@ -140,7 +140,9 @@ impl App {
             Message::Fold(lane, folded) => self.folds.set(lane, folded),
             Message::Modifiers(m) => self.modifiers = m,
             Message::ViewSize(size) => self.view_size = size,
-            Message::Aspect(a) => self.aspect = a,
+            Message::Aspect(a) => {
+                self.op(crate::model::ops::Op::Project(crate::model::ops::project::ProjectOp::Aspect { aspect: a.to_project() }));
+            }
             Message::Theme(theme) => self.theme = theme,
             Message::Mute => {
                 self.muted = !self.muted;

@@ -47,14 +47,10 @@ impl App {
 
     /// The edit as a project file holds it.
     pub(super) fn to_project(&self) -> Project {
-        let aspect = match self.aspect {
-            Aspect::Free => None,
-            Aspect::Ratio(w, h) => Some(crate::view::Aspect(w.into(), h.into())),
-        };
         let (look_360, look_flat) = if self.look_flat { (self.other_look, self.look) } else { (self.look, self.other_look) };
         // The video being framed by hand right now, if any (`Project::as_shown`).
         let framing = (!self.follow).then_some(self.current);
-        Project { aspect, ..self.edit.as_shown(look_360, look_flat, framing) }
+        self.edit.as_shown(look_360, look_flat, framing)
     }
 
     /// Asks whether to save the edit before doing `then`.
@@ -83,7 +79,7 @@ impl App {
     }
 
     pub(super) fn unsaved(&self) -> bool {
-        (self.edit.version != self.saved_version || self.aspect != self.saved_aspect) && self.has_edit()
+        self.edit.version != self.saved_version && self.has_edit()
     }
 
     /// Whether there is anything to save: cuts, or music to fill.
@@ -243,10 +239,10 @@ impl App {
                 // Back to the start screen with an empty edit. Loaded clips
                 // stay in the library, so adding them again is instant; one
                 // still loading finishes there without becoming a cut.
-                self.edit.replace(Project::default());
+                // The shape stays for the next.
+                self.edit.replace(Project { aspect: self.edit.aspect, ..Project::default() });
                 self.forget_edit_state();
                 self.saved_version = self.edit.version;
-                self.saved_aspect = self.aspect;
                 self.project = None;
                 self.queue.clear();
                 self.loading_adds = false;
@@ -278,7 +274,6 @@ impl App {
                 Choice::Discard => {
                     // Let the changes go: the next save starts fresh.
                     self.saved_version = self.edit.version;
-                    self.saved_aspect = self.aspect;
                     return self.proceed(then);
                 }
                 Choice::Cancel => {}
@@ -314,15 +309,13 @@ impl App {
                 for c in &mut project.cuts {
                     c.stabilize.get_or_insert(self.opts.stabilize);
                 }
-                self.aspect = project.aspect.map_or(Aspect::Free, |a| Aspect::Ratio(a.0 as u16, a.1 as u16));
                 self.forget_edit_state();
                 let waves: Vec<_> = project.sound_clips().map(|c| self.load_waveform(&c.input)).collect();
                 self.queue.extend(project.cuts.iter().map(|c| (c.input.clone(), false)));
                 let complete = missing.is_complete();
-                self.edit.replace(Project { aspect: None, ..project });
+                self.edit.replace(project);
                 self.mark_flat();
                 self.saved_version = if complete { self.edit.version } else { 0 };
-                self.saved_aspect = self.aspect;
                 settings::remember(&mut self.recent, &path);
                 self.project = Some(path);
                 // An empty one is built from its bin: open it.
@@ -363,7 +356,6 @@ impl App {
             Message::SaveProjectTo(Some(path)) => match self.to_project().save(&path) {
                 Ok(()) => {
                     self.saved_version = self.edit.version;
-                    self.saved_aspect = self.aspect;
                     // No "Saved …" (user: just annoying): the title's unsaved
                     // mark going is enough.
                     self.save_status = None;

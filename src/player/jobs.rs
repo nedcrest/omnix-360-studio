@@ -217,7 +217,7 @@ impl App {
             .into(),
             None => row![
                 tip(
-                    labelled("Aspect", pick_list(&Aspect::ALL[..], Some(self.aspect), Message::Aspect)),
+                    labelled("Aspect", pick_list(&Aspect::ALL[..], Some(self.aspect()), Message::Aspect)),
                     text("The shape of the view, of saved views and of the export (16:9 when free)"),
                     tooltip::Position::Bottom,
                 ),

@@ -13,6 +13,7 @@ pub mod clips;
 pub mod cuts;
 pub mod items;
 pub mod keys;
+pub mod project;
 pub mod sound;
 #[cfg(test)]
 mod props;
@@ -32,6 +33,8 @@ pub enum Op {
     Sound(sound::SoundOp),
     /// Automation clips (gap 39).
     Auto(auto::AutoOp),
+    /// The edit as a whole: its aspect.
+    Project(project::ProjectOp),
 }
 
 /// A sound that has its own level, line and fades: a cut's or a sound
@@ -122,6 +125,7 @@ fn apply(p: &mut Project, op: &Op) -> Result<Outcome, OpError> {
         Op::Key(op) => keys::apply(p, op),
         Op::Sound(op) => sound::apply(p, op),
         Op::Auto(op) => auto::apply(p, op),
+        Op::Project(op) => project::apply(p, op),
     }
 }
 

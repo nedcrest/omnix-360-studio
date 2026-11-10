@@ -228,6 +228,15 @@ impl std::str::FromStr for Aspect {
     }
 }
 
+impl schemars::JsonSchema for Aspect {
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        "Aspect".into()
+    }
+    fn json_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        schemars::json_schema!({ "type": "string", "description": "width:height, such as \"16:9\" or \"9:16\"; each side up to eight times the other" })
+    }
+}
+
 impl TryFrom<String> for Aspect {
     type Error = anyhow::Error;
 

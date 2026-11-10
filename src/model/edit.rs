@@ -30,9 +30,7 @@ pub const UNDO_STEPS: usize = 300;
 
 #[derive(Default)]
 pub struct Edit {
-    /// What's being edited. Its `aspect` isn't used: the app keeps the
-    /// shape and writes it on save (`App::to_project`). The player shows and
-    /// edits the first overlay lane and the first text lane.
+    /// What's being edited.
     project: Project,
     /// Copies of the project to go back and forth to.
     undo: Vec<Project>,
@@ -201,6 +199,11 @@ impl Edit {
     }
 
     /// Starts over with `project` (an opened or new one), forgetting undo.
+    /// An edit of `project`, as it is: nothing to undo, nothing changed.
+    pub fn new(project: Project) -> Edit {
+        Edit { project, ..Edit::default() }
+    }
+
     pub fn replace(&mut self, project: Project) {
         self.project = project;
         self.open = None;

@@ -218,7 +218,8 @@ still lacks is listed in the last row and in «Later» below.
 | 5 | Keyframes: `model::curve` (`Key`, `key_at`; CORE-API step 8), `KeyOp` for effect, motion and view keys (view keys get where the stick and tracks point as data, `Aims`); the effects panel, K, Auto keyframe, diamond and mark drags, colour-track keys on them; `Edit::checkpoint` gone from the code | **Done** `36c216f`, `cc2eb5a`, and the two after |
 | 6 | `proptest` on random op sequences (found a trim panic and inexact floats in JSON, both fixed); `omnix ops-schema` (`schemars`, doc comments as descriptions); `apply` without `-o` is the preview; `describe` the query | **Done** `cd89a11`, `74e2cca`, `e0b5b5c` |
 | 7 | Transitions (gap 25, 2026-11-08): `CutOp::Transition` (a join's look, on the cut after it), `TransitionKnob` (its settings), `Edge`/`EdgeKnob` (a look on a cut's start or end), `Template` (a join whole from a saved template, all or nothing); overlap and edge looks refuse each other's op; `describe` says each cut's join, in and out with their settings; `omnix looks` lists every look's key and settings (key, range, default, choices) and the templates' library, `--template NAME` prints one as a `template` op takes it | **Done** |
-| — | The edit's fades and the clip-sound and track levels became ops (`SoundOp::EditFade`, `TrackLevel`). Left as direct writes inside a begin/commit: the aspect (kept by the app), a project's load clean-up | |
+| — | The edit's fades and the clip-sound and track levels became ops (`SoundOp::EditFade`, `TrackLevel`). Left as a direct write inside a begin/commit: a project's load clean-up | |
+| 12 | The aspect (audit C3): `ProjectOp::Aspect` (`"area": "project"`, "16:9" or none for free); the player keeps it in the edit, so changing it is an undo step and a change to save; `describe` says it | **Done** |
 | 8 | Effects and styles (gaps 87, 90, 2026-11-09/10): `KeyOp::EffectValue` / `PlaceValue` (a value for the whole cut or item, or the automation point at the playhead), `KeyOp::Clear` with automation; `CutOp::Style` / `StyleKnob`, `ItemOp::Style` / `StyleKnob` sharing their checks; `ItemOp::Kind` (sticker, polaroid, inset); `omnix looks` lists every effect with its range, the kinds, the ins and outs | **Done** |
 | 9 | Automation (gap 39): `AutoOp::Add`, `Move`, `Trim` (outermost points follow the edges), `Delete`, `Point`, `PointDelete`, `PointEase`, `Follow` (a place made from a cut's object track, `CutOp::Track`/`Untrack`), `Animate` (an in or out as clips), `Clear` (a value's clips gone, for a reset) | **Done** |
 | 10 | Lanes (gaps 70, 97): items on a track's lane (`AddText`/`AddPictures`/`AddBars` take `lane`, `Move` takes `lane`), `AddLane`, `RemoveLane` (empty, not the last), `LaneName`, `LaneHidden`; an item is addressed by id, its place as (track, lane, index) | **Done** |
@@ -251,8 +252,8 @@ Soon (small each) — **all four done 2026-11-03** (`82464d0` 4,
    direct imports. Move `normalizing_gain` and `MOST_GAIN` into the core.
 
 Later:
-5. **`ProjectOp`** for what's still a direct write: the edit's fades, the
-   clip-sound and track levels, the aspect, a project's load clean-up.
+5. **`ProjectOp`** for what's still a direct write: a project's load
+   clean-up (the fades, levels and aspect are ops now).
    Needed for the AI and for the lane headers (gap 54).
 6. **A journal**: each undo step keeps its ops, so a player session can be
    replayed as a test.

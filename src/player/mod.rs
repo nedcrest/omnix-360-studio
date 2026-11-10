@@ -181,6 +181,24 @@ enum Aspect {
 impl Aspect {
     const ALL: [Aspect; 6] = [Aspect::Free, Aspect::Ratio(16, 9), Aspect::Ratio(9, 16), Aspect::Ratio(4, 3), Aspect::Ratio(1, 1), Aspect::Ratio(2, 1)];
 
+    /// The project's (none: free).
+    fn of(a: Option<crate::view::Aspect>) -> Aspect {
+        a.map_or(Aspect::Free, |a| Aspect::Ratio(a.0 as u16, a.1 as u16))
+    }
+
+    /// As the settings remember it.
+    fn of_saved(a: Option<[u16; 2]>) -> Option<crate::view::Aspect> {
+        a.map(|[w, h]| crate::view::Aspect(w.into(), h.into()))
+    }
+
+    /// As the project holds it.
+    fn to_project(self) -> Option<crate::view::Aspect> {
+        match self {
+            Aspect::Free => None,
+            Aspect::Ratio(w, h) => Some(crate::view::Aspect(w.into(), h.into())),
+        }
+    }
+
     /// Width over height, if locked.
     fn ratio(self) -> Option<f32> {
         match self {
@@ -698,9 +716,6 @@ struct App {
     /// The project file, once opened or saved, and the edit version saved.
     project: Option<PathBuf>,
     saved_version: u64,
-    /// The aspect lock when last saved: it's in the project, so changing it
-    /// is a change to save.
-    saved_aspect: Aspect,
     /// What to do once the project has been saved.
     after_save: Option<Then>,
     /// Quitting once the export or tracking stopped for it has cleaned up.
@@ -812,7 +827,6 @@ struct App {
     volume: f32,
     muted: bool,
     view_size: Size,
-    aspect: Aspect,
     /// The view-angles strip shows under the transport row.
     angles_shown: bool,
     /// A field of it as typed so far, until Enter or another message.
@@ -899,7 +913,8 @@ impl App {
             music: Default::default(),
             beyond: Vec::new(),
             partner: None,
-            edit: edit::Edit::default(),
+            // A new edit takes the shape last used.
+            edit: edit::Edit::new(Project { aspect: Aspect::of_saved(saved.aspect), ..Project::default() }),
             current: 0,
             selection: Selection::None,
             drag_epoch: 0,
@@ -920,7 +935,6 @@ impl App {
             preroll: None,
             project: None,
             saved_version: 0,
-            saved_aspect: Aspect::Free,
             after_save: None,
             closing: false,
             resolution: saved.resolution,
@@ -987,7 +1001,6 @@ impl App {
             volume: saved.volume,
             muted: saved.muted,
             view_size: Size::new(16.0, 9.0),
-            aspect: saved.aspect.map_or(Aspect::Free, |[w, h]| Aspect::Ratio(w, h)),
             save_status: None,
             picking: None,
             picking_white: false,
@@ -1009,7 +1022,7 @@ impl App {
             volume: self.volume,
             muted: self.muted,
             resolution: self.resolution,
-            aspect: match self.aspect {
+            aspect: match self.aspect() {
                 Aspect::Free => None,
                 Aspect::Ratio(w, h) => Some([w, h]),
             },
@@ -1304,6 +1317,11 @@ pub(super) const BIN: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBo
 
 impl App {
     /// Whether the edit is playing.
+    /// The edit's aspect lock.
+    pub(super) fn aspect(&self) -> Aspect {
+        Aspect::of(self.edit.aspect)
+    }
+
     pub(super) fn playing(&self) -> bool {
         self.clip.as_ref().is_some_and(|c| c.playback.playing)
     }
@@ -1331,6 +1349,15 @@ pub(super) mod tests {
         app.edit.cuts = vec![crate::project::Cut::new("nowhere/a.mp4".into(), 0.0, 2.0), crate::project::Cut::new("nowhere/b.mp4".into(), 0.0, 2.0)];
         app.edit.settle_ids();
         app
+    }
+
+    #[test]
+    fn the_aspect_is_an_edit_saved_and_undone() {
+        let mut app = app();
+        app.saved_version = app.edit.version;
+        let _ = app.update(Message::Aspect(Aspect::Ratio(9, 16)));
+        assert_eq!((app.aspect(), app.to_project().aspect, app.unsaved()), (Aspect::Ratio(9, 16), Some(crate::view::Aspect(9, 16)), true));
+        assert!(app.edit.undo() && app.aspect() == Aspect::Free, "one undo step");
     }
 
     #[test]

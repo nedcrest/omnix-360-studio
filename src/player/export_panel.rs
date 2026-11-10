@@ -40,7 +40,7 @@ const INDENT: f32 = 26.0;
 /// Small dimmed text under an option, saying what it does.
 impl App {
     pub(super) fn export_panel(&self) -> Element<'_, Message> {
-        let (shape, about_shape) = match self.aspect {
+        let (shape, about_shape) = match self.aspect() {
             Aspect::Ratio(w, h) => (crate::view::Aspect(w.into(), h.into()), "In the aspect's shape (top bar)"),
             Aspect::Free => (crate::view::Aspect(16, 9), "16:9, as the aspect (top bar) is Free"),
         };

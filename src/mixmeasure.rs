@@ -47,7 +47,7 @@ fn run(audio: &[Sound<'_>], mix: &Mix<'_>, windows: &mut [&mut Window]) -> Resul
         }
         carry.extend_from_slice(&buf[..n]);
         let whole = carry.len() / 8 * 8;
-        let frames: Vec<[f32; 2]> = carry[..whole].chunks_exact(8).map(|b| [f32::from_le_bytes([b[0], b[1], b[2], b[3]]), f32::from_le_bytes([b[4], b[5], b[6], b[7]])]).collect();
+        let frames: Vec<[f32; 2]> = carry[..whole].as_chunks::<8>().0.iter().map(|b| [f32::from_le_bytes([b[0], b[1], b[2], b[3]]), f32::from_le_bytes([b[4], b[5], b[6], b[7]])]).collect();
         carry.drain(..whole);
         peak = frames.iter().fold(peak, |m, f| m.max(f[0].abs()).max(f[1].abs()));
         let (t0, t1) = (frame as f64 / RATE, (frame + frames.len() as u64) as f64 / RATE);

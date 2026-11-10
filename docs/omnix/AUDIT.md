@@ -2,29 +2,13 @@
 
 Five read-only reviews (dead and stale code; bugs in the week's work;
 design against `code-rules`; the core API's gaps for an agent; Dailix's
-voices and sheet), merged and ranked. Nothing here is fixed yet; each
-fix is its own commit, and the line leaves this file when it's done
-(the history is in git). Line numbers as of `f13a5e6`.
+voices and sheet), merged and ranked. Each fix is its own commit, and
+its line leaves this file when it's done (the history is in git). Line numbers as of `f13a5e6`.
 
 ## A. Bugs
 
-| # | What | Where | Fix |
-|---|---|---|---|
-| A1 | **Panic**: trimming an automation clip that hangs past its owner's edge (after the cut or item was trimmed) — `clamp` with min > max | `player/timeline/auto.rs:280` (edge drag), `model/ops/auto.rs:152` (`AutoOp::Trim`) | Guard the clamp; better, clip a cut's or item's automation to its new range when it's trimmed. A click on such an edge also trims it silently |
-| A2 | A hidden lane's items still get handles in the viewer: invisible, yet grabbed and dragged | `player/overlay_ui.rs:85-97` | One `Project::shown_lane_refs()` for draws and handles |
-| A3 | A fresh project has no lanes, the timeline shows one: its eye and rename fail («lane 0 … not found»), the first «+» changes nothing on screen | `model/ops/items.rs` `LaneName`/`LaneHidden`/`AddLane`, `App::shown_lanes` | The model keeps one lane per track always, or those ops make lane 0 first |
-| A4 | An item dragged onto another lane lands where its own lane's neighbours stopped it, not under the pointer | `player/timeline.rs:1786-1791, 1822-1826` | Keep the pointer's time in the drag; no `OverlayMove` while over another lane |
-| A5 | Removing a lane (or moving an item off one) leaves `active_lanes` and `extra_lanes` pointing at the wrong lane | `player/overlay_ui.rs:240` | Shift the indices above it, drop those equal |
-| A6 | `add_text`/`add_pictures`/`add_bars` with `lane: 7` make seven lanes; a huge one runs out of memory | `model/edit.rs:237` `lane_mut` | Refuse `lane > len` (`len`: new on top) |
-| A7 | Dailix import carries `08_graphics` as it is: an imported project gets both folders; a footage-agent project made after the rename loses its `08_pictures` | `dailix/crates/dailix/src/import.rs:45` | Carry both into `PICTURES`, by the layout's constants; a test |
-| A8 | Dailix: a voice being made is forgotten when the pane changes clip — making it again races the same `.part` and `_recipes.json`; the error shows on another clip | `dailix/.../pane.rs:129`, `pane_voice.rs:114` | Makes in progress on `App`, keyed by (clip, recipe); the clip in the error |
-| A9 | Dailix: `_recipes.json` read-modify-write and a fixed temp name: two makes lose an entry or fail | `dailix/.../voice.rs:97-99`, `sheet/src/voice.rs:174` | `store::replace`-style write; one core `voice::record` re-reading just before writing |
-| A10 | Dailix: a voice whose measuring failed has no entry: listed, never measured, gain 0 in the pane and in Omnix | `dailix/.../voice.rs:94-99` | Always write the entry (`lufs: None`); `measure` covers variants without one |
-| A11 | Dailix: «Original» picked to compare is undone when a make or use finishes; the sound restarts on every refresh | `dailix/.../pane_voice.rs:95` | A «picked» flag; `hear` only when file or gain changed |
-| A12 | `OverlayToLane` skips `ScrubDone`'s clean-up: the snap line stays | `player/overlay_ui.rs:243` | Clear it as `ScrubDone` does |
-| A13 | Scopes freeze for good if a map fails; reopened, they show a stale measure | `player/gpu.rs:675` | Back to idle on error; clear on reopen |
-| A14 | A late auto-colour result joins an open drag's undo step, or lands on another project opened meanwhile | `player/effects.rs` `AutoColoured` | A project generation check; commit an open change first |
-| A15 | Smaller: the `.part` FLAC left in the voice folder on failure; the scratch folder ignores Dailix's TMP place; `mask::shift`/`squared_1d` unguarded for edge sizes; scopes assume 8-bit 4-byte pixels; a range ending at the edit's end may not return; `Playback::hear` and `has_audio` after a bad voice | various | One by one |
+All fifteen fixed, each with a test (`git log --grep 'audit A'`, Omnix
+and Dailix).
 
 ## B. Design (`code-rules`)
 

@@ -73,6 +73,7 @@ pub enum KeyOp {
     /// The key at `from` to `t`, kept `gap` seconds clear of its neighbours
     /// (order kept).
     Retime { line: Line, from: f64, t: f64, gap: f64, #[serde(default = "half_a_frame")] tolerance: f64 },
+    /// The key at `t` on `line` gone.
     Delete { line: Line, t: f64, #[serde(default = "half_a_frame")] tolerance: f64 },
     /// Every key gone: a cut's or item's effects, an item's motion, and
     /// their automation (its ins and outs too).

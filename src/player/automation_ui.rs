@@ -45,7 +45,7 @@ impl Param {
     pub fn title(self) -> &'static str {
         match self {
             Param::Grade(k) => crate::grade::EFFECTS.get(k).map_or("?", |e| e.label),
-            Param::Place(k) => super::effects::PLACE[k].0,
+            Param::Place(k) => crate::overlay::Place::ABOUT[k].0,
         }
     }
 

@@ -25,6 +25,7 @@ pub enum ClipOp {
     Split { clip: Id, at: f64 },
     /// A sound effect to the other SFX lane, nearest its place there.
     OtherSfx { clip: Id },
+    /// The sound clip gone.
     Delete { clip: Id },
 }
 

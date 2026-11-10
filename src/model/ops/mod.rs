@@ -26,10 +26,17 @@ use std::fmt;
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(tag = "area", rename_all = "snake_case")]
 pub enum Op {
+    /// The edit's cuts: added, trimmed, moved, split, their joins, edges,
+    /// styles, markers and settings.
     Cut(cuts::CutOp),
+    /// Sound clips on the music, SFX and voice tracks.
     Clip(clips::ClipOp),
+    /// Pictures, text and bars over the picture, and their lanes.
     Item(items::ItemOp),
+    /// Keys: a cut's view, a cut's or item's effects, an item's place.
     Key(keys::KeyOp),
+    /// The sound of a cut or a sound clip, the tracks' levels, the edit's
+    /// fades, the music ducked under speech.
     Sound(sound::SoundOp),
     /// Automation clips (gap 39).
     Auto(auto::AutoOp),
@@ -104,12 +111,21 @@ pub enum OpError {
     OutOfRange { what: &'static str, value: f64, least: f64, most: f64 },
 }
 
+/// A range's end as said: «∞» for none.
+fn bound(v: f64) -> String {
+    match v {
+        f64::MAX => "∞".to_owned(),
+        f64::MIN => "−∞".to_owned(),
+        _ => v.to_string(),
+    }
+}
+
 impl fmt::Display for OpError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             OpError::NotFound(what) => write!(f, "no {what}"),
             OpError::Invalid(why) => write!(f, "{why}"),
-            OpError::OutOfRange { what, value, least, most } => write!(f, "{what} {value} is outside {least}..{most}"),
+            OpError::OutOfRange { what, value, least, most } => write!(f, "{what} {value} is outside {}..{}", bound(*least), bound(*most)),
         }
     }
 }

@@ -443,5 +443,18 @@ mod tests {
         // And it is a schema an agent's tool list can take.
         let v: serde_json::Value = serde_json::from_str(&schema).unwrap();
         assert_eq!(v["type"], "array");
+        // Every area and every op says what it does (audit C9).
+        for area in v["$defs"]["Op"]["oneOf"].as_array().unwrap() {
+            assert!(area.get("description").is_some(), "{}", area["properties"]["area"]);
+            for op in area["oneOf"].as_array().into_iter().flatten() {
+                assert!(op.get("description").is_some(), "{} {}", area["properties"]["area"], op["properties"]["op"]);
+            }
+        }
+        // Values carry their ranges and defaults, opacity's 1 among them.
+        let grade = &v["$defs"]["Grade"]["properties"];
+        assert_eq!((grade["exposure"]["minimum"].as_f64(), grade["exposure"]["maximum"].as_f64(), grade["opacity"]["default"].as_f64()), (Some(-3.0), Some(3.0), Some(1.0)));
+        assert_eq!(v["$defs"]["OverlayPlace"]["properties"]["size"]["default"].as_f64(), Some(1.0));
+        let err = crate::model::ops::OpError::OutOfRange { what: "length", value: 0.01, least: 0.1, most: f64::MAX };
+        assert_eq!(err.to_string(), "length 0.01 is outside 0.1..∞");
     }
 }

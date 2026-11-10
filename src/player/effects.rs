@@ -38,7 +38,7 @@ pub enum EffectMsg {
     Done,
     /// Effect `i` back to none here, or the cut's effects all gone.
     Reset(Option<usize>),
-    /// The selected overlay's place value `i` (as in `PLACE`) moved to this.
+    /// The selected overlay's place value `i` (as in `Place::NAMES`) moved to this.
     Place(usize, f64),
     /// Its place value `i` back to the default here.
     ResetPlace(usize),
@@ -183,14 +183,6 @@ impl Pin {
     }
 }
 
-/// Where an overlay is, as sliders: its name and what it does (its range
-/// `Place::RANGES`).
-pub(super) const PLACE: [(&str, &str); 4] = [
-    ("Across", "Where its centre is, from the left edge to the right"),
-    ("Down", "Where its centre is, from the top to the bottom"),
-    ("Size", "1 fills the frame as far as its shape allows"),
-    ("Rotation", "Degrees, clockwise"),
-];
 
 /// A selected cut or item: where it starts on the edit, how long, and its
 /// own clock's start.

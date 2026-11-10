@@ -24,6 +24,7 @@ pub enum SoundOp {
     Level { sound: SoundRef, db: f64 },
     /// Its fade in or out, seconds; kept within its length less the other.
     Fade { sound: SoundRef, end: End, seconds: f64 },
+    /// Silenced (`on`), or heard again at its level.
     Mute { sound: SoundRef, on: bool },
     /// Its low rumble cut (`loudness::LOW_CUT`).
     LowCut { sound: SoundRef, on: bool },
@@ -50,6 +51,7 @@ pub enum SoundOp {
     /// The point at `from` moved to `t` and `db`, kept within its stretch
     /// and between its neighbours.
     MovePoint { sound: SoundRef, from: f64, t: f64, db: f64 },
+    /// The point at `t` (file time) on its line gone.
     DeletePoint { sound: SoundRef, t: f64 },
     /// Its line started where what plays before it ends
     /// (`Project::continue_level`).

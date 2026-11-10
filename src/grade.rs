@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 
 /// The effects' values; the default (all 0, opacity 1) is the picture
 /// untouched.
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Grade {
     /// Stops, −3..3.
     #[serde(default, skip_serializing_if = "is_zero")]
@@ -176,6 +176,25 @@ pub const EFFECTS: [Effect; 18] = [
     effect("black_in", "Black", "The level that becomes black, of 255: the picture's darkest (Scopes' Black) makes its black black", (0.0, 0.5), 0.0),
     effect("white_in", "White", "The level that becomes white, of 255: the picture's brightest makes its white white", (0.5, 1.0), 1.0),
 ];
+
+/// The schema (`omnix ops-schema`) from `EFFECTS`: each value's range,
+/// its value untouched and what it does, so an agent sees them (audit C9).
+impl schemars::JsonSchema for Grade {
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        "Grade".into()
+    }
+    fn json_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        let properties: serde_json::Map<String, serde_json::Value> = EFFECTS
+            .iter()
+            .enumerate()
+            .map(|(k, e)| {
+                let only = if ITEM_ONLY.contains(&k) { " (text and pictures only)" } else { "" };
+                (e.name.to_owned(), serde_json::json!({ "type": "number", "description": format!("{}: {}{only}", e.label, e.hint), "minimum": e.range.0, "maximum": e.range.1, "default": e.neutral }))
+            })
+            .collect();
+        schemars::json_schema!({ "type": "object", "description": "The effects' values; one left out is untouched (its default).", "properties": properties })
+    }
+}
 
 /// `EFFECTS`' names, ranges and neutral values each as a list.
 pub const NAMES: [&str; 18] = {

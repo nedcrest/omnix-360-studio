@@ -72,14 +72,19 @@ pub enum CutOp {
     Track { cut: Id, track: crate::automation::ObjectTrack },
     /// Its track named `name` taken away (clips made from it stay).
     Untrack { cut: Id, name: String },
+    /// How its 360 view is held steady (none: the player's choice).
     Stabilize { cut: Id, mode: Option<Mode> },
+    /// Its LUT: a library name (`omnix looks` lists them) or a `.cube`
+    /// file; none: as filmed.
     Lut { cut: Id, lut: Option<String> },
+    /// The cut gone; the cuts after it close up.
     Delete { cut: Id },
     /// A marker at `t` (clip time) with `note`: the one there (within
     /// `SAME_MARK`) gets the note, else a new one.
     Mark { cut: Id, t: f64, #[serde(default)] note: String },
     /// The marker at `from` to `t`, within the cut.
     MoveMark { cut: Id, from: f64, t: f64 },
+    /// The marker at `t` (clip time) gone.
     Unmark { cut: Id, t: f64 },
     /// Its sound's edge (`in`: where it starts, `out`: where it ends) to
     /// clip time `t`, the picture where it is: past the picture's edge the

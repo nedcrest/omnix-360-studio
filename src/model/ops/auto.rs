@@ -30,6 +30,7 @@ pub enum AutoOp {
     /// Its start (`In`) or end (`Out`) to `t`; its points stay where they
     /// are in time.
     Trim { on: Graded, param: String, at: f64, end: End, t: f64 },
+    /// The clip of `param` at `at` gone, its points with it.
     Delete { on: Graded, param: String, at: f64 },
     /// A point of the clip of `param` covering `t`: the one at `from` (or,
     /// without it, at `t`) to `t` and value `v`, or a new one there.

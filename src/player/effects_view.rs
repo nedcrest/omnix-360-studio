@@ -9,7 +9,7 @@
 //! beside it (`effects_extra_panel`), as the Transitions panel's settings
 //! do.
 
-use super::effects::{EffectMsg, Focus, LutChoice, PLACE, Target, WIDTH, label};
+use super::effects::{EffectMsg, Focus, LutChoice, Target, WIDTH, label};
 use crate::grade::{BLACK_IN, BLUR, CONTRAST, EFFECTS, EXPOSURE, HIGHLIGHTS, LUT, OPACITY, REVEAL, SATURATION, SHADOWS, SHAPE, TEMPERATURE, TINT, VIBRANCE, VIGNETTE, VIGNETTE_REACH, VIGNETTE_SOFT, WHITE_IN};
 use super::{App, Message, icon_button, tip};
 use crate::grade::{Grade, grade_at};
@@ -293,7 +293,7 @@ impl App {
     /// The overlay's place: across, down, size, rotation.
     fn place_sliders(&self, i: crate::overlay::ItemRef, t: f64) -> Element<'static, Message> {
         let place = self.edit.item(i).map_or_else(Place::default, |it| crate::automation::placed(place_at(&it.motion, t), &it.automation, t));
-        let rows = PLACE.iter().zip(crate::overlay::Place::RANGES).enumerate().map(|(p, ((name, hint), (lo, hi)))| {
+        let rows = Place::ABOUT.iter().zip(Place::RANGES).enumerate().map(|(p, ((name, hint), (lo, hi)))| {
             let v = place.values()[p];
             let shown = if p == 3 { format!("{v:+.0}°") } else { format!("{v:.2}") };
             let reset = button(text("↺").size(13)).padding([0, 5]).style(button::text).on_press_maybe((v != Place::default().values()[p]).then_some(Message::Effect(EffectMsg::ResetPlace(p))));

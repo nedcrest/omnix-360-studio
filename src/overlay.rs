@@ -239,8 +239,7 @@ impl Item {
 
 /// Where an item is: its centre on the frame (0..1 across and down), its
 /// size (1 fits the whole frame, keeping its shape) and its turn.
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
-#[schemars(rename = "OverlayPlace")]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Place {
     #[serde(default = "half")]
     pub x: f64,
@@ -268,6 +267,24 @@ impl Default for Place {
     }
 }
 
+/// The schema from `Place`'s tables: ranges, defaults, what each does
+/// (audit C9).
+impl schemars::JsonSchema for Place {
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        "OverlayPlace".into()
+    }
+    fn json_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        let at = Place::default().values();
+        let properties: serde_json::Map<String, serde_json::Value> = (0..4)
+            .map(|k| {
+                let ((label, hint), (lo, hi)) = (Place::ABOUT[k], Place::RANGES[k]);
+                (Place::NAMES[k].to_owned(), serde_json::json!({ "type": "number", "description": format!("{label}: {hint}"), "minimum": lo, "maximum": hi, "default": at[k] }))
+            })
+            .collect();
+        schemars::json_schema!({ "type": "object", "description": "Where an item is: its centre on the frame, its size and its turn; one left out is its default.", "properties": properties })
+    }
+}
+
 impl Place {
     pub fn values(&self) -> [f64; 4] {
         [self.x, self.y, self.size, self.rotation]
@@ -278,6 +295,13 @@ impl Place {
     /// Each one's range: the centre within the frame, a twentieth of it
     /// to twice it, degrees either way.
     pub const RANGES: [(f64, f64); 4] = [(0.0, 1.0), (0.0, 1.0), (0.05, 2.0), (-180.0, 180.0)];
+    /// Each one as the Effects panel names it, and what it does.
+    pub const ABOUT: [(&str, &str); 4] = [
+        ("Across", "Where its centre is, from the left edge to the right"),
+        ("Down", "Where its centre is, from the top to the bottom"),
+        ("Size", "1 fills the frame as far as its shape allows"),
+        ("Rotation", "Degrees, clockwise"),
+    ];
 
     pub fn from_values([x, y, size, rotation]: [f64; 4]) -> Place {
         Place { x, y, size, rotation }

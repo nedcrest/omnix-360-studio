@@ -78,6 +78,7 @@ pub enum ItemOp {
     /// `bold`, `align`, `outline`, `shadow`, as `describe` says them) to
     /// `value`, the rest as they are (audit C5).
     TextField { item: Id, field: String, value: serde_json::Value },
+    /// The item gone from its lane.
     Delete { item: Id },
 }
 

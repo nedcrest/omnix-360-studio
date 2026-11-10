@@ -25,6 +25,12 @@
 
 use std::path::{Path, PathBuf};
 
+/// Pictures and photos to lay over the video (Omnix gap 91: named simply,
+/// as the user asked); projects made before it have `OLD_PICTURES`,
+/// still read.
+pub const PICTURES: &str = "08_pictures";
+pub const OLD_PICTURES: &str = "08_graphics";
+
 /// The numbered folders (footage-agent's `layout.py`, the same tree).
 pub const FOLDERS: [&str; 9] = [
     "01_footage",         // the clips, copied in; the originals stay in the sources
@@ -34,7 +40,7 @@ pub const FOLDERS: [&str; 9] = [
     "videos",             // a folder per video: its edit and its exports
     "06_external",        // outside video: memes, inserts, transitions
     "07_sfx",             // sound effects
-    "08_graphics",        // pictures over the video: logos, captions, arrows
+    PICTURES,             // pictures and photos over the video: logos, captions, arrows
     "09_luts",            // LUT files (.cube) for this project's colour
 ];
 
@@ -45,7 +51,7 @@ pub const EXPORT: &str = "export";
 
 /// The folders whose files come from elsewhere: each gets a `LICENSES.md`
 /// to note where a file came from and on what terms.
-const LICENSED: [(&str, &str); 4] = [("02_audio/music", "Music"), ("06_external", "Outside video"), ("07_sfx", "Sound effects"), ("08_graphics", "Graphics")];
+const LICENSED: [(&str, &str); 4] = [("02_audio/music", "Music"), ("06_external", "Outside video"), ("07_sfx", "Sound effects"), (PICTURES, "Pictures")];
 
 /// Where the parts of the project folder `root` are.
 #[derive(Debug, Clone, PartialEq)]

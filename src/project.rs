@@ -170,9 +170,9 @@ impl SoundTrack {
     }
 }
 
-/// A track's beats as the lane shows them (gap 13): the hits at
-/// `threshold` (0..1 of a song's strongest) or stronger, and whether edges
-/// and the playhead snap to them.
+/// A song's beats as its clip shows them (gap 13): the hits at
+/// `threshold` (0..1 of its strongest) or stronger, and whether edges and
+/// the playhead snap to them.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Beats {
@@ -191,9 +191,11 @@ pub struct Music {
     pub volume: f64,
     #[serde(default)]
     pub clips: Vec<MusicClip>,
-    /// Its songs' beats shown on the lane (gap 13): none, off.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub beats: Option<Beats>,
+    /// Older projects' beats for the whole track, read and moved onto its
+    /// clips (`MusicClip::beats`; the user, 2026-11-11: not every song is
+    /// cut to its beats), never written.
+    #[serde(default, rename = "beats", skip_serializing)]
+    old_beats: Option<Beats>,
     /// Sync lock (gap 99): when the picture's edit gets shorter or longer
     /// at some point, this track's clips after it move with it
     /// (`Project::ripple_locked`), so what's under the cuts stays there.
@@ -482,6 +484,9 @@ pub struct MusicClip {
     /// the line without it instead of lowering twice (user, 2026-11-02).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ducked: Option<Ducked>,
+    /// Its beats shown on the lane (gap 13): none, off.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub beats: Option<Beats>,
     /// The group it's in (gap 8), by its id in `Project::groups`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub group: Option<Id>,
@@ -1114,7 +1119,13 @@ impl Project {
             keys.sort_by(|a, b| a.t.total_cmp(&b.t));
         }
         for which in SoundTrack::ALL {
-            project.track_mut(which).fold_track_line();
+            let track = project.track_mut(which);
+            track.fold_track_line();
+            if let Some(b) = track.old_beats.take() {
+                for c in &mut track.clips {
+                    c.beats.get_or_insert(b);
+                }
+            }
         }
         for cut in &mut project.cuts {
             if cut.effects.iter().any(|k| !k.t.is_finite() || k.grade.values().iter().any(|v| !v.is_finite())) {
@@ -1669,6 +1680,19 @@ mod tests {
         assert_eq!((e.music.clips[0].at, e.music.clips[0].start), (0.0, 4.0));
         // A split doesn't move it.
         assert_eq!(ripple_of(&e.cuts.clone(), &e.cuts), None);
+    }
+
+    #[test]
+    fn a_tracks_beats_from_an_older_file_move_onto_its_songs() {
+        let dir = std::env::temp_dir().join(format!("omnix-oldbeats-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("edit.json");
+        std::fs::write(&file, r#"{"cuts": [{"input": "a.mp4", "in": 0, "out": 4}], "music": {"beats": {"threshold": 0.4, "snap": true}, "clips": [{"input": "a.wav", "at": 0, "in": 0, "out": 3}, {"input": "b.wav", "at": 3, "in": 0, "out": 3}]}}"#).unwrap();
+        let p = Project::read(&file).unwrap();
+        let written = serde_json::to_string(&p).unwrap();
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert!(p.music.clips.iter().all(|c| c.beats == Some(Beats { threshold: 0.4, snap: true })));
+        assert!(!written.contains("\"music\":{\"beats\""), "the track's own never written");
     }
 
     #[test]

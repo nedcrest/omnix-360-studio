@@ -331,8 +331,8 @@ pub struct MusicBlock {
     pub wave: Option<Arc<crate::waveform::Waveform>>,
     /// Its waveform through the leveler, if it's evened out (and read).
     pub even_wave: Option<Arc<crate::waveform::Waveform>>,
-    /// The song's beats, once read, if its track shows them (gap 13).
-    pub beats: Option<Arc<Vec<crate::beats::Beat>>>,
+    /// The song's beats, once read, if its clip shows them (gap 13).
+    pub hits: Option<Arc<Vec<crate::beats::Beat>>>,
     /// Its own level as a tag, the knob a drag turns (`Block::level`).
     pub level: String,
 }
@@ -341,7 +341,7 @@ impl MusicBlock {
     /// Its beats at `threshold` or stronger, as edit times within it.
     fn beat_times(&self, threshold: f64) -> impl Iterator<Item = f64> + '_ {
         let clip = &self.clip;
-        self.beats.iter().flat_map(move |beats| crate::beats::at_least(beats, threshold)).filter(move |b| b.t >= clip.start && b.t <= clip.end).map(move |b| clip.at + b.t - clip.start)
+        self.hits.iter().flat_map(move |beats| crate::beats::at_least(beats, threshold)).filter(move |b| b.t >= clip.start && b.t <= clip.end).map(move |b| clip.at + b.t - clip.start)
     }
 
     fn len(&self) -> f64 {
@@ -889,11 +889,9 @@ impl Timeline {
         }
         for (li, l) in self.sounds.iter().enumerate() {
             at.extend(l.blocks.iter().enumerate().flat_map(|(i, m)| [(m.clip.at, Of::Sound(li, i)), (m.clip.at + m.len(), Of::Sound(li, i))]));
-            if let Some(b) = l.track.beats.filter(|b| b.snap) {
-                let beats: Vec<(f64, Of)> = l.blocks.iter().enumerate().flat_map(|(i, m)| m.beat_times(b.threshold).map(move |t| (t, Of::Sound(li, i)))).collect();
-                // On the frame nearest each: where a playhead or a cut can be.
-                at.extend(beats.into_iter().map(|(t, of)| (self.on_frame(t), of)));
-            }
+            let beats: Vec<(f64, Of)> = l.blocks.iter().enumerate().filter_map(|(i, m)| Some((i, m, m.clip.beats.filter(|b| b.snap)?))).flat_map(|(i, m, b)| m.beat_times(b.threshold).map(move |t| (t, Of::Sound(li, i)))).collect();
+            // On the frame nearest each: where a playhead or a cut can be.
+            at.extend(beats.into_iter().map(|(t, of)| (self.on_frame(t), of)));
         }
         for track in Track::ALL {
             for (l, items) in self.track_blocks(track).iter().enumerate() {
@@ -1170,7 +1168,7 @@ impl Timeline {
                 let wave = Wave { left: l, right: r, top, height: h, start: m.clip.start, len: m.len() };
                 wave.draw(frame, b, w, m.even_wave.as_ref().unwrap_or(w), heard, palette.background.base.text.scale_alpha(0.7));
             }
-            if let Some(shown) = track.beats {
+            if let Some(shown) = m.clip.beats {
                 for t in m.beat_times(shown.threshold) {
                     let x = self.x(t, b);
                     frame.fill(&Path::rectangle(Point::new(x - 0.75, top + h / 2.0), Size::new(1.5, h / 2.0)), BEAT_COLOUR);
@@ -1417,7 +1415,7 @@ impl Timeline {
                 for k in &m.clip.volume {
                     (k.t.to_bits(), k.volume.to_bits()).hash(&mut h);
                 }
-                (ptr(&m.wave), ptr(&m.even_wave), m.beats.as_ref().map_or(0, |b| Arc::as_ptr(b) as usize), &m.label, &m.level).hash(&mut h);
+                (ptr(&m.wave), ptr(&m.even_wave), m.hits.as_ref().map_or(0, |b| Arc::as_ptr(b) as usize), format!("{:?}", m.clip.beats), &m.label, &m.level).hash(&mut h);
             }
         }
         // The sound lanes show a selected cut, clip or point; not an item.
@@ -2975,7 +2973,7 @@ mod tests {
         let voice = sounds.iter_mut().find(|l| l.which == SoundTrack::Voice).unwrap();
         let clip = crate::project::MusicClip { input: "take.wav".into(), at: 2.0, start: 1.0, end: 5.0, fade_in: 1.0, volume: vec![VolumeKey { t: 3.0, volume: 0.0 }], ..Default::default() };
         voice.track.clips.push(clip.clone());
-        voice.blocks.push(MusicBlock { clip, label: "take".into(), most: f64::INFINITY, wave: None, even_wave: None, beats: None, level: "0 dB".into() });
+        voice.blocks.push(MusicBlock { clip, label: "take".into(), most: f64::INFINITY, wave: None, even_wave: None, hits: None, level: "0 dB".into() });
         let t = Timeline {
             blocks: vec![block(0.0, 4.0, 0.0), block(3.0, 4.0, 1.0), block(7.0, 3.0, 0.0)],
             sounds,
@@ -3011,10 +3009,10 @@ mod tests {
         let li = t.sounds.iter().position(|l| l.which == crate::project::SoundTrack::Music).unwrap();
         let clip = crate::project::MusicClip { input: "song.wav".into(), at: 0.0, start: 0.0, end: 20.0, ..Default::default() };
         let beats = vec![Beat { t: 7.3, strength: 0.9 }];
-        t.sounds[li].blocks.push(MusicBlock { clip, label: String::new(), most: f64::INFINITY, wave: None, even_wave: None, beats: Some(Arc::new(beats)), level: String::new() });
+        t.sounds[li].blocks.push(MusicBlock { clip, label: String::new(), most: f64::INFINITY, wave: None, even_wave: None, hits: Some(Arc::new(beats)), level: String::new() });
         let near = |t: &Timeline| t.snap_targets().iter().any(|&(at, _)| (at - 7.3).abs() < 1e-9);
         assert!(!near(&t), "shown only, not snapping");
-        t.sounds[li].track.beats = Some(crate::project::Beats { threshold: 0.5, snap: true });
+        t.sounds[li].blocks[0].clip.beats = Some(crate::project::Beats { threshold: 0.5, snap: true });
         assert!(near(&t));
         assert!(t.snap(&[7.32], 0.01, |of| of == Of::Sound(li, 0)).is_none(), "the song itself doesn't snap to its own");
         assert!(t.snap(&[7.32], 0.01, |_| false).is_some_and(|(by, _)| (by + 0.02).abs() < 1e-9), "a cut's edge does");
@@ -3062,7 +3060,7 @@ mod tests {
         use crate::beats::Beat;
         let clip = crate::project::MusicClip { input: "song.wav".into(), at: 10.0, start: 2.0, end: 6.0, ..Default::default() };
         let beats = [(1.0, 0.9), (3.0, 0.3), (5.0, 0.8), (7.0, 1.0)].map(|(t, strength)| Beat { t, strength });
-        let m = MusicBlock { clip, label: String::new(), most: f64::INFINITY, wave: None, even_wave: None, beats: Some(Arc::new(beats.to_vec())), level: String::new() };
+        let m = MusicBlock { clip, label: String::new(), most: f64::INFINITY, wave: None, even_wave: None, hits: Some(Arc::new(beats.to_vec())), level: String::new() };
         assert_eq!(m.beat_times(0.0).collect::<Vec<_>>(), [11.0, 13.0], "in the file's 2-6 s, on the edit from 10");
         assert_eq!(m.beat_times(0.5).collect::<Vec<_>>(), [13.0], "the strong one alone");
     }
@@ -3177,7 +3175,7 @@ mod tests {
         let (mut t, b) = timeline();
         let li = t.sounds.iter().position(|l| l.which == SoundTrack::Sfx2).unwrap();
         let clip = crate::project::MusicClip { input: "boom.wav".into(), at: 2.0, start: 0.0, end: 1.0, ..Default::default() };
-        t.sounds[li].blocks.push(MusicBlock { clip, label: "boom".into(), most: f64::INFINITY, wave: None, even_wave: None, beats: None, level: "0 dB".into() });
+        t.sounds[li].blocks.push(MusicBlock { clip, label: "boom".into(), most: f64::INFINITY, wave: None, even_wave: None, hits: None, level: "0 dB".into() });
         let open = t.rows;
         t.rows = Rows::new(1.0, false, Folds::default(), 0);
         assert_eq!(t.rows.lane_h(li), FOLDED);

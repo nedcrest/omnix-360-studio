@@ -53,18 +53,13 @@ impl App {
         )
     }
 
-    /// Reads the beats of every song on a track that shows them (gap 13),
-    /// each file once, off the UI thread.
+    /// Reads the beats of every song whose clip shows them (gap 13), each
+    /// file once, off the UI thread.
     pub(super) fn read_beats(&mut self) -> Task<Message> {
-        let wanted: Vec<PathBuf> = SoundTrack::ALL
-            .into_iter()
-            .map(|w| self.edit.track(w))
-            .filter(|t| t.beats.is_some())
-            .flat_map(|t| t.clips.iter().map(|c| c.input.clone()))
-            .filter(|p| !self.beats.contains_key(p))
-            .collect();
+        let mut wanted: Vec<PathBuf> = self.edit.sound_clips().filter(|c| c.beats.is_some()).map(|c| c.input.clone()).filter(|p| !self.hits.contains_key(p)).collect();
+        wanted.dedup();
         Task::batch(wanted.into_iter().map(|path| {
-            self.beats.insert(path.clone(), None);
+            self.hits.insert(path.clone(), None);
             Task::perform(blocking({
                 let path = path.clone();
                 move || crate::beats::read(&path).map(Arc::new).map_err(|e| format!("{e:#}"))
@@ -182,9 +177,9 @@ impl App {
             Message::TrackSync(track, on) => {
                 self.op(Op::Sound(SoundOp::SyncLock { track, on }));
             }
-            Message::TrackBeats(track, beats, press) => {
+            Message::ClipBeats(clip, beats, press) => {
                 self.edit.begin();
-                self.op(Op::Sound(SoundOp::Beats { track, beats }));
+                self.op(Op::Sound(SoundOp::Beats { clip, beats }));
                 if press {
                     self.edit.commit();
                 }
@@ -242,7 +237,7 @@ impl App {
             Message::Waveform(path, Err(e)) => self.error = Some(format!("Can't read {}: {e}", path.display())),
             Message::Beats(path, read) => match read {
                 Ok(beats) => {
-                    self.beats.insert(path, Some(beats));
+                    self.hits.insert(path, Some(beats));
                 }
                 // Left as being read: not tried again over and over.
                 Err(e) => self.error = Some(format!("Can't find the beats of {}: {e}", path.display())),

@@ -140,14 +140,16 @@ fn describe_lines(p: &Project) -> Vec<String> {
         if track.clips.is_empty() {
             continue;
         }
-        let beats = track.beats.map_or(String::new(), |b| format!("  beats at {:.2}{}", b.threshold, if b.snap { ", snapping" } else { "" }));
         let sync = if track.sync { "  sync lock" } else { "" };
-        println(format!("{}: level {:+.1} dB{beats}{sync}", w.name(), track.volume));
+        println(format!("{}: level {:+.1} dB{sync}", w.name(), track.volume));
         for c in &track.clips {
             println(format!("  clip #{:<2} {:7.2}-{:7.2} s  {} {:.2}-{:.2}  level {:+.1} dB{}{}", c.id, c.at, c.ends(), name(&c.input), c.start, c.end, c.gain, if c.mute { " muted" } else { "" }, c.ducked.as_ref().map_or(String::new(), |d| format!(" ducked {:.0} dB", d.depth))));
             let sound = Sounding { even: c.even, low_cut: c.low_cut, clean: c.clean, fades: (c.fade_in, c.fade_out), beyond: (0.0, 0.0), loudness: c.loudness };
             for line in sound_lines(&sound, &c.volume) {
                 println(format!("    {line}"));
+            }
+            if let Some(b) = c.beats {
+                println(format!("    beats at {:.2}{}", b.threshold, if b.snap { ", snapping" } else { "" }));
             }
             if let Some(d) = c.ducked.as_ref().filter(|d| !d.speech.is_empty()) {
                 let spans: Vec<String> = d.speech.iter().map(|(a, b)| format!("{a:.2}-{b:.2}")).collect();
@@ -428,8 +430,8 @@ mod tests {
         (c.even, c.sound_before, c.loudness) = (true, 0.5, Some(-23.0));
         c.volume = vec![VolumeKey { t: 1.0, volume: -6.0 }];
         let mut p = Project { cuts: vec![c], aspect: Some(crate::view::Aspect(16, 9)), ..Project::default() };
-        (p.music.volume, p.music.beats, p.music.sync) = (-3.0, Some(crate::project::Beats { threshold: 0.4, snap: true }), true);
-        p.music.clips.push(MusicClip { input: "song.wav".into(), end: 10.0, fade_out: 2.0, ..MusicClip::default() });
+        (p.music.volume, p.music.sync) = (-3.0, true);
+        p.music.clips.push(MusicClip { input: "song.wav".into(), end: 10.0, fade_out: 2.0, beats: Some(crate::project::Beats { threshold: 0.4, snap: true }), ..MusicClip::default() });
         p.settle_ids();
         (p.cuts[0].group, p.music.clips[0].group) = (Some(1), Some(1));
         p.groups.push(crate::project::Group { id: 1, name: "Opening".into(), colour: crate::text::Colour([230, 159, 0]) });
@@ -443,7 +445,8 @@ mod tests {
             "sound from: voice.flac",
             "sound: even, before its picture 0.50 s, measured -23.0 LUFS",
             "points: 1.00 s -6.0 dB",
-            "Music: level -3.0 dB  beats at 0.40, snapping  sync lock",
+            "Music: level -3.0 dB  sync lock",
+            "beats at 0.40, snapping",
             "sound: fade out 2.00 s",
         ] {
             assert!(lines.contains(said), "{said:?} in\n{lines}");

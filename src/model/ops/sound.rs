@@ -3,7 +3,7 @@
 //! player's sound menu and level tag (`OPS-API.md` phase 2).
 
 use super::{End, OpError, Outcome, SoundRef, said};
-use crate::project::{OFF_DB, Own, OwnSound, Project, SoundTrack};
+use crate::project::{Id, OFF_DB, Own, OwnSound, Project, SoundTrack};
 use serde::{Deserialize, Serialize};
 
 /// How far «Lower for voice-over» takes a sound under its normal level:
@@ -68,10 +68,10 @@ pub enum SoundOp {
     /// A track's level, dB (the Audio panel's), or the clips' own sound's
     /// without a `track`: from `OFF_DB` (silent) to `TRACK_MOST`.
     TrackLevel { track: Option<SoundTrack>, db: f64 },
-    /// A track's beats shown (gap 13): the hits at `threshold` (0..1) or
-    /// stronger, edges and the playhead snapping to them if `snap`; none:
-    /// off. `omnix beats` lists a song's.
-    Beats { track: SoundTrack, beats: Option<crate::project::Beats> },
+    /// A song's beats shown on its clip (gap 13): the hits at `threshold`
+    /// (0..1) or stronger, edges and the playhead snapping to them if
+    /// `snap`; none: off. `omnix beats` lists a song's.
+    Beats { clip: Id, beats: Option<crate::project::Beats> },
     /// A track's sync lock (gap 99): on, the picture's edit made shorter
     /// or longer at a point moves its clips after it with it.
     SyncLock { track: SoundTrack, on: bool },
@@ -132,7 +132,7 @@ pub(super) fn apply(p: &mut Project, op: &SoundOp) -> Result<Outcome, OpError> {
             crate::duck::duck_music(&mut p.music, speech, *depth);
             said(format!("music {depth:.0} dB down under {} stretches of speech", speech.len()))
         }
-        &SoundOp::Beats { track, beats } => show_beats(p, track, beats),
+        &SoundOp::Beats { clip, beats } => show_beats(p, clip, beats),
         &SoundOp::SyncLock { track, on } => {
             p.track_mut(track).sync = on;
             said(format!("{}: sync lock {}", track.name(), if on { "on" } else { "off" }))
@@ -233,16 +233,17 @@ fn normalized(p: &mut Project, sound: SoundRef, lufs: Option<f64>, even: bool) -
 }
 
 /// A track's beats shown or not (gap 13).
-fn show_beats(p: &mut Project, track: SoundTrack, beats: Option<crate::project::Beats>) -> Result<Outcome, OpError> {
+fn show_beats(p: &mut Project, clip: Id, beats: Option<crate::project::Beats>) -> Result<Outcome, OpError> {
     if let Some(b) = beats
         && !(0.0..=1.0).contains(&b.threshold)
     {
         return Err(OpError::OutOfRange { what: "beat threshold", value: b.threshold, least: 0.0, most: 1.0 });
     }
-    p.track_mut(track).beats = beats;
+    let (w, i) = p.clip_index(clip).ok_or_else(|| OpError::NotFound(format!("sound clip #{clip}")))?;
+    p.track_mut(w).clips[i].beats = beats;
     said(match beats {
-        Some(b) => format!("{}: beats at {:.2}{}", track.name(), b.threshold, if b.snap { ", snapping" } else { "" }),
-        None => format!("{}: beats off", track.name()),
+        Some(b) => format!("sound clip #{clip}: beats at {:.2}{}", b.threshold, if b.snap { ", snapping" } else { "" }),
+        None => format!("sound clip #{clip}: beats off"),
     })
 }
 
@@ -325,11 +326,12 @@ mod tests {
     #[test]
     fn track_levels_and_the_edits_fades_are_ops() {
         let mut e = edit();
-        let beats = |threshold, snap| op(SoundOp::Beats { track: SoundTrack::Music, beats: Some(crate::project::Beats { threshold, snap }) });
+        let song = e.music.clips[0].id;
+        let beats = |threshold, snap| op(SoundOp::Beats { clip: song, beats: Some(crate::project::Beats { threshold, snap }) });
         e.apply(&beats(0.4, true)).unwrap();
-        assert!(e.apply(&beats(1.5, false)).is_err() && e.music.beats == Some(crate::project::Beats { threshold: 0.4, snap: true }));
-        e.apply(&op(SoundOp::Beats { track: SoundTrack::Music, beats: None })).unwrap();
-        assert_eq!(e.music.beats, None);
+        assert!(e.apply(&beats(1.5, false)).is_err() && e.music.clips[0].beats == Some(crate::project::Beats { threshold: 0.4, snap: true }));
+        e.apply(&op(SoundOp::Beats { clip: song, beats: None })).unwrap();
+        assert_eq!(e.music.clips[0].beats, None);
         e.apply(&op(SoundOp::SyncLock { track: SoundTrack::Music, on: true })).unwrap();
         assert!(e.music.sync);
         e.apply(&op(SoundOp::TrackLevel { track: Some(SoundTrack::Sfx), db: -6.0 })).unwrap();

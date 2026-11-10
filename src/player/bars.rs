@@ -336,7 +336,7 @@ impl App {
                         most: self.waveforms.get(&c.input).map_or(f64::INFINITY, |w| w.duration),
                         wave: self.waveforms.get(&c.input).cloned(),
                         even_wave: if c.even { self.even_waves.get(&c.input).cloned() } else { None },
-                        beats: self.beats.get(&c.input).cloned().flatten(),
+                        hits: self.hits.get(&c.input).cloned().flatten(),
                         level: level_tag(c.gain, c.mute, filter_tags(c.low_cut, c.clean, c.even)),
                     })
                     .collect();

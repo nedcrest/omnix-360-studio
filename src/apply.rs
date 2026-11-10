@@ -140,7 +140,8 @@ fn describe_lines(p: &Project) -> Vec<String> {
         if track.clips.is_empty() {
             continue;
         }
-        println(format!("{}: level {:+.1} dB", w.name(), track.volume));
+        let beats = track.beats.map_or(String::new(), |b| format!("  beats at {:.2}{}", b.threshold, if b.snap { ", snapping" } else { "" }));
+        println(format!("{}: level {:+.1} dB{beats}", w.name(), track.volume));
         for c in &track.clips {
             println(format!("  clip #{:<2} {:7.2}-{:7.2} s  {} {:.2}-{:.2}  level {:+.1} dB{}{}", c.id, c.at, c.ends(), name(&c.input), c.start, c.end, c.gain, if c.mute { " muted" } else { "" }, c.ducked.as_ref().map_or(String::new(), |d| format!(" ducked {:.0} dB", d.depth))));
             let sound = Sounding { even: c.even, low_cut: c.low_cut, clean: c.clean, fades: (c.fade_in, c.fade_out), beyond: (0.0, 0.0), loudness: c.loudness };
@@ -421,7 +422,7 @@ mod tests {
         (c.even, c.sound_before, c.loudness) = (true, 0.5, Some(-23.0));
         c.volume = vec![VolumeKey { t: 1.0, volume: -6.0 }];
         let mut p = Project { cuts: vec![c], aspect: Some(crate::view::Aspect(16, 9)), ..Project::default() };
-        p.music.volume = -3.0;
+        (p.music.volume, p.music.beats) = (-3.0, Some(crate::project::Beats { threshold: 0.4, snap: true }));
         p.music.clips.push(MusicClip { input: "song.wav".into(), end: 10.0, fade_out: 2.0, ..MusicClip::default() });
         let lines = super::describe_lines(&p).join("\n");
         for said in [
@@ -432,7 +433,7 @@ mod tests {
             "sound from: voice.flac",
             "sound: even, before its picture 0.50 s, measured -23.0 LUFS",
             "points: 1.00 s -6.0 dB",
-            "Music: level -3.0 dB",
+            "Music: level -3.0 dB  beats at 0.40, snapping",
             "sound: fade out 2.00 s",
         ] {
             assert!(lines.contains(said), "{said:?} in\n{lines}");

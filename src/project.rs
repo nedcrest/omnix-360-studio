@@ -151,6 +151,17 @@ impl SoundTrack {
     }
 }
 
+/// A track's beats as the lane shows them (gap 13): the hits at
+/// `threshold` (0..1 of a song's strongest) or stronger, and whether edges
+/// and the playhead snap to them.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Beats {
+    pub threshold: f64,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub snap: bool,
+}
+
 /// A sound track: clips of songs (or sound effects) placed on the edit's
 /// timeline. The music is one, the sound effects another (`SoundTrack`).
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -161,6 +172,9 @@ pub struct Music {
     pub volume: f64,
     #[serde(default)]
     pub clips: Vec<MusicClip>,
+    /// Its songs' beats shown on the lane (gap 13): none, off.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub beats: Option<Beats>,
     /// The track's own volume line of older projects (edit times), read
     /// and folded into its clips' lines on load (`fold_track_line`), never
     /// written: it lay over the clips' own lines and the two got in each

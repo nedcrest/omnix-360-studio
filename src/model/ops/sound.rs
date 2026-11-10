@@ -68,6 +68,10 @@ pub enum SoundOp {
     /// A track's level, dB (the Audio panel's), or the clips' own sound's
     /// without a `track`: from `OFF_DB` (silent) to `TRACK_MOST`.
     TrackLevel { track: Option<SoundTrack>, db: f64 },
+    /// A track's beats shown (gap 13): the hits at `threshold` (0..1) or
+    /// stronger, edges and the playhead snapping to them if `snap`; none:
+    /// off. `omnix beats` lists a song's.
+    Beats { track: SoundTrack, beats: Option<crate::project::Beats> },
     /// The whole edit's fade from or to black, its sound with it: seconds,
     /// 0 to `EDIT_FADE_MOST`.
     EditFade { end: End, seconds: f64 },
@@ -191,6 +195,18 @@ pub(super) fn apply(p: &mut Project, op: &SoundOp) -> Result<Outcome, OpError> {
             crate::duck::duck_music(&mut p.music, speech, *depth);
             said(format!("music {depth:.0} dB down under {} stretches of speech", speech.len()))
         }
+        &SoundOp::Beats { track, beats } => {
+            if let Some(b) = beats
+                && !(0.0..=1.0).contains(&b.threshold)
+            {
+                return Err(OpError::OutOfRange { what: "beat threshold", value: b.threshold, least: 0.0, most: 1.0 });
+            }
+            p.track_mut(track).beats = beats;
+            said(match beats {
+                Some(b) => format!("{}: beats at {:.2}{}", track.name(), b.threshold, if b.snap { ", snapping" } else { "" }),
+                None => format!("{}: beats off", track.name()),
+            })
+        }
         &SoundOp::TrackLevel { track, db } => {
             if !(OFF_DB..=TRACK_MOST).contains(&db) {
                 return Err(OpError::OutOfRange { what: "track level", value: db, least: OFF_DB, most: TRACK_MOST });
@@ -269,6 +285,11 @@ mod tests {
     #[test]
     fn track_levels_and_the_edits_fades_are_ops() {
         let mut e = edit();
+        let beats = |threshold, snap| op(SoundOp::Beats { track: SoundTrack::Music, beats: Some(crate::project::Beats { threshold, snap }) });
+        e.apply(&beats(0.4, true)).unwrap();
+        assert!(e.apply(&beats(1.5, false)).is_err() && e.music.beats == Some(crate::project::Beats { threshold: 0.4, snap: true }));
+        e.apply(&op(SoundOp::Beats { track: SoundTrack::Music, beats: None })).unwrap();
+        assert_eq!(e.music.beats, None);
         e.apply(&op(SoundOp::TrackLevel { track: Some(SoundTrack::Sfx), db: -6.0 })).unwrap();
         e.apply(&op(SoundOp::TrackLevel { track: None, db: 3.0 })).unwrap();
         e.apply(&op(SoundOp::EditFade { end: End::Out, seconds: 2.5 })).unwrap();

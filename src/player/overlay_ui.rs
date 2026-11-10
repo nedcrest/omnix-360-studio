@@ -246,7 +246,9 @@ impl App {
                     self.op(Op::Item(ItemOp::Move { item, at, lane: Some(lane) }));
                     self.active_lanes[track_index(r.0)] = lane;
                 }
-                self.edit.commit();
+                // The drag ends as any does: one step, the snap line gone
+                // (audit A12).
+                return self.update(Message::ScrubDone);
             }
             Message::OverlayMove(r, at) => {
                 if let Some(item) = self.edit.item(r).map(|it| it.id) {

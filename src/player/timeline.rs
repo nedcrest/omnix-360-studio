@@ -1422,8 +1422,8 @@ enum OverlayDrag {
     #[default]
     None,
     /// An item moved along, and up or down onto lane `lane` of its track
-    /// (gap 97), landing there when let go.
-    Move { item: usize, x0: f32, at: f64, per_px: f64, lane: usize },
+    /// (gap 97), landing there when let go at the pointer's time `aim`.
+    Move { item: usize, x0: f32, at: f64, per_px: f64, lane: usize, aim: f64 },
     /// An edge, at own time `from` when pressed.
     Trim { item: usize, start: bool, x0: f32, from: f64, per_px: f64 },
     /// A keyframe mark: item `item`'s effect keyframe `key` (`effects`) or
@@ -1779,7 +1779,8 @@ impl canvas::Program<Message> for OverlayLane {
                         Message::OverlaySelect(Some(self.r(item)))
                     }
                     OverlayHit::Item(item) => {
-                        *drag = OverlayDrag::Move { item, x0: p.x, at: self.blocks()[item].item.at, per_px, lane: self.2 };
+                        let at = self.blocks()[item].item.at;
+                        *drag = OverlayDrag::Move { item, x0: p.x, at, per_px, lane: self.2, aim: at };
                         Message::OverlaySelect(Some(self.r(item)))
                     }
                 };
@@ -1792,9 +1793,16 @@ impl canvas::Program<Message> for OverlayLane {
                 }
                 let message = match drag {
                     OverlayDrag::None => return None,
-                    OverlayDrag::Move { item, x0, at, per_px, .. } => {
+                    OverlayDrag::Move { item, x0, at, per_px, lane, aim } => {
                         let (track, item) = (self.1, *item);
                         let at = *at + (x - *x0) as f64 * *per_px;
+                        // Over another lane it stays put on its own, where
+                        // the neighbours there would stop it (audit A4): it
+                        // goes where the pointer is when let go.
+                        *aim = at.max(0.0);
+                        if *lane != self.2 {
+                            return Some(canvas::Action::request_redraw().and_capture());
+                        }
                         let len = self.blocks()[item].len();
                         snapped(t.snap(&[at, at + len], *per_px, |of| of == Of::Item(track, self.2, item)), |by| Message::OverlayMove(self.r(item), at + by))
                     }
@@ -1820,10 +1828,7 @@ impl canvas::Program<Message> for OverlayLane {
                 OverlayDrag::None => None,
                 OverlayDrag::Auto(motion, d) => Some(self.lanes(motion).release(d, bounds).map_or_else(canvas::Action::request_redraw, canvas::Action::publish).and_capture()),
                 // Let go over another lane: it lands there, where it fits.
-                OverlayDrag::Move { item, lane, .. } if lane != self.2 => {
-                    let at = self.blocks().get(item)?.item.at;
-                    Some(canvas::Action::publish(Message::OverlayToLane(self.r(item), at, lane)).and_capture())
-                }
+                OverlayDrag::Move { item, lane, aim, .. } if lane != self.2 => Some(canvas::Action::publish(Message::OverlayToLane(self.r(item), aim, lane)).and_capture()),
                 _ => Some(canvas::Action::publish(Message::ScrubDone).and_capture()),
             },
             _ => None,

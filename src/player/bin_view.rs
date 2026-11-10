@@ -648,6 +648,19 @@ impl App {
     }
 }
 
+/// A file's tile, pressed: a picture is taken up to be carried onto an
+/// overlay lane (gap 91), and a click shows it; other files are buttons.
+/// The button won't do for a picture: it acts only when let go over
+/// itself, so nothing could be carried off it.
+/// `width`: the list's rows fill it, the grid's tiles keep theirs.
+pub(super) fn carried<'a>(content: Element<'a, Message>, (path, kind): (&Path, Kind), width: Length, selected: bool, click: Message) -> iced::widget::MouseArea<'a, Message> {
+    if kind != Kind::Picture {
+        return mouse_area(button(content).width(width).padding(0).style(if selected { button::secondary } else { button::text }).on_press(click));
+    }
+    let card = container(content).width(width).style(move |theme: &iced::Theme| if selected { container::Style::default().background(theme.extended_palette().secondary.base.color) } else { container::Style::default() });
+    mouse_area(card).on_press(Message::Carry(Some(path.to_owned()))).on_release(click).interaction(iced::mouse::Interaction::Grab)
+}
+
 #[cfg(test)]
 mod tests {
     use super::{Kind, copy_in, folder_for, uses};
@@ -697,17 +710,4 @@ mod tests {
         assert_eq!(names, ["song (2).mp3", "song.mp3"]);
         std::fs::remove_dir_all(&dir).unwrap();
     }
-}
-
-/// A file's tile, pressed: a picture is taken up to be carried onto an
-/// overlay lane (gap 91), and a click shows it; other files are buttons.
-/// The button won't do for a picture: it acts only when let go over
-/// itself, so nothing could be carried off it.
-/// `width`: the list's rows fill it, the grid's tiles keep theirs.
-pub(super) fn carried<'a>(content: Element<'a, Message>, (path, kind): (&Path, Kind), width: Length, selected: bool, click: Message) -> iced::widget::MouseArea<'a, Message> {
-    if kind != Kind::Picture {
-        return mouse_area(button(content).width(width).padding(0).style(if selected { button::secondary } else { button::text }).on_press(click));
-    }
-    let card = container(content).width(width).style(move |theme: &iced::Theme| if selected { container::Style::default().background(theme.extended_palette().secondary.base.color) } else { container::Style::default() });
-    mouse_area(card).on_press(Message::Carry(Some(path.to_owned()))).on_release(click).interaction(iced::mouse::Interaction::Grab)
 }

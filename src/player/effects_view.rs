@@ -485,7 +485,7 @@ impl App {
     fn scopes_view(&self) -> Element<'static, Message> {
         let Ok(mut feed) = self.scope.lock() else { return text("…").into() };
         let Some(s) = feed.latest.clone() else {
-            return text("…").size(12).into();
+            return text(if feed.unreadable { "The scopes read 8-bit screens only" } else { "…" }).size(12).into();
         };
         let image = feed.waveform.get_or_insert_with(|| waveform_image(&s)).clone();
         drop(feed);

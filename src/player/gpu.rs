@@ -250,6 +250,8 @@ pub struct ScopeFeed {
     /// The waveform drawn from `latest`, made once by the panel.
     pub waveform: Option<iced::widget::image::Handle>,
     asked: Option<std::time::Instant>,
+    /// The screen's pictures are of a kind the scopes can't read.
+    pub unreadable: bool,
 }
 
 pub type Scope = Arc<std::sync::Mutex<ScopeFeed>>;
@@ -284,6 +286,18 @@ enum ScopeRead {
     Idle,
     Copied,
     Mapping(Arc<std::sync::atomic::AtomicU8>),
+}
+
+/// Whether the scopes read a picture of `format` blue first; none for one
+/// they can't read (they count 8-bit pixels of 4 bytes: a deeper screen's
+/// format leaves them empty, audit A15).
+fn scope_order(format: wgpu::TextureFormat) -> Option<bool> {
+    use wgpu::TextureFormat as F;
+    match format {
+        F::Rgba8Unorm | F::Rgba8UnormSrgb => Some(false),
+        F::Bgra8Unorm | F::Bgra8UnormSrgb => Some(true),
+        _ => None,
+    }
 }
 
 /// A mapping's state: waiting, done, failed (back to idle: audit A13).
@@ -691,6 +705,10 @@ impl Pipeline {
     /// whether to take a picture this frame (idle, and `SCOPE_EVERY` since
     /// the last).
     pub(super) fn scope_due(&mut self, device: &wgpu::Device, feed: &Scope) -> bool {
+        let Some(bgra) = scope_order(self.format) else {
+            feed.lock().expect("the scopes' feed").unreadable = true;
+            return false;
+        };
         let read = std::mem::take(&mut *self.scope_read.lock().expect("the scope's state"));
         let Some(b) = &self.scope_buffer else { return self.ask(feed) };
         let next = match read {
@@ -706,7 +724,6 @@ impl Pipeline {
                     MAP_WAITING => ScopeRead::Mapping(state),
                     MAP_FAILED => ScopeRead::Idle,
                     _ => {
-                        let bgra = matches!(self.format, wgpu::TextureFormat::Bgra8Unorm | wgpu::TextureFormat::Bgra8UnormSrgb);
                         let measured = crate::scopes::measure(&b.buffer.slice(..).get_mapped_range(), (b.size.0 as usize, b.size.1 as usize), b.row as usize, bgra, 2);
                         b.buffer.unmap();
                         let mut f = feed.lock().expect("the scopes' feed");
@@ -1231,6 +1248,12 @@ fn to_half(v: f32) -> u16 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_scopes_read_8_bit_pictures_only() {
+        use wgpu::TextureFormat as F;
+        assert_eq!((scope_order(F::Bgra8UnormSrgb), scope_order(F::Rgba8Unorm), scope_order(F::Rgba16Float)), (Some(true), Some(false), None));
+    }
 
     #[test]
     fn the_scopes_ask_every_so_often_and_forget_when_closed() {

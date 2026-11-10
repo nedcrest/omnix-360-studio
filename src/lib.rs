@@ -45,6 +45,7 @@ mod text;
 mod track;
 mod view;
 mod waveform;
+mod beats;
 pub mod cli;
 mod analyse;
 mod export;

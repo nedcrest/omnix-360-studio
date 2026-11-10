@@ -141,6 +141,14 @@ pub(crate) enum Cmd {
         #[arg(long)]
         every: Option<f64>,
     },
+    /// A song's beats (gap 13): a line per hit, its time in the file and
+    /// its strength (0..1 of the song's strongest), those at --threshold
+    /// or stronger.
+    Beats {
+        song: PathBuf,
+        #[arg(long, default_value_t = 0.0)]
+        threshold: f64,
+    },
     /// Lower the music under speech (auto-duck): find where cleaned voices
     /// and Voice takes speak and put volume points on the music's line, this
     /// far down there. Prints where; writes the project with -o.
@@ -709,6 +717,13 @@ pub(crate) fn run() -> Result<()> {
         Cmd::Check { project, fast_pan, opts } => check::check(&project, &opts.into(), fast_pan)?,
         Cmd::Autocolour { project, cuts, levels, ops, output } => crate::autocolour::run(&project, &cuts, levels, ops, output.as_deref())?,
         Cmd::Normalize { project, cuts, track, even, ops, output } => loudness::normalize(&project, &cuts, track, even, ops, output.as_deref())?,
+        Cmd::Beats { song, threshold } => {
+            let beats = crate::beats::read(&song)?;
+            for b in crate::beats::at_least(&beats, threshold) {
+                println!("{:8.2} s  {:.2}", b.t, b.strength);
+            }
+            eprintln!("{} of {} hits at {threshold} or stronger", crate::beats::at_least(&beats, threshold).count(), beats.len());
+        }
         Cmd::Duck { project, depth, ops, output } => crate::duck::run(&project, depth, ops, output.as_deref())?,
         Cmd::Apply { project, ops, output } => crate::apply::run(&project, &ops, output.as_deref())?,
         Cmd::Describe { project } => crate::apply::describe(&project)?,

@@ -223,6 +223,19 @@ pub const NEUTRAL: [f64; 18] = {
     a
 };
 
+/// The input levels' span, `black_in` to `white_in`, never none: what
+/// `level` divides by (`grade.wgsl` takes it as is).
+pub fn level_span(black_in: f64, white_in: f64) -> f64 {
+    (white_in - black_in).max(1e-3)
+}
+
+/// Display value `v` through the input levels (gap 14): `black_in` to
+/// black, `white_in` to white. Auto colour reads its picture through the
+/// same, so what it measures is what the grade does.
+pub fn level(v: f64, black_in: f64, white_in: f64) -> f64 {
+    ((v - black_in) / level_span(black_in, white_in)).clamp(0.0, 1.0)
+}
+
 /// Rec. 709's weights of red, green and blue in a colour's brightness.
 pub const REC709: [f64; 3] = [0.2126, 0.7152, 0.0722];
 
@@ -296,8 +309,7 @@ impl Grade {
     pub fn apply(&self, rgb: [f64; 3], at: [f64; 2], aspect: f64) -> [f64; 3] {
         // Levels first (gap 14): `black_in` to black, `white_in` to white,
         // on the display values, as an editor's input levels.
-        let span = (self.white_in - self.black_in).max(1e-3);
-        let rgb = rgb.map(|v| ((v - self.black_in) / span).clamp(0.0, 1.0));
+        let rgb = rgb.map(|v| level(v, self.black_in, self.white_in));
         // Light: exposure and white balance.
         let gain = 2f64.powf(self.exposure);
         let wb = [2f64.powf(WB_STOPS * self.temperature), 2f64.powf(-WB_STOPS * self.tint), 2f64.powf(-WB_STOPS * self.temperature)];
@@ -353,7 +365,7 @@ impl Grade {
                 let from = 1.0 - self.vignette_reach;
                 [self.vignette_shape.round() as f32, f(from), f(from + (1.0 - from) * self.vignette_soft.max(0.05)), 0.0]
             },
-            [f(self.black_in), f((self.white_in - self.black_in).max(1e-3)), 0.0, 0.0],
+            [f(self.black_in), f(level_span(self.black_in, self.white_in)), 0.0, 0.0],
         ]
     }
 }
@@ -429,6 +441,14 @@ pub fn grade_at(keys: &[EffectKey], t: f64) -> Grade {
 mod tests {
     /// Exposure up rolls the highlights off instead of clipping them, and
     /// leaves everything else as the plain gain did.
+    #[test]
+    fn levels_map_their_black_and_white_to_the_ends() {
+        assert_eq!((level(0.1, 0.1, 0.9), level(0.9, 0.1, 0.9), level(0.5, 0.1, 0.9)), (0.0, 1.0, 0.5));
+        assert_eq!(level(0.5, 0.5, 0.5), 0.0, "an empty span divides by its least");
+        let g = Grade { black_in: 0.1, white_in: 0.9, ..Grade::default() };
+        assert!((g.apply([0.5; 3], [0.0, 0.0], 1.0)[0] - 0.5).abs() < 1e-9, "the grade levels as `level` does");
+    }
+
     #[test]
     fn one_luma_weighs_green_most_and_white_is_one() {
         assert!((luma([1.0; 3]) - 1.0).abs() < 1e-12);

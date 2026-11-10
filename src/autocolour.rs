@@ -95,8 +95,7 @@ impl Correction {
 pub fn correction(m: &Measure) -> Correction {
     let black_in = if m.black > 0.01 { m.black.min(0.3) } else { 0.0 };
     let white_in = if m.white < 0.98 { m.white.max(0.7) } else { 1.0 };
-    let span = (white_in - black_in).max(1e-3);
-    let level = |v: f64| ((v - black_in) / span).clamp(0.0, 1.0);
+    let level = |v: f64| crate::grade::level(v, black_in, white_in);
     let mid = level(m.mid).max(0.02);
     let stops = (2.2 * (mid.clamp(MID.0, MID.1) / mid).log2()).clamp(-MOST_STOPS, MOST_STOPS);
     let exposure = if stops.abs() < SMALL_STOPS { 0.0 } else { (stops * 100.0).round() / 100.0 };

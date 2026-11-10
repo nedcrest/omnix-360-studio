@@ -314,6 +314,8 @@ impl App {
         let item = |label: String, msg: Message| -> Element<'a, Message> { button(text(label).size(13)).style(button::text).width(Length::Fill).padding([5, 10]).on_press(msg).into() };
         let sound = |label: String, msg: SoundMsg| item(label, Message::Sound(msg));
         let mut items: Vec<Element<'a, Message>> = Vec::new();
+        // The menu's rows, by kind, for its height: items, rules, headings.
+        let mut rows = (0usize, 0usize, 0usize);
         match menu {
             Menu::Own(own) => {
                 let Some((keys, _)) = self.edit.own_line(own) else { return below };
@@ -322,44 +324,63 @@ impl App {
                     Own::Clip(which, i) => self.edit.track(which).clips.get(i).map(|c| (c.gain, c.mute, c.even, c.loudness, c.low_cut, c.clean)),
                 }
                 .unwrap_or_default();
-                items.push(sound(format!("Lower for voice-over ({VOICE_OVER_DIP:+.0} dB)"), SoundMsg::Lower(own)));
+                // In groups, each under a small heading (gap 47); a toggle
+                // keeps its words and shows its state by a tick.
+                let tick = |on: bool, label: &str| format!("{}{label}", if on { "✓ " } else { "" });
+                let mut level = vec![sound(format!("Lower for voice-over ({VOICE_OVER_DIP:+.0} dB)"), SoundMsg::Lower(own))];
                 if (gain - normal_gain(loudness)).abs() > 0.05 {
-                    items.push(sound(format!("Back to normal level ({:+.1} dB)", normal_gain(loudness)), SoundMsg::Restore(own)));
+                    level.push(sound(format!("Back to normal level ({:+.1} dB)", normal_gain(loudness)), SoundMsg::Restore(own)));
                 }
+                level.push(sound(tick(mute, "Mute"), SoundMsg::Mute(own, !mute)));
+                level.push(sound("Normalize…".into(), SoundMsg::Open(Scope::Own(own))));
+                let mut line = Vec::new();
                 // The line shows once it has points; then a click on it adds one.
                 if keys.is_empty() {
-                    items.push(sound("Show volume line".into(), SoundMsg::ShowLine(own)));
+                    line.push(sound("Show volume line".into(), SoundMsg::ShowLine(own)));
                 }
                 if self.edit.before(own).is_some() {
-                    items.push(sound("Continue the level of the one before".into(), SoundMsg::Continue(own)));
+                    line.push(sound("Continue the level of the one before".into(), SoundMsg::Continue(own)));
                 }
-                items.push(sound(if mute { "Unmute".into() } else { "Mute".into() }, SoundMsg::Mute(own, !mute)));
-                items.push(sound(if even { "Stop evening out".into() } else { "Even out quiet and loud".into() }, SoundMsg::Even1(own, !even)));
-                items.push(sound(if low_cut { "Stop cutting the low rumble".into() } else { "Cut the low rumble (wind)".into() }, SoundMsg::LowCut(own, !low_cut)));
-                items.push(sound(if clean { "Stop cleaning up the noise".into() } else { "Clean up steady noise".into() }, SoundMsg::Clean(own, !clean)));
-                items.push(sound("Normalize…".into(), SoundMsg::Open(Scope::Own(own))));
-                items.push(sound("Back to the original".into(), SoundMsg::Original(own)));
+                line.push(sound("Back to the original".into(), SoundMsg::Original(own)));
+                let clean_up = vec![
+                    sound(tick(even, "Even out quiet and loud"), SoundMsg::Even1(own, !even)),
+                    sound(tick(low_cut, "Cut the low rumble (wind)"), SoundMsg::LowCut(own, !low_cut)),
+                    sound(tick(clean, "Clean up steady noise"), SoundMsg::Clean(own, !clean)),
+                ];
+                let mut place = Vec::new();
                 // A sound split from its picture (a J- or L-cut, or short).
                 if let Own::Cut(i) = own
                     && self.edit.cuts.get(i).is_some_and(|c| c.sound_before != 0.0 || c.sound_after != 0.0)
                 {
-                    items.push(sound("Sound back to the picture's edges".into(), SoundMsg::ToPicture(i)));
+                    place.push(sound("Sound back to the picture's edges".into(), SoundMsg::ToPicture(i)));
                 }
                 if let Own::Clip(which @ (SoundTrack::Sfx | SoundTrack::Sfx2), i) = own {
                     let to = if which == SoundTrack::Sfx { "SFX 2" } else { "SFX" };
-                    items.push(sound(format!("Move to {to}"), SoundMsg::OtherSfx(which, i)));
+                    place.push(sound(format!("Move to {to}"), SoundMsg::OtherSfx(which, i)));
                 }
                 // Auto-duck where a song is right-clicked too, not only on
                 // the lane's empty stretch or in the Audio panel.
+                let mut music = Vec::new();
                 if let Own::Clip(SoundTrack::Music, _) = own {
-                    items.push(item(format!("Lower the music under speech (−{:.0} dB)", self.duck_db), Message::Duck));
+                    music.push(item(format!("Lower the music under speech (−{:.0} dB)", self.duck_db), Message::Duck));
                 }
-                items.push(rule::horizontal(1).into());
                 let info = match own {
                     Own::Cut(i) => super::info::Of::Cut(i),
                     Own::Clip(which, i) => super::info::Of::Music(which, i),
                 };
-                items.push(item("Info".into(), Message::Info(info)));
+                let groups = [("Level", level), ("Volume line", line), ("Clean up", clean_up), ("Placement", place), ("Music", music), ("", vec![item("Info".into(), Message::Info(info))])];
+                for (heading, group) in groups.into_iter().filter(|(_, g)| !g.is_empty()) {
+                    if !items.is_empty() {
+                        items.push(rule::horizontal(1).into());
+                        rows.1 += 1;
+                    }
+                    if !heading.is_empty() {
+                        items.push(container(text(heading).size(11).style(text::secondary)).width(Length::Fill).padding([4, 10]).into());
+                        rows.2 += 1;
+                    }
+                    rows.0 += group.len();
+                    items.extend(group);
+                }
             }
             Menu::Track(which) => {
                 let track = self.edit.track(which);
@@ -385,8 +406,13 @@ impl App {
             return below;
         }
         // Its bottom at the pointer (the timeline is low in the window),
-        // by its own height: a row is 13 pt text, 5 px above and below.
-        let height = items.len() as f32 * 26.0 + 8.0;
+        // by its own height: an item is 13 pt text, 5 px above and below; a
+        // heading is smaller, a rule thin. Menus without groups count their
+        // items alone.
+        if rows == (0, 0, 0) {
+            rows.0 = items.len();
+        }
+        let height = rows.0 as f32 * 26.0 + rows.1 as f32 * 2.0 + rows.2 as f32 * 22.0 + 8.0;
         let top = (at.y - height).max(0.0);
         let menu = container(column(items).width(260)).padding(4).style(container::rounded_box);
         let close = mouse_area(container(space()).width(Length::Fill).height(Length::Fill)).on_press(Message::Sound(SoundMsg::Menu(None))).on_right_press(Message::Sound(SoundMsg::Menu(None)));

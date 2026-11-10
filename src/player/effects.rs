@@ -31,7 +31,7 @@ pub enum EffectMsg {
     AutoColoured(crate::project::Id, u64, bool, Result<crate::autocolour::Correction, String>),
     /// The playhead onto the selected clip, the panel's to edit (gap 93).
     GoToSelected,
-    /// Effect `i` (as in `PARAMS`) moved to this value.
+    /// Effect `i` (as in `grade::EFFECTS`) moved to this value.
     Set(usize, f64),
     /// A slider let go: the next move is a change of its own for undo.
     Done,
@@ -65,7 +65,7 @@ pub enum EffectMsg {
     Jump(usize, f64),
     /// Cut `cut`'s effect keyframe `key` dragged to clip time `t`.
     KeyMove(usize, usize, f64),
-    /// The cut's LUT (how much of it is effect `LUT`).
+    /// The cut's LUT (how much of it is effect `grade::LUT`).
     Lut(LutChoice),
     /// A group of the panel folded or opened, by its key (`Group::fold_key`).
     Fold(String),
@@ -113,43 +113,18 @@ impl std::fmt::Display for LutChoice {
     }
 }
 
-/// Each effect as the panel shows it: its name and what it does, in the
-/// order of `Grade::values` (their ranges `grade::RANGES`).
-pub(super) const PARAMS: [(&str, &str); 18] = [
-    ("Exposure", "Brighter or darker, in stops, like the camera's EV"),
-    ("Contrast", "More or less contrast, around mid-grey"),
-    ("Highlights", "Pull back (−) or lift the bright parts, such as the sky"),
-    ("Shadows", "Lift (+) or deepen the dark parts"),
-    ("Temperature", "Cooler (−) or warmer"),
-    ("Tint", "Greener (−) or more magenta"),
-    ("Saturation", "Less or more colour; −1 is black and white"),
-    ("Vibrance", "More colour mostly where there is little, sparing skin and sky"),
-    ("Vignette", "Darker edges: round, or from the top, the bottom or the sides"),
-    ("Opacity", "How much of the picture shows; on the main track it fades towards black"),
-    ("Strength", "How much of the LUT: 100 % is all of it, less mixes in the picture as filmed"),
-    ("Shape", "The vignette's shape: round, from the top, the bottom or the sides"),
-    ("Reach", "How far in the vignette reaches"),
-    ("Softness", "How soft the vignette's inner edge is"),
-    ("Blur", "How soft it's drawn; at 100 % past reading"),
-    ("Reveal", "How much has come on: a picture wiped in from the left, text typed letter by letter"),
-    ("Black", "The level that becomes black, of 255: the picture's darkest (Scopes' Black) makes its black black"),
-    ("White", "The level that becomes white, of 255: the picture's brightest makes its white white"),
-];
-
-/// The LUT's strength among `Grade::values` (a row of `PARAMS`), drawn
-/// beside the LUT picker.
-pub(super) const LUT: usize = 10;
 
 /// The panel's width.
 pub(super) const WIDTH: f32 = 300.0;
 
 /// A slider's value as shown: stops for exposure, else a signed amount.
 pub(super) fn label(i: usize, v: f64) -> String {
+    use crate::grade::*;
     match i {
-        0 => format!("{v:+.2} EV"),
-        8 => format!("{v:.2}"),
-        9 | 10 | 14 | 15 => format!("{:.0} %", v * 100.0),
-        16 | 17 => format!("{:.0}", v * 255.0),
+        EXPOSURE => format!("{v:+.2} EV"),
+        VIGNETTE => format!("{v:.2}"),
+        OPACITY | LUT | BLUR | REVEAL => format!("{:.0} %", v * 100.0),
+        BLACK_IN | WHITE_IN => format!("{:.0}", v * 255.0),
         _ => format!("{v:+.2}"),
     }
 }
@@ -832,8 +807,7 @@ mod tests {
     }
 
     #[test]
-    fn every_value_the_panel_draws_has_a_row_and_a_range() {
-        assert_eq!(PARAMS.len(), crate::grade::NAMES.len());
+    fn every_effects_neutral_value_is_within_its_range() {
         let neutral = crate::grade::NEUTRAL;
         assert!(crate::grade::RANGES.iter().zip(neutral).all(|(&(lo, hi), v)| lo <= v && v <= hi));
     }

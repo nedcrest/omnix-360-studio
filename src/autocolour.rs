@@ -5,7 +5,7 @@
 //! within reach, nothing moved for a small difference; set as the cut's
 //! own values, one undo step, the user's to change after.
 
-use crate::grade::{BLACK_IN, WHITE_IN};
+use crate::grade::{BLACK_IN, EXPOSURE, TEMPERATURE, TINT, WHITE_IN};
 use anyhow::{Context, Result, bail};
 
 /// Frames measured across a cut.
@@ -84,7 +84,7 @@ pub struct Correction {
 impl Correction {
     /// Each as an effect: its place among `grade::NAMES`, and its value.
     pub fn values(&self) -> [(usize, f64); 5] {
-        [(BLACK_IN, self.black_in), (WHITE_IN, self.white_in), (0, self.exposure), (4, self.temperature), (5, self.tint)]
+        [(BLACK_IN, self.black_in), (WHITE_IN, self.white_in), (EXPOSURE, self.exposure), (TEMPERATURE, self.temperature), (TINT, self.tint)]
     }
 
     /// The levels alone (Levels' «Auto»).

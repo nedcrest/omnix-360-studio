@@ -3023,7 +3023,7 @@ mod tests {
         use crate::automation::{AutoClip, AutoPoint};
         let (mut t, b) = timeline();
         // Exposure's lane open; cut 0 (0..4 s, clip time 0..4) moves it over 1..3 s.
-        (t.auto_lanes, t.folds.effects) = (vec![super::super::automation_ui::Param::Grade(0)], false);
+        (t.auto_lanes, t.folds.effects) = (vec![super::super::automation_ui::Param::Grade(crate::grade::EXPOSURE)], false);
         t.rows = Rows::new(1.0, false, t.folds, 1);
         t.blocks[0].cut.automation = vec![AutoClip { param: "exposure".into(), from: 1.0, to: 3.0, points: vec![AutoPoint { t: 2.0, v: 1.5, ease: Default::default() }], follows: None, animation: None }];
         let lanes = t.cut_lanes();
@@ -3114,7 +3114,7 @@ mod tests {
         assert_eq!(lanes.owners[0].on, AutoOn::Item(9));
         assert_eq!(Param::Place(0).label(0.25), "0.25");
         // An effect's lane open too: Motion moves down under it.
-        let lane2 = lane_with(vec![Param::Grade(9), Param::Place(0)], true);
+        let lane2 = lane_with(vec![Param::Grade(crate::grade::OPACITY), Param::Place(0)], true);
         assert_eq!(lane2.motion_top(), lane2.0.rows.overlay + EFFECTS + AUTO);
         assert_eq!((lane2.lanes(false).tag(), lane2.lanes(true).tag()), ("▾ Effects".to_owned(), "▾ Motion".to_owned()));
         // A clip's edges snap to its item's, within reach; Shift frees them.

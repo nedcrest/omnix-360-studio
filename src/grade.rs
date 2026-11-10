@@ -113,33 +113,96 @@ fn is_reach(v: &f64) -> bool {
 /// The vignette's shapes, by `Grade::vignette_shape`.
 pub const VIGNETTES: [&str; 4] = ["Round", "Top", "Bottom", "Sides"];
 
-/// The range of each of `Grade::values`: the panel's sliders, an
-/// automation lane's height.
-pub const RANGES: [(f64, f64); 18] = [
-    (-3.0, 3.0), (-1.0, 1.0), (-1.0, 1.0), (-1.0, 1.0), (-1.0, 1.0), (-1.0, 1.0), (-1.0, 1.0), (-1.0, 1.0), (0.0, 1.0), (0.0, 1.0), (0.0, 1.0), (0.0, 3.0), (0.0, 1.0), (0.0, 1.0), (0.0, 1.0), (0.0, 1.0), (0.0, 0.5), (0.5, 1.0),
-];
+/// One of `Grade::values`: its name in the project (`KeyOp::EffectValue`),
+/// as the Effects panel shows it, what it does, its range (the panel's
+/// slider, an automation lane's height) and its value untouched.
+#[derive(Clone, Copy, Debug)]
+pub struct Effect {
+    pub name: &'static str,
+    pub label: &'static str,
+    pub hint: &'static str,
+    pub range: (f64, f64),
+    pub neutral: f64,
+}
 
-/// Each of `Grade::values` by its name in the project (`KeyOp::EffectValue`).
-pub const NAMES: [&str; 18] = [
-    "exposure", "contrast", "highlights", "shadows", "temperature", "tint", "saturation", "vibrance", "vignette", "opacity", "lut", "vignette_shape", "vignette_reach", "vignette_soft", "blur", "reveal", "black_in", "white_in",
-];
+const fn effect(name: &'static str, label: &'static str, hint: &'static str, range: (f64, f64), neutral: f64) -> Effect {
+    Effect { name, label, hint, range, neutral }
+}
 
-/// Where `Grade::values` holds the blur and the reveal: a text's or a
-/// picture's, never a cut's (`ITEM_ONLY`).
+/// Where each sits in `Grade::values`.
+pub const EXPOSURE: usize = 0;
+pub const CONTRAST: usize = 1;
+pub const HIGHLIGHTS: usize = 2;
+pub const SHADOWS: usize = 3;
+pub const TEMPERATURE: usize = 4;
+pub const TINT: usize = 5;
+pub const SATURATION: usize = 6;
+pub const VIBRANCE: usize = 7;
+/// The vignette's amount, its shape (held, not blended), its reach and
+/// softness.
+pub const VIGNETTE: usize = 8;
+pub const OPACITY: usize = 9;
+/// How much of the cut's LUT.
+pub const LUT: usize = 10;
+pub const SHAPE: usize = 11;
+pub const VIGNETTE_REACH: usize = 12;
+pub const VIGNETTE_SOFT: usize = 13;
+/// A text's or a picture's, never a cut's (`ITEM_ONLY`).
 pub const BLUR: usize = 14;
 pub const REVEAL: usize = 15;
-pub const ITEM_ONLY: [usize; 2] = [BLUR, REVEAL];
-/// Where `Grade::values` holds the input levels (gap 14).
+/// The input levels (gap 14).
 pub const BLACK_IN: usize = 16;
 pub const WHITE_IN: usize = 17;
+pub const ITEM_ONLY: [usize; 2] = [BLUR, REVEAL];
 
-/// Where `Grade::values` holds the vignette's amount, and its shape (held,
-/// not blended; its reach and softness follow).
-pub const VIGNETTE: usize = 8;
-pub const SHAPE: usize = 11;
+/// Each of `Grade::values`, in its order.
+pub const EFFECTS: [Effect; 18] = [
+    effect("exposure", "Exposure", "Brighter or darker, in stops, like the camera's EV", (-3.0, 3.0), 0.0),
+    effect("contrast", "Contrast", "More or less contrast, around mid-grey", (-1.0, 1.0), 0.0),
+    effect("highlights", "Highlights", "Pull back (−) or lift the bright parts, such as the sky", (-1.0, 1.0), 0.0),
+    effect("shadows", "Shadows", "Lift (+) or deepen the dark parts", (-1.0, 1.0), 0.0),
+    effect("temperature", "Temperature", "Cooler (−) or warmer", (-1.0, 1.0), 0.0),
+    effect("tint", "Tint", "Greener (−) or more magenta", (-1.0, 1.0), 0.0),
+    effect("saturation", "Saturation", "Less or more colour; −1 is black and white", (-1.0, 1.0), 0.0),
+    effect("vibrance", "Vibrance", "More colour mostly where there is little, sparing skin and sky", (-1.0, 1.0), 0.0),
+    effect("vignette", "Vignette", "Darker edges: round, or from the top, the bottom or the sides", (0.0, 1.0), 0.0),
+    effect("opacity", "Opacity", "How much of the picture shows; on the main track it fades towards black", (0.0, 1.0), 1.0),
+    effect("lut", "Strength", "How much of the LUT: 100 % is all of it, less mixes in the picture as filmed", (0.0, 1.0), 1.0),
+    effect("vignette_shape", "Shape", "The vignette's shape: round, from the top, the bottom or the sides", (0.0, 3.0), 0.0),
+    effect("vignette_reach", "Reach", "How far in the vignette reaches", (0.0, 1.0), REACH),
+    effect("vignette_soft", "Softness", "How soft the vignette's inner edge is", (0.0, 1.0), 1.0),
+    effect("blur", "Blur", "How soft it's drawn; at 100 % past reading", (0.0, 1.0), 0.0),
+    effect("reveal", "Reveal", "How much has come on: a picture wiped in from the left, text typed letter by letter", (0.0, 1.0), 1.0),
+    effect("black_in", "Black", "The level that becomes black, of 255: the picture's darkest (Scopes' Black) makes its black black", (0.0, 0.5), 0.0),
+    effect("white_in", "White", "The level that becomes white, of 255: the picture's brightest makes its white white", (0.5, 1.0), 1.0),
+];
 
+/// `EFFECTS`' names, ranges and neutral values each as a list.
+pub const NAMES: [&str; 18] = {
+    let (mut a, mut i) = ([""; 18], 0);
+    while i < EFFECTS.len() {
+        a[i] = EFFECTS[i].name;
+        i += 1;
+    }
+    a
+};
+pub const RANGES: [(f64, f64); 18] = {
+    let (mut a, mut i) = ([(0.0, 0.0); 18], 0);
+    while i < EFFECTS.len() {
+        a[i] = EFFECTS[i].range;
+        i += 1;
+    }
+    a
+};
 /// `Grade::values` of the picture untouched.
-pub const NEUTRAL: [f64; 18] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0, REACH, 1.0, 0.0, 1.0, 0.0, 1.0];
+pub const NEUTRAL: [f64; 18] = {
+    let (mut a, mut i) = ([0.0; 18], 0);
+    while i < EFFECTS.len() {
+        a[i] = EFFECTS[i].neutral;
+        i += 1;
+    }
+    a
+};
 
 /// Stops of colour per unit of temperature or tint: at ±1, red and blue
 /// are four times apart, enough to neutralise shade or low sun.

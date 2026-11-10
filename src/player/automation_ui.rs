@@ -44,7 +44,7 @@ impl Param {
     /// As the panel calls it.
     pub fn title(self) -> &'static str {
         match self {
-            Param::Grade(k) => super::effects::PARAMS.get(k).map_or(crate::grade::NAMES[k], |(n, _)| n),
+            Param::Grade(k) => crate::grade::EFFECTS.get(k).map_or("?", |e| e.label),
             Param::Place(k) => super::effects::PLACE[k].0,
         }
     }

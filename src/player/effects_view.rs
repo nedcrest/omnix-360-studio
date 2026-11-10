@@ -9,7 +9,8 @@
 //! beside it (`effects_extra_panel`), as the Transitions panel's settings
 //! do.
 
-use super::effects::{EffectMsg, Focus, LUT, LutChoice, PARAMS, PLACE, Target, WIDTH, label};
+use super::effects::{EffectMsg, Focus, LutChoice, PLACE, Target, WIDTH, label};
+use crate::grade::{BLACK_IN, BLUR, CONTRAST, EFFECTS, EXPOSURE, HIGHLIGHTS, LUT, OPACITY, REVEAL, SATURATION, SHADOWS, SHAPE, TEMPERATURE, TINT, VIBRANCE, VIGNETTE, VIGNETTE_REACH, VIGNETTE_SOFT, WHITE_IN};
 use super::{App, Message, icon_button, tip};
 use crate::grade::{Grade, grade_at};
 use crate::overlay::{Place, place_at};
@@ -75,17 +76,17 @@ impl Group {
         }
     }
 
-    /// The effects its ↺ sets back (`Grade::values`), on a text or
-    /// picture if `item`: there opacity is in Show, not Finish.
+    /// The effects it holds and its ↺ sets back (`Grade::values`), in the
+    /// order drawn, on a text or picture if `item`: there opacity is in
+    /// Show, not Finish. Light's first two are its levels.
     pub fn params(self, item: bool) -> &'static [usize] {
-        use crate::grade::{BLUR, REVEAL};
         match self {
-            Group::Light => &[16, 17, 0, 1, 2, 3],
-            Group::Colour => &[4, 5, 6, 7],
+            Group::Light => &[BLACK_IN, WHITE_IN, EXPOSURE, CONTRAST, HIGHLIGHTS, SHADOWS],
+            Group::Colour => &[TEMPERATURE, TINT, SATURATION, VIBRANCE],
             Group::Look => &[LUT],
-            Group::Finish if item => &[8, 11, 12, 13],
-            Group::Finish => &[8, 9, 11, 12, 13],
-            Group::Show => &[9, REVEAL, BLUR],
+            Group::Finish if item => &[VIGNETTE, SHAPE, VIGNETTE_REACH, VIGNETTE_SOFT],
+            Group::Finish => &[VIGNETTE, OPACITY, SHAPE, VIGNETTE_REACH, VIGNETTE_SOFT],
+            Group::Show => &[OPACITY, REVEAL, BLUR],
             Group::Scopes | Group::Text | Group::Kind | Group::Place | Group::Animate | Group::Bars => &[],
         }
     }
@@ -146,15 +147,16 @@ impl App {
             text("Black and White from a dozen frames across the cut: its darkest to black, its brightest to white"),
             tooltip::Position::Left,
         );
-        let levels = column![row![text("Levels").size(13).width(Length::Fill), auto].align_y(Alignment::Center), self.sliders(&grade, &[16, 17], enabled)].spacing(6);
+        let (levels, light) = Group::Light.params(false).split_at(2);
+        let levels = column![row![text("Levels").size(13).width(Length::Fill), auto].align_y(Alignment::Center), self.sliders(&grade, levels, enabled)].spacing(6);
         let mut groups = vec![
-            self.group(Group::Light, column![levels, self.sliders(&grade, &[0, 1, 2, 3], enabled)].spacing(10).into()),
-            self.group(Group::Colour, column![row![text("White balance").size(13).width(Length::Fill), picker].align_y(Alignment::Center), self.sliders(&grade, &[4, 5, 6, 7], enabled)].spacing(6).into()),
+            self.group(Group::Light, column![levels, self.sliders(&grade, light, enabled)].spacing(10).into()),
+            self.group(Group::Colour, column![row![text("White balance").size(13).width(Length::Fill), picker].align_y(Alignment::Center), self.sliders(&grade, Group::Colour.params(false), enabled)].spacing(6).into()),
         ];
         if let Some((i, _)) = cut {
             groups.push(self.group(Group::Look, column![self.lut_controls(i, &grade), self.style_tiles(Target::Cut(i))].spacing(10).into()));
         }
-        let finish = column![self.vignette_row(&grade, enabled), self.param_row(9, grade.opacity, enabled)].spacing(6);
+        let finish = column![self.vignette_row(&grade, enabled), self.param_row(OPACITY, grade.opacity, enabled)].spacing(6);
         groups.push(self.group(Group::Finish, finish.into()));
         groups
     }
@@ -167,7 +169,7 @@ impl App {
         let Some(it) = self.edit.item(i) else { return Vec::new() };
         let grade = self.shown_grade(Target::Overlay(i), t);
         if let Some(b) = it.bars {
-            return vec![self.group(Group::Bars, bars_controls(b)), self.group(Group::Show, self.sliders(&grade, &[9], true))];
+            return vec![self.group(Group::Bars, bars_controls(b)), self.group(Group::Show, self.sliders(&grade, &[OPACITY], true))];
         }
         let mut groups = Vec::new();
         if let Some(words) = &it.text {
@@ -178,11 +180,11 @@ impl App {
         }
         groups.extend([
             self.group(Group::Place, self.place_sliders(i, t)),
-            self.group(Group::Show, self.sliders(&grade, &[9, crate::grade::REVEAL, crate::grade::BLUR], true)),
+            self.group(Group::Show, self.sliders(&grade, Group::Show.params(true), true)),
             self.group(Group::Animate, self.animate_controls(i)),
             self.group(Group::Look, self.style_tiles(Target::Overlay(i))),
-            self.group(Group::Light, self.sliders(&grade, &[16, 17, 0, 1, 2, 3], true)),
-            self.group(Group::Colour, self.sliders(&grade, &[4, 5, 6, 7], true)),
+            self.group(Group::Light, self.sliders(&grade, Group::Light.params(true), true)),
+            self.group(Group::Colour, self.sliders(&grade, Group::Colour.params(true), true)),
             self.group(Group::Finish, self.vignette_row(&grade, true)),
         ]);
         groups
@@ -260,8 +262,9 @@ impl App {
 
     /// Effect `p`'s slider with its value and ↺.
     fn param_row(&self, p: usize, v: f64, enabled: bool) -> Element<'static, Message> {
-        let ((name, hint), (lo, hi)) = (PARAMS[p], crate::grade::RANGES[p]);
-        let reset = button(text("↺").size(13)).padding([0, 5]).style(button::text).on_press_maybe((enabled && v != crate::grade::NEUTRAL[p]).then_some(Message::Effect(EffectMsg::Reset(Some(p)))));
+        let e = EFFECTS[p];
+        let (name, hint, (lo, hi)) = (e.label, e.hint, e.range);
+        let reset = button(text("↺").size(13)).padding([0, 5]).style(button::text).on_press_maybe((enabled && v != e.neutral).then_some(Message::Effect(EffectMsg::Reset(Some(p)))));
         let control = slider(lo..=hi, v, move |v| Message::Effect(EffectMsg::Set(p, v))).step(0.01).on_release(Message::Effect(EffectMsg::Done));
         let lane = self.lane_button(super::automation_ui::Param::Grade(p));
         tip(column![row![text(name).width(Length::Fill), text(label(p, v)).size(13), reset, lane].spacing(4).align_y(Alignment::Center), control].spacing(2), text(hint), tooltip::Position::Left)
@@ -466,7 +469,7 @@ fn vignette_controls(grade: &Grade) -> Element<'static, Message> {
         column![row![text(name).size(13).width(Length::Fill), text(format!("{v:.2}")).size(13)], slider(0.0..=1.0, v, move |v| Message::Effect(EffectMsg::Set(p, v))).step(0.01).on_release(m(EffectMsg::Done))].spacing(2)
     };
     tip(
-        column![iced::widget::row(shapes).spacing(4).wrap().vertical_spacing(4), slider_of(PARAMS[crate::grade::SHAPE + 1].0, crate::grade::SHAPE + 1, grade.vignette_reach), slider_of(PARAMS[crate::grade::SHAPE + 2].0, crate::grade::SHAPE + 2, grade.vignette_soft)].spacing(8),
+        column![iced::widget::row(shapes).spacing(4).wrap().vertical_spacing(4), slider_of(EFFECTS[VIGNETTE_REACH].label, VIGNETTE_REACH, grade.vignette_reach), slider_of(EFFECTS[VIGNETTE_SOFT].label, VIGNETTE_SOFT, grade.vignette_soft)].spacing(8),
         text("Round, or from the top (a graduated filter on a bright sky), the bottom or the sides; how far in it reaches, how soft its edge"),
         tooltip::Position::Left,
     )

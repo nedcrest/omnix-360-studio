@@ -1457,6 +1457,12 @@ this beside our Play."
   its stop-and-return.
 - Milestone «Зручний таймлайн».
 
+**Built 2026-11-10, waiting for the check** (`c997d40`): Shift and a
+drag on the ruler marks the range (decided: a plain click or drag
+still moves the playhead), a band with its ends; Esc lets it go.
+Shift+Space or the button beside Play plays it once and pauses back at
+its start; «Play the join» shares the same `play_stretch`.
+
 ### 95. Text: its own colour, letter spacing, a box behind it — idea (Claude's UI review, 2026-11-10)
 
 From gap 94's review, for later: the text's colour is one of a few

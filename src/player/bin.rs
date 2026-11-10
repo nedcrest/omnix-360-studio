@@ -315,10 +315,22 @@ fn play(path: &Path, kind: Kind) -> Option<Player> {
 }
 
 impl App {
+    /// The project's folder, where files are copied in; none before it's
+    /// saved.
+    pub(super) fn project_root(&self) -> Option<PathBuf> {
+        self.project.as_deref().and_then(root)
+    }
+
+    /// Whether `path` is inside the project's folder: copied in already,
+    /// or the project's own.
+    pub(super) fn inside_project(&self, path: &Path) -> bool {
+        self.project_root().is_some_and(|r| path.starts_with(r))
+    }
+
     /// The project's folder, read afresh, and a task reading the files'
     /// pictures and lengths not read yet, a few files per thread.
     pub(super) fn rescan_bin(&mut self) -> Task<Message> {
-        self.bin.read = self.project.as_deref().and_then(root).map(|r| (scan(&r), r));
+        self.bin.read = self.project_root().map(|r| (scan(&r), r));
         self.bin.sheet = self.bin.read.as_ref().and_then(|(_, r)| crate::notes::Sheet::of(r));
         self.bin.roles = self.bin.sheet.as_ref().map_or_else(crate::notes::Sheet::default_roles, crate::notes::Sheet::roles);
         self.read_bin_meta()
@@ -629,6 +641,16 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_picture_from_outside_goes_into_the_projects_pictures() {
+        let mut app = crate::player::tests::app();
+        assert!(app.project_root().is_none() && !app.inside_project(Path::new("/p/08_pictures/a.png")), "not saved yet");
+        app.project = Some(PathBuf::from("/p/04_project/edit.json"));
+        assert_eq!(app.project_root(), Some(PathBuf::from("/p")));
+        assert!(app.inside_project(Path::new("/p/08_pictures/a.png")) && !app.inside_project(Path::new("/q/a.png")));
+        assert_eq!(super::super::bin_view::folder_for(Path::new("/p"), Kind::Picture, None), Some(PathBuf::from("/p").join(dailix_sheet::layout::PICTURES)));
+    }
 
     #[test]
     fn root_is_the_trip_or_above_04_project() {

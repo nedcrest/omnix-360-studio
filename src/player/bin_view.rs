@@ -312,7 +312,7 @@ impl App {
         if files.is_empty() {
             return Task::none();
         }
-        let Some(root) = self.bin.read.as_ref().map(|(_, r)| r.clone()) else {
+        let Some(root) = self.project_root() else {
             self.error = Some("Save the project first: files are copied into its folder".to_owned());
             return Task::none();
         };
@@ -323,7 +323,7 @@ impl App {
                 self.error = Some(format!("{name}: not a clip, sound or picture"));
                 continue;
             };
-            if file.starts_with(&root) {
+            if self.inside_project(&file) {
                 continue;
             }
             match folder_for(&root, kind, title) {
@@ -635,7 +635,7 @@ impl App {
         // material outside it (an archive, a card) is only taken off the list.
         // Neither while the edit uses it.
         items.push(rule::horizontal(1).into());
-        let inside = self.bin.read.as_ref().is_some_and(|(_, root)| path.starts_with(root));
+        let inside = self.inside_project(path);
         let label = if inside { "Move to trash…" } else { "Take out of the bin" };
         match uses(&self.edit, path) {
             Some(used) => items.push(button(text(format!("{label} (in the edit: {used})")).size(13)).style(button::text).width(Length::Fill).padding([5, 10]).into()),

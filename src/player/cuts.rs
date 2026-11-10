@@ -99,7 +99,8 @@ impl App {
             Message::AddBlank => {
                 // In the project's pictures folder, so it travels with the
                 // project; before the first save, in the cache.
-                let dir = self.project.as_deref().and_then(bin::root).map(|r| r.join(dailix_sheet::layout::PICTURES)).or_else(|| crate::cache::dir().map(|d| d.join("blank"))).unwrap_or_else(std::env::temp_dir);
+                let pictures = self.project_root().and_then(|r| super::bin_view::folder_for(&r, bin::Kind::Picture, None));
+                let dir = pictures.or_else(|| crate::cache::dir().map(|d| d.join("blank"))).unwrap_or_else(std::env::temp_dir);
                 match crate::blank::ensure(&dir) {
                     Ok(path) => {
                         // Placed from the playhead now, as a bin button does.

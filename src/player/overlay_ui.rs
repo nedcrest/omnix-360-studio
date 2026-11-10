@@ -126,9 +126,9 @@ impl App {
     /// `at`, where it fits nearest (gap 91). From outside the project's
     /// folder it's copied into its pictures first, as the bin copies.
     pub(super) fn drop_picture(&mut self, path: PathBuf, lane: usize, at: f64) {
-        let root = self.bin.read.as_ref().map(|(_, r)| r.clone());
-        let input = match root.filter(|r| !path.starts_with(r)) {
-            Some(r) => match super::bin_view::copy_in(&path, &r.join(dailix_sheet::layout::PICTURES)) {
+        let into = self.project_root().filter(|_| !self.inside_project(&path)).and_then(|r| super::bin_view::folder_for(&r, super::bin::Kind::Picture, None));
+        let input = match into {
+            Some(dir) => match super::bin_view::copy_in(&path, &dir) {
                 Ok(copied) => copied,
                 Err(e) => {
                     self.error = Some(e);

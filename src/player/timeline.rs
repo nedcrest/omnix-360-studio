@@ -2203,8 +2203,8 @@ fn coloured_block(frame: &mut Frame, (l, r): (f32, f32), (top, h): (f32, f32), c
 /// beside the first.
 fn belonging(frame: &mut Frame, t: &Timeline, theme: &Theme, (l, r): (f32, f32), (top, h): (f32, f32), (id, group): (crate::project::Id, Option<crate::project::Id>)) {
     if let Some(&(_, colour)) = group.and_then(|g| t.groups.iter().find(|(id, _)| *id == g)) {
-        frame.stroke(&block_path((l, r), top, h), Stroke::default().with_width(2.0).with_color(colour));
-        frame.fill(&Path::rectangle(Point::new(l - GAP / 2.0, top), Size::new(r - l + GAP, 4.0)), colour);
+        frame.stroke(&block_path((l, r), top, h), Stroke::default().with_width(3.0).with_color(colour));
+        frame.fill(&Path::rectangle(Point::new(l - GAP / 2.0, top), Size::new(r - l + GAP, 5.0)), colour);
     }
     if t.also.contains(&id) {
         selection_frame(frame, &block_path((l, r), top, h), theme);

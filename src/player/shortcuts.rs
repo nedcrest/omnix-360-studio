@@ -45,7 +45,7 @@ const GROUPS: &[(&str, &[(&str, &str)])] = &[
             ("drag an edge", "trim the selected clip (yellow: more footage, red: its end)"),
             ("drag a clip", "move it"),
             ("Shift+click a clip", "add it to the selection (again: take it away)"),
-            ("click a grouped clip", "selects its group (Alt+click: the clip alone)"),
+            ("Alt+click a grouped clip", "select its whole group (a click: the clip alone)"),
             ("Shift+drag a cut's start", "crossfade: out, onto the cut before"),
             ("Shift+drag a sound clip", "let it overlap its neighbour (a crossfade)"),
             ("drag a cut's sound edge", "its sound alone past the picture or short of it: J / L cut (the cut selected; it snaps to joins and the sounds beside, Alt: free)"),

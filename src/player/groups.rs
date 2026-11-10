@@ -1,7 +1,7 @@
 //! Several clips selected, and groups of them (gap 8): Shift+click adds a
 //! clip to the selection (Ctrl+click puts a volume point on a sound), a
-//! click on a grouped clip selects its group (Alt+click the clip alone),
-//! Ctrl+G groups what's selected, Ctrl+Shift+G undoes the group.
+//! click selects the clip alone and Alt+click its whole group (the user,
+//! 2026-11-11), Ctrl+G groups what's selected, Ctrl+Shift+G undoes it.
 
 use super::{App, Selection};
 use crate::model::ops::{Op, clips::ClipOp, cuts::CutOp, items::ItemOp, project::ProjectOp};
@@ -10,7 +10,7 @@ use crate::project::Id;
 impl App {
     /// A clip clicked, `s` its selection: with Shift, added to (or taken
     /// from) the clips selected beside the first; else selected, and its
-    /// group with it unless Alt is held.
+    /// group with it if Alt is held.
     pub(super) fn pick(&mut self, s: Selection) {
         let id = s.clip_id();
         if self.modifiers.shift()
@@ -25,7 +25,7 @@ impl App {
             return;
         }
         self.selection = s;
-        let group = id.and_then(|i| self.edit.group_of(i)).filter(|_| !self.modifiers.alt());
+        let group = id.and_then(|i| self.edit.group_of(i)).filter(|_| self.modifiers.alt());
         self.also = group.map_or_else(Vec::new, |g| self.edit.members(g).into_iter().filter(|&m| Some(m) != id).collect());
         self.picked_with = self.selection;
     }
@@ -134,6 +134,7 @@ mod tests {
         let mut app = app();
         let (a, b) = (app.edit.cuts[0].id, app.edit.cuts[1].id);
         app.op(Op::Project(ProjectOp::Group { members: vec![a, b], name: None, colour: Some(crate::text::Colour([10, 20, 30])) }));
+        app.modifiers = iced::keyboard::Modifiers::ALT;
         let _ = app.update(Message::Select(0));
         let t = app.timeline_data();
         assert_eq!((t.groups.len(), t.groups[0].1, t.also.as_slice()), (1, iced::Color::from_rgb8(10, 20, 30), &[b][..]));
@@ -150,8 +151,10 @@ mod tests {
         app.edit.settle_ids();
         let (cut, song, words) = (app.edit.cuts[0].id, app.edit.music.clips[0].id, app.edit.text[0].items[0].id);
         app.op(Op::Project(ProjectOp::Group { members: vec![cut, song, words], name: None, colour: None }));
-        // The song clicked (its group with it) and dragged 0.5 s on.
+        // The song Alt+clicked (its group with it) and dragged 0.5 s on.
+        app.modifiers = iced::keyboard::Modifiers::ALT;
         let _ = app.update(Message::SelectMusic(SoundTrack::Music, 0));
+        app.modifiers = iced::keyboard::Modifiers::empty();
         let _ = app.update(Message::MusicMove(SoundTrack::Music, 0, 1.5, false));
         let _ = app.update(Message::ScrubDone);
         assert_eq!((app.edit.music.clips[0].at, app.edit.text[0].items[0].at, app.edit.offset(0)), (1.5, 2.5, 0.0), "the text along, the cut where it is");
@@ -162,7 +165,7 @@ mod tests {
     }
 
     #[test]
-    fn shift_adds_ctrl_g_groups_and_a_click_then_selects_the_group() {
+    fn shift_adds_ctrl_g_groups_and_alt_click_selects_the_group() {
         let mut app = app();
         let (a, b) = (app.edit.cuts[0].id, app.edit.cuts[1].id);
         let _ = app.update(Message::Select(0));
@@ -173,12 +176,12 @@ mod tests {
         app.group_selected(false);
         let g = app.edit.group_of(a).unwrap();
         assert_eq!(app.edit.members(g), [a, b]);
-        // Another click: the group comes with it; Alt, the clip alone.
-        let _ = app.update(Message::Select(1));
-        assert_eq!(app.picked_ids(), [b, a]);
-        app.modifiers = iced::keyboard::Modifiers::ALT;
+        // A click: the clip alone; Alt+click, its group with it.
         let _ = app.update(Message::Select(1));
         assert_eq!(app.picked_ids(), [b]);
+        app.modifiers = iced::keyboard::Modifiers::ALT;
+        let _ = app.update(Message::Select(1));
+        assert_eq!(app.picked_ids(), [b, a]);
         // Esc-like: the selection let go some other way, the rest go too.
         app.modifiers = iced::keyboard::Modifiers::empty();
         let _ = app.update(Message::Select(0));

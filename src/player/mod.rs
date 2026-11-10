@@ -55,6 +55,7 @@ mod marks;
 use crate::model::selection::Selection;
 mod listen;
 mod mixcheck_ui;
+mod groups;
 
 use crate::ffmpeg::{self, Hwaccel};
 use crate::stab::{ImuAxes, Mode, Stabilizer};
@@ -847,6 +848,10 @@ struct App {
     angle_draft: Option<(angles::Angle, String)>,
     /// The keyboard's modifiers, for Shift on a scroll.
     modifiers: keyboard::Modifiers,
+    /// The clips selected beside `selection` (gap 8): Shift+clicked, or
+    /// its group's; `picked_with` the selection they go with.
+    also: Vec<crate::project::Id>,
+    picked_with: Selection,
     /// The field whose name is being dragged, from its press to its
     /// release (`angles::Scrub`).
     scrubbing: Option<angles::Angle>,
@@ -991,6 +996,8 @@ impl App {
             check: Default::default(),
             angle_draft: None,
             modifiers: keyboard::Modifiers::default(),
+            also: Vec::new(),
+            picked_with: Selection::None,
             scrubbing: None,
             settings_open: None,
             new_menu: None,
@@ -1113,6 +1120,7 @@ impl App {
         if self.selection != selected && !opens_info {
             self.info = None;
         }
+        self.settle_picked();
         if looking {
             self.auto_key(before);
         }

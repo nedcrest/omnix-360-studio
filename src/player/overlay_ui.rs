@@ -187,7 +187,7 @@ impl App {
                 self.edit.commit();
                 match i {
                     Some(r) => {
-                        self.selection = Selection::item_at(&self.edit, r);
+                        self.pick(Selection::item_at(&self.edit, r));
                         self.active_lanes[r.0.index()] = r.1;
                     }
                     // An empty spot on its lane: only an item lets go.

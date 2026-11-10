@@ -282,6 +282,7 @@ impl App {
                 };
                 return self.update(Message::Stab(next));
             }
+            "g" | "G" if mods.command() => self.group_selected(mods.shift()),
             "g" | "G" => return self.effect_message(effects::EffectMsg::Toggle),
             "r" | "R" => return self.update(Message::RollingShutter(!self.rolling_shutter)),
             // D selects the cut under the playhead (Premiere's key): ↓ to a

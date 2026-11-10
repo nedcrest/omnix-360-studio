@@ -78,6 +78,15 @@ impl Selection {
         Some((i, m.t))
     }
 
+    /// The selected clip's id — a cut's, a sound clip's or an item's —
+    /// what a group holds (gap 8).
+    pub fn clip_id(self) -> Option<Id> {
+        match self {
+            Selection::Cut(id) | Selection::Clip(id) | Selection::Item(id) => Some(id),
+            _ => None,
+        }
+    }
+
     /// Where the selected cut is in `p`.
     pub fn cut(self, p: &Project) -> Option<usize> {
         let Selection::Cut(id) = self else { return None };

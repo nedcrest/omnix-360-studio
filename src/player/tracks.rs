@@ -189,7 +189,7 @@ impl App {
                 }
             }
             Message::SelectMusic(which, i) => {
-                self.selection = Selection::clip_at(&self.edit, which, i);
+                self.pick(Selection::clip_at(&self.edit, which, i));
             }
             Message::PointAdd(own, t, db) => {
                 let Some((_, (start, end))) = self.edit.own_line(own) else { return Task::none() };

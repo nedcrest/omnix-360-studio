@@ -297,8 +297,9 @@ colour round each of its clips and a faint band of it behind them; it
 selects and moves together — a click selects the whole group (Alt+click
 one clip), Delete removes it all, its sound clips, text and pictures move
 together when one is dragged; its cuts stay where the magnetic edit puts
-them. Made as Premiere does: Ctrl+click adds a clip to the selection,
-Ctrl+G groups, Ctrl+Shift+G ungroups. Steps: (1) the core — group ids,
+them. Made as Premiere does: Shift+click adds a clip to the selection
+(Ctrl+click already puts a volume point on a sound), Ctrl+G groups,
+Ctrl+Shift+G ungroups. Steps: (1) the core — group ids,
 the project's groups, ops, `describe`; (2) Ctrl+click selecting several;
 (3) the frame and band; (4) together — select, delete, move.
 

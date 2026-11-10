@@ -94,7 +94,7 @@ impl App {
                 if self.partner.as_ref().is_some_and(|(j, _)| *j == i) && self.clip.as_ref().is_some_and(|c| !c.playback.playing) {
                     self.swap_partner();
                 }
-                self.selection = Selection::cut_at(&self.edit, i);
+                self.pick(Selection::cut_at(&self.edit, i));
             }
             Message::AddBlank => {
                 // In the project's pictures folder, so it travels with the

@@ -786,6 +786,8 @@ struct App {
     /// The Effects panel's groups folded (kept in the settings), and the
     /// complex control whose knobs are out beside it.
     effects_folded: Vec<String>,
+    /// The Effects panel's extended view (gap 98).
+    effects_wide: bool,
     /// The scopes' feed, read by the Effects panel (gap 69).
     scope: gpu::Scope,
     /// The cut being measured for auto colour (gap 89), its id.
@@ -972,6 +974,7 @@ impl App {
             template_name: String::new(),
             last_overlap: crate::transition::Look::WhipPan,
             effects_folded: saved.effects_folded.clone(),
+            effects_wide: saved.effects_wide,
             scope: Default::default(),
             active_lanes: [0; 2],
             auto_measuring: None,
@@ -1042,6 +1045,7 @@ impl App {
             fold_overlay_motion: self.folds.overlay_motion,
             fold_text_motion: self.folds.text_motion,
             effects_folded: self.effects_folded.clone(),
+            effects_wide: self.effects_wide,
             projects: self.projects.clone(),
             recent: self.recent.clone(),
             browse: self.browse,

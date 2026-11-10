@@ -26,6 +26,18 @@ impl std::fmt::Display for AnimChoice {
     }
 }
 
+/// A group as a framed block of the extended view (gap 98).
+fn framed(g: Element<'_, Message>) -> Element<'_, Message> {
+    container(g)
+        .padding(10)
+        .width(WIDTH - 24.0)
+        .style(|theme: &iced::Theme| container::Style { border: iced::Border { color: theme.extended_palette().background.strong.color, width: 1.0, radius: 6.0.into() }, ..container::Style::default() })
+        .into()
+}
+
+/// The panel's width in its extended view: three blocks to a row.
+const WIDE: f32 = 3.0 * (WIDTH - 24.0) + 2.0 * 10.0 + 24.0;
+
 /// The side panel's width.
 const EXTRA_WIDTH: f32 = 220.0;
 
@@ -106,14 +118,19 @@ impl App {
         if let Focus::Apart(selected) = self.effect_focus() {
             body = body.push(self.apart_notice(selected));
         }
-        body = body.push(self.group(Group::Scopes, self.scopes_view()));
-        let groups = match target {
+        let mut groups = vec![self.group(Group::Scopes, self.scopes_view())];
+        groups.extend(match target {
             Some((Target::Overlay(i), t)) => self.item_groups(i, t),
             Some((Target::Cut(i), t)) => self.cut_groups(Some((i, t))),
             None => self.cut_groups(None),
-        };
-        body = body.extend(groups);
-        container(scrollable(body)).width(WIDTH).height(Length::Fill).into()
+        });
+        if !self.effects_wide {
+            return container(scrollable(body.extend(groups))).width(WIDTH).height(Length::Fill).into();
+        }
+        // Extended (gap 98): each group a framed block, side by side, as
+        // many to a row as fit, for a wide monitor.
+        let blocks = iced::widget::row(groups.into_iter().map(framed)).spacing(10).wrap().vertical_spacing(10);
+        container(scrollable(body.push(blocks))).width(WIDE).height(Length::Fill).into()
     }
 
     /// A cut's groups (none: greyed, nothing to edit): Light, Colour (with
@@ -195,7 +212,8 @@ impl App {
             tip(button(text(if measuring { "Measuring…" } else { "Auto" }).size(13)).padding([2, 8]).style(button::secondary).on_press_maybe(press), text("Auto colour: levels, exposure and white balance from a dozen frames across the cut, careful and one undo step"), tooltip::Position::Bottom)
         });
         let reset = tip(button(text("↺ All").size(13)).padding([2, 8]).style(button::secondary).on_press_maybe(any.map(|_| m(EffectMsg::Reset(None)))), text(if on_cut { "Reset: remove this cut's effects and automation" } else { "Reset: remove this item's effects, place, automation and ins and outs" }), tooltip::Position::Bottom);
-        column![row![text("Effects").size(18).width(Length::Fill), close].align_y(Alignment::Center), row![text(name).size(13).width(Length::Fill)].push(auto).push(to_all).push(reset).spacing(6).align_y(Alignment::Center)].spacing(6).into()
+        let wide = tip(iced::widget::toggler(self.effects_wide).label("Extended view").text_size(12).on_toggle(|on| Message::Effect(EffectMsg::Wide(on))), text("The groups as framed blocks side by side, for a wide monitor"), tooltip::Position::Bottom);
+        column![row![text("Effects").size(18).width(Length::Fill), wide, close].spacing(10).align_y(Alignment::Center), row![text(name).size(13).width(Length::Fill)].push(auto).push(to_all).push(reset).spacing(6).align_y(Alignment::Center)].spacing(6).into()
     }
 
     /// What `target` is called in the panel: «Cut 3 · name», «Text · words».

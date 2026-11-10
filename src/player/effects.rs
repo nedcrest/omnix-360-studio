@@ -21,6 +21,8 @@ use iced::{Alignment, Element, Length};
 pub enum EffectMsg {
     /// Open or close the panel.
     Toggle,
+    /// The extended view on or off (gap 98).
+    Wide(bool),
     /// The cut measured over a dozen frames across it and put right (gap
     /// 89): levels, exposure and white balance, or the levels alone.
     AutoColour(bool),
@@ -366,6 +368,7 @@ impl App {
         let target = self.effect_target();
         match m {
             EffectMsg::Toggle => self.toggle_side(super::Side::Effects),
+            EffectMsg::Wide(on) => self.effects_wide = on,
             EffectMsg::AutoColour(levels) => return self.auto_colour(levels),
             EffectMsg::AutoColoured(cut, levels, found) => {
                 self.auto_measuring = None;

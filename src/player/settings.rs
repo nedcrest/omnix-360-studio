@@ -82,6 +82,8 @@ pub struct Settings {
     pub fold_text_motion: bool,
     /// The Effects panel's groups folded, by name (`effects_view::Group`).
     pub effects_folded: Vec<String>,
+    /// The Effects panel wide, its groups framed side by side (gap 98).
+    pub effects_wide: bool,
     /// The projects place, chosen in Omnix; none: Dailix's.
     pub projects: Option<PathBuf>,
     /// The edits opened or saved last, the latest first (`RECENT` at most).
@@ -151,6 +153,7 @@ impl Default for Settings {
             fold_overlay_motion: true,
             fold_text_motion: true,
             effects_folded: Vec::new(),
+            effects_wide: false,
             projects: None,
             recent: Vec::new(),
             browse: false,

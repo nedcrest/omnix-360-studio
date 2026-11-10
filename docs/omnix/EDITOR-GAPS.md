@@ -1438,6 +1438,16 @@ at the playhead»; a file dropped on the window goes to the bin only.
   and say so).
 - Milestone «Матеріал і бін».
 
+**Built 2026-11-10, waiting for the check** (`03fc508`, `064f536`;
+Dailix `dd18a6b`, footage-agent `4b4a13c`): the folder is `08_pictures`
+(`dailix_sheet::layout::PICTURES`), the bin's section «Pictures», an old
+`08_graphics` still read; footage-agent's layout line changed with it.
+A picture's tile in the bin (the view and the panel) is taken up when
+pressed and goes onto the overlay lane it's let go over, at the
+pointer; a picture file dropped from a file manager onto an overlay
+lane is copied into `08_pictures` and placed so (X11: winit passes no
+drops on Wayland yet). Elsewhere a drop goes into the bin as before.
+
 ### 92. Play a stretch marked on the ruler — idea (user, 2026-11-10)
 
 The user: "on the timeline's ruler you can select a range; Shift+Space

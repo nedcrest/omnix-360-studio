@@ -349,6 +349,11 @@ with C):
    ruler) — for checking a cut made by ear.
 The cutting view is gap 57 (`BEAT-CUT.md`).
 
+**Built 2026-11-11, waits for the user's check** (1 and 2): `beats.rs`,
+`omnix beats`, `Music::beats` and `SoundOp::Beats`, the purple lines,
+the music lane's menu (shown, threshold, snapping), the beats in
+`snap_targets`. 3 and 4 stay for later.
+
 ### 16. Subtitles from speech — medium (Kos TODO, 2026-10-23)
 
 Mar'yana can't be heard even cleaned (action-cam mic, distance). Run

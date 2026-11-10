@@ -1062,31 +1062,7 @@ impl Project {
         let mut project: Project = serde_json::from_str(&text).with_context(|| format!("reading {}", path.display()))?;
         let dir = &project_dir(path)?;
         for (n, cut) in project.cuts.iter_mut().enumerate() {
-            if cut.end <= cut.start {
-                bail!("cut {} ends ({} s) before it starts ({} s)", n + 1, cut.end, cut.start);
-            }
-            cut.input = dir.join(&cut.input);
-            if let Some(audio) = cut.audio.as_mut() {
-                *audio = dir.join(&*audio);
-            }
-            for track in cut.keyframes.tracks_mut() {
-                *track = dir.join(&*track);
-            }
-            if let Some(lut) = cut.lut.as_mut().filter(|l| crate::lut::is_file(l)) {
-                *lut = dir.join(&*lut).to_string_lossy().into_owned();
-            }
-            if let Some(strength) = cut.old_lut_strength.take().filter(|s| *s != 1.0) {
-                if cut.effects.is_empty() {
-                    cut.effects.push(crate::grade::EffectKey { t: cut.start, grade: Default::default(), ease: Default::default() });
-                }
-                for key in &mut cut.effects {
-                    key.grade.lut = strength.clamp(0.0, 1.0);
-                }
-            }
-            // Effect keys from before automation clips become clips (gap 39).
-            cut.effects.sort_by(|a, b| a.t.total_cmp(&b.t));
-            let clips = crate::automation::from_keys(&mut cut.effects, cut.start, cut.end);
-            crate::automation::adopt(&mut cut.automation, clips);
+            cut_from_file(cut, n, dir)?;
         }
         for which in SoundTrack::ALL {
             for (n, clip) in project.track_mut(which).clips.iter_mut().enumerate() {
@@ -1097,28 +1073,7 @@ impl Project {
             }
         }
         for (n, item) in project.overlays.iter_mut().chain(&mut project.text).flat_map(|l| &mut l.items).enumerate() {
-            if item.end <= item.start || item.at < 0.0 {
-                bail!("overlay {} is empty or starts before the edit", n + 1);
-            }
-            // One of a picture, text or bars.
-            let kinds = [item.file().is_some(), item.text.is_some(), item.bars.is_some()].into_iter().filter(|&k| k).count();
-            if kinds != 1 {
-                bail!("overlay {} needs one of a picture (\"input\"), \"text\" or \"bars\"", n + 1);
-            }
-            if item.motion.iter().any(|k| !k.t.is_finite() || k.place.values().iter().any(|v| !v.is_finite())) {
-                bail!("an overlay's motion keyframe isn't a number");
-            }
-            if item.effects.iter().any(|k| !k.t.is_finite() || k.grade.values().iter().any(|v| !v.is_finite())) {
-                bail!("an overlay's effect keyframe isn't a number");
-            }
-            if item.file().is_some() {
-                item.input = dir.join(&item.input);
-            }
-            item.motion.sort_by(|a, b| a.t.total_cmp(&b.t));
-            item.effects.sort_by(|a, b| a.t.total_cmp(&b.t));
-            // And an item's effect and motion keys.
-            let clips = [crate::automation::from_keys(&mut item.effects, item.start, item.end), crate::automation::from_keys(&mut item.motion, item.start, item.end)].concat();
-            crate::automation::adopt(&mut item.automation, clips);
+            item_from_file(item, n, dir)?;
         }
         if project.cuts.iter().any(|c| !c.crossfade.is_finite()) {
             bail!("a crossfade isn't a number");
@@ -1435,6 +1390,65 @@ impl Project {
         }
     }
 
+}
+
+/// Cut `n` (from 0) as read from a project file in `dir`: checked, its
+/// paths made whole, older fields brought up to date.
+fn cut_from_file(cut: &mut Cut, n: usize, dir: &Path) -> Result<()> {
+    if cut.end <= cut.start {
+        bail!("cut {} ends ({} s) before it starts ({} s)", n + 1, cut.end, cut.start);
+    }
+    cut.input = dir.join(&cut.input);
+    if let Some(audio) = cut.audio.as_mut() {
+        *audio = dir.join(&*audio);
+    }
+    for track in cut.keyframes.tracks_mut() {
+        *track = dir.join(&*track);
+    }
+    if let Some(lut) = cut.lut.as_mut().filter(|l| crate::lut::is_file(l)) {
+        *lut = dir.join(&*lut).to_string_lossy().into_owned();
+    }
+    if let Some(strength) = cut.old_lut_strength.take().filter(|s| *s != 1.0) {
+        if cut.effects.is_empty() {
+            cut.effects.push(crate::grade::EffectKey { t: cut.start, grade: Default::default(), ease: Default::default() });
+        }
+        for key in &mut cut.effects {
+            key.grade.lut = strength.clamp(0.0, 1.0);
+        }
+    }
+    // Effect keys from before automation clips become clips (gap 39).
+    cut.effects.sort_by(|a, b| a.t.total_cmp(&b.t));
+    let clips = crate::automation::from_keys(&mut cut.effects, cut.start, cut.end);
+    crate::automation::adopt(&mut cut.automation, clips);
+    Ok(())
+}
+
+/// Overlay `n` (from 0) as read from a project file in `dir`: one of a
+/// picture, text or bars, its keys numbers in order, its path made whole.
+fn item_from_file(item: &mut crate::overlay::Item, n: usize, dir: &Path) -> Result<()> {
+    if item.end <= item.start || item.at < 0.0 {
+        bail!("overlay {} is empty or starts before the edit", n + 1);
+    }
+    // One of a picture, text or bars.
+    let kinds = [item.file().is_some(), item.text.is_some(), item.bars.is_some()].into_iter().filter(|&k| k).count();
+    if kinds != 1 {
+        bail!("overlay {} needs one of a picture (\"input\"), \"text\" or \"bars\"", n + 1);
+    }
+    if item.motion.iter().any(|k| !k.t.is_finite() || k.place.values().iter().any(|v| !v.is_finite())) {
+        bail!("an overlay's motion keyframe isn't a number");
+    }
+    if item.effects.iter().any(|k| !k.t.is_finite() || k.grade.values().iter().any(|v| !v.is_finite())) {
+        bail!("an overlay's effect keyframe isn't a number");
+    }
+    if item.file().is_some() {
+        item.input = dir.join(&item.input);
+    }
+    item.motion.sort_by(|a, b| a.t.total_cmp(&b.t));
+    item.effects.sort_by(|a, b| a.t.total_cmp(&b.t));
+    // And an item's effect and motion keys.
+    let clips = [crate::automation::from_keys(&mut item.effects, item.start, item.end), crate::automation::from_keys(&mut item.motion, item.start, item.end)].concat();
+    crate::automation::adopt(&mut item.automation, clips);
+    Ok(())
 }
 
 /// The sound settings a cut and a sound clip share, borrowed to change

@@ -522,6 +522,12 @@ enum Message {
     Range(Option<(f64, f64)>),
     /// The marked range played once, back to its start, paused.
     PlayRange,
+    /// A picture taken up in the bin (gap 91), or let go of anywhere.
+    Carry(Option<PathBuf>),
+    /// A picture let go over lane `.1` of the overlay track at edit time
+    /// `.2`: the bin's, or a file dropped from a file manager (copied into
+    /// the project's pictures first).
+    DropPicture(PathBuf, usize, f64),
     /// The bin view's own player.
     BinPlayer(bin_player::SourceMsg),
     /// Add a file from the bin where its kind goes.
@@ -764,6 +770,9 @@ struct App {
     stretch_play: Option<(f64, f64)>,
     /// A stretch of the edit marked on the ruler (gap 92), edit time.
     range: Option<(f64, f64)>,
+    /// A picture pressed in the bin and carried (gap 91): let go over an
+    /// overlay lane, it goes there.
+    carrying: Option<PathBuf>,
     /// The panel's open tab, and the edge whose settings show on Edges.
     transitions_tab: transitions_panel::Kind,
     edge_side: crate::model::ops::End,
@@ -954,6 +963,7 @@ impl App {
             join: None,
             stretch_play: None,
             range: None,
+            carrying: None,
             transitions_tab: Default::default(),
             edge_side: crate::model::ops::End::Out,
             templates: crate::template::names(),
@@ -1130,10 +1140,20 @@ impl App {
             close
         };
         // Files dropped from a file manager go into the bin (X11 and other
-        // systems; winit doesn't pass them on Wayland yet).
+        // systems; winit doesn't pass them on Wayland yet), unless an
+        // overlay lane took one (gap 91).
         let close = if self.bin.view || self.bin.open {
+            Subscription::batch([close, iced::event::listen_with(|e, status, _| match (e, status) {
+                (iced::Event::Window(window::Event::FileDropped(path)), iced::event::Status::Ignored) => Some(Message::BinView(bin_view::BinMsg::Dropped(path))),
+                _ => None,
+            })])
+        } else {
+            close
+        };
+        // A picture carried from the bin is let go of wherever the button is.
+        let close = if self.carrying.is_some() {
             Subscription::batch([close, iced::event::listen_with(|e, _, _| match e {
-                iced::Event::Window(window::Event::FileDropped(path)) => Some(Message::BinView(bin_view::BinMsg::Dropped(path))),
+                iced::Event::Mouse(iced::mouse::Event::ButtonReleased(iced::mouse::Button::Left)) => Some(Message::Carry(None)),
                 _ => None,
             })])
         } else {
@@ -1189,6 +1209,15 @@ impl App {
                 Task::none()
             }
             Message::PlayRange => self.play_stretch(self.range),
+            Message::Carry(path) => {
+                self.carrying = path;
+                Task::none()
+            }
+            Message::DropPicture(path, lane, at) => {
+                self.carrying = None;
+                self.drop_picture(path, lane, at);
+                Task::none()
+            }
             m @ (Message::MarkEdit { .. } | Message::MarkNote { .. } | Message::MarkSave | Message::MarkDelete | Message::MarkClose) => self.on_marks(m),
             m @ (Message::Tick | Message::TimelineZoom { .. } | Message::TimelineWheel { .. } | Message::TimelineZoomTo { .. } | Message::TimelinePan { .. } | Message::Toggle | Message::Scrub { .. } | Message::ScrubDone) => self.on_transport(m),
             m @ (Message::Select { .. } | Message::AddBlank | Message::SoundEdge { .. } | Message::Trim { .. } | Message::MoveCut { .. } | Message::AddMark | Message::SelectAtPlayhead | Message::MarkMove { .. } | Message::MarkSelect { .. } | Message::StepsRested { .. } | Message::ToastGone { .. } | Message::StepNoteGone { .. } | Message::TrimToPlayhead { .. } | Message::Crossfade { .. } | Message::ToggleCrossfade | Message::Split | Message::DeleteCut | Message::Undo | Message::Redo) => self.on_cuts(m),

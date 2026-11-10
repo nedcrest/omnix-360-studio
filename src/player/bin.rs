@@ -541,11 +541,7 @@ impl App {
         // A camera's names have no spaces to break at: broken anywhere, so
         // a long one wraps under itself rather than under the add buttons.
         let info = column![text(name).size(13).wrapping(text::Wrapping::WordOrGlyph), text(length).size(11).style(text::secondary)].spacing(1).width(Length::Fill);
-        let body = button(row![picture, info].spacing(8).align_y(Alignment::Center))
-            .width(Length::Fill)
-            .padding([3, 4])
-            .style(if selected { button::secondary } else { button::text })
-            .on_press(Message::BinPreview(path.to_owned(), kind));
+        let body = super::bin_view::carried(container(row![picture, info].spacing(8).align_y(Alignment::Center)).padding([3, 4]).into(), (path, kind), Length::Fill, selected, Message::BinPreview(path.to_owned(), kind));
         row![body, add_buttons(path, kind)].spacing(4).align_y(Alignment::Center).into()
     }
 }

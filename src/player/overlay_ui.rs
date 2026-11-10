@@ -2,6 +2,7 @@
 //! view, the text panel's words kept in step, what draws over the picture,
 //! the on-screen handles, and their blocks on the timeline.
 
+use std::path::PathBuf;
 use super::*;
 use crate::model::ops::items::ItemOp;
 use crate::model::ops::{End, Op};
@@ -118,6 +119,28 @@ impl App {
         }
         self.op(Op::Item(ItemOp::Move { item, at, lane: Some(to) }));
         self.edit.commit();
+    }
+
+    /// Picture `path` onto lane `lane` of the overlay track at edit time
+    /// `at`, where it fits nearest (gap 91). From outside the project's
+    /// folder it's copied into its pictures first, as the bin copies.
+    pub(super) fn drop_picture(&mut self, path: PathBuf, lane: usize, at: f64) {
+        let root = self.bin.read.as_ref().map(|(_, r)| r.clone());
+        let input = match root.filter(|r| !path.starts_with(r)) {
+            Some(r) => match super::bin_view::copy_in(&path, &r.join(dailix_sheet::layout::PICTURES)) {
+                Ok(copied) => copied,
+                Err(e) => {
+                    self.error = Some(e);
+                    return;
+                }
+            },
+            None => path,
+        };
+        self.folds.overlay = false;
+        if let Some(id) = self.op(Op::Item(ItemOp::AddPictures { inputs: vec![input], at, len: ffmpeg::PICTURE_SECONDS, lane })).and_then(|o| o.made) {
+            self.selection = Selection::Item(id);
+            self.active_lanes[track_index(crate::overlay::Track::Overlay)] = lane;
+        }
     }
 
     /// How many lanes `track` shows: its own, one at least.

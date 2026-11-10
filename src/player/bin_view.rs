@@ -579,11 +579,8 @@ impl App {
             info = info.push(text(format!("In the edit: {used}")).size(11).style(text::success));
         }
         let selected = self.bin.preview.as_ref().is_some_and(|p| p.path == path);
-        let tile = button(column![picture, info].spacing(4))
-            .padding(4)
-            .style(if selected { button::secondary } else { button::text })
-            .on_press(Message::BinView(BinMsg::Show(path.to_owned(), kind)));
-        let area = mouse_area(tile).on_right_press(Message::BinView(BinMsg::Menu(Some((path.to_owned(), kind)))));
+        let show = Message::BinView(BinMsg::Show(path.to_owned(), kind));
+        let area = carried(column![picture, info].spacing(4).padding(4).into(), (path, kind), Length::Shrink, selected, show).on_right_press(Message::BinView(BinMsg::Menu(Some((path.to_owned(), kind)))));
         // A clip's frames show when the pointer rests on its tile.
         match kind {
             Kind::Clip => area.on_enter(Message::BinView(BinMsg::HoverIn(path.to_owned()))).on_exit(Message::BinView(BinMsg::HoverOut(path.to_owned()))).into(),
@@ -699,4 +696,17 @@ mod tests {
         assert_eq!(names, ["song (2).mp3", "song.mp3"]);
         std::fs::remove_dir_all(&dir).unwrap();
     }
+}
+
+/// A file's tile, pressed: a picture is taken up to be carried onto an
+/// overlay lane (gap 91), and a click shows it; other files are buttons.
+/// The button won't do for a picture: it acts only when let go over
+/// itself, so nothing could be carried off it.
+/// `width`: the list's rows fill it, the grid's tiles keep theirs.
+pub(super) fn carried<'a>(content: Element<'a, Message>, (path, kind): (&Path, Kind), width: Length, selected: bool, click: Message) -> iced::widget::MouseArea<'a, Message> {
+    if kind != Kind::Picture {
+        return mouse_area(button(content).width(width).padding(0).style(if selected { button::secondary } else { button::text }).on_press(click));
+    }
+    let card = container(content).width(width).style(move |theme: &iced::Theme| if selected { container::Style::default().background(theme.extended_palette().secondary.base.color) } else { container::Style::default() });
+    mouse_area(card).on_press(Message::Carry(Some(path.to_owned()))).on_release(click).interaction(iced::mouse::Interaction::Grab)
 }

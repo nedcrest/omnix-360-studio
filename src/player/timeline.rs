@@ -394,6 +394,8 @@ pub struct Timeline {
     pub lane_meta: [Vec<(Option<String>, bool)>; 2],
     /// The range marked on the ruler (gap 92), edit time.
     pub range: Option<(f64, f64)>,
+    /// A picture carried from the bin (gap 91).
+    pub carrying: Option<std::path::PathBuf>,
 }
 
 /// A lane head's buttons (gap 70, 97).
@@ -1721,6 +1723,16 @@ impl canvas::Program<Message> for OverlayLane {
         let drag = &mut state.0;
         match event {
             Mouse(mouse::Event::WheelScrolled { delta }) => wheel(delta, t, cursor, bounds),
+            // A picture from the bin let go here, or a file from a file
+            // manager dropped here: onto this lane at the pointer (gap 91).
+            Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) if self.1 == Track::Overlay && t.carrying.is_some() => {
+                let p = cursor.position_in(bounds).filter(|p| p.x >= HEAD)?;
+                Some(canvas::Action::publish(Message::DropPicture(t.carrying.clone()?, self.2, t.t(p.x, bounds).max(0.0))).and_capture())
+            }
+            iced::Event::Window(iced::window::Event::FileDropped(path)) if self.1 == Track::Overlay && super::bin::kind_of(path) == Some(super::bin::Kind::Picture) => {
+                let p = cursor.position_in(bounds).filter(|p| p.x >= HEAD)?;
+                Some(canvas::Action::publish(Message::DropPicture(path.clone(), self.2, t.t(p.x, bounds).max(0.0))).and_capture())
+            }
             // Right-click on its automation lanes: a point's ease, a clip gone.
             Mouse(mouse::Event::ButtonPressed(mouse::Button::Right)) if cursor.position_in(bounds).is_some_and(|p| p.x >= HEAD && [false, true].iter().any(|&m| self.lanes(m).lane_at(p.y).is_some())) => {
                 let p = cursor.position_in(bounds)?;
@@ -2851,6 +2863,7 @@ mod tests {
             active_lanes: [0; 2],
             lane_meta: [vec![], vec![]],
             range: None,
+            carrying: None,
             held: Default::default(),
         };
         (t, Rectangle::new(Point::ORIGIN, Size::new(1000.0 + 2.0 * PICK, 300.0)))

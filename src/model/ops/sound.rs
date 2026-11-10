@@ -250,8 +250,7 @@ mod tests {
 
     /// Two cuts and a song, ids given.
     fn edit() -> Edit {
-        let mut p = Project::default();
-        p.cuts = vec![Cut::new("a.mp4".into(), 0.0, 4.0), Cut::new("b.mp4".into(), 0.0, 3.0)];
+        let mut p = Project { cuts: vec![Cut::new("a.mp4".into(), 0.0, 4.0), Cut::new("b.mp4".into(), 0.0, 3.0)], ..Default::default() };
         p.music.append_part("song.wav".into(), 0.0, 0.0, 10.0);
         p.settle_ids();
         let mut e = Edit::default();

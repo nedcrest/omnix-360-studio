@@ -223,6 +223,15 @@ pub const NEUTRAL: [f64; 18] = {
     a
 };
 
+/// Rec. 709's weights of red, green and blue in a colour's brightness.
+pub const REC709: [f64; 3] = [0.2126, 0.7152, 0.0722];
+
+/// Rec. 709 brightness of `c`, the one weighing every picture measure and
+/// effect makes (the shaders' `luma` too).
+pub fn luma(c: [f64; 3]) -> f64 {
+    REC709[0] * c[0] + REC709[1] * c[1] + REC709[2] * c[2]
+}
+
 /// Stops of colour per unit of temperature or tint: at ±1, red and blue
 /// are four times apart, enough to neutralise shade or low sun.
 const WB_STOPS: f64 = 1.0;
@@ -285,7 +294,6 @@ impl Grade {
     /// Grades display-encoded `rgb` (0..1) at screen point `at` (−1..1 each
     /// way) of a picture `aspect` wide to its height.
     pub fn apply(&self, rgb: [f64; 3], at: [f64; 2], aspect: f64) -> [f64; 3] {
-        let luma = |c: [f64; 3]| 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
         // Levels first (gap 14): `black_in` to black, `white_in` to white,
         // on the display values, as an editor's input levels.
         let span = (self.white_in - self.black_in).max(1e-3);
@@ -421,6 +429,13 @@ pub fn grade_at(keys: &[EffectKey], t: f64) -> Grade {
 mod tests {
     /// Exposure up rolls the highlights off instead of clipping them, and
     /// leaves everything else as the plain gain did.
+    #[test]
+    fn one_luma_weighs_green_most_and_white_is_one() {
+        assert!((luma([1.0; 3]) - 1.0).abs() < 1e-12);
+        assert!(luma([0.0, 1.0, 0.0]) > luma([1.0, 0.0, 0.0]) && luma([1.0, 0.0, 0.0]) > luma([0.0, 0.0, 1.0]));
+        assert_eq!(crate::transition::luma([0.0, 1.0, 0.0]), 0.7152);
+    }
+
     #[test]
     fn levels_make_their_black_black_and_their_white_white() {
         let g = Grade { black_in: 14.0 / 255.0, white_in: 0.9, ..Grade::default() };

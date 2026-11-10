@@ -35,7 +35,7 @@ pub struct Scopes {
 
 /// Rec. 709's luma of display values.
 fn luma(r: u8, g: u8, b: u8) -> u8 {
-    (0.2126 * r as f32 + 0.7152 * g as f32 + 0.0722 * b as f32).round().min(255.0) as u8
+    crate::grade::luma([r, g, b].map(f64::from)).round().min(255.0) as u8
 }
 
 /// Measures a `w` × `h` picture of 4 bytes a pixel, rows `row` bytes

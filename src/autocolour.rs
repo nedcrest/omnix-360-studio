@@ -5,7 +5,7 @@
 //! within reach, nothing moved for a small difference; set as the cut's
 //! own values, one undo step, the user's to change after.
 
-use crate::grade::{BLACK_IN, EXPOSURE, TEMPERATURE, TINT, WHITE_IN};
+use crate::grade::{BLACK_IN, EXPOSURE, TEMPERATURE, TINT, WHITE_IN, luma};
 use anyhow::{Context, Result, bail};
 
 /// Frames measured across a cut.
@@ -36,10 +36,6 @@ pub struct Measure {
     pub white: f64,
     pub mid: f64,
     pub grey: Option<[f64; 3]>,
-}
-
-fn luma(c: [f64; 3]) -> f64 {
-    0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
 }
 
 /// Measures `pixels` (display values, 0..1).

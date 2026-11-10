@@ -45,7 +45,7 @@ pub fn measure(rgb: &[u8], w: usize) -> Sky {
         let i = (y * w + x) * 3;
         [rgb[i] as f64 / 255.0, rgb[i + 1] as f64 / 255.0, rgb[i + 2] as f64 / 255.0]
     };
-    let luma = |c: [f64; 3]| 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+    let luma = crate::grade::luma;
     let rows = h / 2;
     // Sky-like and smooth: no edge to the next pixel across or down.
     let mut ok = vec![false; w * rows];

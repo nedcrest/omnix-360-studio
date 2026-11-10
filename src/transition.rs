@@ -498,7 +498,7 @@ pub(crate) fn disc(radius: f32, salt: u32, uv: [f32; 2], aspect: f32, pixel: [u3
 
 /// Rec. 709 brightness.
 pub(crate) fn luma(c: [f32; 3]) -> f32 {
-    0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
+    crate::grade::luma(c.map(f64::from)) as f32
 }
 
 /// The edge zoom: pushed in (or pulled out, the frame mirrored past its

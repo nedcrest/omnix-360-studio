@@ -52,8 +52,9 @@ pub enum EffectMsg {
     PickWhite,
     FadeIn(f64),
     FadeOut(f64),
-    /// The cut's style look (none: off), one of its settings moved (a
-    /// slider's drag one undo step, closed by `Done`), all of them back.
+    /// The selection's style look, a cut's or an item's (none: off), one
+    /// of its settings moved (a slider's drag one undo step, closed by
+    /// `Done`), all of them back.
     Style(Option<crate::transition::Look>),
     StyleKnob(&'static str, f32),
     StyleReset,
@@ -112,8 +113,8 @@ impl std::fmt::Display for LutChoice {
     }
 }
 
-/// Each effect as the panel shows it: its name and what it does (the first
-/// eleven of `Grade::values`; their ranges `grade::RANGES`).
+/// Each effect as the panel shows it: its name and what it does, in the
+/// order of `Grade::values` (their ranges `grade::RANGES`).
 pub(super) const PARAMS: [(&str, &str); 18] = [
     ("Exposure", "Brighter or darker, in stops, like the camera's EV"),
     ("Contrast", "More or less contrast, around mid-grey"),
@@ -577,9 +578,8 @@ impl App {
         Some((it.id, it.text.clone()?))
     }
 
-    /// The text panel, at the player's left while a text item is selected:
-    /// its words and look, wherever the playhead is (where it is and its
-    /// effects stay in the Effects panel).
+    /// The Effects panel's Text group while a text item is selected: its
+    /// words and look, wherever the playhead is (gap 94).
     pub(super) fn text_controls(&self, words: &crate::text::Text) -> Element<'_, Message> {
         let t = |c: TextChange| Message::Effect(EffectMsg::Text(c));
         let swatches = |chosen: Colour, f: fn(Colour) -> TextChange| {
@@ -732,7 +732,6 @@ impl App {
         self.edit.commit();
     }
 
-    /// Cut `i`'s style look: set, a setting moved, all set back.
     /// The style on `target`, a cut's or a text's or picture's.
     pub(super) fn style_of(&self, target: Target) -> Option<&crate::project::Style> {
         match target {
@@ -792,7 +791,7 @@ impl App {
     }
 }
 
-/// A font family in the text panel's list, the built-in ones marked.
+/// A font family in the Text group's list, the built-in ones marked.
 #[derive(Clone, PartialEq)]
 struct FontChoice(String);
 

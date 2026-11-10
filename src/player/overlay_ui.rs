@@ -1,5 +1,5 @@
 //! Overlays and text in the player: their pictures read or drawn for the
-//! view, the text panel's words kept in step, what draws over the picture,
+//! view, the Text group's words kept in step, what draws over the picture,
 //! the on-screen handles, and their blocks on the timeline.
 
 use std::path::PathBuf;

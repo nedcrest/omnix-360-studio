@@ -97,7 +97,7 @@ impl App {
                 self.selection = Selection::cut_at(&self.edit, i);
             }
             Message::AddBlank => {
-                // In the project's graphics folder, so it travels with the
+                // In the project's pictures folder, so it travels with the
                 // project; before the first save, in the cache.
                 let dir = self.project.as_deref().and_then(bin::root).map(|r| r.join(dailix_sheet::layout::PICTURES)).or_else(|| crate::cache::dir().map(|d| d.join("blank"))).unwrap_or_else(std::env::temp_dir);
                 match crate::blank::ensure(&dir) {

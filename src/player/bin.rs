@@ -65,8 +65,8 @@ const ADD_HERE: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0
 const ADD_JOIN: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="11" width="8" height="10" rx="1"/><rect x="14" y="11" width="8" height="10" rx="1"/><path d="M12 2v7M9 6l3 3 3-3"/></svg>"#;
 
 /// A heading and the folders under the project's folder it gathers.
-/// Cleaned voice (`voice/`) isn't listed: it belongs to its clip, and comes
-/// in with the project footage-agent writes, not by hand.
+/// Cleaned voices (`dailix/voice/`) aren't listed: each belongs to its
+/// clip, made in Dailix and chosen there (gap 77).
 pub(super) const SECTIONS: [(&str, Kind, &[&str]); 6] = [
     ("Footage", Kind::Clip, &["01_footage"]),
     ("External video", Kind::Clip, &["06_external"]),
@@ -656,7 +656,7 @@ mod tests {
         make("02_audio/music/song.wav");
         make("02_audio/music/LICENSES.md");
         make("07_sfx/boom.mp3");
-        make("voice/2026-08-22/DJI_0001/dnn6.flac");
+        make("dailix/voice/2026-08-22/DJI_0001/dnn6.flac");
         make("08_graphics/logo.png");
         // A Dailix project files its clips by day.
         make("01_footage/2030-05-02/B.MP4");

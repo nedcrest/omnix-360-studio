@@ -547,7 +547,8 @@ enum Message {
     ToggleCrossfade,
     /// From the Effects panel.
     Effect(effects::EffectMsg),
-    /// Delete the selected cut, or the selected music clip.
+    /// Delete what's selected: a cut, a sound clip, a point, an overlay,
+    /// a marker; a join's transition taken away.
     DeleteCut,
     Undo,
     Redo,

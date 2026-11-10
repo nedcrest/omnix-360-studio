@@ -48,7 +48,7 @@ impl Selection {
         }
     }
 
-    /// Item `r` (in the lane the player shows) of `p`.
+    /// Item `r` (its track, lane and place in it) of `p`.
     pub fn item_at(p: &Project, r: ItemRef) -> Self {
         p.item(r).map_or(Selection::None, |it| Selection::Item(it.id))
     }

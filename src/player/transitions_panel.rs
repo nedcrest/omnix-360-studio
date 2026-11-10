@@ -194,7 +194,8 @@ impl App {
     /// The playhead moved (a click, a drag, a key, playing): the panel
     /// takes the join nearest it (user, 2026-11-08: not only by Previous
     /// and Next). Moved means in the clip: a longer transition shifts the
-    /// edit's time under a playhead that stays put. Not while a join plays.
+    /// edit's time under a playhead that stays put. Not while a stretch
+    /// plays (a join's or a marked range).
     pub(super) fn follow_playhead_join(&mut self, before: Option<(usize, f64)>) {
         if self.side == Some(Side::Transitions) && self.stretch_play.is_none() && self.clip_place() != before {
             self.join = self.nearest_join_cut();

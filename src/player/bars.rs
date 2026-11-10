@@ -235,8 +235,8 @@ impl App {
     }
 
     /// The picture (or the logo while it decodes) in the aspect lock's
-    /// shape, with the panels beside it: a side panel at the right, Info,
-    /// Settings or Text at the left, the bin at the far left.
+    /// shape, with the panels beside it: a side panel at the right, Info
+    /// at the left, the bin at the far left.
     pub(super) fn picture(&self) -> Element<'_, Message> {
         let view: Element<'_, Message> = match self.held.clone().or_else(|| self.sphere()) {
             Some(sphere) => {

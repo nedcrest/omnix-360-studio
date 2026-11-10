@@ -81,55 +81,75 @@ pub(super) fn framing_key(key: &Key, mods: keyboard::Modifiers, sound: bool) -> 
     }
 }
 
+/// How far a key turns or tilts the view, degrees.
+const LOOK_STEP: f64 = 5.0;
+
 impl App {
+    /// A key pressed: a window open takes it first, then the editing
+    /// keys, then the rest by name or letter.
     pub(super) fn key(&mut self, key: Key, mods: keyboard::Modifiers) -> Task<Message> {
-        let step = 5.0;
-        // A dialog or a menu open takes the keys: Esc closes it (or stops a
-        // run), the rest wait.
+        if let Some(task) = self.key_in_window(&key).or_else(|| self.key_editing(&key, mods)) {
+            return task;
+        }
+        match key.as_ref() {
+            Key::Character(c) => self.character_key(c, mods),
+            named => self.named_key(named, mods),
+        }
+    }
+
+    /// A dialog, window or menu open takes the keys: Esc closes it (or
+    /// stops a run), the rest wait; F1 the shortcuts.
+    fn key_in_window(&mut self, key: &Key) -> Option<Task<Message>> {
         let escape = matches!(key.as_ref(), Key::Named(Named::Escape));
         if self.asking.is_some() {
-            return if escape { self.cancel_ask() } else { Task::none() };
+            return Some(if escape { self.cancel_ask() } else { Task::none() });
         }
         if self.normalize.is_some() {
-            return if escape { self.update(Message::Sound(sound_ui::SoundMsg::Cancel)) } else { Task::none() };
+            return Some(if escape { self.update(Message::Sound(sound_ui::SoundMsg::Cancel)) } else { Task::none() });
         }
         // The «New» window open: Esc closes it; its field takes the rest.
         if self.new_menu.is_some() {
-            return if escape { self.update(Message::NewMenuClose) } else { Task::none() };
+            return Some(if escape { self.update(Message::NewMenuClose) } else { Task::none() });
         }
         // The Settings window open: Esc closes it, the rest wait.
         if self.settings_open.is_some() {
-            return if escape { self.update(Message::SettingsPanel) } else { Task::none() };
+            return Some(if escape { self.update(Message::SettingsPanel) } else { Task::none() });
         }
         // A marker's window open: Esc closes it; its field takes the rest.
         if self.mark_edit.is_some() {
-            return if escape { self.update(Message::MarkClose) } else { Task::none() };
+            return Some(if escape { self.update(Message::MarkClose) } else { Task::none() });
         }
         // The shortcuts' list open: Esc or F1 close it, the rest wait. Not
         // «?»: it never reached here on the user's keyboard (2026-11-04),
         // and F1 is help everywhere.
         let help = matches!(key.as_ref(), Key::Named(Named::F1));
         if self.shortcuts {
-            return if escape || help { self.update(Message::Shortcuts) } else { Task::none() };
+            return Some(if escape || help { self.update(Message::Shortcuts) } else { Task::none() });
         }
         if help {
-            return self.update(Message::Shortcuts);
+            return Some(self.update(Message::Shortcuts));
         }
         if self.sound_menu.is_some() && escape {
-            return self.update(Message::Sound(sound_ui::SoundMsg::Menu(None)));
+            return Some(self.update(Message::Sound(sound_ui::SoundMsg::Menu(None))));
         }
+        None
+    }
+
+    /// Editing (not framing): the arrows, Home and End move the playhead
+    /// (gap 55), Alt+↑↓ an item a lane, and the framing keys do nothing.
+    fn key_editing(&mut self, key: &Key, mods: keyboard::Modifiers) -> Option<Task<Message>> {
         // Editing: the keys that turn, frame or key the view do nothing. K
         // still adds a volume point to a selected sound.
         let sound = self.selection.sound(&self.edit).is_some();
         // Editing: the arrows, Home and End move the playhead (gap 55).
         if !self.framing && !mods.alt() && !mods.command() {
             match key.as_ref() {
-                Key::Named(Named::ArrowLeft) if mods.shift() => return self.seek_by(-1.0, "−1 s"),
-                Key::Named(Named::ArrowRight) if mods.shift() => return self.seek_by(1.0, "+1 s"),
-                Key::Named(Named::ArrowUp) => return self.go_to_join(-1.0),
-                Key::Named(Named::ArrowDown) => return self.go_to_join(1.0),
-                Key::Named(Named::Home) => return self.seek_to(0.0, "start"),
-                Key::Named(Named::End) => return self.seek_to(self.edit.frame(), "end"),
+                Key::Named(Named::ArrowLeft) if mods.shift() => return Some(self.seek_by(-1.0, "−1 s")),
+                Key::Named(Named::ArrowRight) if mods.shift() => return Some(self.seek_by(1.0, "+1 s")),
+                Key::Named(Named::ArrowUp) => return Some(self.go_to_join(-1.0)),
+                Key::Named(Named::ArrowDown) => return Some(self.go_to_join(1.0)),
+                Key::Named(Named::Home) => return Some(self.seek_to(0.0, "start")),
+                Key::Named(Named::End) => return Some(self.seek_to(self.edit.frame(), "end")),
                 _ => {}
             }
         }
@@ -139,157 +159,170 @@ impl App {
             && self.selection.item(&self.edit).is_some()
         {
             self.item_to_lane(arrow == Named::ArrowUp);
-            return Task::none();
+            return Some(Task::none());
         }
-        if !self.framing && framing_key(&key, mods, sound) {
-            return Task::none();
+        // Editing: the framing keys do nothing.
+        (!self.framing && framing_key(key, mods, sound)).then(Task::none)
+    }
+
+    /// The named keys: Esc, Space, the arrows, Home, Delete.
+    fn named_key(&mut self, key: Key<&str>, mods: keyboard::Modifiers) -> Task<Message> {
+        match key {
+        Key::Named(Named::Escape) if self.picking.is_some() => return self.update(Message::PickColour),
+        // Esc cancels a drag: a change under way (a trim, a fade, a run
+        // of typing, a look-around keyed by Auto keyframe) goes back to
+        // before it, and the timeline drops its drag, a cut's move too
+        // (it lands only on release). Without a drag it changes nothing
+        // there. Then, as before, it leaves full screen.
+        Key::Named(Named::Escape) => {
+            if self.edit.changing() {
+                self.edit.cancel();
+                self.selection = self.selection.still_valid(&self.edit);
+            } else {
+                // A range marked on the ruler let go of.
+                self.range = None;
+            }
+            self.drag_epoch += 1;
+            self.snap_line = None;
+            if self.fullscreen {
+                return self.update(Message::Fullscreen);
+            }
         }
-        match key.as_ref() {
-            Key::Named(Named::Escape) if self.picking.is_some() => return self.update(Message::PickColour),
-            // Esc cancels a drag: a change under way (a trim, a fade, a run
-            // of typing, a look-around keyed by Auto keyframe) goes back to
-            // before it, and the timeline drops its drag, a cut's move too
-            // (it lands only on release). Without a drag it changes nothing
-            // there. Then, as before, it leaves full screen.
-            Key::Named(Named::Escape) => {
-                if self.edit.changing() {
-                    self.edit.cancel();
-                    self.selection = self.selection.still_valid(&self.edit);
-                } else {
-                    // A range marked on the ruler let go of.
-                    self.range = None;
-                }
-                self.drag_epoch += 1;
-                self.snap_line = None;
-                if self.fullscreen {
-                    return self.update(Message::Fullscreen);
-                }
-            }
-            // As the Play button: from the end of the edit, from the start.
-            // Shift+Space: the range marked on the ruler, once (gap 92).
-            Key::Named(Named::Space) if mods.shift() && self.range.is_some() => return self.update(Message::PlayRange),
-            Key::Named(Named::Space) => return self.update(Message::Toggle),
-            // The selected cut one place left or right (a drag's key route).
-            Key::Named(arrow @ (Named::ArrowLeft | Named::ArrowRight)) if mods.alt() => {
-                let Some(i) = self.selection.cut(&self.edit) else { return Task::none() };
-                let to = if arrow == Named::ArrowLeft { i.checked_sub(1) } else { Some(i + 2).filter(|&to| to <= self.edit.cuts.len()) };
-                return to.map_or_else(Task::none, |to| self.update(Message::MoveCut(i, to)));
-            }
-            Key::Named(Named::ArrowLeft) if mods.shift() => self.free_look().yaw -= 2.0 * step,
-            Key::Named(Named::ArrowRight) if mods.shift() => self.free_look().yaw += 2.0 * step,
-            // A frame, as `,` and `.` (it was 5 s, thrown about unclearly:
-            // gap 55).
-            Key::Named(arrow @ (Named::ArrowLeft | Named::ArrowRight)) => {
-                let back = arrow == Named::ArrowLeft;
-                return self.step_frame(if back { -1.0 } else { 1.0 });
-            }
-            // With the strip showing, a field typed in may want them.
-            Key::Named(arrow @ (Named::ArrowUp | Named::ArrowDown)) if self.angles_shown => {
-                return angles::arrow(if arrow == Named::ArrowUp { 1.0 } else { -1.0 });
-            }
-            Key::Named(Named::ArrowUp) => self.free_look().pitch += step,
-            Key::Named(Named::ArrowDown) => self.free_look().pitch -= step,
-            Key::Named(Named::Home) => self.free_look().reset(),
-            // A segment picked in the bin's player: Delete removes it.
-            Key::Named(Named::Delete | Named::Backspace) if self.bin.view && self.bin.source.as_ref().is_some_and(|s| s.picked.is_some()) => {
-                return self.update(Message::BinPlayer(super::bin_player::SourceMsg::Remove));
-            }
-            Key::Named(Named::Delete | Named::Backspace) if mods.shift() || !matches!(self.selection, Selection::None | Selection::Cut(_)) => {
-                return self.update(Message::DeleteCut);
-            }
-            // Editing: Del takes the selected cut (framing, the keyframe).
-            Key::Named(Named::Delete | Named::Backspace) if !self.framing => return self.update(Message::DeleteCut),
-            Key::Named(Named::Delete | Named::Backspace) => return self.update(Message::KeyDelete),
-            Key::Character(c) => match c {
-                // In and out points in the bin's player (Alt clears them).
-                "i" | "I" if self.bin.view && self.bin.source.is_some() && !mods.command() => return self.update(Message::BinPlayer(super::bin_player::SourceMsg::In(!mods.alt()))),
-                "o" | "O" if self.bin.view && self.bin.source.is_some() && !mods.command() => return self.update(Message::BinPlayer(super::bin_player::SourceMsg::Out(!mods.alt()))),
-                "o" | "O" if mods.command() && mods.shift() => return self.update(Message::OpenProject),
-                "n" | "N" if mods.command() => return self.update(Message::NewMenu),
-                "o" if mods.command() => return self.update(Message::Open),
-                "s" | "S" if mods.command() => return self.update(Message::SaveProject(mods.shift())),
-                "z" | "Z" if mods.command() && mods.shift() => return self.update(Message::Redo),
-                "z" if mods.command() => return self.update(Message::Undo),
-                "y" if mods.command() => return self.update(Message::Redo),
-                "e" | "E" if mods.command() => return self.update(Message::ExportPanel),
-                "," if mods.command() => return self.update(Message::SettingsPanel),
-                "c" | "C" => return self.update(Message::Split),
-                "t" | "T" => return self.update(Message::TransitionsPanel),
-                "b" | "B" if !mods.command() && mods.shift() => return self.update(Message::BinView(super::bin_view::BinMsg::Toggle)),
-                "b" | "B" if !mods.command() => return self.update(Message::BinPanel),
-                "q" | "Q" => self.free_look().roll -= step,
-                "e" | "E" => self.free_look().roll += step,
-                "=" | "+" if mods.command() => return self.update(Message::TimelineZoom(1.5, None)),
-                "-" if mods.command() => return self.update(Message::TimelineZoom(1.0 / 1.5, None)),
-                "0" if mods.command() => return self.update(Message::TimelineZoomTo(0.0)),
-                "0" => self.free_look().reset(),
-                // A sound clip or a point selected: a volume point at the
-                // playhead on that clip's own line (within it), or the
-                // playing cut's.
-                "k" | "K" if self.selection.sound(&self.edit).is_some() => {
-                    let own = self.selection.sound(&self.edit);
-                    // The playhead in that sound's file time: the selected
-                    // cut's, not the playing one's (K used to key that).
-                    let at = match own {
-                        Some(own @ Own::Cut(n)) => self.edit.cuts.get(n).map(|c| (own, c.start + self.position() - self.edit.offset(n))),
-                        Some(own @ Own::Clip(which, c)) => self.edit.track(which).clips.get(c).map(|m| (own, m.start + self.position() - m.at)),
-                        None => None,
-                    };
-                    let Some((own, t)) = at.filter(|&(own, t)| self.edit.own_line(own).is_some_and(|(_, (s, e))| t >= s && t <= e)) else { return Task::none() };
-                    // No undo step when one is there already. A clip selected
-                    // stays selected (K again keys it again); a point
-                    // selected moves to the one keyed.
-                    self.sound_op(own, |sound| SoundOp::PointAt { sound, t });
-                    if self.selection.point(&self.edit).is_some() {
-                        self.select_point_at(own, t);
-                    }
-                }
-                "k" | "K" => return self.update(Message::KeyAdd),
-                "j" | "J" => {
-                    if let Some(k) = self.current_key() {
-                        let ease = self.edit.cuts[self.current].keyframes[k].ease;
-                        let i = Ease::ALL.iter().position(|&e| e == ease).unwrap_or(0);
-                        return self.update(Message::KeyEase(Ease::ALL[(i + 1) % Ease::ALL.len()]));
-                    }
-                }
-                "[" if mods.alt() => return self.update(Message::TrimToPlayhead(true)),
-                "]" if mods.alt() => return self.update(Message::TrimToPlayhead(false)),
-                "[" => return self.key_step(-1.0),
-                "]" => return self.key_step(1.0),
-                "," | "." => return self.step_frame(if c == "," { -1.0 } else { 1.0 }),
-                "+" | "=" => self.free_look().zoom_by(-1.0),
-                "-" => self.free_look().zoom_by(1.0),
-                "s" | "S" => {
-                    let mode = self.clip.as_ref().map_or(self.opts.stabilize, |c| c.playback.media.stab.mode());
-                    let next = match mode {
-                        Mode::Off => Mode::Horizon,
-                        Mode::Horizon => Mode::Level,
-                        Mode::Level => Mode::Lock,
-                        Mode::Lock => Mode::Off,
-                    };
-                    return self.update(Message::Stab(next));
-                }
-                "g" | "G" => return self.effect_message(effects::EffectMsg::Toggle),
-                "r" | "R" => return self.update(Message::RollingShutter(!self.rolling_shutter)),
-                // D selects the cut under the playhead (Premiere's key): ↓ to a
-                // cut, D, then Alt+← moves it (gap 58).
-                "d" | "D" if !mods.command() => return self.update(Message::SelectAtPlayhead),
-                // N turns snapping on and off, as in Final Cut.
-                "n" | "N" if !mods.command() => return self.update(Message::Snapping),
-                // M marks, as in FCP, Premiere and Resolve (gap 5); mute
-                // moved to Shift+M, out of the way of a slip.
-                "m" | "M" if mods.shift() => return self.update(Message::Mute),
-                "m" | "M" => return self.update(Message::AddMark),
-                "p" | "P" => {
-                    let i = Projection::ALL.iter().position(|&p| p == self.shown_view().projection).unwrap_or(0);
-                    return self.update(Message::Projection(Projection::ALL[(i + 1) % Projection::ALL.len()]));
-                }
-                "f" | "F" => return self.update(Message::Fullscreen),
-                _ => {}
-            },
+        // As the Play button: from the end of the edit, from the start.
+        // Shift+Space: the range marked on the ruler, once (gap 92).
+        Key::Named(Named::Space) if mods.shift() && self.range.is_some() => return self.update(Message::PlayRange),
+        Key::Named(Named::Space) => return self.update(Message::Toggle),
+        // The selected cut one place left or right (a drag's key route).
+        Key::Named(arrow @ (Named::ArrowLeft | Named::ArrowRight)) if mods.alt() => {
+            let Some(i) = self.selection.cut(&self.edit) else { return Task::none() };
+            let to = if arrow == Named::ArrowLeft { i.checked_sub(1) } else { Some(i + 2).filter(|&to| to <= self.edit.cuts.len()) };
+            return to.map_or_else(Task::none, |to| self.update(Message::MoveCut(i, to)));
+        }
+        Key::Named(Named::ArrowLeft) if mods.shift() => self.free_look().yaw -= 2.0 * LOOK_STEP,
+        Key::Named(Named::ArrowRight) if mods.shift() => self.free_look().yaw += 2.0 * LOOK_STEP,
+        // A frame, as `,` and `.` (it was 5 s, thrown about unclearly:
+        // gap 55).
+        Key::Named(arrow @ (Named::ArrowLeft | Named::ArrowRight)) => {
+            let back = arrow == Named::ArrowLeft;
+            return self.step_frame(if back { -1.0 } else { 1.0 });
+        }
+        // With the strip showing, a field typed in may want them.
+        Key::Named(arrow @ (Named::ArrowUp | Named::ArrowDown)) if self.angles_shown => {
+            return angles::arrow(if arrow == Named::ArrowUp { 1.0 } else { -1.0 });
+        }
+        Key::Named(Named::ArrowUp) => self.free_look().pitch += LOOK_STEP,
+        Key::Named(Named::ArrowDown) => self.free_look().pitch -= LOOK_STEP,
+        Key::Named(Named::Home) => self.free_look().reset(),
+        // A segment picked in the bin's player: Delete removes it.
+        Key::Named(Named::Delete | Named::Backspace) if self.bin.view && self.bin.source.as_ref().is_some_and(|s| s.picked.is_some()) => {
+            return self.update(Message::BinPlayer(super::bin_player::SourceMsg::Remove));
+        }
+        Key::Named(Named::Delete | Named::Backspace) if mods.shift() || !matches!(self.selection, Selection::None | Selection::Cut(_)) => {
+            return self.update(Message::DeleteCut);
+        }
+        // Editing: Del takes the selected cut (framing, the keyframe).
+        Key::Named(Named::Delete | Named::Backspace) if !self.framing => return self.update(Message::DeleteCut),
+        Key::Named(Named::Delete | Named::Backspace) => return self.update(Message::KeyDelete),
             _ => {}
         }
         Task::none()
+    }
+
+    /// The letter and sign keys.
+    fn character_key(&mut self, c: &str, mods: keyboard::Modifiers) -> Task<Message> {
+        match c {
+            // In and out points in the bin's player (Alt clears them).
+            "i" | "I" if self.bin.view && self.bin.source.is_some() && !mods.command() => return self.update(Message::BinPlayer(super::bin_player::SourceMsg::In(!mods.alt()))),
+            "o" | "O" if self.bin.view && self.bin.source.is_some() && !mods.command() => return self.update(Message::BinPlayer(super::bin_player::SourceMsg::Out(!mods.alt()))),
+            "o" | "O" if mods.command() && mods.shift() => return self.update(Message::OpenProject),
+            "n" | "N" if mods.command() => return self.update(Message::NewMenu),
+            "o" if mods.command() => return self.update(Message::Open),
+            "s" | "S" if mods.command() => return self.update(Message::SaveProject(mods.shift())),
+            "z" | "Z" if mods.command() && mods.shift() => return self.update(Message::Redo),
+            "z" if mods.command() => return self.update(Message::Undo),
+            "y" if mods.command() => return self.update(Message::Redo),
+            "e" | "E" if mods.command() => return self.update(Message::ExportPanel),
+            "," if mods.command() => return self.update(Message::SettingsPanel),
+            "c" | "C" => return self.update(Message::Split),
+            "t" | "T" => return self.update(Message::TransitionsPanel),
+            "b" | "B" if !mods.command() && mods.shift() => return self.update(Message::BinView(super::bin_view::BinMsg::Toggle)),
+            "b" | "B" if !mods.command() => return self.update(Message::BinPanel),
+            "q" | "Q" => self.free_look().roll -= LOOK_STEP,
+            "e" | "E" => self.free_look().roll += LOOK_STEP,
+            "=" | "+" if mods.command() => return self.update(Message::TimelineZoom(1.5, None)),
+            "-" if mods.command() => return self.update(Message::TimelineZoom(1.0 / 1.5, None)),
+            "0" if mods.command() => return self.update(Message::TimelineZoomTo(0.0)),
+            "0" => self.free_look().reset(),
+            // A sound clip or a point selected: a volume point at the
+            // playhead on that clip's own line (within it), or the
+            // playing cut's.
+            "k" | "K" if self.selection.sound(&self.edit).is_some() => self.key_volume_point(),
+            "k" | "K" => return self.update(Message::KeyAdd),
+            "j" | "J" => {
+                if let Some(k) = self.current_key() {
+                    let ease = self.edit.cuts[self.current].keyframes[k].ease;
+                    let i = Ease::ALL.iter().position(|&e| e == ease).unwrap_or(0);
+                    return self.update(Message::KeyEase(Ease::ALL[(i + 1) % Ease::ALL.len()]));
+                }
+            }
+            "[" if mods.alt() => return self.update(Message::TrimToPlayhead(true)),
+            "]" if mods.alt() => return self.update(Message::TrimToPlayhead(false)),
+            "[" => return self.key_step(-1.0),
+            "]" => return self.key_step(1.0),
+            "," | "." => return self.step_frame(if c == "," { -1.0 } else { 1.0 }),
+            "+" | "=" => self.free_look().zoom_by(-1.0),
+            "-" => self.free_look().zoom_by(1.0),
+            "s" | "S" => {
+                let mode = self.clip.as_ref().map_or(self.opts.stabilize, |c| c.playback.media.stab.mode());
+                let next = match mode {
+                    Mode::Off => Mode::Horizon,
+                    Mode::Horizon => Mode::Level,
+                    Mode::Level => Mode::Lock,
+                    Mode::Lock => Mode::Off,
+                };
+                return self.update(Message::Stab(next));
+            }
+            "g" | "G" => return self.effect_message(effects::EffectMsg::Toggle),
+            "r" | "R" => return self.update(Message::RollingShutter(!self.rolling_shutter)),
+            // D selects the cut under the playhead (Premiere's key): ↓ to a
+            // cut, D, then Alt+← moves it (gap 58).
+            "d" | "D" if !mods.command() => return self.update(Message::SelectAtPlayhead),
+            // N turns snapping on and off, as in Final Cut.
+            "n" | "N" if !mods.command() => return self.update(Message::Snapping),
+            // M marks, as in FCP, Premiere and Resolve (gap 5); mute
+            // moved to Shift+M, out of the way of a slip.
+            "m" | "M" if mods.shift() => return self.update(Message::Mute),
+            "m" | "M" => return self.update(Message::AddMark),
+            "p" | "P" => {
+                let i = Projection::ALL.iter().position(|&p| p == self.shown_view().projection).unwrap_or(0);
+                return self.update(Message::Projection(Projection::ALL[(i + 1) % Projection::ALL.len()]));
+            }
+            "f" | "F" => return self.update(Message::Fullscreen),
+            _ => {}
+        }
+        Task::none()
+    }
+
+    /// K on a sound clip or point selected: a volume point at the playhead
+    /// on that sound's own line (within it), the selected cut's rather
+    /// than the playing one's.
+    fn key_volume_point(&mut self) {
+            let own = self.selection.sound(&self.edit);
+            // The playhead in that sound's file time: the selected
+            // cut's, not the playing one's (K used to key that).
+            let at = match own {
+                Some(own @ Own::Cut(n)) => self.edit.cuts.get(n).map(|c| (own, c.start + self.position() - self.edit.offset(n))),
+                Some(own @ Own::Clip(which, c)) => self.edit.track(which).clips.get(c).map(|m| (own, m.start + self.position() - m.at)),
+                None => None,
+            };
+            let Some((own, t)) = at.filter(|&(own, t)| self.edit.own_line(own).is_some_and(|(_, (s, e))| t >= s && t <= e)) else { return };
+            // No undo step when one is there already. A clip selected
+            // stays selected (K again keys it again); a point
+            // selected moves to the one keyed.
+            self.sound_op(own, |sound| SoundOp::PointAt { sound, t });
+            if self.selection.point(&self.edit).is_some() {
+                self.select_point_at(own, t);
+            }
     }
 }
 
@@ -403,6 +436,19 @@ fn next_stop(stops: &[(f64, Stop)], now: f64, dir: f64, frame: f64) -> Option<(f
 mod tests {
     use super::*;
     use crate::project::{Cut, MusicClip};
+
+    #[test]
+    fn a_window_open_takes_the_keys_first() {
+        let mut app = super::super::tests::app();
+        let none = keyboard::Modifiers::empty();
+        let snapping = app.snapping;
+        app.shortcuts = true;
+        let _ = app.key(Key::Character("n".into()), none);
+        assert_eq!(app.snapping, snapping, "the list open: N waits");
+        let _ = app.key(Key::Named(Named::F1), none);
+        let _ = app.key(Key::Character("n".into()), none);
+        assert!(!app.shortcuts && app.snapping != snapping, "closed by F1, then N snaps");
+    }
 
     #[test]
     fn stops_are_every_edge_and_marker_on_the_edit() {

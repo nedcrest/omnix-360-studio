@@ -517,6 +517,11 @@ enum Message {
     AskTyped(String),
     /// A question let go with nothing to do.
     AskClosed,
+    /// A range marked on the ruler (Shift and a drag; gap 92), from where
+    /// the drag began to where it is; none: let go of.
+    Range(Option<(f64, f64)>),
+    /// The marked range played once, back to its start, paused.
+    PlayRange,
     /// The bin view's own player.
     BinPlayer(bin_player::SourceMsg),
     /// Add a file from the bin where its kind goes.
@@ -752,10 +757,13 @@ struct App {
     settings_open: Option<settings_panel::Group>,
     /// The «New» window, while open.
     new_menu: Option<new_menu::NewMenu>,
-    /// The join the Transitions panel works on: the cut after it; and,
-    /// while it's played, where to stop and where to go back to.
+    /// The join the Transitions panel works on: the cut after it.
     join: Option<crate::project::Id>,
-    join_play: Option<(f64, f64)>,
+    /// While a stretch plays once (a join, a range marked on the ruler):
+    /// where to stop and where to go back to, paused.
+    stretch_play: Option<(f64, f64)>,
+    /// A stretch of the edit marked on the ruler (gap 92), edit time.
+    range: Option<(f64, f64)>,
     /// The panel's open tab, and the edge whose settings show on Edges.
     transitions_tab: transitions_panel::Kind,
     edge_side: crate::model::ops::End,
@@ -944,7 +952,8 @@ impl App {
             settings_open: None,
             new_menu: None,
             join: None,
-            join_play: None,
+            stretch_play: None,
+            range: None,
             transitions_tab: Default::default(),
             edge_side: crate::model::ops::End::Out,
             templates: crate::template::names(),
@@ -1070,7 +1079,7 @@ impl App {
         self.settle_text();
         self.follow_crossfade();
         self.follow_music();
-        let task = Task::batch([task, self.follow_join_play()]);
+        let task = Task::batch([task, self.follow_stretch()]);
         self.follow_playhead_join(at);
         let task = Task::batch([task, self.follow_bin()]);
         // Another panel took the Record panel's place: stop listening.
@@ -1175,6 +1184,11 @@ impl App {
                 Task::none()
             }
             Message::AskClosed => Task::none(),
+            Message::Range(range) => {
+                self.range = range.map(|(a, b)| (a.min(b).max(0.0), a.max(b).min(self.edit.duration()))).filter(|(a, b)| b - a > 1e-3);
+                Task::none()
+            }
+            Message::PlayRange => self.play_stretch(self.range),
             m @ (Message::MarkEdit { .. } | Message::MarkNote { .. } | Message::MarkSave | Message::MarkDelete | Message::MarkClose) => self.on_marks(m),
             m @ (Message::Tick | Message::TimelineZoom { .. } | Message::TimelineWheel { .. } | Message::TimelineZoomTo { .. } | Message::TimelinePan { .. } | Message::Toggle | Message::Scrub { .. } | Message::ScrubDone) => self.on_transport(m),
             m @ (Message::Select { .. } | Message::AddBlank | Message::SoundEdge { .. } | Message::Trim { .. } | Message::MoveCut { .. } | Message::AddMark | Message::SelectAtPlayhead | Message::MarkMove { .. } | Message::MarkSelect { .. } | Message::StepsRested { .. } | Message::ToastGone { .. } | Message::StepNoteGone { .. } | Message::TrimToPlayhead { .. } | Message::Crossfade { .. } | Message::ToggleCrossfade | Message::Split | Message::DeleteCut | Message::Undo | Message::Redo) => self.on_cuts(m),

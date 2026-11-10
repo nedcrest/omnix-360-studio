@@ -126,17 +126,10 @@ impl App {
             }
             // The join nearest the playhead, played from a few frames
             // before its transition to a few after, then paused back at the
-            // start (`follow_join_play`).
+            // start (`follow_stretch`).
             Message::TransitionPreview => {
                 self.join = self.nearest_join_cut();
-                let Some((start, stop)) = self.join_window() else { return Task::none() };
-                // One jump that plays: a seek and then Play started from the
-                // frame still on screen, before the seek's had decoded.
-                let Some((i, t)) = self.edit.locate(start) else { return Task::none() };
-                self.pause_source();
-                self.follow = true;
-                self.goto(i, t, true);
-                self.join_play = Some((stop, start));
+                return self.play_stretch(self.join_window());
             }
             Message::TransitionsTab(kind) => self.transitions_tab = kind,
             _ => {}
@@ -198,27 +191,12 @@ impl App {
         Some(((from - BEFORE * frame).max(0.0), to + AFTER * frame))
     }
 
-    /// While a join plays (`TransitionPreview`): past its end, paused and
-    /// back at its start; stopped another way (paused, a seek), let go.
-    pub(super) fn follow_join_play(&mut self) -> Task<Message> {
-        let Some((stop, start)) = self.join_play else { return Task::none() };
-        if !self.playing() {
-            self.join_play = None;
-            return Task::none();
-        }
-        if self.position() < stop {
-            return Task::none();
-        }
-        self.join_play = None;
-        Task::batch([self.update(Message::Toggle), self.update(Message::Scrub(start)), self.update(Message::ScrubDone)])
-    }
-
     /// The playhead moved (a click, a drag, a key, playing): the panel
     /// takes the join nearest it (user, 2026-11-08: not only by Previous
     /// and Next). Moved means in the clip: a longer transition shifts the
     /// edit's time under a playhead that stays put. Not while a join plays.
     pub(super) fn follow_playhead_join(&mut self, before: Option<(usize, f64)>) {
-        if self.side == Some(Side::Transitions) && self.join_play.is_none() && self.clip_place() != before {
+        if self.side == Some(Side::Transitions) && self.stretch_play.is_none() && self.clip_place() != before {
             self.join = self.nearest_join_cut();
         }
     }

@@ -14,6 +14,7 @@ const GROUPS: &[(&str, &[(&str, &str)])] = &[
         "Play and the playhead",
         &[
             ("Space", "play / pause"),
+            ("Shift+Space", "play the range marked on the ruler once (Shift and a drag marks it, Esc lets go)"),
             ("← / →  or  , / .", "a frame back / on"),
             ("Shift+← / →", "a second back / on (editing)"),
             ("↑ / ↓", "the previous / next cut or marker (editing)"),

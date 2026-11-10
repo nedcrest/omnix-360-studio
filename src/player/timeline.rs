@@ -392,6 +392,8 @@ pub struct Timeline {
     /// Each lane's name and whether it's hidden (gap 97), of the overlay
     /// track and of the text's, lane by lane.
     pub lane_meta: [Vec<(Option<String>, bool)>; 2],
+    /// The range marked on the ruler (gap 92), edit time.
+    pub range: Option<(f64, f64)>,
 }
 
 /// A lane head's buttons (gap 70, 97).
@@ -2848,6 +2850,7 @@ mod tests {
             text_auto: vec![],
             active_lanes: [0; 2],
             lane_meta: [vec![], vec![]],
+            range: None,
             held: Default::default(),
         };
         (t, Rectangle::new(Point::ORIGIN, Size::new(1000.0 + 2.0 * PICK, 300.0)))
@@ -3349,6 +3352,8 @@ fn ruler_label(t: f64, step: f64) -> String {
 #[derive(Default)]
 pub struct RulerState {
     dragging: bool,
+    /// Shift held when pressed: a range marked from here (gap 92).
+    marking: Option<f64>,
 }
 
 /// Markers' colour: apart from the playhead's and the lanes'.
@@ -3524,6 +3529,15 @@ impl canvas::Program<Message> for Ruler {
             let x = t.x(t.video, bounds);
             frame.fill(&Path::rectangle(Point::new(x, 0.0), Size::new(1.0, h)), ink.scale_alpha(0.5));
         }
+        // The range marked (gap 92): a band, its ends marked.
+        if let Some((a, b)) = t.range {
+            let (l, r) = (t.x(a, bounds), t.x(b, bounds));
+            let band = palette.primary.base.color;
+            frame.fill(&Path::rectangle(Point::new(l, 0.0), Size::new(r - l, h)), band.scale_alpha(0.25));
+            for x in [l, r] {
+                frame.fill(&Path::rectangle(Point::new(x - 1.0, 0.0), Size::new(2.0, h)), band);
+            }
+        }
         // The mix check's findings along its foot: red to fix, yellow a hint.
         for &(from, to, fix) in &t.check_marks {
             let colour = if fix { iced::Color::from_rgb(1.0, 0.3, 0.3) } else { iced::Color::from_rgb(0.95, 0.79, 0.3) };
@@ -3556,6 +3570,21 @@ impl canvas::Program<Message> for Ruler {
         use iced::Event::Mouse;
         match event {
             Mouse(mouse::Event::WheelScrolled { delta }) => wheel(delta, &self.0, cursor, bounds),
+            // Shift and a drag: a range marked (gap 92); else the playhead.
+            Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) if self.0.held.shift() => {
+                let p = cursor.position_in(bounds).filter(|p| p.x >= HEAD)?;
+                let t = self.0.t(p.x, bounds);
+                state.marking = Some(t);
+                Some(canvas::Action::publish(Message::Range(None)).and_capture())
+            }
+            Mouse(mouse::Event::CursorMoved { position }) if state.marking.is_some() => {
+                let from = state.marking?;
+                Some(canvas::Action::publish(Message::Range(Some((from, self.0.t(position.x - bounds.x, bounds))))).and_capture())
+            }
+            Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) if state.marking.is_some() => {
+                state.marking = None;
+                Some(canvas::Action::request_redraw().and_capture())
+            }
             Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
                 let p = cursor.position_in(bounds).filter(|p| p.x >= HEAD)?;
                 state.dragging = true;

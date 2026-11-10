@@ -155,6 +155,9 @@ impl App {
                 if self.edit.changing() {
                     self.edit.cancel();
                     self.selection = self.selection.still_valid(&self.edit);
+                } else {
+                    // A range marked on the ruler let go of.
+                    self.range = None;
                 }
                 self.drag_epoch += 1;
                 self.snap_line = None;
@@ -163,6 +166,8 @@ impl App {
                 }
             }
             // As the Play button: from the end of the edit, from the start.
+            // Shift+Space: the range marked on the ruler, once (gap 92).
+            Key::Named(Named::Space) if mods.shift() && self.range.is_some() => return self.update(Message::PlayRange),
             Key::Named(Named::Space) => return self.update(Message::Toggle),
             // The selected cut one place left or right (a drag's key route).
             Key::Named(arrow @ (Named::ArrowLeft | Named::ArrowRight)) if mods.alt() => {

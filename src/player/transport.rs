@@ -14,6 +14,35 @@ pub(super) const PREROLL: f64 = 3.0;
 pub(super) const TIMELINE_SPAN: f64 = 2.0;
 
 impl App {
+    /// Plays `start..stop` once (a join, a marked range): past its end it's
+    /// paused back at its start (`follow_stretch`).
+    pub(super) fn play_stretch(&mut self, stretch: Option<(f64, f64)>) -> Task<Message> {
+        let Some((start, stop)) = stretch else { return Task::none() };
+        // One jump that plays: a seek and then Play started from the frame
+        // still on screen, before the seek's had decoded.
+        let Some((i, t)) = self.edit.locate(start) else { return Task::none() };
+        self.pause_source();
+        self.follow = true;
+        self.goto(i, t, true);
+        self.stretch_play = Some((stop, start));
+        Task::none()
+    }
+
+    /// While a stretch plays (`play_stretch`): past its end, paused and
+    /// back at its start; stopped another way (paused, a seek), let go.
+    pub(super) fn follow_stretch(&mut self) -> Task<Message> {
+        let Some((stop, start)) = self.stretch_play else { return Task::none() };
+        if !self.playing() {
+            self.stretch_play = None;
+            return Task::none();
+        }
+        if self.position() < stop {
+            return Task::none();
+        }
+        self.stretch_play = None;
+        Task::batch([self.update(Message::Toggle), self.update(Message::Scrub(start)), self.update(Message::ScrubDone)])
+    }
+
     /// Keeps the music in step with the edit: playing where playback is, at
     /// its level, or stopped while playback is.
     pub(super) fn follow_music(&mut self) {

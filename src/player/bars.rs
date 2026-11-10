@@ -352,6 +352,7 @@ impl App {
             held: self.modifiers,
             text_auto: self.lanes_of_track(crate::overlay::Track::Text),
             active_lanes: self.active_lanes,
+            range: self.range,
             lane_meta: [crate::overlay::Track::Overlay, crate::overlay::Track::Text].map(|track| (0..self.shown_lanes(track)).map(|l| self.edit.lane(track, l).map_or((None, false), |ln| (ln.name.clone(), ln.hidden))).collect()),
             folds: self.folds,
             video: self.edit.duration(),
@@ -399,6 +400,11 @@ impl App {
             tip(
                 tint_button(Tint::Move, if playing { PAUSE } else { PLAY }, Some(Message::Toggle)),
                 text(if playing { "Pause (Space)" } else { "Play (Space)" }),
+                tooltip::Position::Top,
+            ),
+            tip(
+                tint_button(Tint::Move, PLAY_RANGE, self.range.map(|_| Message::PlayRange)),
+                text(if self.range.is_some() { "Play the range marked on the ruler once, then back to its start (Shift+Space)" } else { "Play a range: mark one with Shift and a drag on the ruler" }),
                 tooltip::Position::Top,
             ),
             // A fixed width: the digits' widths differ in most fonts (macOS's

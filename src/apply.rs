@@ -37,55 +37,137 @@ pub fn schema() -> String {
 
 /// What `project` holds, a line each, by id: what ops name.
 pub fn describe(project: &Path) -> Result<()> {
-    let p = Project::load(project)?;
+    for line in describe_lines(&Project::load(project)?) {
+        println!("{line}");
+    }
+    Ok(())
+}
+
+/// `describe`'s lines for `p`.
+fn describe_lines(p: &Project) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut println = |line: String| out.push(line);
     let name = |path: &Path| path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+    let aspect = p.aspect.map_or("free".to_owned(), |a| format!("{}:{}", a.0, a.1));
+    println(format!("edit: aspect {aspect}  clips' sound {:+.1} dB  fades in {:.2} s, out {:.2} s", p.sound.volume, p.fades.fade_in, p.fades.fade_out));
     let offsets = crate::project::offsets(&p.cuts);
-    println!("cuts:");
+    println("cuts:".to_owned());
     for (c, at) in p.cuts.iter().zip(offsets) {
-        println!("  cut #{:<3} {:7.2}-{:7.2} s  {} {:.2}-{:.2}  level {:+.1} dB{}", c.id, at, at + c.len(), name(&c.input), c.start, c.end, c.gain, if c.mute { " muted" } else { "" });
-        for line in look_lines(c) {
-            println!("    {line}");
+        println(format!("  cut #{:<3} {:7.2}-{:7.2} s  {} {:.2}-{:.2}  level {:+.1} dB{}", c.id, at, at + c.len(), name(&c.input), c.start, c.end, c.gain, if c.mute { " muted" } else { "" }));
+        for line in cut_lines(c).into_iter().chain(look_lines(c)) {
+            println(format!("    {line}"));
         }
         for m in c.marks.iter().filter(|m| m.t >= c.start && m.t <= c.end) {
-            println!("    marker {:.2} s (clip) at {:.2} s{}", m.t, at + m.t - c.start, if m.note.is_empty() { String::new() } else { format!("  «{}»", m.note) });
+            println(format!("    marker {:.2} s (clip) at {:.2} s{}", m.t, at + m.t - c.start, if m.note.is_empty() { String::new() } else { format!("  «{}»", m.note) }));
         }
     }
     for w in SoundTrack::ALL {
-        let clips = &p.track(w).clips;
-        if clips.is_empty() {
+        let track = p.track(w);
+        if track.clips.is_empty() {
             continue;
         }
-        println!("{}:", w.name());
-        for c in clips {
-            println!("  clip #{:<2} {:7.2}-{:7.2} s  {} {:.2}-{:.2}  level {:+.1} dB{}{}", c.id, c.at, c.ends(), name(&c.input), c.start, c.end, c.gain, if c.mute { " muted" } else { "" }, c.ducked.as_ref().map_or(String::new(), |d| format!(" ducked {:.0} dB", d.depth)));
+        println(format!("{}: level {:+.1} dB", w.name(), track.volume));
+        for c in &track.clips {
+            println(format!("  clip #{:<2} {:7.2}-{:7.2} s  {} {:.2}-{:.2}  level {:+.1} dB{}{}", c.id, c.at, c.ends(), name(&c.input), c.start, c.end, c.gain, if c.mute { " muted" } else { "" }, c.ducked.as_ref().map_or(String::new(), |d| format!(" ducked {:.0} dB", d.depth))));
+            let sound = Sounding { even: c.even, low_cut: c.low_cut, clean: c.clean, fades: (c.fade_in, c.fade_out), beyond: (0.0, 0.0), loudness: c.loudness };
+            for line in sound_lines(&sound, &c.volume) {
+                println(format!("    {line}"));
+            }
+            if let Some(d) = c.ducked.as_ref().filter(|d| !d.speech.is_empty()) {
+                let spans: Vec<String> = d.speech.iter().map(|(a, b)| format!("{a:.2}-{b:.2}")).collect();
+                println(format!("    ducked under speech (file time): {}", spans.join(", ")));
+            }
         }
     }
     for (what, lanes) in [("overlays", &p.overlays), ("text", &p.text)] {
         if lanes.iter().all(|l| l.items.is_empty()) {
             continue;
         }
-        println!("{what}:");
+        println(format!("{what}:"));
         // Lane by lane when there are several, 0 the lowest (gap 70).
         for (n, i) in lanes.iter().enumerate().flat_map(|(n, l)| l.items.iter().map(move |i| (n, i))) {
             if (lanes.len() > 1 || lanes[n].name.is_some() || lanes[n].hidden) && lanes[n].items.first().is_some_and(|f| f.id == i.id) {
                 let name = lanes[n].name.as_ref().map_or(String::new(), |s| format!(" «{s}»"));
-                println!("  lane {n}{name}{}:", if lanes[n].hidden { " (hidden)" } else { "" });
+                println(format!("  lane {n}{name}{}:", if lanes[n].hidden { " (hidden)" } else { "" }));
             }
             let label = match (&i.text, i.bars) {
                 (Some(t), _) => format!("«{}»", t.content),
                 (None, Some(b)) => format!("bars {:.2}:1, sliding {:.1} s, colour {:?}", b.ratio, b.slide, b.colour),
                 (None, None) => format!("{}{}", name(&i.input), i.kind.map_or(String::new(), |k| format!(" as a {}", k.name().to_lowercase()))),
             };
-            println!("  item #{:<2} {:7.2}-{:7.2} s  {label}", i.id, i.at, i.ends());
+            println(format!("  item #{:<2} {:7.2}-{:7.2} s  {label}", i.id, i.at, i.ends()));
             if let Some(s) = &i.style {
-                println!("    {}", style_line(s));
+                println(format!("    {}", style_line(s)));
             }
             for line in auto_lines(&i.automation) {
-                println!("    {line}");
+                println(format!("    {line}"));
             }
         }
     }
-    Ok(())
+    out
+}
+
+/// A cut's own settings as `describe` says them: its view keys,
+/// stabilisation, LUT, note, sound file and sound (`flat` isn't saved: it's
+/// found when the clip opens).
+fn cut_lines(c: &crate::project::Cut) -> Vec<String> {
+    let mut lines = Vec::new();
+    for k in c.keyframes.iter() {
+        let v = &k.view;
+        let ease = serde_json::to_string(&k.ease).unwrap_or_default();
+        let projection = serde_json::to_string(&v.projection).unwrap_or_default();
+        let follow = k.follow.as_ref().map_or(String::new(), |f| format!(", following {f}"));
+        lines.push(format!("view key {:.2} s (clip): yaw {:.1} pitch {:.1} roll {:.1} fov {:.1} {}, {}{follow}", k.t, v.yaw, v.pitch, v.roll, v.fov, projection.trim_matches('"'), ease.trim_matches('"')));
+    }
+    if let Some(m) = c.stabilize {
+        lines.push(format!("stabilise: {}", serde_json::to_string(&m).unwrap_or_default().trim_matches('"')));
+    }
+    if let Some(lut) = &c.lut {
+        lines.push(format!("lut: {lut}"));
+    }
+    if let Some(note) = &c.note {
+        lines.push(format!("note: «{note}»"));
+    }
+    if let Some(audio) = &c.audio {
+        lines.push(format!("sound from: {}", audio.display()));
+    }
+    let sound = Sounding { even: c.even, low_cut: c.low_cut, clean: c.clean, fades: (c.sound_fade_in, c.sound_fade_out), beyond: (c.sound_before, c.sound_after), loudness: c.loudness };
+    lines.extend(sound_lines(&sound, &c.volume));
+    lines
+}
+
+/// What a cut's or a sound clip's sound goes through: evened, rumble cut,
+/// cleaned; its fades; a cut's sound before and after its picture (J and
+/// L); its measured loudness.
+struct Sounding {
+    even: bool,
+    low_cut: bool,
+    clean: bool,
+    fades: (f64, f64),
+    beyond: (f64, f64),
+    loudness: Option<f64>,
+}
+
+/// A `sound:` line with what's set (none if nothing), and a `points:` line
+/// for its volume points (dB at its clip's time).
+fn sound_lines(s: &Sounding, volume: &[crate::project::VolumeKey]) -> Vec<String> {
+    let mut said: Vec<String> = [(s.even, "even"), (s.low_cut, "low cut"), (s.clean, "clean")].into_iter().filter(|(on, _)| *on).map(|(_, w)| w.to_owned()).collect();
+    for (v, what) in [(s.fades.0, "fade in"), (s.fades.1, "fade out"), (s.beyond.0, "before its picture"), (s.beyond.1, "after its picture")] {
+        if v != 0.0 {
+            said.push(format!("{what} {v:.2} s"));
+        }
+    }
+    if let Some(l) = s.loudness {
+        said.push(format!("measured {l:.1} LUFS"));
+    }
+    let mut lines = Vec::new();
+    if !said.is_empty() {
+        lines.push(format!("sound: {}", said.join(", ")));
+    }
+    if !volume.is_empty() {
+        lines.push(format!("points: {}", volume.iter().map(|k| format!("{:.2} s {:+.1} dB", k.t, k.volume)).collect::<Vec<_>>().join(", ")));
+    }
+    lines
 }
 
 /// A cut's looks as `describe` says them: the join before it (its overlap
@@ -190,6 +272,34 @@ pub fn looks(template: Option<&str>) -> Result<String> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn describe_says_a_cuts_view_and_sound_and_the_edits_own() {
+        use crate::project::{Cut, MusicClip, Project, VolumeKey};
+        let mut c = Cut::new("a.mp4".into(), 0.0, 4.0);
+        let view = crate::view::View { yaw: 30.0, ..crate::view::View::home(crate::view::Projection::Perspective) };
+        c.keyframes.set(1.0, view, 0.0, &|_, _| None);
+        (c.stabilize, c.lut, c.audio) = (Some(crate::stab::Mode::Horizon), Some("dlogm".into()), Some("voice.flac".into()));
+        (c.even, c.sound_before, c.loudness) = (true, 0.5, Some(-23.0));
+        c.volume = vec![VolumeKey { t: 1.0, volume: -6.0 }];
+        let mut p = Project { cuts: vec![c], aspect: Some(crate::view::Aspect(16, 9)), ..Project::default() };
+        p.music.volume = -3.0;
+        p.music.clips.push(MusicClip { input: "song.wav".into(), end: 10.0, fade_out: 2.0, ..MusicClip::default() });
+        let lines = super::describe_lines(&p).join("\n");
+        for said in [
+            "edit: aspect 16:9  clips' sound +0.0 dB  fades in 0.00 s, out 0.00 s",
+            "view key 1.00 s (clip): yaw 30.0",
+            "stabilise: horizon",
+            "lut: dlogm",
+            "sound from: voice.flac",
+            "sound: even, before its picture 0.50 s, measured -23.0 LUFS",
+            "points: 1.00 s -6.0 dB",
+            "Music: level -3.0 dB",
+            "sound: fade out 2.00 s",
+        ] {
+            assert!(lines.contains(said), "{said:?} in\n{lines}");
+        }
+    }
+
     #[test]
     fn transitions_are_said_with_their_settings() {
         use crate::project::{Cut, Edge};

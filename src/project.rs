@@ -948,6 +948,21 @@ pub fn ripple_of(before: &[Cut], after: &[Cut]) -> Option<(f64, f64)> {
     Some((at, by))
 }
 
+/// The latest a thing `len` seconds long may start so it ends by `end`
+/// (gap 101), never before the edit; any time without an end. A thing
+/// already past it (longer than the film, or the film cut shorter) isn't
+/// pulled back: the caller takes the later of this and where it is, so
+/// it can go earlier, not later.
+pub fn latest_start(end: Option<f64>, len: f64) -> f64 {
+    end.map_or(f64::INFINITY, |e| (e - len).max(0.0))
+}
+
+/// The latest out time, in its own file, of a thing starting at `at` on
+/// the edit from `start` in its file, so it ends by `end` (gap 101).
+pub fn latest_out(end: Option<f64>, at: f64, start: f64) -> f64 {
+    end.map_or(f64::INFINITY, |e| start + (e - at))
+}
+
 pub fn edit_length(cuts: &[Cut]) -> f64 {
     cuts.iter().map(|c| c.len() - c.crossfade).sum()
 }
@@ -1266,6 +1281,13 @@ impl Project {
     /// Length of the edit in seconds.
     pub fn duration(&self) -> f64 {
         edit_length(&self.cuts)
+    }
+
+    /// Where the film ends for what runs beside it — sound, text,
+    /// pictures (gap 101): its length; none while it has no pictures, so
+    /// a song laid down first runs as long as it is.
+    pub fn film_end(&self) -> Option<f64> {
+        Some(self.duration()).filter(|&d| d > 0.0)
     }
 
     /// The sync-locked tracks' clips after edit time `at` moved by `by`

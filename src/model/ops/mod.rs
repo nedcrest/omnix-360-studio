@@ -90,6 +90,11 @@ pub struct Outcome {
 }
 
 /// An outcome that made nothing.
+/// What a move or trim adds when the film's end held it back (gap 101).
+fn held(was: bool) -> &'static str {
+    if was { ", held at the film's end" } else { "" }
+}
+
 fn said(summary: String) -> Result<Outcome, OpError> {
     Ok(Outcome { summary, made: None })
 }

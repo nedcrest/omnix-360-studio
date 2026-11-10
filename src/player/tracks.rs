@@ -139,7 +139,7 @@ impl App {
             Message::MusicMove(which, i, want, overlap) => {
                 self.edit.begin();
                 let (clip, was) = (self.edit.track(which).clips[i].id, self.edit.track(which).clips[i].at);
-                self.op(Op::Clip(ClipOp::Move { clip, at: want, overlap }));
+                self.op(Op::Clip(ClipOp::Move { clip, at: want.min(was + self.also_room()), overlap }));
                 let now = self.edit.clip_index(clip).map_or(was, |(w, i)| self.edit.track(w).clips[i].at);
                 self.move_also(now - was);
             }

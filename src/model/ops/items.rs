@@ -178,8 +178,12 @@ pub(super) fn apply(p: &mut Project, op: &ItemOp) -> Result<Outcome, OpError> {
             let style = styleable(p, *item)?.style.as_mut().ok_or_else(|| OpError::Invalid(format!("item #{item} has no style to set")))?;
             said(format!("item #{item}: {}", super::cuts::set_knob(style.look, &mut style.params, key, *value)?))
         }
-        &ItemOp::Move { item, at, lane: onto } => {
+        &ItemOp::Move { item, at: want, lane: onto } => {
             let (track, l, i) = find(p, item)?;
+            let film_end = p.film_end();
+            let it = &p.track_lanes_mut(track)[l].items[i];
+            let latest = crate::project::latest_start(film_end, it.end - it.start).max(it.at);
+            let at = want.min(latest);
             match onto.filter(|&to| to != l) {
                 Some(to) => {
                     if to >= p.track_lanes_mut(track).len() {
@@ -192,12 +196,12 @@ pub(super) fn apply(p: &mut Project, op: &ItemOp) -> Result<Outcome, OpError> {
                     lane.items[i].at = lane.place(i, at);
                     lane.items.sort_by(|a, b| a.at.total_cmp(&b.at));
                     let now = lane.items.iter().find(|it| it.id == item).map_or(at, |it| it.at);
-                    said(format!("item #{item} on lane {to} at {now:.2} s"))
+                    said(format!("item #{item} on lane {to} at {now:.2} s{}", super::held(want > latest)))
                 }
                 None => {
                     let lane = &mut p.track_lanes_mut(track)[l];
                     lane.move_to(i, at);
-                    said(format!("item #{item} at {:.2} s", lane.items[i].at))
+                    said(format!("item #{item} at {:.2} s{}", lane.items[i].at, super::held(want > latest)))
                 }
             }
         }
@@ -228,13 +232,15 @@ pub(super) fn apply(p: &mut Project, op: &ItemOp) -> Result<Outcome, OpError> {
         }
         &ItemOp::Trim { item, end, t, most } => {
             let (track, lane, i) = find(p, item)?;
+            let film_end = p.film_end();
             let lane = &mut p.track_lanes_mut(track)[lane];
             let was = (lane.items[i].start, lane.items[i].end);
-            lane.trim(i, end == End::In, t, MIN_CUT, most);
+            let latest = if end == End::Out { crate::project::latest_out(film_end, lane.items[i].at, was.0).max(was.1) } else { f64::INFINITY };
+            lane.trim(i, end == End::In, t.min(latest), MIN_CUT, most);
             let it = &mut lane.items[i];
             // Its ins and outs stay on their edges.
             crate::animate::keep_on_edges(&mut it.automation, was, (it.start, it.end));
-            said(format!("item #{item}: {:.2}-{:.2} s on the edit", it.at, it.ends()))
+            said(format!("item #{item}: {:.2}-{:.2} s on the edit{}", it.at, it.ends(), super::held(t > latest)))
         }
         ItemOp::SetText { item, text } => {
             let (track, lane, i) = find(p, *item)?;
@@ -391,4 +397,17 @@ mod tests {
         assert!(e.apply(&Op::Item(ItemOp::SetBars { item: text, bars: bars(2.0) })).is_err(), "text isn't bars");
     }
 
+
+    #[test]
+    fn text_stops_at_the_films_end_when_moved_or_lengthened() {
+        let mut e = Edit::default();
+        e.apply(&Op::Cut(super::super::cuts::CutOp::Add { input: "a.mp4".into(), start: 0.0, end: 10.0, place: super::super::cuts::Place::End, stabilize: None, lut: None })).unwrap();
+        let title = e.apply(&Op::Item(ItemOp::AddText { text: Text::default(), at: 1.0, len: 3.0, lane: 0 })).unwrap().made.unwrap();
+        let said = e.apply(&Op::Item(ItemOp::Move { item: title, at: 12.0, lane: None })).unwrap().summary;
+        assert_eq!((e.text[0].items[0].at, said.contains("held")), (7.0, true));
+        e.apply(&Op::Item(ItemOp::Move { item: title, at: 2.0, lane: None })).unwrap();
+        e.apply(&Op::Item(ItemOp::Trim { item: title, end: End::Out, t: 50.0, most: 60.0 })).unwrap();
+        assert!((e.text[0].items[0].ends() - 10.0).abs() < 1e-9, "{:?}", e.text[0].items[0]);
+        check(&e).unwrap();
+    }
 }

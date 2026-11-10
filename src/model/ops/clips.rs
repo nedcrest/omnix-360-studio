@@ -2,7 +2,7 @@
 //! other SFX lane, delete (`OPS-API.md` step 3). A clip's own level, line
 //! and fades are sound ops (`sound.rs`).
 
-use super::{End, OpError, Outcome, said};
+use super::{End, OpError, Outcome, held, said};
 use crate::model::edit::MIN_CUT;
 use crate::project::{Id, Project, SoundTrack};
 use serde::{Deserialize, Serialize};
@@ -45,14 +45,18 @@ pub(super) fn apply(p: &mut Project, op: &ClipOp) -> Result<Outcome, OpError> {
         }
         &ClipOp::Move { clip, at, overlap } => {
             let (w, i) = find(p, clip)?;
-            p.track_mut(w).drag_to(i, at, overlap);
-            said(format!("sound clip #{clip} at {:.2} s", p.track(w).clips[i].at))
+            let c = &p.track(w).clips[i];
+            let latest = crate::project::latest_start(p.film_end(), c.end - c.start).max(c.at);
+            p.track_mut(w).drag_to(i, at.min(latest), overlap);
+            said(format!("sound clip #{clip} at {:.2} s{}", p.track(w).clips[i].at, held(at > latest)))
         }
         &ClipOp::Trim { clip, end, t, most, overlap } => {
             let (w, i) = find(p, clip)?;
-            p.track_mut(w).trim(i, end == End::In, t, overlap, most, MIN_CUT);
             let c = &p.track(w).clips[i];
-            said(format!("sound clip #{clip}: {:.2}-{:.2} s of its file", c.start, c.end))
+            let latest = if end == End::Out { crate::project::latest_out(p.film_end(), c.at, c.start).max(c.end) } else { f64::INFINITY };
+            p.track_mut(w).trim(i, end == End::In, t.min(latest), overlap, most, MIN_CUT);
+            let c = &p.track(w).clips[i];
+            said(format!("sound clip #{clip}: {:.2}-{:.2} s of its file{}", c.start, c.end, held(t > latest)))
         }
         &ClipOp::Split { clip, at } => {
             let (w, i) = find(p, clip)?;
@@ -125,5 +129,29 @@ mod tests {
         assert_eq!(e.music.clips.iter().map(|c| c.id).collect::<Vec<_>>(), [a, b, half]);
         check(&e).unwrap();
         assert!(e.undo() && e.music.clips.len() == 2);
+    }
+
+    #[test]
+    fn a_sound_clip_stops_at_the_films_end_unless_there_is_no_film() {
+        let mut e = Edit::default();
+        let song = add(&mut e, SoundTrack::Music, 0.0, 3.0);
+        e.apply(&Op::Clip(ClipOp::Move { clip: song, at: 20.0, overlap: false })).unwrap();
+        assert_eq!(e.music.clips[0].at, 20.0, "no pictures yet: no end to keep to");
+        e.apply(&Op::Cut(super::super::cuts::CutOp::Add { input: "a.mp4".into(), start: 0.0, end: 10.0, place: super::super::cuts::Place::End, stabilize: None, lut: None })).unwrap();
+        e.apply(&Op::Clip(ClipOp::Move { clip: song, at: 2.0, overlap: false })).unwrap();
+        assert_eq!(e.music.clips[0].at, 2.0, "back from past the end: earlier is free");
+        let said = e.apply(&Op::Clip(ClipOp::Move { clip: song, at: 9.0, overlap: false })).unwrap().summary;
+        assert_eq!((e.music.clips[0].at, said.contains("held")), (7.0, true), "ends with the film");
+        e.apply(&Op::Clip(ClipOp::Trim { clip: song, end: End::In, t: 1.0, most: 60.0, overlap: false })).unwrap();
+        e.apply(&Op::Clip(ClipOp::Trim { clip: song, end: End::Out, t: 30.0, most: 60.0, overlap: false })).unwrap();
+        assert!((e.music.clips[0].ends() - 10.0).abs() < 1e-9, "its tail stops there too: {:?}", e.music.clips[0]);
+        // A song longer than the film: earlier and shorter, never later.
+        let long = add(&mut e, SoundTrack::Sfx, 0.0, 30.0);
+        e.apply(&Op::Clip(ClipOp::Move { clip: long, at: 2.0, overlap: false })).unwrap();
+        assert_eq!(e.sfx.clips[0].at, 0.0, "not later");
+        e.apply(&Op::Clip(ClipOp::Trim { clip: long, end: End::Out, t: 20.0, most: 60.0, overlap: false })).unwrap();
+        e.apply(&Op::Clip(ClipOp::Trim { clip: long, end: End::Out, t: 25.0, most: 60.0, overlap: false })).unwrap();
+        assert_eq!(e.sfx.clips[0].end, 20.0, "shorter, then not longer again");
+        check(&e).unwrap();
     }
 }

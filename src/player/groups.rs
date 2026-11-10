@@ -50,6 +50,18 @@ impl App {
         self.also = kept;
     }
 
+    /// How far later the clips selected beside a dragged one may go
+    /// before one of them passes the film's end (gap 101): the dragged
+    /// one stops there too, so the group stays whole. Never below 0.
+    pub(super) fn also_room(&self) -> f64 {
+        let Some(end) = self.edit.film_end() else { return f64::INFINITY };
+        let ends = self.also.iter().filter_map(|&id| match self.edit.clip_index(id) {
+            Some((w, i)) => Some(self.edit.track(w).clips[i].ends()),
+            None => self.edit.item_by_id(id).map(|it| it.ends()),
+        });
+        ends.map(|e| end - e).fold(f64::INFINITY, f64::min).max(0.0)
+    }
+
     /// The clip that was dragged `by` seconds took the sound clips, text
     /// and pictures selected beside it along, by as much (a group moves
     /// together; its cuts stay where the magnetic edit puts them).
@@ -295,7 +307,7 @@ mod tests {
     fn a_group_moves_together_and_is_deleted_together() {
         use crate::project::SoundTrack;
         let mut app = app();
-        app.edit.music.clips.push(crate::project::MusicClip { input: "song.wav".into(), at: 1.0, end: 9.0, ..Default::default() });
+        app.edit.music.clips.push(crate::project::MusicClip { input: "song.wav".into(), at: 1.0, end: 2.0, ..Default::default() });
         let item = crate::overlay::Item { id: 0, input: "".into(), text: Some(Default::default()), at: 2.0, start: 0.0, end: 1.0, motion: Vec::new(), effects: Vec::new(), bars: None, automation: Vec::new(), kind: None, style: None, group: None };
         app.edit.text.push(crate::overlay::Lane { items: vec![item], ..Default::default() });
         app.edit.settle_ids();
@@ -341,5 +353,24 @@ mod tests {
         app.selection = Selection::Cut(a);
         app.group_selected(true);
         assert!(app.edit.groups.is_empty());
+    }
+
+    #[test]
+    fn a_group_dragged_past_the_films_end_stops_whole() {
+        use crate::project::SoundTrack;
+        let mut app = app();
+        let end = app.edit.duration();
+        app.edit.music.clips.push(crate::project::MusicClip { input: "song.wav".into(), at: 0.0, end: 1.0, ..Default::default() });
+        let item = crate::overlay::Item { id: 0, input: "".into(), text: Some(Default::default()), at: 0.5, start: 0.0, end: 1.0, motion: Vec::new(), effects: Vec::new(), bars: None, automation: Vec::new(), kind: None, style: None, group: None };
+        app.edit.text.push(crate::overlay::Lane { items: vec![item], ..Default::default() });
+        app.edit.settle_ids();
+        let (song, words) = (app.edit.music.clips[0].id, app.edit.text[0].items[0].id);
+        app.op(Op::Project(ProjectOp::Group { members: vec![song, words], name: None, colour: None }));
+        app.modifiers = iced::keyboard::Modifiers::ALT;
+        let _ = app.update(Message::SelectMusic(SoundTrack::Music, 0));
+        app.modifiers = iced::keyboard::Modifiers::empty();
+        let _ = app.update(Message::MusicMove(SoundTrack::Music, 0, end + 5.0, false));
+        let (s, t) = (app.edit.music.clips[0].at, app.edit.text[0].items[0].at);
+        assert!((t + 1.0 - end).abs() < 1e-9 && (t - s - 0.5).abs() < 1e-9, "the text at the end, the song still half a second before it: {s} {t} of {end}");
     }
 }

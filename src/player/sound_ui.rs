@@ -548,7 +548,7 @@ mod tests {
         use super::super::Message;
         use crate::beats::Beat;
         let mut app = app();
-        app.edit.music.clips.push(crate::project::MusicClip { input: "song.wav".into(), at: 0.0, end: 9.0, beats: Some(crate::project::Beats { threshold: 0.0, snap: true }), ..Default::default() });
+        app.edit.music.clips.push(crate::project::MusicClip { input: "song.wav".into(), at: 0.0, end: 2.0, beats: Some(crate::project::Beats { threshold: 0.0, snap: true }), ..Default::default() });
         app.edit.settle_ids();
         app.hits.insert("song.wav".into(), Some(std::sync::Arc::new(vec![Beat { t: 0.013, strength: 1.0 }])));
         // The playhead at the edit's start (no clip open): the beat 13 ms in.

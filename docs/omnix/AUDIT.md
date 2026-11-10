@@ -30,15 +30,14 @@ items one way each) done.
 
 ## C. Core API gaps (what an agent can't see or do)
 
-C1, C2 (`describe` says a cut's view, settings and sound, and the
-edit's own) and C3 (the aspect an op) done.
+C1–C7 done: `describe` says a cut's view, settings and sound, the
+edit's own, a text's look, an item's own time and keys; the aspect is
+an op; ops hold values to their ranges and `apply` warns of what's
+missing; `looks` lists LUTs and fonts; `text_field` sets one field;
+`looks --save-template`.
 
 | # | What | Fix |
 |---|---|---|
-| C4 | Ops take values out of range (exposure 1000, view at 500 s, place x 99, trims past the file, missing files and LUTs); `check` doesn't catch them | Range checks in the ops; key invariants in `check`; `apply` warns of missing inputs |
-| C5 | No list of LUTs or fonts; a text's style isn't described; `set_text` needs the whole text | `looks` lists them; `describe` the style |
-| C6 | Items: `describe` drops place keys, effect keys, source range | Lines as cuts have |
-| C7 | Saving a transition template is GUI-only | `omnix looks --save-template` |
 | C8 | `--cuts` on `normalize`/`autocolour` numbers by position; ops and `describe` by id | Ids |
 | C9 | The schema hides defaults that aren't 0 (opacity, white_in, reveal…) and every range; some ops undocumented; «out of range» prints `f64::MAX` | `schemars` defaults and ranges; doc comments; «∞» |
 | C10 | Measures the GUI has, the CLI hasn't: scopes, a graded frame (`preview` draws no grade), the mix's loudness over time | `omnix scopes`, a graded `frame`, `mixcheck --every` |

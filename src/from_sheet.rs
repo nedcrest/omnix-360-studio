@@ -8,8 +8,9 @@
 //!   sheet's first version) a cut of `POINT` seconds from it;
 //! - a clip with no segment goes in whole (a flag is no marking: a note
 //!   about a meme doesn't mean the clip was gone through);
-//! - the cleaned voice chosen for a clip plays in its cuts, its level set
-//!   from the loudness Dailix measured (gap 77);
+//! - the cleaned voice chosen for a clip plays in its cuts, each cut's
+//!   level set from the loudness of the stretch it plays (gap 77; audit
+//!   B11: Dailix's number is the whole file's);
 //! - by day, by file, by time; 16:9 (the player shows the export's shape).
 //!
 //! New here (gap 75): a clip's flags inside a cut become the cut's
@@ -49,9 +50,9 @@ pub fn build(root: &Path, day: Option<&str>) -> Result<Project> {
         use dailix_sheet::voice;
         let chosen = mark.audio.as_ref().zip(voice::dir(&layout, &clip.key)).filter(|(r, dir)| voice::track(dir, r).is_file());
         let voice = chosen.as_ref().map(|(r, dir)| voice::track(dir, r));
-        // Its loudness as Dailix measured it (gap 77): the cut's level set
-        // from it, nothing made again.
-        let loudness = chosen.as_ref().and_then(|(r, dir)| voice::made(dir).get(*r)?.lufs);
+        // The whole file's loudness as Dailix measured it: what's used for a
+        // voice that can't be read here.
+        let whole = chosen.as_ref().and_then(|(r, dir)| voice::made(dir).get(*r)?.lufs);
         let mut spans: Vec<(f64, f64, String)> = mark
             .marks
             .iter()
@@ -69,9 +70,9 @@ pub fn build(root: &Path, day: Option<&str>) -> Result<Project> {
             let mut cut = Cut::new(clip.path.clone(), start, end);
             cut.note = (!note.is_empty()).then_some(note);
             cut.audio = voice.clone();
-            if voice.is_some() {
-                cut.loudness = loudness;
-                cut.gain = crate::model::ops::sound::normal_gain(loudness);
+            if let Some(v) = &voice {
+                cut.loudness = stretch_loudness(v, (start, end), whole);
+                cut.gain = crate::model::ops::sound::normal_gain(cut.loudness);
             }
             cut.marks = mark
                 .marks
@@ -85,6 +86,21 @@ pub fn build(root: &Path, day: Option<&str>) -> Result<Project> {
     let mut project = Project { aspect: Some(Aspect(16, 9)), cuts, ..Default::default() };
     project.settle_ids();
     Ok(project)
+}
+
+/// What a cut playing `voice` over `span` (the voice is timed like its
+/// clip) plays, LUFS, as Normalize measures it; none where it's silent.
+/// A voice that can't be read here gets `whole`, the file's own loudness
+/// Dailix measured, and a warning.
+fn stretch_loudness(voice: &Path, span: (f64, f64), whole: Option<f64>) -> Option<f64> {
+    match crate::ffmpeg::has_audio(voice).map(|sound| sound.then(|| crate::loudness::measure_stretch(voice, span, None))) {
+        Ok(Some(Ok(measured))) => measured.map(|(lufs, _)| lufs),
+        Ok(None) => None,
+        Ok(Some(Err(e))) | Err(e) => {
+            eprintln!("warning: {} couldn't be measured ({e:#}); its whole file's loudness is used", voice.display());
+            whole
+        }
+    }
 }
 
 /// Builds the edit and writes it as a new video of the trip
@@ -124,6 +140,25 @@ pub fn day_of(edit: &Path) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_cut_gets_the_loudness_of_the_stretch_it_plays() {
+        let dir = std::env::temp_dir().join(format!("omnix-stretch-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let voice = dir.join("dnn6.flac");
+        // Loud for 10 s, then 20 dB down.
+        let made = std::process::Command::new("ffmpeg").args(["-v", "error", "-y", "-f", "lavfi", "-i", "sine=f=440:d=20:sample_rate=48000", "-af", "volume='if(lt(t,10),1,0.1)':eval=frame"]).arg(&voice).status();
+        if !made.is_ok_and(|s| s.success()) {
+            return;
+        }
+        let (loud, quiet) = (stretch_loudness(&voice, (1.0, 8.0), Some(-26.0)).unwrap(), stretch_loudness(&voice, (12.0, 19.0), Some(-26.0)).unwrap());
+        let broken = dir.join("broken.flac");
+        std::fs::write(&broken, b"not sound").unwrap();
+        let unread = stretch_loudness(&broken, (1.0, 8.0), Some(-26.0));
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert!((loud - quiet - 20.0).abs() < 1.0, "{loud} against {quiet}");
+        assert_eq!(unread, Some(-26.0), "can't be read: Dailix's number");
+    }
 
     #[test]
     fn a_marking_becomes_an_edit_by_the_sheets_rules() {

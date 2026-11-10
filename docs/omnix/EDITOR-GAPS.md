@@ -306,12 +306,19 @@ the project's groups, ops, `describe`; (2) Shift+click selecting several;
 
 **Built 2026-11-11, waits for the user's check:** `Cut`/`MusicClip`/`Item`
 `group`, `Project::groups`, `ProjectOp::Group`/`Ungroup`/`GroupLook`,
-`describe`; `player/groups.rs` (Shift+click, Ctrl+G, Ctrl+Shift+G, a
-click selects the group, Alt+click one clip); frames and bands on the
-timeline; a dragged sound clip or item moves the group's others; Del
-takes all. Not yet: merging a clip's pieces back into one, effects set
-on all of a group at once, naming or recolouring a group in the window
-(the op is there).
+`describe`; `player/groups.rs` (Shift+click, Ctrl+G, Ctrl+Shift+G; a
+click selects one clip, Alt+click the group — swapped on the user's
+word); a 3 px frame and a band on the timeline; the groups as tabs
+under the timeline (a click selects, a double-click renames, a
+right-click recolours or ungroups); a dragged sound clip or item moves
+the group's others, a grouped cut dragged gathers the group's cuts
+after it (`CutOp::MoveTogether`); Del takes all.
+«This was one clip»: `Cut::origin` set on split, `Project::pieces`; a
+thin line of one colour under a clip's pieces; right-click a piece →
+«Join the pieces back (n)» (`CutOp::JoinPieces`: where the first piece
+is, earliest start to latest end, the first's join and effects, the
+last's out end; undo splits again). Not yet: effects set on all of a
+group at once.
 
 ### 9. Timeline ease and accessibility — research done (user, 2026-10-23)
 

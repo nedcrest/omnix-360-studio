@@ -197,6 +197,11 @@ fn describe_lines(p: &Project) -> Vec<String> {
         let members: Vec<String> = p.members(g.id).iter().map(|m| format!("#{m}")).collect();
         println(format!("group #{}{name} {}: {}", g.id, g.colour.hex(), members.join(", ")));
     }
+    // Gap 101: what an agent should trim (the trim_to_end op).
+    let past: Vec<String> = p.past_end().iter().map(|(id, by)| format!("#{id} by {by:.2} s")).collect();
+    if let (false, Some(end)) = (past.is_empty(), p.film_end()) {
+        println(format!("past the film's end at {end:.2} s: {}", past.join(", ")));
+    }
     out
 }
 
@@ -500,5 +505,15 @@ mod tests {
         assert_eq!(v["$defs"]["OverlayPlace"]["properties"]["size"]["default"].as_f64(), Some(1.0));
         let err = crate::model::ops::OpError::OutOfRange { what: "length", value: 0.01, least: 0.1, most: f64::MAX };
         assert_eq!(err.to_string(), "length 0.01 is outside 0.1..∞");
+    }
+
+    #[test]
+    fn describe_names_what_runs_past_the_film() {
+        let mut p = crate::project::Project { cuts: vec![crate::project::Cut::new("a.mp4".into(), 0.0, 4.0)], ..Default::default() };
+        p.music.clips.push(crate::project::MusicClip { input: "song.wav".into(), at: 1.0, end: 5.0, ..Default::default() });
+        p.settle_ids();
+        let said = super::describe_lines(&p).join("\n");
+        assert!(said.contains(&format!("past the film's end at 4.00 s: #{} by 2.00 s", p.music.clips[0].id)), "{said}");
+        assert!(super::warnings(&p).iter().any(|w| w.contains("2.00 s past the film's end")));
     }
 }

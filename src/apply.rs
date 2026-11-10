@@ -6,6 +6,7 @@ use crate::model::edit::Edit;
 use crate::model::ops::{Op, check};
 use crate::project::{Project, SoundTrack};
 use anyhow::{Context, Result, bail};
+use serde::Serialize;
 use std::path::Path;
 
 /// Applies the ops in `ops` (a JSON list) to `project` as one step, all or
@@ -120,6 +121,10 @@ fn describe_lines(p: &Project) -> Vec<String> {
             if let Some(t) = &i.text {
                 println(format!("    {}", text_line(t)));
             }
+            println(format!("    own time {:.2}-{:.2} s{}", i.start, i.end, if i.file().is_some() { " (of its file)" } else { "" }));
+            for line in key_lines("place", "own", &i.motion).into_iter().chain(key_lines("effects", "own", &i.effects)) {
+                println(format!("    {line}"));
+            }
             if let Some(s) = &i.style {
                 println(format!("    {}", style_line(s)));
             }
@@ -129,6 +134,20 @@ fn describe_lines(p: &Project) -> Vec<String> {
         }
     }
     out
+}
+
+/// Keys as `describe` says them: each one's time (`clock`: clip or own)
+/// and what it sets, as the project writes it.
+fn key_lines<K: Serialize + crate::view::Timed>(what: &str, clock: &str, keys: &[K]) -> Vec<String> {
+    keys.iter()
+        .map(|k| {
+            let mut values = serde_json::to_value(k).unwrap_or_default();
+            if let Some(map) = values.as_object_mut() {
+                map.remove("t");
+            }
+            format!("{what} at {:.2} s ({clock}): {values}", k.time())
+        })
+        .collect()
 }
 
 /// A text's look as `describe` says it: each field but its words, as the
@@ -219,14 +238,7 @@ fn look_lines(c: &crate::project::Cut) -> Vec<String> {
     if let Some(s) = &c.style {
         lines.push(style_line(s));
     }
-    // Its effect keys, each with what it sets (as the project writes it).
-    for k in &c.effects {
-        let mut values = serde_json::to_value(k).unwrap_or_default();
-        if let Some(map) = values.as_object_mut() {
-            map.remove("t");
-        }
-        lines.push(format!("effects at {:.2} s (clip): {values}", k.t));
-    }
+    lines.extend(key_lines("effects", "clip", &c.effects));
     lines.extend(auto_lines(&c.automation));
     for t in &c.tracks {
         let span = t.samples.first().zip(t.samples.last()).map_or(String::new(), |(a, b)| format!(", {:.2}-{:.2} s (clip)", a.t, b.t));
@@ -322,6 +334,11 @@ mod tests {
         assert!(e.apply(&field("size", serde_json::json!(5))).is_err() && e.apply(&field("weight", serde_json::json!(1))).is_err() && e.apply(&field("bold", serde_json::json!("yes"))).is_err());
         let said = super::describe_lines(&e).join("\n");
         assert!(said.contains("«Kos»") && said.contains("text: font \"Inter\", size 0.1, colour") && said.contains("bold true"), "{said}");
+        // Its own time, and a place and an effect for the whole of it.
+        e.apply(&Op::Key(crate::model::ops::keys::KeyOp::PlaceValue { item: 1, param: "x".into(), value: 0.25 })).unwrap();
+        e.apply(&Op::Key(crate::model::ops::keys::KeyOp::EffectValue { on: crate::model::ops::keys::Graded::Item(1), param: "blur".into(), value: 0.5 })).unwrap();
+        let said = super::describe_lines(&e).join("\n");
+        assert!(said.contains("own time 0.00-3.00 s") && said.contains("place at 0.00 s (own): {") && said.contains("\"x\":0.25") && said.contains("effects at 0.00 s (own)") && said.contains("\"blur\":0.5"), "{said}");
     }
 
     #[test]

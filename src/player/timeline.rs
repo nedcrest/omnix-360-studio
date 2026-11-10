@@ -420,6 +420,9 @@ pub struct Timeline {
     /// The project's groups' colours (gap 8), and the clips selected
     /// beside the first (Shift+clicked, or its group's).
     pub groups: Vec<(crate::project::Id, iced::Color)>,
+    /// The playing clip's frame rate: the playhead and cuts land on its
+    /// frames (gap 13: a beat between frames is snapped to the nearest).
+    pub fps: f64,
     pub also: Vec<crate::project::Id>,
     /// The range marked on the ruler (gap 92), edit time.
     pub range: Option<(f64, f64)>,
@@ -808,6 +811,58 @@ impl Timeline {
         Some((start + self.t(p.x, b) - from, Self::volume_db(lane, p.y)))
     }
 
+    /// Over the cuts: their frames (selected, grouped), labels, effect
+    /// keys, edge looks and crossfades.
+    fn draw_cut_marks(&self, frame: &mut Frame, theme: &Theme, bounds: Rectangle) {
+        for (i, c) in self.blocks.iter().enumerate() {
+            let (l, r) = self.block_x(c, bounds);
+            belonging(frame, self, theme, (l, r), (0.0, self.rows.cuts), (c.cut.id, c.cut.group));
+            if Some(i) == self.picked.cut() {
+                selected_block(frame, theme, (l, r), (0.0, self.rows.cuts), (c.cut.start > 1e-3, c.cut.start + c.len() < c.most - 1e-3));
+            }
+            // The longest label that fits (about 7 px a character).
+            if let Some(label) = c.labels.iter().find(|s| r - l > s.chars().count() as f32 * 7.0 + 24.0) {
+                name_tag(frame, (l + 9.0, self.rows.cuts - 19.0), 15.0, label, 12.0, 5.9);
+            }
+        }
+        // Effect keyframes: small squares along the bottom of their cut.
+        for c in &self.blocks {
+            for t in marked(&c.cut.effects).iter().map(|k| k.t).filter(|&t| t >= c.cut.start && t <= c.cut.start + c.len()) {
+                effect_mark(frame, self.x(c.from + t - c.cut.start, bounds), self.rows.effects_top + EFFECTS / 2.0);
+            }
+        }
+        // Edge looks: an orange wedge, deepest at the cut's edge.
+        for c in &self.blocks {
+            let end = c.from + c.len();
+            if let Some(e) = &c.cut.edge_in {
+                edge_wedge(frame, self.x(c.from, bounds), self.x(c.from + e.seconds.min(c.len()), bounds), self.rows.cuts);
+            }
+            if let Some(e) = &c.cut.edge_out {
+                edge_wedge(frame, self.x(end, bounds), self.x(end - e.seconds.min(c.len()), bounds), self.rows.cuts);
+            }
+        }
+        // Crossfades: an X over each overlap, as on the music lane.
+        for (i, c) in self.blocks.iter().enumerate().filter(|(_, c)| c.cut.crossfade > 0.0) {
+            let (l, r) = (self.x(c.from, bounds), self.x(c.from + c.cut.crossfade, bounds));
+            crossfade(frame, (l, r), (0.0, self.rows.cuts), true);
+            // The join picked: framed as a picked block is.
+            if self.picked.join() == Some(i) {
+                selection_frame(frame, &block_path((l, r), 0.0, self.rows.cuts), theme);
+            }
+        }
+    }
+
+    /// Edit time `t` on the frame nearest it of the cut there, as the
+    /// player puts the playhead (`Playback::snap`: a clip's frames at its
+    /// clip time); past the cuts, on the edit's own frames.
+    pub(crate) fn on_frame(&self, t: f64) -> f64 {
+        let fps = self.fps.max(1.0);
+        match self.blocks.iter().find(|c| t >= c.from && t < c.from + c.len()) {
+            Some(c) => c.from + ((c.cut.start + t - c.from) * fps).round() / fps - c.cut.start,
+            None => (t * fps).round() / fps,
+        }
+    }
+
     /// Where things snap, edit times, and whose they are: the edit's ends,
     /// the playhead, the pictures' joins, cuts' sounds split from their
     /// pictures, markers, sound clips, the beats of a track that snaps to
@@ -825,7 +880,9 @@ impl Timeline {
         for (li, l) in self.sounds.iter().enumerate() {
             at.extend(l.blocks.iter().enumerate().flat_map(|(i, m)| [(m.clip.at, Of::Sound(li, i)), (m.clip.at + m.len(), Of::Sound(li, i))]));
             if let Some(b) = l.track.beats.filter(|b| b.snap) {
-                at.extend(l.blocks.iter().enumerate().flat_map(|(i, m)| m.beat_times(b.threshold).map(move |t| (t, Of::Sound(li, i)))));
+                let beats: Vec<(f64, Of)> = l.blocks.iter().enumerate().flat_map(|(i, m)| m.beat_times(b.threshold).map(move |t| (t, Of::Sound(li, i)))).collect();
+                // On the frame nearest each: where a playhead or a cut can be.
+                at.extend(beats.into_iter().map(|(t, of)| (self.on_frame(t), of)));
             }
         }
         for track in Track::ALL {
@@ -1107,6 +1164,13 @@ impl Timeline {
                 for t in m.beat_times(shown.threshold) {
                     let x = self.x(t, b);
                     frame.fill(&Path::rectangle(Point::new(x - 0.75, top + h / 2.0), Size::new(1.5, h / 2.0)), BEAT_COLOUR);
+                    // Snapping, where a cut on it lands: the frame nearest,
+                    // a notch atop the line when that's a pixel or more away.
+                    let f = self.x(self.on_frame(t), b);
+                    if shown.snap && (f - x).abs() >= 1.0 {
+                        frame.fill(&Path::rectangle(Point::new(f.min(x), top + h / 2.0 - 3.0), Size::new((f - x).abs().max(1.0), 3.0)), BEAT_COLOUR);
+                        frame.fill(&Path::rectangle(Point::new(f - 1.0, top + h / 2.0 - 7.0), Size::new(2.0, 7.0)), BEAT_COLOUR);
+                    }
                 }
             }
             draw_fades(frame, (l, r), top, h, m.len(), (m.clip.fade_in, m.clip.fade_out));
@@ -2722,42 +2786,7 @@ impl canvas::Program<Message> for Marks {
         draw_rows(&mut frame, theme, self, bounds, self.rows.effects_top, (self.rows.keys > 0.0).then_some(self.rows.keys_top));
         self.cut_lanes().draw(&mut frame, theme, bounds, if let Drag::Auto(d) = drag { Some(d) } else { None });
         self.draw_zones(&mut frame, theme, bounds, drag);
-        for (i, c) in self.blocks.iter().enumerate() {
-            let (l, r) = self.block_x(c, bounds);
-            belonging(&mut frame, self, theme, (l, r), (0.0, self.rows.cuts), (c.cut.id, c.cut.group));
-            if Some(i) == self.picked.cut() {
-                selected_block(&mut frame, theme, (l, r), (0.0, self.rows.cuts), (c.cut.start > 1e-3, c.cut.start + c.len() < c.most - 1e-3));
-            }
-            // The longest label that fits (about 7 px a character).
-            if let Some(label) = c.labels.iter().find(|s| r - l > s.chars().count() as f32 * 7.0 + 24.0) {
-                name_tag(&mut frame, (l + 9.0, self.rows.cuts - 19.0), 15.0, label, 12.0, 5.9);
-            }
-        }
-        // Effect keyframes: small squares along the bottom of their cut.
-        for c in &self.blocks {
-            for t in marked(&c.cut.effects).iter().map(|k| k.t).filter(|&t| t >= c.cut.start && t <= c.cut.start + c.len()) {
-                effect_mark(&mut frame, self.x(c.from + t - c.cut.start, bounds), self.rows.effects_top + EFFECTS / 2.0);
-            }
-        }
-        // Edge looks: an orange wedge, deepest at the cut's edge.
-        for c in &self.blocks {
-            let end = c.from + c.len();
-            if let Some(e) = &c.cut.edge_in {
-                edge_wedge(&mut frame, self.x(c.from, bounds), self.x(c.from + e.seconds.min(c.len()), bounds), self.rows.cuts);
-            }
-            if let Some(e) = &c.cut.edge_out {
-                edge_wedge(&mut frame, self.x(end, bounds), self.x(end - e.seconds.min(c.len()), bounds), self.rows.cuts);
-            }
-        }
-        // Crossfades: an X over each overlap, as on the music lane.
-        for (i, c) in self.blocks.iter().enumerate().filter(|(_, c)| c.cut.crossfade > 0.0) {
-            let (l, r) = (self.x(c.from, bounds), self.x(c.from + c.cut.crossfade, bounds));
-            crossfade(&mut frame, (l, r), (0.0, self.rows.cuts), true);
-            // The join picked: framed as a picked block is.
-            if self.picked.join() == Some(i) {
-                selection_frame(&mut frame, &block_path((l, r), 0.0, self.rows.cuts), theme);
-            }
-        }
+        self.draw_cut_marks(&mut frame, theme, bounds);
         if let Drag::Move { moved: true, to, .. } = drag {
             let t = self.blocks.get(*to).map_or(self.duration, |c| c.from);
             let x = self.x(t, bounds);
@@ -2937,6 +2966,7 @@ mod tests {
             active_lanes: [0; 2],
             lane_heads: [vec![LaneHead::default()], vec![LaneHead::default()]],
             groups: Vec::new(),
+            fps: 30.0,
             also: Vec::new(),
             range: None,
             carrying: None,
@@ -2959,6 +2989,19 @@ mod tests {
         assert!(near(&t));
         assert!(t.snap(&[7.32], 0.01, |of| of == Of::Sound(li, 0)).is_none(), "the song itself doesn't snap to its own");
         assert!(t.snap(&[7.32], 0.01, |_| false).is_some_and(|(by, _)| (by + 0.02).abs() < 1e-9), "a cut's edge does");
+    }
+
+    #[test]
+    fn a_beat_snaps_to_the_frame_a_cut_can_be_on() {
+        let (mut t, _) = timeline();
+        t.fps = 25.0;
+        // The first cut starts 13 ms into its clip: its frames aren't the
+        // edit's 40 ms grid.
+        t.blocks[0].cut.start = 0.013;
+        let f = t.on_frame(1.007);
+        let clip_t = t.blocks[0].cut.start + f - t.blocks[0].from;
+        assert!(((clip_t * 25.0) - (clip_t * 25.0).round()).abs() < 1e-9, "on one of the clip's frames: {clip_t}");
+        assert!((f - 1.007).abs() <= 0.02 + 1e-9, "the nearest, at most half a frame away");
     }
 
     #[test]
@@ -3647,6 +3690,20 @@ impl canvas::Program<Message> for Ruler {
                 frame.fill(&Path::rectangle(Point::new(x, h * 0.75), Size::new(1.0, h * 0.25)), ink.scale_alpha(0.35));
             }
             m += step;
+        }
+        // Close in, each frame of the cuts in sight: the steps a playhead
+        // and a cut move by (gap 13).
+        let frame_px = (1.0 / t.fps.max(1.0) / per_px) as f32;
+        if frame_px >= 6.0 {
+            for c in &t.blocks {
+                let (from, to) = (c.from.max(t.start), (c.from + c.len()).min(t.start + t.span));
+                let first = ((c.cut.start + from - c.from) * t.fps).ceil() as i64;
+                let last = ((c.cut.start + to - c.from) * t.fps).floor() as i64;
+                for k in first..=last {
+                    let x = t.x(c.from + k as f64 / t.fps - c.cut.start, bounds);
+                    frame.fill(&Path::rectangle(Point::new(x, h * 0.85), Size::new(1.0, h * 0.15)), ink.scale_alpha(0.3));
+                }
+            }
         }
         // Where the video ends, when the music runs on past it.
         if t.duration > t.video + 1e-6 {

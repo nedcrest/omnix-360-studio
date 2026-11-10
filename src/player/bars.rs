@@ -362,6 +362,7 @@ impl App {
             carrying: self.carrying.clone(),
             groups: self.edit.groups.iter().map(|g| (g.id, iced::Color::from_rgb8(g.colour.0[0], g.colour.0[1], g.colour.0[2]))).collect(),
             also: self.also.clone(),
+            fps: self.fps(),
             lane_heads: crate::overlay::Track::ALL.map(|track| (0..self.shown_lanes(track)).map(|l| self.edit.lane(track, l).map(timeline::LaneHead::from).unwrap_or_default()).collect()),
             folds: self.folds,
             video: self.edit.duration(),

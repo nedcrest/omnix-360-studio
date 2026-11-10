@@ -96,41 +96,8 @@ impl App {
                 }
                 self.pick(Selection::cut_at(&self.edit, i));
             }
-            Message::AddBlank => {
-                // In the project's pictures folder, so it travels with the
-                // project; before the first save, in the cache.
-                let pictures = self.project_root().and_then(|r| super::bin_view::folder_for(&r, bin::Kind::Picture, None));
-                let dir = pictures.or_else(|| crate::cache::dir().map(|d| d.join("blank"))).unwrap_or_else(std::env::temp_dir);
-                match crate::blank::ensure(&dir) {
-                    Ok(path) => {
-                        // Placed from the playhead now, as a bin button does.
-                        self.placing.insert(path.clone(), Place::At(self.position()));
-                        return self.update(Message::Picked(vec![path]));
-                    }
-                    Err(e) => self.error = Some(format!("Can't make the blank picture: {e:#}")),
-                }
-            }
-            Message::SoundEdge(i, start, t) => {
-                let Some(c) = self.edit.cuts.get(i) else { return Task::none() };
-                let most = self.library.iter().find(|m| m.input == c.input).map_or(f64::INFINITY, |m| m.duration);
-                let cut = c.id;
-                // One undo step for the drag, ended by `ScrubDone`.
-                self.edit.begin();
-                self.op(Op::Cut(CutOp::SoundEdge { cut, end: if start { End::In } else { End::Out }, t, most }));
-            }
-            Message::Trim(i, start, t) => {
-                let Some(clip_len) = self.edit.cuts.get(i).and_then(|c| self.library.iter().find(|m| m.input == c.input)).map(|m| m.duration) else {
-                    return Task::none();
-                };
-                self.edit.begin();
-                let cut = self.edit.cuts[i].id;
-                self.op(Op::Cut(CutOp::Trim { cut, end: if start { End::In } else { End::Out }, t, most: clip_len }));
-                let c = &self.edit.cuts[i];
-                // Show the frame at the edge being trimmed.
-                let t = if start { c.start } else { c.end - self.frame_len() };
-                self.follow = true;
-                self.scrub_to(i, t);
-            }
+            Message::AddBlank => return self.add_blank(),
+            m @ (Message::SoundEdge(..) | Message::Trim(..) | Message::TrimToPlayhead(_) | Message::Crossfade(..) | Message::ToggleCrossfade) => return self.on_trims(m),
             Message::MoveCut(from, to) => {
                 if to != from && to != from + 1 && from < self.edit.cuts.len() {
                     let (cut, before) = (self.edit.cuts[from].id, self.edit.cuts.get(to).map(|c| c.id));
@@ -140,26 +107,6 @@ impl App {
                         self.selection = Selection::Cut(cut);
                     }
                 }
-            }
-            Message::TrimToPlayhead(start) => {
-                if let Some(i) = self.trim_to(start, self.position()) {
-                    // On the frame trimmed to: the cut's new start, or its
-                    // end, where the playhead already was.
-                    self.follow = true;
-                    let at = if start { self.edit.cuts[i].start } else { self.edit.cuts[i].end - self.frame_len() };
-                    self.goto(i, at, false);
-                }
-            }
-            Message::Crossfade(i, seconds) => {
-                let Some(cut) = self.edit.cuts.get(i).map(|c| c.id) else { return Task::none() };
-                self.edit.begin();
-                self.op(Op::Cut(CutOp::Crossfade { cut, seconds }));
-            }
-            Message::ToggleCrossfade => {
-                let i = self.selection.cut(&self.edit).unwrap_or(self.current);
-                let Some(c) = self.edit.cuts.get(i) else { return Task::none() };
-                let (cut, seconds) = (c.id, if c.crossfade > 0.0 { 0.0 } else { 1.0 });
-                self.op(Op::Cut(CutOp::Crossfade { cut, seconds }));
             }
             Message::Split if let Some((which, i)) = self.selection.clip(&self.edit) => {
                 let (Some(clip), at) = (self.edit.track(which).clips.get(i).map(|c| c.id), self.position()) else { return Task::none() };
@@ -178,70 +125,12 @@ impl App {
                     self.selection = Selection::cut_at(&self.edit, i + 1);
                 }
             }
-            Message::DeleteCut => {
-                self.sound_menu = None;
-                // With nothing selected, the cut under the playhead.
-                let s = match self.selection {
-                    Selection::None if self.clip.is_some() => Selection::cut_at(&self.edit, self.current),
-                    s => s,
-                };
-                let what = match s {
-                    Selection::Cut(_) => "Cut deleted",
-                    Selection::Clip(..) => "Sound deleted",
-                    Selection::Point(..) => "Point deleted",
-                    Selection::Item(_) => "Overlay deleted",
-                    Selection::Mark(..) => "Marker deleted",
-                    Selection::Join(_) => "Transition taken away",
-                    Selection::None => return Task::none(),
-                };
-                let at = s.cut(&self.edit);
-                let done = self.edit.delete(s);
-                if let Some(i) = at {
-                    // The cut after it, now at `i`, selected: Del again
-                    // takes the next.
-                    if done {
-                        self.selection = Selection::cut_at(&self.edit, i);
-                        self.after_edit(self.edit.offset(i.min(self.edit.cuts.len())));
-                    }
-                } else {
-                    self.selection = Selection::None;
-                }
-                // Undo a moment away, without knowing Ctrl+Z (pack 2).
-                if done {
-                    let n = self.toast.map_or(0, |(_, n)| n + 1);
-                    self.toast = Some((what, n));
-                    return Task::perform(super::blocking(|| std::thread::sleep(std::time::Duration::from_secs(6))), move |_| Message::ToastGone(n));
-                }
-            }
+            Message::DeleteCut => return self.delete_selected(),
             Message::SelectAtPlayhead => {
                 // The cut playing there (the one shown through a crossfade).
                 if self.playing_cut().is_some() {
                     self.selection = Selection::cut_at(&self.edit, self.current);
                     return self.step_note("selected");
-                }
-            }
-            Message::AddMark => {
-                let Some((cut, t)) = self.playing_cut().map(|(c, t)| (c.id, t)) else { return Task::none() };
-                if self.op(Op::Cut(CutOp::Mark { cut, t, note: String::new() })).is_some() {
-                    self.save_status = None;
-                }
-            }
-            Message::MarkMove(i, from, t) => {
-                let Some(cut) = self.edit.cuts.get(i).map(|c| c.id) else { return Task::none() };
-                // One undo step for the drag; the playhead follows the flag,
-                // and the selection (it names the marker by its time).
-                self.edit.begin();
-                self.op(Op::Cut(CutOp::MoveMark { cut, from, t }));
-                self.selection = Selection::Mark(cut, t);
-                self.follow = true;
-                self.scrub_to(i, t);
-            }
-            Message::MarkSelect(i, t) => {
-                self.selection = Selection::mark_at(&self.edit, i, t);
-                self.follow = true;
-                let at = self.edit.edit_time(i, t);
-                if let Some((i, t)) = self.edit.locate(at) {
-                    self.goto(i, t, false);
                 }
             }
             Message::StepsRested(n) => {
@@ -269,6 +158,113 @@ impl App {
                 }
             }
             _ => {}
+        }
+        Task::none()
+    }
+
+    /// A cut's edges trimmed (by a drag, or to the playhead), its sound's
+    /// edges, its crossfade.
+    fn on_trims(&mut self, message: Message) -> Task<Message> {
+        match message {
+            Message::SoundEdge(i, start, t) => {
+                let Some(c) = self.edit.cuts.get(i) else { return Task::none() };
+                let most = self.library.iter().find(|m| m.input == c.input).map_or(f64::INFINITY, |m| m.duration);
+                let cut = c.id;
+                // One undo step for the drag, ended by `ScrubDone`.
+                self.edit.begin();
+                self.op(Op::Cut(CutOp::SoundEdge { cut, end: if start { End::In } else { End::Out }, t, most }));
+            }
+            Message::Trim(i, start, t) => {
+                let Some(clip_len) = self.edit.cuts.get(i).and_then(|c| self.library.iter().find(|m| m.input == c.input)).map(|m| m.duration) else {
+                    return Task::none();
+                };
+                self.edit.begin();
+                let cut = self.edit.cuts[i].id;
+                self.op(Op::Cut(CutOp::Trim { cut, end: if start { End::In } else { End::Out }, t, most: clip_len }));
+                let c = &self.edit.cuts[i];
+                // Show the frame at the edge being trimmed.
+                let t = if start { c.start } else { c.end - self.frame_len() };
+                self.follow = true;
+                self.scrub_to(i, t);
+            }
+            Message::TrimToPlayhead(start) => {
+                if let Some(i) = self.trim_to(start, self.position()) {
+                    // On the frame trimmed to: the cut's new start, or its
+                    // end, where the playhead already was.
+                    self.follow = true;
+                    let at = if start { self.edit.cuts[i].start } else { self.edit.cuts[i].end - self.frame_len() };
+                    self.goto(i, at, false);
+                }
+            }
+            Message::Crossfade(i, seconds) => {
+                let Some(cut) = self.edit.cuts.get(i).map(|c| c.id) else { return Task::none() };
+                self.edit.begin();
+                self.op(Op::Cut(CutOp::Crossfade { cut, seconds }));
+            }
+            Message::ToggleCrossfade => {
+                let i = self.selection.cut(&self.edit).unwrap_or(self.current);
+                let Some(c) = self.edit.cuts.get(i) else { return Task::none() };
+                let (cut, seconds) = (c.id, if c.crossfade > 0.0 { 0.0 } else { 1.0 });
+                self.op(Op::Cut(CutOp::Crossfade { cut, seconds }));
+            }
+            _ => {}
+        }
+        Task::none()
+    }
+
+    /// A blank (black) cut at the playhead: its picture made in the
+    /// project's pictures folder (before the first save, in the cache).
+    fn add_blank(&mut self) -> Task<Message> {
+        // In the project's pictures folder, so it travels with the
+        // project; before the first save, in the cache.
+        let pictures = self.project_root().and_then(|r| super::bin_view::folder_for(&r, bin::Kind::Picture, None));
+        let dir = pictures.or_else(|| crate::cache::dir().map(|d| d.join("blank"))).unwrap_or_else(std::env::temp_dir);
+        match crate::blank::ensure(&dir) {
+            Ok(path) => {
+                // Placed from the playhead now, as a bin button does.
+                self.placing.insert(path.clone(), Place::At(self.position()));
+                return self.update(Message::Picked(vec![path]));
+            }
+            Err(e) => self.error = Some(format!("Can't make the blank picture: {e:#}")),
+        }
+        Task::none()
+    }
+
+    /// Del: what's selected deleted (with nothing selected, the cut under
+    /// the playhead), said in a toast with Undo a moment.
+    fn delete_selected(&mut self) -> Task<Message> {
+        self.sound_menu = None;
+        // With nothing selected, the cut under the playhead.
+        let s = match self.selection {
+            Selection::None if self.clip.is_some() => Selection::cut_at(&self.edit, self.current),
+            s => s,
+        };
+        let what = match s {
+            Selection::Cut(_) => "Cut deleted",
+            Selection::Clip(..) => "Sound deleted",
+            Selection::Point(..) => "Point deleted",
+            Selection::Item(_) => "Overlay deleted",
+            Selection::Mark(..) => "Marker deleted",
+            Selection::Join(_) => "Transition taken away",
+            Selection::None => return Task::none(),
+        };
+        let at = s.cut(&self.edit);
+        let done = self.edit.delete(s);
+        if let Some(i) = at {
+            // The cut after it, now at `i`, selected: Del again
+            // takes the next.
+            if done {
+                self.selection = Selection::cut_at(&self.edit, i);
+                self.after_edit(self.edit.offset(i.min(self.edit.cuts.len())));
+            }
+        } else {
+            self.selection = Selection::None;
+        }
+        // Undo a moment away, without knowing Ctrl+Z (pack 2).
+        if done {
+            let n = self.toast.map_or(0, |(_, n)| n + 1);
+            self.toast = Some((what, n));
+            return Task::perform(super::blocking(|| std::thread::sleep(std::time::Duration::from_secs(6))), move |_| Message::ToastGone(n));
         }
         Task::none()
     }

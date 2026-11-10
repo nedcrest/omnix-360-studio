@@ -61,8 +61,8 @@ pub fn speech(peaks: &[f32], step: f64, source: &Source) -> Vec<(f64, f64)> {
     let loudest = peaks[first..last].iter().fold(0.0f32, |m, &p| m.max(p));
     let threshold = (db(loudest) - BELOW_LOUDEST_DB).max(FLOOR_DB);
     let mut spans: Vec<(f64, f64)> = Vec::new();
-    for i in first..last {
-        if db(peaks[i]) < threshold {
+    for (i, &peak) in peaks.iter().enumerate().take(last).skip(first) {
+        if db(peak) < threshold {
             continue;
         }
         let (a, b) = ((i as f64 * step).max(source.start), ((i + 1) as f64 * step).min(source.end));
@@ -120,7 +120,7 @@ pub fn duck_music(music: &mut crate::project::Music, speech: &[(f64, f64)], dept
             None => c.volume.clone(),
         };
         c.volume = if on.is_empty() { base } else { duck(&base, &on, depth) };
-        c.ducked = (!on.is_empty()).then(|| crate::project::Ducked { depth, speech: on });
+        c.ducked = (!on.is_empty()).then_some(crate::project::Ducked { depth, speech: on });
     }
 }
 

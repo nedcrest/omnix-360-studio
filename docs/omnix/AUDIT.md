@@ -21,11 +21,13 @@ Transitions panel's own code) and B7 (the range, the sound menu,
 Dailix's Make recipe and speech as tested functions) and B8 (no
 `DerefMut` on `Edit` outside tests: ops through `put`, what the player
 learns of a clip through `learn`; `flat` stays a `serde(skip)` field of
-the cut, as the core's view keys read it) done.
+the cut, as the core's view keys read it) and B9 (the four long
+functions of that week split: `key`, `effect_message`, `on_overlay_ui`,
+`sound_menu_layer`; the older long ones are split as they're next
+touched) done.
 
 | # | What | Fix |
 |---|---|---|
-| B9 | Long functions: 29 in `player/` over 80 lines; four grew past it this week (`key` 209, `effect_message` 200, `on_overlay_ui` 145, `sound_menu_layer` 109) | Split those four first, by area |
 | B10 | CPU/GPU tests miss most of the grade (highlights, shadows, contrast, temperature, tint, vibrance on colour) and the overlay's blur, reveal and letter order beyond the two cases; `grade.wgsl` hard-codes the knee | One test with every value on a coloured picture; name the knee |
 | B11 | `from_sheet` puts a whole file's loudness into `cut.loudness`, which means «what the cut plays» | Measure the segment, or say what it is |
 | B12 | Two loudness rules: Dailix compares at −20 LUFS (lift ≤ 15), Omnix plays at −16 (≤ 24) | Decide in one place, or say why they differ |

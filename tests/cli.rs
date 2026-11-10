@@ -371,3 +371,18 @@ fn a_frame_of_the_edit_is_graded_and_faded_as_the_export_makes_it() {
     assert!(start < 2.0, "faded in from black: {start}");
     assert!(plain > 40.0 && dark < plain / 2.0, "graded: {dark} against {plain}");
 }
+
+#[test]
+fn mixcheck_says_the_films_loudness_over_time() {
+    if !has_ffmpeg() {
+        return;
+    }
+    let d = dir("mixevery");
+    clip(&d, "a.mp4", 3.0, 440);
+    std::fs::write(d.join("edit.json"), r#"{"cuts": [{"input": "a.mp4", "in": 0, "out": 3}]}"#).unwrap();
+    let said = omnix(&d, &["mixcheck", "edit.json", "--every", "1"]);
+    std::fs::remove_dir_all(&d).unwrap();
+    let lines: Vec<&str> = said.lines().filter(|l| l.contains(" s  film ")).collect();
+    assert_eq!(lines.len(), 3, "{said}");
+    assert!(lines.iter().all(|l| l.contains("LUFS") && !l.contains("silent")), "{said}");
+}

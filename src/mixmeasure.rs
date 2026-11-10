@@ -135,14 +135,47 @@ pub fn measure(project: &Project, progress: &mut dyn FnMut(usize, usize)) -> Res
     Ok(Measured { items, speech, mix: whole.loudness.integrated(), peak })
 }
 
+/// A stretch of the film from `at`: its integrated and loudest LUFS
+/// (none while silent).
+pub struct Stretch {
+    pub at: f64,
+    pub lufs: Option<f64>,
+    pub loudest: Option<f64>,
+}
+
+/// The whole film's loudness over time (audit C10: the player's meter
+/// had it, the command line hadn't): rendered as the export mixes it, a
+/// stretch per `every` seconds.
+pub fn over_time(project: &Project, every: f64) -> Result<Vec<Stretch>> {
+    let video = crate::project::edit_length(&project.cuts);
+    let length = if project.cuts.is_empty() { project.sound_clips().map(|c| c.ends()).fold(0.0, f64::max) } else { video };
+    let mut ws: Vec<Window> = spans(length, every).into_iter().map(|(from, to)| Window { from, to, loudness: Loudness::default() }).collect();
+    let beyond = project.sound_beyond();
+    run(&cut_sounds(project), &Mix::whole(project, &beyond, length), &mut ws.iter_mut().collect::<Vec<_>>())?;
+    Ok(ws.into_iter().map(|w| Stretch { at: w.from, lufs: w.loudness.integrated(), loudest: w.loudness.loudest() }).collect())
+}
+
+/// `0..length` in stretches of `every` seconds (at least a tenth), the
+/// last one shorter.
+fn spans(length: f64, every: f64) -> Vec<(f64, f64)> {
+    let every = every.max(0.1);
+    (0..).map(|k| k as f64 * every).take_while(|&from| from < length).map(|from| (from, (from + every).min(length))).collect()
+}
+
 fn overlap(a0: f64, a1: f64, b0: f64, b1: f64) -> f64 {
     (a1.min(b1) - a0.max(b0)).max(0.0)
 }
 
 /// `omnix mixcheck`: measures the project, prints each clip's loudness
 /// and the findings against `target` LUFS.
-pub fn run_cli(path: &std::path::Path, target: f64) -> Result<()> {
+pub fn run_cli(path: &std::path::Path, target: f64, every: Option<f64>) -> Result<()> {
     let project = Project::load(path)?;
+    if let Some(every) = every {
+        let lufs = |v: Option<f64>| v.map_or("silent".to_owned(), |v| format!("{v:6.1}"));
+        for s in over_time(&project, every)? {
+            println!("{:7.2} s  film  {} LUFS, loudest {}", s.at, lufs(s.lufs), lufs(s.loudest));
+        }
+    }
     let m = measure(&project, &mut |done, of| eprintln!("measured {done} of {of}"))?;
     let lufs = |v: Option<f64>| v.map_or("silent".to_owned(), |v| format!("{v:6.1}"));
     for i in &m.items {
@@ -161,4 +194,13 @@ pub fn run_cli(path: &std::path::Path, target: f64) -> Result<()> {
         println!("{:7.2} s  {}  {}", f.at, if f.severity == crate::mixcheck::Severity::Fix { "fix " } else { "hint" }, f.text);
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn the_film_is_cut_into_stretches_the_last_shorter() {
+        assert_eq!(super::spans(2.5, 1.0), [(0.0, 1.0), (1.0, 2.0), (2.0, 2.5)]);
+        assert_eq!(super::spans(0.3, 0.0).len(), 3, "at least a tenth");
+    }
 }

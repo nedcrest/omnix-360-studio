@@ -129,6 +129,9 @@ pub(crate) enum Cmd {
         /// The platform's target, LUFS integrated (YouTube -14).
         #[arg(long, allow_negative_numbers = true, default_value_t = -14.0)]
         target: f64,
+        /// Also the whole film's loudness every this many seconds.
+        #[arg(long)]
+        every: Option<f64>,
     },
     /// Lower the music under speech (auto-duck): find where cleaned voices
     /// and Voice takes speak and put volume points on the music's line, this
@@ -697,7 +700,7 @@ pub(crate) fn run() -> Result<()> {
         Cmd::Blank { dir } => println!("{}", crate::blank::ensure(&dir)?.display()),
         Cmd::FromSheet { project, day, empty: true } => println!("{}", crate::from_sheet::write_empty(&project, day.as_deref())?.display()),
         Cmd::FromSheet { project, day, empty: false } => println!("{}", crate::from_sheet::write(&project, day.as_deref())?.display()),
-        Cmd::Mixcheck { project, target } => crate::mixmeasure::run_cli(&project, target)?,
+        Cmd::Mixcheck { project, target, every } => crate::mixmeasure::run_cli(&project, target, every)?,
         Cmd::Play { input, osv_size, hwaccel, stabilize, imu_axes, world_z_down } => {
             player::run(input, player::Launch { osv_size, hw: hwaccel, stabilize, imu_axes, world_z_down })?;
         }

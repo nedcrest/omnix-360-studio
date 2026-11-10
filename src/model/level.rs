@@ -3,7 +3,12 @@
 //! without the core reaching ffmpeg (it used to, through `loudness`).
 
 /// What a cut's speech is brought to: web video and podcasts sit around
-/// −14 to −16 LUFS; −16 leaves room for music under it.
+/// −14 to −16 LUFS; −16 leaves room for music under it. Not Dailix's
+/// `voice::HEARD_AT` (−20): that one only makes voices heard equally loud
+/// to choose between them (a louder one would pass for better), lifting
+/// less (15 dB) so a near-silent one doesn't roar; this one sets the
+/// film's level. Two purposes, two rules (audit B12, the user's decision
+/// of 2026-11-11).
 pub const TARGET_LUFS: f64 = -16.0;
 /// The most a cut is raised or lowered when normalized, dB.
 pub const MOST_GAIN: f64 = 24.0;

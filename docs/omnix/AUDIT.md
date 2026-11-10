@@ -12,25 +12,20 @@ and Dailix).
 
 ## B. Design (`code-rules`)
 
-B1 (the grade's values by name, one `EFFECTS` table), B2 (tracks and
-items one way each) B3 (the timeline's `LaneHead`, one
-`active_lane`) B4 (one `project_root`, `inside_project`, pictures
-through `folder_for`) and B5 (`grade::luma`, `grade::level`,
-`MusicClip::local`, `App::frame_len`) B6 (the film's fades in the
-Transitions panel's own code) and B7 (the range, the sound menu,
-Dailix's Make recipe and speech as tested functions) and B8 (no
-`DerefMut` on `Edit` outside tests: ops through `put`, what the player
-learns of a clip through `learn`; `flat` stays a `serde(skip)` field of
-the cut, as the core's view keys read it) and B9 (the four long
-functions of that week split: `key`, `effect_message`, `on_overlay_ui`,
-`sound_menu_layer`; the older long ones are split as they're next
-touched) and B10 (the GPU against the CPU with every grade value on
-coloured pictures; the knee named in the shader) done.
-
-| # | What | Fix |
-|---|---|---|
-| B11 | `from_sheet` puts a whole file's loudness into `cut.loudness`, which means «what the cut plays» | Measure the segment, or say what it is |
-| B12 | Two loudness rules: Dailix compares at −20 LUFS (lift ≤ 15), Omnix plays at −16 (≤ 24) | Decide in one place, or say why they differ |
+All done (B1–B12). The grade's values by name in one `EFFECTS` table;
+tracks and items one way each; the timeline's `LaneHead` and one
+`active_lane`; pictures copied through `folder_for`, the project's
+folder asked once; `grade::luma`, `grade::level`, `MusicClip::local`,
+`App::frame_len`; the film's fades in the Transitions panel's own code;
+the range, the sound menu and Dailix's Make recipe and speech as tested
+functions; no `DerefMut` on `Edit` outside tests (ops through `put`,
+what the player learns of a clip through `learn`; `flat` stays a
+`serde(skip)` field the core's view keys read); the four long functions
+of that week split (older ones are split as they're next touched); the
+GPU against the CPU with every grade value, the knee named. Loudness
+(the user's decisions, 2026-11-11): `from_sheet` measures the stretch
+each cut plays (B11); Dailix compares voices at −20 and Omnix sets the
+film at −16, two purposes, two rules, each saying why (B12).
 
 ## C. Core API gaps (what an agent can't see or do)
 

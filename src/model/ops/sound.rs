@@ -95,27 +95,11 @@ pub(super) fn apply(p: &mut Project, op: &SoundOp) -> Result<Outcome, OpError> {
             let was = change(p, sound, |s| std::mem::replace(s.gain, db))?;
             said(format!("{sound}: level {was:+.1} → {db:+.1} dB"))
         }
-        &SoundOp::Fade { sound, end, seconds } => {
-            let now = change(p, sound, |mut s| {
-                s.set_fade(end == End::In, seconds);
-                if end == End::In { *s.fade_in } else { *s.fade_out }
-            })?;
-            said(format!("{sound}: fade {} {now:.2} s", if end == End::In { "in" } else { "out" }))
-        }
+        &SoundOp::Fade { sound, end, seconds } => fade(p, sound, end, seconds),
         &SoundOp::Mute { sound, on } => switch(p, sound, on, "muted", |s| s.mute),
         &SoundOp::LowCut { sound, on } => switch(p, sound, on, "low cut", |s| s.low_cut),
         &SoundOp::Clean { sound, on } => switch(p, sound, on, "cleaned", |s| s.clean),
-        &SoundOp::ShowLine { sound } => {
-            change(p, sound, |s| {
-                // Not at its edges: there a point stayed behind when the
-                // clip was trimmed longer (user, 2026-11-07). A line already
-                // there is shown: shown twice is shown once.
-                if s.volume.is_empty() {
-                    crate::project::volume_key_at(s.volume, (s.range.0 + s.range.1) / 2.0);
-                }
-            })?;
-            said(format!("{sound}: line shown"))
-        }
+        &SoundOp::ShowLine { sound } => show_line(p, sound),
         &SoundOp::DeleteLine { sound } => {
             let n = change(p, sound, |s| std::mem::take(s.volume).len())?;
             forget_duck(p, sound);
@@ -126,71 +110,21 @@ pub(super) fn apply(p: &mut Project, op: &SoundOp) -> Result<Outcome, OpError> {
             forget_duck(p, sound);
             said(format!("{sound}: back to the original"))
         }
-        &SoundOp::LowerForVoice { sound } => {
-            let db = change(p, sound, |s| {
-                *s.gain = normal_gain(*s.loudness) + VOICE_OVER_DIP;
-                *s.gain
-            })?;
-            said(format!("{sound}: lowered for voice-over, level {db:+.1} dB"))
-        }
-        &SoundOp::Restore { sound } => {
-            let db = change(p, sound, |s| {
-                *s.gain = normal_gain(*s.loudness);
-                *s.gain
-            })?;
-            said(format!("{sound}: normal level {db:+.1} dB"))
-        }
+        &SoundOp::LowerForVoice { sound } => lower_for_voice(p, sound),
+        &SoundOp::Restore { sound } => restore(p, sound),
         &SoundOp::AddPoint { sound, t, db } => {
             within(p, sound, t)?;
             change(p, sound, |s| crate::project::add_volume_key(s.volume, t, db))?;
             said(format!("{sound}: point at {t:.2} s, {db:+.1} dB"))
         }
-        &SoundOp::PointAt { sound, t } => {
-            within(p, sound, t)?;
-            let db = change(p, sound, |s| {
-                let i = crate::project::volume_key_at(s.volume, t);
-                s.volume[i].volume
-            })?;
-            said(format!("{sound}: point at {t:.2} s, {db:+.1} dB"))
-        }
-        &SoundOp::MovePoint { sound, from, t, db } => {
-            let now = change(p, sound, |s| {
-                let i = point(s.volume, from)?;
-                crate::project::move_volume_key(s.volume, i, t, db, s.range);
-                Some(s.volume[i])
-            })?
-            .ok_or_else(|| OpError::NotFound(format!("point at {from:.2} s on {sound}")))?;
-            said(format!("{sound}: point {from:.2} s → {:.2} s, {:+.1} dB", now.t, now.volume))
-        }
+        &SoundOp::PointAt { sound, t } => point_at(p, sound, t),
+        &SoundOp::MovePoint { sound, from, t, db } => move_point(p, sound, from, t, db),
         &SoundOp::DeletePoint { sound, t } => {
             change(p, sound, |s| point(s.volume, t).map(|i| s.volume.remove(i)))?.ok_or_else(|| OpError::NotFound(format!("point at {t:.2} s on {sound}")))?;
             said(format!("{sound}: point at {t:.2} s removed"))
         }
-        &SoundOp::ContinueLevel { sound } => {
-            let own = sound.own(p).ok_or_else(|| OpError::NotFound(sound.to_string()))?;
-            if !p.continue_level(own) {
-                return Err(OpError::Invalid(format!("{sound}: nothing sounds before it to continue")));
-            }
-            said(format!("{sound}: line continues the level before it"))
-        }
-        &SoundOp::Normalized { sound, lufs, even } => {
-            if lufs.is_some_and(|l| !l.is_finite()) {
-                return Err(OpError::OutOfRange { what: "loudness", value: lufs.unwrap(), least: f64::MIN, most: f64::MAX });
-            }
-            let db = change(p, sound, |s| {
-                *s.even = even;
-                if lufs.is_some() {
-                    *s.loudness = lufs;
-                    *s.gain = normal_gain(lufs);
-                }
-                *s.gain
-            })?;
-            let evened = if even { ", evened out" } else { "" };
-            said(match lufs {
-                Some(l) => format!("{sound}: {l:.1} LUFS, level {db:+.1} dB{evened}"),
-                None => format!("{sound}: level kept {db:+.1} dB{evened}"),
-            })
-        }
+        &SoundOp::ContinueLevel { sound } => continue_level(p, sound),
+        &SoundOp::Normalized { sound, lufs, even } => normalized(p, sound, lufs, even),
         SoundOp::Duck { depth, speech } => {
             if !(0.0..=60.0).contains(depth) {
                 return Err(OpError::OutOfRange { what: "depth", value: *depth, least: 0.0, most: 60.0 });
@@ -198,42 +132,141 @@ pub(super) fn apply(p: &mut Project, op: &SoundOp) -> Result<Outcome, OpError> {
             crate::duck::duck_music(&mut p.music, speech, *depth);
             said(format!("music {depth:.0} dB down under {} stretches of speech", speech.len()))
         }
-        &SoundOp::Beats { track, beats } => {
-            if let Some(b) = beats
-                && !(0.0..=1.0).contains(&b.threshold)
-            {
-                return Err(OpError::OutOfRange { what: "beat threshold", value: b.threshold, least: 0.0, most: 1.0 });
-            }
-            p.track_mut(track).beats = beats;
-            said(match beats {
-                Some(b) => format!("{}: beats at {:.2}{}", track.name(), b.threshold, if b.snap { ", snapping" } else { "" }),
-                None => format!("{}: beats off", track.name()),
-            })
-        }
+        &SoundOp::Beats { track, beats } => show_beats(p, track, beats),
         &SoundOp::SyncLock { track, on } => {
             p.track_mut(track).sync = on;
             said(format!("{}: sync lock {}", track.name(), if on { "on" } else { "off" }))
         }
-        &SoundOp::TrackLevel { track, db } => {
-            if !(OFF_DB..=TRACK_MOST).contains(&db) {
-                return Err(OpError::OutOfRange { what: "track level", value: db, least: OFF_DB, most: TRACK_MOST });
-            }
-            let level = match track {
-                Some(w) => &mut p.track_mut(w).volume,
-                None => &mut p.sound.volume,
-            };
-            let was = std::mem::replace(level, db);
-            said(format!("{}: level {was:+.1} → {db:+.1} dB", track.map_or("clip sound", SoundTrack::name)))
-        }
-        &SoundOp::EditFade { end, seconds } => {
-            if !(0.0..=EDIT_FADE_MOST).contains(&seconds) {
-                return Err(OpError::OutOfRange { what: "edit fade", value: seconds, least: 0.0, most: EDIT_FADE_MOST });
-            }
-            let fade = if end == End::In { &mut p.fades.fade_in } else { &mut p.fades.fade_out };
-            *fade = seconds;
-            said(format!("the edit fades {} over {seconds:.1} s", if end == End::In { "in" } else { "out" }))
-        }
+        &SoundOp::TrackLevel { track, db } => track_level(p, track, db),
+        &SoundOp::EditFade { end, seconds } => edit_fade(p, end, seconds),
     }
+}
+
+/// Its fade in or out.
+fn fade(p: &mut Project, sound: SoundRef, end: End, seconds: f64) -> Result<Outcome, OpError> {
+    let now = change(p, sound, |mut s| {
+        s.set_fade(end == End::In, seconds);
+        if end == End::In { *s.fade_in } else { *s.fade_out }
+    })?;
+    said(format!("{sound}: fade {} {now:.2} s", if end == End::In { "in" } else { "out" }))
+}
+
+/// Its line shown: a point in its middle when it has none.
+fn show_line(p: &mut Project, sound: SoundRef) -> Result<Outcome, OpError> {
+    change(p, sound, |s| {
+        // Not at its edges: there a point stayed behind when the
+        // clip was trimmed longer (user, 2026-11-07). A line already
+        // there is shown: shown twice is shown once.
+        if s.volume.is_empty() {
+            crate::project::volume_key_at(s.volume, (s.range.0 + s.range.1) / 2.0);
+        }
+    })?;
+    said(format!("{sound}: line shown"))
+}
+
+/// Lowered under a voice-over, from its normal level.
+fn lower_for_voice(p: &mut Project, sound: SoundRef) -> Result<Outcome, OpError> {
+    let db = change(p, sound, |s| {
+        *s.gain = normal_gain(*s.loudness) + VOICE_OVER_DIP;
+        *s.gain
+    })?;
+    said(format!("{sound}: lowered for voice-over, level {db:+.1} dB"))
+}
+
+/// Back to its normal level.
+fn restore(p: &mut Project, sound: SoundRef) -> Result<Outcome, OpError> {
+    let db = change(p, sound, |s| {
+        *s.gain = normal_gain(*s.loudness);
+        *s.gain
+    })?;
+    said(format!("{sound}: normal level {db:+.1} dB"))
+}
+
+/// A point at `t` on its line, at the level there.
+fn point_at(p: &mut Project, sound: SoundRef, t: f64) -> Result<Outcome, OpError> {
+    within(p, sound, t)?;
+    let db = change(p, sound, |s| {
+        let i = crate::project::volume_key_at(s.volume, t);
+        s.volume[i].volume
+    })?;
+    said(format!("{sound}: point at {t:.2} s, {db:+.1} dB"))
+}
+
+/// The point at `from` to `t` and `db`.
+fn move_point(p: &mut Project, sound: SoundRef, from: f64, t: f64, db: f64) -> Result<Outcome, OpError> {
+    let now = change(p, sound, |s| {
+        let i = point(s.volume, from)?;
+        crate::project::move_volume_key(s.volume, i, t, db, s.range);
+        Some(s.volume[i])
+    })?
+    .ok_or_else(|| OpError::NotFound(format!("point at {from:.2} s on {sound}")))?;
+    said(format!("{sound}: point {from:.2} s → {:.2} s, {:+.1} dB", now.t, now.volume))
+}
+
+/// Its line continuing the level of the sound before it.
+fn continue_level(p: &mut Project, sound: SoundRef) -> Result<Outcome, OpError> {
+    let own = sound.own(p).ok_or_else(|| OpError::NotFound(sound.to_string()))?;
+    if !p.continue_level(own) {
+        return Err(OpError::Invalid(format!("{sound}: nothing sounds before it to continue")));
+    }
+    said(format!("{sound}: line continues the level before it"))
+}
+
+/// Its level from a measured loudness, evened or not.
+fn normalized(p: &mut Project, sound: SoundRef, lufs: Option<f64>, even: bool) -> Result<Outcome, OpError> {
+    if lufs.is_some_and(|l| !l.is_finite()) {
+        return Err(OpError::OutOfRange { what: "loudness", value: lufs.unwrap(), least: f64::MIN, most: f64::MAX });
+    }
+    let db = change(p, sound, |s| {
+        *s.even = even;
+        if lufs.is_some() {
+            *s.loudness = lufs;
+            *s.gain = normal_gain(lufs);
+        }
+        *s.gain
+    })?;
+    let evened = if even { ", evened out" } else { "" };
+    said(match lufs {
+        Some(l) => format!("{sound}: {l:.1} LUFS, level {db:+.1} dB{evened}"),
+        None => format!("{sound}: level kept {db:+.1} dB{evened}"),
+    })
+}
+
+/// A track's beats shown or not (gap 13).
+fn show_beats(p: &mut Project, track: SoundTrack, beats: Option<crate::project::Beats>) -> Result<Outcome, OpError> {
+    if let Some(b) = beats
+        && !(0.0..=1.0).contains(&b.threshold)
+    {
+        return Err(OpError::OutOfRange { what: "beat threshold", value: b.threshold, least: 0.0, most: 1.0 });
+    }
+    p.track_mut(track).beats = beats;
+    said(match beats {
+        Some(b) => format!("{}: beats at {:.2}{}", track.name(), b.threshold, if b.snap { ", snapping" } else { "" }),
+        None => format!("{}: beats off", track.name()),
+    })
+}
+
+/// A track's level, or the clips' own sound's without one.
+fn track_level(p: &mut Project, track: Option<SoundTrack>, db: f64) -> Result<Outcome, OpError> {
+    if !(OFF_DB..=TRACK_MOST).contains(&db) {
+        return Err(OpError::OutOfRange { what: "track level", value: db, least: OFF_DB, most: TRACK_MOST });
+    }
+    let level = match track {
+        Some(w) => &mut p.track_mut(w).volume,
+        None => &mut p.sound.volume,
+    };
+    let was = std::mem::replace(level, db);
+    said(format!("{}: level {was:+.1} → {db:+.1} dB", track.map_or("clip sound", SoundTrack::name)))
+}
+
+/// The whole edit's fade from or to black.
+fn edit_fade(p: &mut Project, end: End, seconds: f64) -> Result<Outcome, OpError> {
+    if !(0.0..=EDIT_FADE_MOST).contains(&seconds) {
+        return Err(OpError::OutOfRange { what: "edit fade", value: seconds, least: 0.0, most: EDIT_FADE_MOST });
+    }
+    let fade = if end == End::In { &mut p.fades.fade_in } else { &mut p.fades.fade_out };
+    *fade = seconds;
+    said(format!("the edit fades {} over {seconds:.1} s", if end == End::In { "in" } else { "out" }))
 }
 
 /// Runs `f` on `sound`'s settings.

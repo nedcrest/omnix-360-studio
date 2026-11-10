@@ -615,8 +615,8 @@ impl App {
             self.selection = Selection::None;
         }
         self.edit.begin();
-        self.set_effect(true, 4, temperature);
-        self.set_effect(false, 5, tint);
+        self.set_effect(true, crate::grade::TEMPERATURE, temperature);
+        self.set_effect(false, crate::grade::TINT, tint);
         self.edit.commit();
     }
 

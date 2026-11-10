@@ -21,11 +21,32 @@ pub fn run(project: &Path, ops: &Path, output: Option<&Path>) -> Result<()> {
         Err((n, e)) => bail!("op {} of {}: {e}; nothing changed", n + 1, ops.len()),
     }
     check(&edit).map_err(|e| anyhow::anyhow!("the ops left the project broken: {e}"))?;
+    for w in warnings(&edit) {
+        eprintln!("warning: {w}");
+    }
     if let Some(out) = output {
         edit.save(out)?;
         eprintln!("wrote {}", out.display());
     }
     Ok(())
+}
+
+/// What the project names that isn't there, or reaches past its file: an
+/// op can't know (audit C4), so it's said after, not refused.
+fn warnings(p: &Project) -> Vec<String> {
+    let mut said: Vec<String> = p.clone().drop_missing(|f| f.exists()).said().into_iter().collect();
+    for c in &p.cuts {
+        if let Some(lut) = c.lut.as_deref().filter(|l| crate::lut::find(l).is_none()) {
+            said.push(format!("cut #{}: no LUT «{lut}» (add it in Settings)", c.id));
+        }
+        if c.input.exists()
+            && let Ok(long) = crate::ffmpeg::duration(&c.input)
+            && c.end > long + 0.05
+        {
+            said.push(format!("cut #{} runs to {:.2} s of a clip {long:.2} s long", c.id, c.end));
+        }
+    }
+    said
 }
 
 /// The JSON Schema of an ops file: a list of `Op`, each field described by
@@ -272,6 +293,14 @@ pub fn looks(template: Option<&str>) -> Result<String> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn apply_warns_of_what_isnt_there() {
+        let mut c = crate::project::Cut::new("nowhere/a.mp4".into(), 0.0, 4.0);
+        c.lut = Some("no such look".into());
+        let w = super::warnings(&crate::project::Project { cuts: vec![c], ..Default::default() }).join("\n");
+        assert!(w.contains("nowhere/a.mp4") && w.contains("no LUT «no such look»"), "{w}");
+    }
+
     #[test]
     fn describe_says_a_cuts_view_and_sound_and_the_edits_own() {
         use crate::project::{Cut, MusicClip, Project, VolumeKey};

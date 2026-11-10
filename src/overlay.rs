@@ -282,6 +282,13 @@ impl Place {
     pub fn from_values([x, y, size, rotation]: [f64; 4]) -> Place {
         Place { x, y, size, rotation }
     }
+
+    /// Each value held within its range (`RANGES`), as the sliders hold
+    /// them: a drag on the view past the frame's edge stops there.
+    pub fn clamped(self) -> Place {
+        let v = self.values();
+        Place::from_values(std::array::from_fn(|k| v[k].clamp(Place::RANGES[k].0, Place::RANGES[k].1)))
+    }
 }
 
 /// Where an item is from its own time `t`, eased like camera keyframes.
@@ -698,6 +705,12 @@ impl FrameSink for Burn<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_place_dragged_past_the_frame_stops_at_its_range() {
+        let p = super::Place { x: 1.4, y: -0.2, size: 0.01, rotation: 30.0 }.clamped();
+        assert_eq!(p.values(), [1.0, 0.0, 0.05, 30.0]);
+    }
 
     #[test]
     fn bars_slide_in_to_the_ratio_and_out() {

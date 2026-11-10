@@ -114,7 +114,7 @@ fn knob(q: &Quad) -> Point {
 }
 
 fn place_msg(place: Place) -> Message {
-    Message::Effect(EffectMsg::Drag(place))
+    Message::Effect(EffectMsg::Drag(place.clamped()))
 }
 
 impl canvas::Program<Message> for Handles {

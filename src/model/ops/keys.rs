@@ -4,7 +4,7 @@
 //! re-sent or an agent's retry changes nothing more. A keyframe is named by
 //! what it's on and its time (its own time: a cut's clip time, an item's).
 
-use super::{OpError, Outcome, said};
+use super::{OpError, Outcome, grade_in_range, in_range, in_span, place_in_range, said};
 use crate::grade::{EffectKey, Grade, grade_at};
 use crate::model::curve::{self, Key};
 use crate::overlay::{Item, Place};
@@ -85,15 +85,18 @@ pub enum KeyOp {
 pub(super) fn apply(p: &mut Project, op: &KeyOp) -> Result<Outcome, OpError> {
     match op {
         KeyOp::View { cut, t, view, tolerance, aims } => {
-            let keys = &mut find_cut(p, *cut)?.keyframes;
+            let c = find_cut(p, *cut)?;
+            if c.keyframes.near(*t, *tolerance).is_none() {
+                in_span("a new view key", *t, (c.start, c.end), *tolerance)?;
+            }
+            view_in_range(view)?;
+            let keys = &mut c.keyframes;
             keys.set(*t, *view, *tolerance, &|f, _| aim(aims, f));
             said(format!("cut #{cut}: view keyed at {t:.2} s"))
         }
         KeyOp::EffectValue { on, param, value } => {
             let k = crate::grade::NAMES.iter().position(|n| n == param).ok_or_else(|| OpError::NotFound(format!("effect {param:?}")))?;
-            if !value.is_finite() {
-                return Err(OpError::Invalid(format!("{param} {value} isn't a number")));
-            }
+            in_range(param, *value)?;
             if matches!(on, Graded::Cut(_)) && crate::grade::ITEM_ONLY.contains(&k) {
                 return Err(OpError::Invalid(format!("{param} is for text and pictures, not a cut")));
             }
@@ -114,9 +117,7 @@ pub(super) fn apply(p: &mut Project, op: &KeyOp) -> Result<Outcome, OpError> {
         }
         KeyOp::PlaceValue { item, param, value } => {
             let k = Place::NAMES.iter().position(|n| n == param).ok_or_else(|| OpError::NotFound(format!("place value {param:?}")))?;
-            if !value.is_finite() {
-                return Err(OpError::Invalid(format!("{param} {value} isn't a number")));
-            }
+            in_range(param, *value)?;
             let it = find_item(p, *item)?;
             if it.motion.is_empty() {
                 it.motion.push(crate::overlay::MotionKey { t: it.start, place: Place::default(), ease: Default::default() });
@@ -135,10 +136,18 @@ pub(super) fn apply(p: &mut Project, op: &KeyOp) -> Result<Outcome, OpError> {
             said(format!("cut #{cut}: view key at {t:.2} s {}", if follow.is_some() { "follows" } else { "fixed" }))
         }
         &KeyOp::Effects { on, t, grade, tolerance } => {
+            grade_in_range(&grade)?;
+            if !effects(p, on)?.iter().any(|k| (k.t - t).abs() <= tolerance) {
+                in_span("a new effect key", t, span(p, on)?, tolerance)?;
+            }
             set(effects(p, on)?, t, grade, tolerance);
             said(format!("{}: look set at {t:.2} s", name(on)))
         }
         &KeyOp::Motion { item, t, place, tolerance } => {
+            place_in_range(&place)?;
+            if !find_item(p, item)?.motion.iter().any(|k| (k.t - t).abs() <= tolerance) {
+                in_span("a new place key", t, span(p, Graded::Item(item))?, tolerance)?;
+            }
             set(&mut find_item(p, item)?.motion, t, place, tolerance);
             said(format!("item #{item}: place set at {t:.2} s"))
         }
@@ -211,6 +220,24 @@ fn aim(aims: &Aims, f: &Follow) -> Option<(f64, f64)> {
     aims.iter().find(|a| &a.0 == f).and_then(|a| a.1)
 }
 
+/// Where `on`'s keys may lie: a cut's clip time, an item's own.
+fn span(p: &mut Project, on: Graded) -> Result<(f64, f64), OpError> {
+    Ok(match on {
+        Graded::Cut(id) => find_cut(p, id).map(|c| (c.start, c.end))?,
+        Graded::Item(id) => find_item(p, id).map(|i| (i.start, i.end))?,
+    })
+}
+
+/// A view's angles numbers, its field of view within what its projection
+/// allows, its bend 0..1.
+fn view_in_range(v: &View) -> Result<(), OpError> {
+    let (lo, hi) = v.fov_range();
+    if ![v.yaw, v.pitch, v.roll].iter().all(|a| a.is_finite()) || !(lo..=hi).contains(&v.fov) || !(0.0..=1.0).contains(&v.correction) {
+        return Err(OpError::Invalid(format!("view yaw {} pitch {} roll {} fov {} (its range {lo}..{hi}) correction {} (0..1)", v.yaw, v.pitch, v.roll, v.fov, v.correction)));
+    }
+    Ok(())
+}
+
 fn effects(p: &mut Project, on: Graded) -> Result<&mut Vec<EffectKey>, OpError> {
     match on {
         Graded::Cut(id) => Ok(&mut find_cut(p, id)?.effects),
@@ -264,6 +291,28 @@ mod tests {
 
     fn key(o: KeyOp) -> Op {
         Op::Key(o)
+    }
+
+    #[test]
+    fn values_and_new_keys_out_of_range_are_refused() {
+        let mut e = edit();
+        let value = |param: &str, value: f64| key(KeyOp::EffectValue { on: Graded::Cut(1), param: param.into(), value });
+        assert!(e.apply(&value("exposure", 1000.0)).is_err() && e.apply(&value("exposure", 3.0)).is_ok());
+        assert!(e.apply(&value("white_in", 0.2)).is_err(), "white under its half");
+        let home = View::home(crate::view::Projection::Perspective);
+        let view = |t: f64, view: View| key(KeyOp::View { cut: 1, t, view, tolerance: 0.01, aims: Vec::new() });
+        assert!(e.apply(&view(500.0, home)).is_err(), "past the cut's 1-5 s");
+        assert!(e.apply(&view(2.0, View { fov: 500.0, ..home })).is_err());
+        // A key past the cut, as a split leaves it, can still be changed.
+        e.cuts[0].keyframes.set(9.0, home, 0.0, &|_, _| None);
+        assert!(e.apply(&view(9.0, View { yaw: 20.0, ..home })).is_ok());
+        let effects = key(KeyOp::Effects { on: Graded::Cut(1), t: 2.0, grade: Grade { contrast: 4.0, ..Grade::default() }, tolerance: 0.01 });
+        assert!(e.apply(&effects).is_err());
+        let auto = Op::Auto(super::super::auto::AutoOp::Add { on: Graded::Cut(1), param: "vignette".into(), from: 1.0, to: 3.0 });
+        e.apply(&auto).unwrap();
+        let point = |v: f64| Op::Auto(super::super::auto::AutoOp::Point { on: Graded::Cut(1), param: "vignette".into(), t: 2.0, v, from: None, tolerance: 0.01 });
+        assert!(e.apply(&point(7.0)).is_err() && e.apply(&point(0.5)).is_ok());
+        check(&e).unwrap();
     }
 
     #[test]

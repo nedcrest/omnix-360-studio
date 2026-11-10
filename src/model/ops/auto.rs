@@ -4,7 +4,7 @@
 //! keys are by their time.
 
 use super::keys::Graded;
-use super::{End, OpError, Outcome, said};
+use super::{End, OpError, Outcome, in_range, said};
 use crate::automation::{AutoClip, AutoPoint};
 use crate::project::{Id, Project};
 use crate::view::Ease;
@@ -160,9 +160,7 @@ pub(super) fn apply(p: &mut Project, op: &AutoOp) -> Result<Outcome, OpError> {
             said(format!("{}: {param} clip at {at:.2} s gone", name(*on)))
         }
         AutoOp::Point { on, param, t, v, from, tolerance } => {
-            if !v.is_finite() {
-                return Err(OpError::Invalid(format!("{param} {v} isn't a number")));
-            }
+            in_range(param, *v)?;
             let o = owner(p, *on)?;
             let i = clip_at(o.clips, param, from.unwrap_or(*t))?;
             let c = &mut o.clips[i];

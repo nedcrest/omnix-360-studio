@@ -174,6 +174,39 @@ impl Edit {
 /// numbers. The tests run it after every op, undo and redo.
 /// Automation clips that have a length and a point, points in time order,
 /// and no two of one value overlapping.
+/// Value `v` of `param`, an effect (`grade::EFFECTS`) or a place value
+/// (`Place::RANGES`), within its range (audit C4: exposure 1000 was taken).
+pub(super) fn in_range(param: &str, v: f64) -> Result<(), OpError> {
+    use crate::overlay::Place;
+    let range = crate::grade::NAMES.iter().position(|n| *n == param).map(|k| crate::grade::RANGES[k]).or_else(|| Place::NAMES.iter().position(|n| *n == param).map(|k| Place::RANGES[k]));
+    match range {
+        Some((lo, hi)) if (lo..=hi).contains(&v) => Ok(()),
+        Some((lo, hi)) => Err(OpError::Invalid(format!("{param} {v} is outside {lo}..{hi}"))),
+        None => Err(OpError::NotFound(format!("value {param:?}"))),
+    }
+}
+
+/// Every value of `grade` within its range.
+pub(super) fn grade_in_range(grade: &crate::grade::Grade) -> Result<(), OpError> {
+    crate::grade::NAMES.iter().zip(grade.values()).try_for_each(|(n, v)| in_range(n, v))
+}
+
+/// Every value of `place` within its range.
+pub(super) fn place_in_range(place: &crate::overlay::Place) -> Result<(), OpError> {
+    crate::overlay::Place::NAMES.iter().zip(place.values()).try_for_each(|(n, v)| in_range(n, v))
+}
+
+/// Time `t` within `span` (clip or own time), give or take `tolerance`:
+/// a new key past its cut or item would never show. (One there already
+/// may be changed: a split leaves each half the other's keys.)
+pub(super) fn in_span(what: &str, t: f64, (from, to): (f64, f64), tolerance: f64) -> Result<(), OpError> {
+    if t >= from - tolerance && t <= to + tolerance {
+        Ok(())
+    } else {
+        Err(OpError::Invalid(format!("{what} at {t:.2} s is outside {from:.2}-{to:.2} s")))
+    }
+}
+
 fn automation(what: &str, clips: &[crate::automation::AutoClip]) -> Result<(), String> {
     for (i, c) in clips.iter().enumerate() {
         if c.to.partial_cmp(&c.from) != Some(std::cmp::Ordering::Greater) || c.points.is_empty() || c.points.windows(2).any(|w| w[0].t > w[1].t) || c.points.iter().any(|q| !q.v.is_finite()) {
@@ -206,6 +239,10 @@ pub fn check(p: &Project) -> Result<(), String> {
             return Err(format!("cut #{}'s markers aren't numbers in time order", c.id));
         }
         automation(&format!("cut #{}", c.id), &c.automation)?;
+        let numbers = c.keyframes.iter().all(|k| [k.t, k.view.yaw, k.view.pitch, k.view.roll, k.view.fov, k.view.correction].iter().all(|v| v.is_finite()));
+        if !numbers || c.effects.iter().any(|k| !k.t.is_finite() || k.grade.values().iter().any(|v| !v.is_finite())) {
+            return Err(format!("cut #{}'s view or effect keys aren't numbers", c.id));
+        }
     }
     for w in SoundTrack::ALL {
         for c in &p.track(w).clips {
@@ -219,6 +256,9 @@ pub fn check(p: &Project) -> Result<(), String> {
     for i in p.overlays.iter().chain(&p.text).flat_map(|l| &l.items) {
         id("an overlay", i.id)?;
         automation(&format!("item #{}", i.id), &i.automation)?;
+        if i.motion.iter().any(|k| !k.t.is_finite() || k.place.values().iter().any(|v| !v.is_finite())) || i.effects.iter().any(|k| !k.t.is_finite() || k.grade.values().iter().any(|v| !v.is_finite())) {
+            return Err(format!("item #{}'s keys aren't numbers", i.id));
+        }
         if i.end <= i.start {
             return Err(format!("overlay #{} ends before it starts", i.id));
         }

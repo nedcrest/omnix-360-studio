@@ -170,16 +170,16 @@ pub(super) fn apply(p: &mut Project, op: &ItemOp) -> Result<Outcome, OpError> {
             }
         }
         &ItemOp::AddLane { track } => {
-            lanes(p, track).push(crate::overlay::Lane::default());
+            shown(p, track).push(crate::overlay::Lane::default());
             said(format!("{track:?} track: lane {} added on top", lanes(p, track).len() - 1))
         }
         ItemOp::LaneName { track, lane, name } => {
-            let l = lanes(p, *track).get_mut(*lane).ok_or_else(|| OpError::NotFound(format!("lane {lane} of the {track:?} track")))?;
+            let l = shown(p, *track).get_mut(*lane).ok_or_else(|| OpError::NotFound(format!("lane {lane} of the {track:?} track")))?;
             l.name = name.as_ref().map(|n| n.trim().to_owned()).filter(|n| !n.is_empty());
             said(format!("{track:?} lane {lane}: {}", l.name.as_deref().unwrap_or("no name")))
         }
         &ItemOp::LaneHidden { track, lane, hidden } => {
-            let l = lanes(p, track).get_mut(lane).ok_or_else(|| OpError::NotFound(format!("lane {lane} of the {track:?} track")))?;
+            let l = shown(p, track).get_mut(lane).ok_or_else(|| OpError::NotFound(format!("lane {lane} of the {track:?} track")))?;
             l.hidden = hidden;
             said(format!("{track:?} lane {lane}: {}", if hidden { "hidden" } else { "shown" }))
         }
@@ -243,6 +243,14 @@ fn lanes(p: &mut Project, track: Track) -> &mut Vec<crate::overlay::Lane> {
 }
 
 /// Which track, lane and place item `id` is in.
+/// `track`'s lanes as the timeline shows them: one at least, made if the
+/// project has none yet (a new project's lane is shown before anything is
+/// on it; naming, hiding or adding over it failed, audit A3).
+fn shown(p: &mut Project, track: Track) -> &mut Vec<crate::overlay::Lane> {
+    p.lane_mut(track, 0);
+    lanes(p, track)
+}
+
 /// Item `id`, a text or a picture (bars take no style).
 fn styleable(p: &mut Project, id: Id) -> Result<&mut Item, OpError> {
     let (track, lane, i) = find(p, id)?;
@@ -262,6 +270,15 @@ mod tests {
     use super::super::{Op, check};
     use super::*;
     use crate::model::edit::Edit;
+
+    #[test]
+    fn a_new_projects_shown_lane_can_be_named_hidden_and_added_over() {
+        let mut e = Edit::default();
+        e.apply(&Op::Item(ItemOp::LaneName { track: Track::Text, lane: 0, name: Some("Titles".into()) })).unwrap();
+        e.apply(&Op::Item(ItemOp::LaneHidden { track: Track::Overlay, lane: 0, hidden: true })).unwrap();
+        e.apply(&Op::Item(ItemOp::AddLane { track: Track::Overlay })).unwrap();
+        assert_eq!((e.text[0].name.as_deref(), e.overlays.len(), e.overlays[0].hidden), (Some("Titles"), 2, true), "the one shown, and one over it");
+    }
 
     #[test]
     fn a_track_holds_lanes_one_over_another() {

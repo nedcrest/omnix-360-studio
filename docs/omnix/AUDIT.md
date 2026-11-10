@@ -30,17 +30,16 @@ items one way each) done.
 
 ## C. Core API gaps (what an agent can't see or do)
 
-C1–C7 done: `describe` says a cut's view, settings and sound, the
-edit's own, a text's look, an item's own time and keys; the aspect is
-an op; ops hold values to their ranges and `apply` warns of what's
-missing; `looks` lists LUTs and fonts; `text_field` sets one field;
-`looks --save-template`; `--cuts` takes ids (C8); the schema gives every op a description and
-the values their ranges and defaults (C9); `omnix frame`, `omnix
-scopes` and `mixcheck --every` (C10); `--ops` on the measuring commands (C11).
-
-| # | What | Fix |
-|---|---|---|
-| C12 | Dailix: a trip's description and tags can't be changed by command after it's made; no `dailix voice use` shortcut; a marking naming a voice that's gone isn't flagged | `dailix about`, `voice use`, a `sheet check` warning |
+All done (C1–C12). `describe` says the edit's aspect, levels and fades,
+a cut's view, settings and sound, a text's look, an item's own time and
+keys; the aspect is an op; ops hold values to their ranges and `apply`
+warns of what's missing; `looks` lists LUTs and fonts and saves
+templates; `text_field` sets one field of a text; `--cuts` takes ids;
+the ops schema describes every op and gives each value its range and
+default; `omnix frame`, `omnix scopes` and `mixcheck --every` measure
+what the player shows; `--ops` prints a measuring command's ops.
+Dailix: `about`, `voice use`, and `sheet check` saying a voice that
+isn't made.
 
 ## D. Stale comments and leftovers
 

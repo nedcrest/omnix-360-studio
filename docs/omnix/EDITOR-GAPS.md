@@ -109,6 +109,7 @@ done in part stays here until its last card is done.
 | 87 | Style looks (old film, VHS, neo-cyberpunk) for a video, an overlay picture or text; animation presets for text and pictures | [done](EDITOR-GAPS-DONE.md) |
 | 88 | The Osmo 360 II: its calibration and 8K50 decoding | below |
 | 89 | Auto colour: exposure and white balance set from the picture (or by an AI), keyed where the camera misses | [done](EDITOR-GAPS-DONE.md) |
+| 99 | Sync lock on a sound track: when the picture's edit gets shorter or longer, the music after that point moves with it | below |
 | 98 | The Effects panel's extended view: its groups as framed blocks side by side, for a wide monitor | [done](EDITOR-GAPS-DONE.md) |
 | 97 | The text and overlay lanes: names, dragging an item between them, hiding one | [done](EDITOR-GAPS-DONE.md) |
 | 96 | A timeline that scrolls up and down: a «Scrollable» switch keeps the lanes' sizes, a vertical scroller, Alt+wheel | below |
@@ -280,6 +281,15 @@ effects, and **join** them (e.g. merge cuts of one clip back into one, or
 group them so they move together). Needs a selection set instead of one
 index, and a choice of what "join" means: merging neighbours from the same
 clip is clear; a group of different clips is a format change (a group id).
+
+**Groups with colours** (user, 2026-11-11, after cutting to beats):
+a group is any clips — cuts, sound clips, text, pictures — each group
+with a colour of its own: its clips framed in it and/or a band of it
+behind them on the timeline. A click on one selects the group; delete,
+effects, a move where the magnetic edit allows. With sync lock (99) a
+group can later mean «these cuts and this song move together». The
+format: a group id on cuts, sound clips and items, and the project's
+groups (name, colour); after 99.
 
 ### 9. Timeline ease and accessibility — research done (user, 2026-10-23)
 
@@ -1401,6 +1411,30 @@ lanes fit the place as today.
 - The header column scrolls with the lanes; the ruler stays on top.
 - Alt + wheel scrolls; the wheel alone keeps what it does now.
 - Milestone «Зручний таймлайн».
+
+### 99. Sync lock on a sound track — medium (user, 2026-11-11)
+
+The user cut a film to a song's beats (gap 13), then trimmed a few
+seconds off the first cut's start: the edit is magnetic, so every cut
+after it moved left, while the song stayed where it was — every cut
+fell off its beat.
+
+Agreed (2026-11-11, Claude's plan, the user approved): **sync lock**,
+Premiere's name. A lock on a sound track's head; while it's on, an edit
+that makes the picture shorter or longer at some point (a cut trimmed,
+deleted, added, a crossfade changed) moves that track's clips after the
+point by the same amount. A clip across the point moves too and loses
+(or gets back) as much at its head, so what's after the point stays
+under the same pictures.
+
+- A rule of the core (`Project::ripple(at, by)` or so), run inside the
+  cut ops when a track is locked; a setting of the track (`Music::sync`)
+  and an op; `describe` says it. Tests: trimming the first cut's start
+  keeps a beat under the second cut's start.
+- Weighed: FCP's connected clips (a song pinned to one cut: a song under
+  many cuts pins badly) and groups (gap 8: they need the same shift to
+  keep a song with its cuts). Sync lock first; groups use it later.
+- Milestone «Ритм і переходи».
 
 ## Format rule for all of these
 

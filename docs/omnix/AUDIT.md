@@ -12,12 +12,12 @@ and Dailix).
 
 ## B. Design (`code-rules`)
 
-B1 (the grade's values by name, one `EFFECTS` table) and B2 (tracks and
-items one way each) done.
+B1 (the grade's values by name, one `EFFECTS` table), B2 (tracks and
+items one way each) and B3 (the timeline's `LaneHead`, one
+`active_lane`) done.
 
 | # | What | Fix |
 |---|---|---|
-| B3 | The timeline restates the lane model (`lane_meta` tuples); «active lane, clamped» twice; a dead `.max(1)` twice | Hold a `LaneHead` from `Lane`; one `active_lane`; drop the dead clamps |
 | B4 | Where a copied-in picture goes, three ways; «inside the project» checked twice | Everything through `folder_for`; one `App::inside_project` |
 | B5 | Derived values written out: a music clip's own time ×7, the levels' span ×3 (auto colour must match `Grade::apply`), `luma` ×4, `1.0 / fps()` ×11 | Methods: `MusicClip::local`, `Grade::level`, one `luma`, `App::frame_len` |
 | B6 | The film's fades drawn by `effects_view::whole_edit` for the Transitions panel, on `EffectMsg` | Move them into `transitions_panel.rs` |

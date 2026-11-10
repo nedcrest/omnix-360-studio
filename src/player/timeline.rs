@@ -338,6 +338,20 @@ impl MusicBlock {
     }
 }
 
+/// What a lane's head shows of its `Lane`: its name and whether it's
+/// hidden.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct LaneHead {
+    pub name: Option<String>,
+    pub hidden: bool,
+}
+
+impl From<&crate::overlay::Lane> for LaneHead {
+    fn from(lane: &crate::overlay::Lane) -> LaneHead {
+        LaneHead { name: lane.name.clone(), hidden: lane.hidden }
+    }
+}
+
 pub struct Timeline {
     pub blocks: Vec<Block>,
     /// The sound lanes, in `SoundTrack::ALL`'s order.
@@ -389,9 +403,9 @@ pub struct Timeline {
     pub held: iced::keyboard::Modifiers,
     /// The lane new things go on, of the overlay track and of the text's.
     pub active_lanes: [usize; 2],
-    /// Each lane's name and whether it's hidden (gap 97), of the overlay
-    /// track and of the text's, lane by lane.
-    pub lane_meta: [Vec<(Option<String>, bool)>; 2],
+    /// Each lane's head (gap 97), of the overlay track and of the text's,
+    /// lane by lane.
+    pub lane_heads: [Vec<LaneHead>; 2],
     /// The range marked on the ruler (gap 92), edit time.
     pub range: Option<(f64, f64)>,
     /// A picture carried from the bin (gap 91).
@@ -1021,7 +1035,7 @@ impl Timeline {
         // A track's lanes, the top one first (what's above is drawn over);
         // folded, the top one alone, a thin row of every lane's items.
         let group = |track: Track| -> Vec<iced::Element<'a, Message>> {
-            let n = t.track_blocks(track).len().max(1);
+            let n = t.track_blocks(track).len();
             let folded = OverlayLane(t.clone(), track, n - 1).folded();
             (0..n).rev().take(if folded { 1 } else { n }).map(|l| lane(track, l)).collect()
         };
@@ -1482,10 +1496,11 @@ impl OverlayLane {
         (self.1, self.2, i)
     }
 
-    /// How many lanes its track has, and whether this is the top one (it
-    /// carries the track's name, fold and «+»).
+    /// How many lanes its track has (one at least: `App::shown_lanes`), and
+    /// whether this is the top one (it carries the track's name, fold and
+    /// «+»).
     fn count(&self) -> usize {
-        self.0.track_blocks(self.1).len().max(1)
+        self.0.track_blocks(self.1).len()
     }
     fn top(&self) -> bool {
         self.2 + 1 == self.count()
@@ -1514,8 +1529,8 @@ impl OverlayLane {
     }
 
     /// Its name and whether it's hidden (gap 97).
-    fn meta(&self) -> (Option<&str>, bool) {
-        self.0.lane_meta[super::overlay_ui::track_index(self.1)].get(self.2).map_or((None, false), |(n, h)| (n.as_deref(), *h))
+    fn head(&self) -> LaneHead {
+        self.0.lane_heads[self.1.index()].get(self.2).cloned().unwrap_or_default()
     }
 
     /// The buttons in its head, right to left, and where they sit: the
@@ -1680,7 +1695,7 @@ impl OverlayLane {
     fn tag_name(&self, name: &str) -> String {
         let all = self.0.track_blocks(self.1).iter().map(Vec::len).sum::<usize>();
         // The user's name for it, else its track's (numbered of several).
-        let label = match (self.meta().0, self.count()) {
+        let label = match (self.head().name.as_deref(), self.count()) {
             (Some(own), _) => own.to_owned(),
             (None, 1) => name.to_owned(),
             (None, _) => format!("{name} {}", self.2 + 1),
@@ -1757,7 +1772,7 @@ impl canvas::Program<Message> for OverlayLane {
                     OverlayHit::Fold => Message::Fold(self.fold_lane(), !self.folded()),
                     OverlayHit::Sign(Sign::Add) => Message::LaneAdd(self.1),
                     OverlayHit::Sign(Sign::Remove) => Message::LaneRemove(self.1, self.2),
-                    OverlayHit::Sign(Sign::Eye) => Message::LaneHide(self.1, self.2, !self.meta().1),
+                    OverlayHit::Sign(Sign::Eye) => Message::LaneHide(self.1, self.2, !self.head().hidden),
                     OverlayHit::LanesFold(motion) => Message::Fold(self.fold_of(motion), !self.lanes(motion).folded),
                     OverlayHit::Auto(motion, h) => match self.lanes(motion).press(h, p, t.held.command()) {
                         Ok(d) => {
@@ -1860,7 +1875,7 @@ impl canvas::Program<Message> for OverlayLane {
             }
             let selected = Some(self.r(i)) == t.picked.item();
             // A hidden lane's items faint: they aren't in the picture.
-            let colour = if self.meta().1 { colour.scale_alpha(0.35) } else { colour };
+            let colour = if self.head().hidden { colour.scale_alpha(0.35) } else { colour };
             coloured_block(&mut frame, (l, r), (top, h), colour, selected);
             if selected {
                 // A picture or text has no end of its own: footage both ways
@@ -1916,12 +1931,12 @@ impl canvas::Program<Message> for OverlayLane {
         head_cell(&mut frame, 0.0, self.height(), colour);
         lane_tag(&mut frame, &self.tag_name(name), colour, top + h / 2.0);
         // The lane new things go on, of several: a bar at its head's edge.
-        if self.count() > 1 && self.0.active_lanes[super::overlay_ui::track_index(self.1)].min(self.count() - 1) == self.2 {
+        if self.count() > 1 && super::overlay_ui::active_lane(&self.0.active_lanes, self.1, self.count()) == self.2 {
             frame.fill(&Path::rectangle(Point::new(0.0, 0.0), Size::new(3.0, self.height())), colour);
         }
         // The track's «+» on its top lane; «×» on an empty one of several.
         let ink = palette.background.base.text.scale_alpha(0.75);
-        let hidden = self.meta().1;
+        let hidden = self.head().hidden;
         for (s, r) in self.signs() {
             let glyph = match s {
                 Sign::Add => "+",
@@ -2854,7 +2869,7 @@ mod tests {
             sounds,
             picked: Picked::None,
             video: 10.0, clips_db: 0.0, duration: 10.0, start: 0.0, span: 10.0, position: 0.0,
-            current: None, overlays: vec![], texts: vec![], drag_epoch: 0, step_note: None,
+            current: None, overlays: vec![vec![]], texts: vec![vec![]], drag_epoch: 0, step_note: None,
             rows: Rows::new(1.0, false, Folds { sfx2: false, ..Folds::default() }, 0),
             listen: Default::default(),
             check_marks: vec![],
@@ -2863,10 +2878,10 @@ mod tests {
             snapping: true,
             snap_line: None,
             auto_lanes: vec![],
-            overlay_auto: vec![],
-            text_auto: vec![],
+            overlay_auto: vec![vec![]],
+            text_auto: vec![vec![]],
             active_lanes: [0; 2],
-            lane_meta: [vec![], vec![]],
+            lane_heads: [vec![LaneHead::default()], vec![LaneHead::default()]],
             range: None,
             carrying: None,
             held: Default::default(),

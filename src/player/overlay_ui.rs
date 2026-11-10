@@ -103,7 +103,7 @@ impl App {
     /// Which lane of `track` something added goes on (gap 70): the
     /// selected item's, if it's on that track, else the active one.
     pub(super) fn adding_lane(&self, track: crate::overlay::Track) -> usize {
-        let active = self.active_lanes[track_index(track)].min(self.shown_lanes(track) - 1);
+        let active = active_lane(&self.active_lanes, track, self.shown_lanes(track));
         self.selection.item(&self.edit).filter(|r| r.0 == track).map_or(active, |r| r.1)
     }
 
@@ -140,7 +140,7 @@ impl App {
         self.folds.overlay = false;
         if let Some(id) = self.op(Op::Item(ItemOp::AddPictures { inputs: vec![input], at, len: ffmpeg::PICTURE_SECONDS, lane })).and_then(|o| o.made) {
             self.selection = Selection::Item(id);
-            self.active_lanes[track_index(crate::overlay::Track::Overlay)] = lane;
+            self.active_lanes[crate::overlay::Track::Overlay.index()] = lane;
         }
     }
 
@@ -205,7 +205,7 @@ impl App {
                 match i {
                     Some(r) => {
                         self.selection = Selection::item_at(&self.edit, r);
-                        self.active_lanes[track_index(r.0)] = r.1;
+                        self.active_lanes[r.0.index()] = r.1;
                     }
                     // An empty spot on its lane: only an item lets go.
                     None if self.selection.item(&self.edit).is_some() => self.selection = Selection::None,
@@ -214,7 +214,7 @@ impl App {
             }
             Message::LaneAdd(track) => {
                 self.op(Op::Item(ItemOp::AddLane { track }));
-                self.active_lanes[track_index(track)] = self.edit.track_lanes(track).len() - 1;
+                self.active_lanes[track.index()] = self.edit.track_lanes(track).len() - 1;
             }
             Message::LaneRename(track, lane) => {
                 let now = self.edit.lane(track, lane).and_then(|l| l.name.clone()).unwrap_or_default();
@@ -233,7 +233,7 @@ impl App {
                 self.op(Op::Item(ItemOp::LaneHidden { track, lane, hidden }));
             }
             Message::LaneActive(track, lane) => {
-                self.active_lanes[track_index(track)] = lane;
+                self.active_lanes[track.index()] = lane;
                 if self.selection.item(&self.edit).is_some() {
                     self.selection = Selection::None;
                 }
@@ -241,7 +241,7 @@ impl App {
             Message::LaneRemove(track, lane) => {
                 if self.op(Op::Item(ItemOp::RemoveLane { track, lane })).is_some() {
                     // What points at a lane follows the lanes down (audit A5).
-                    let active = &mut self.active_lanes[track_index(track)];
+                    let active = &mut self.active_lanes[track.index()];
                     *active = after_removing(*active, lane).unwrap_or(lane.saturating_sub(1));
                     self.extra_lanes = std::mem::take(&mut self.extra_lanes)
                         .into_iter()
@@ -255,7 +255,7 @@ impl App {
             Message::OverlayToLane(r, at, lane) => {
                 if let Some(item) = self.edit.item(r).map(|it| it.id) {
                     self.op(Op::Item(ItemOp::Move { item, at, lane: Some(lane) }));
-                    self.active_lanes[track_index(r.0)] = lane;
+                    self.active_lanes[r.0.index()] = lane;
                 }
                 // The drag ends as any does: one step, the snap line gone
                 // (audit A12).
@@ -332,10 +332,12 @@ impl App {
     }
 }
 
-/// `track`'s place in `App::active_lanes`.
-pub(super) fn track_index(track: crate::overlay::Track) -> usize {
-    track.index()
+/// The lane new things go on of `track`'s `count` (one at least): the
+/// one made active, or the top one if that's gone.
+pub(super) fn active_lane(active: &[usize; 2], track: crate::overlay::Track, count: usize) -> usize {
+    active[track.index()].min(count - 1)
 }
+
 
 /// Lane `l`'s number once lane `removed` is taken away: one down above it,
 /// none for itself.
@@ -349,6 +351,15 @@ fn after_removing(l: usize, removed: usize) -> Option<usize> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn the_active_lane_is_the_top_one_once_its_own_is_gone() {
+        use crate::overlay::Track;
+        let active = [3, 0];
+        assert_eq!((super::active_lane(&active, Track::Overlay, 5), super::active_lane(&active, Track::Overlay, 2), super::active_lane(&active, Track::Text, 1)), (3, 1, 0));
+        let lane = crate::overlay::Lane { name: Some("Subtitles".into()), hidden: true, ..Default::default() };
+        assert_eq!(super::super::timeline::LaneHead::from(&lane), super::super::timeline::LaneHead { name: Some("Subtitles".into()), hidden: true });
+    }
+
     #[test]
     fn lanes_above_a_removed_one_move_down() {
         assert_eq!([0, 1, 2].map(|l| super::after_removing(l, 1)), [Some(0), None, Some(1)]);

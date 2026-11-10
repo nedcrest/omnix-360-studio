@@ -31,7 +31,7 @@ const GROUPS: &[(&str, &[(&str, &str)])] = &[
             ("M", "a marker at the playhead"),
             ("Alt+[ / Alt+]", "trim the start / end to the playhead"),
             ("D", "select the cut under the playhead"),
-            ("Alt+← / Alt+→", "move the selected cut one place"),
+            ("Alt+← / Alt+→", "move the selected cut one place; a selected song 1 ms (with Shift 10 ms), to line a beat up"),
             ("Alt+↑ / Alt+↓", "the selected text or picture a lane up / down (a new lane on top)"),
             ("Del", "delete what's selected (Shift+Del: the cut)"),
             ("Ctrl+G / Ctrl+Shift+G", "group the clips selected / undo the selected clip's group"),

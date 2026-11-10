@@ -193,6 +193,14 @@ impl App {
         Key::Named(Named::Space) if mods.shift() && self.range.is_some() => return self.update(Message::PlayRange),
         Key::Named(Named::Space) => return self.update(Message::Toggle),
         // The selected cut one place left or right (a drag's key route).
+        // A sound clip a hair along, to line its beat up with a cut: 1 ms,
+        // with Shift 10 (gap 13).
+        Key::Named(arrow @ (Named::ArrowLeft | Named::ArrowRight)) if mods.alt() && self.selection.clip(&self.edit).is_some() => {
+            let (which, i) = self.selection.clip(&self.edit).expect("a clip selected");
+            let by = if mods.shift() { 0.01 } else { 0.001 } * if arrow == Named::ArrowLeft { -1.0 } else { 1.0 };
+            let at = (self.edit.track(which).clips[i].at + by).max(0.0);
+            return Task::batch([self.update(Message::MusicMove(which, i, at, false)), self.update(Message::ScrubDone)]);
+        }
         Key::Named(arrow @ (Named::ArrowLeft | Named::ArrowRight)) if mods.alt() => {
             let Some(i) = self.selection.cut(&self.edit) else { return Task::none() };
             let to = if arrow == Named::ArrowLeft { i.checked_sub(1) } else { Some(i + 2).filter(|&to| to <= self.edit.cuts.len()) };

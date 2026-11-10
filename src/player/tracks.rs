@@ -53,6 +53,15 @@ impl App {
         )
     }
 
+    /// How far music clip `i` would move for its nearest shown beat to
+    /// land on the playhead (`beats::pull_to`): none without one in reach.
+    pub(super) fn beat_pull(&self, i: usize) -> Option<f64> {
+        let c = self.edit.music.clips.get(i)?;
+        let shown = c.beats?;
+        let hits = self.hits.get(&c.input)?.as_ref()?;
+        crate::beats::pull_to(hits, shown.threshold, c.local(self.position()))
+    }
+
     /// Reads the beats of every song whose clip shows them (gap 13), each
     /// file once, off the UI thread.
     pub(super) fn read_beats(&mut self) -> Task<Message> {
@@ -176,6 +185,15 @@ impl App {
             Message::LevelDone => self.edit.commit(),
             Message::TrackSync(track, on) => {
                 self.op(Op::Sound(SoundOp::SyncLock { track, on }));
+            }
+            Message::PullBeat(i) => {
+                self.sound_menu = None;
+                if let Some(shift) = self.beat_pull(i) {
+                    let clip = self.edit.music.clips[i].id;
+                    let at = self.edit.music.clips[i].at + shift;
+                    self.op(Op::Clip(ClipOp::Move { clip, at, overlap: false }));
+                    self.move_also(shift);
+                }
             }
             Message::ClipBeats(clip, beats, press) => {
                 self.edit.begin();

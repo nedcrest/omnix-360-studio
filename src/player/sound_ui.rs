@@ -336,7 +336,10 @@ impl App {
                 if let Own::Clip(SoundTrack::Music, i) = own
                     && let Some(c) = self.edit.music.clips.get(i)
                 {
-                    let beats = beat_entries(c.id, c.beats);
+                    let mut beats = beat_entries(c.id, c.beats);
+                    if let Some(shift) = self.beat_pull(i) {
+                        beats.push(item(format!("Pull the nearest beat to the playhead ({:+.0} ms)", shift * 1000.0), Message::PullBeat(i)));
+                    }
                     items.push(rule::horizontal(1).into());
                     items.push(container(text("Beats").size(11).style(text::secondary)).width(Length::Fill).padding([4, 10]).into());
                     (rows.0, rows.1, rows.2) = (rows.0 + beats.len() + 1, rows.1 + 1, rows.2 + 1);
@@ -538,6 +541,25 @@ mod tests {
         app.op(Op::Cut(CutOp::Trim { cut, end: End::In, t: 0.5, most: 2.0 }));
         assert_eq!((app.edit.music.clips[0].at, app.edit.music.clips[0].start), (0.0, 0.5), "the song gave up its head with the picture");
         assert!(app.edit.undo() && app.edit.music.clips[0].start == 0.0, "one undo step with the trim");
+    }
+
+    #[test]
+    fn a_songs_beat_is_pulled_onto_the_playhead_and_nudged_by_keys() {
+        use super::super::Message;
+        use crate::beats::Beat;
+        let mut app = app();
+        app.edit.music.clips.push(crate::project::MusicClip { input: "song.wav".into(), at: 0.0, end: 9.0, beats: Some(crate::project::Beats { threshold: 0.0, snap: true }), ..Default::default() });
+        app.edit.settle_ids();
+        app.hits.insert("song.wav".into(), Some(std::sync::Arc::new(vec![Beat { t: 0.013, strength: 1.0 }])));
+        // The playhead at the edit's start (no clip open): the beat 13 ms in.
+        assert!((app.beat_pull(0).unwrap() + 0.013).abs() < 1e-12);
+        let _ = app.update(Message::PullBeat(0));
+        assert!(app.edit.music.clips[0].at.abs() < 1e-12, "at the edit's start: it can't go before it");
+        app.edit.music.clips[0].at = 1.0;
+        app.selection = crate::model::selection::Selection::clip_at(&app.edit, SoundTrack::Music, 0);
+        let _ = app.key(iced::keyboard::Key::Named(iced::keyboard::key::Named::ArrowRight), iced::keyboard::Modifiers::ALT);
+        let _ = app.key(iced::keyboard::Key::Named(iced::keyboard::key::Named::ArrowRight), iced::keyboard::Modifiers::ALT | iced::keyboard::Modifiers::SHIFT);
+        assert!((app.edit.music.clips[0].at - 1.011).abs() < 1e-9, "{}", app.edit.music.clips[0].at);
     }
 
     #[test]

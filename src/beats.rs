@@ -124,6 +124,18 @@ pub fn read(path: &Path) -> Result<Vec<Beat>> {
     Ok(hits(&rises, Some(&at)))
 }
 
+/// How far a song shown at `threshold` moves so its hit nearest `at`
+/// (its file's time) lands right on `at`: seconds, within `REACH` of it;
+/// none without such a hit. A cut falls on a frame, a song's hit between
+/// two: moving the song by a part of a frame lines them up exactly (the
+/// user, 2026-11-11).
+pub fn pull_to(beats: &[Beat], threshold: f64, at: f64) -> Option<f64> {
+    at_least(beats, threshold).map(|b| at - b.t).filter(|d| d.abs() <= REACH).min_by(|a, b| a.abs().total_cmp(&b.abs()))
+}
+
+/// How far `pull_to` looks for a hit, seconds.
+pub const REACH: f64 = 0.25;
+
 /// The hits at `threshold` (0..1) or stronger.
 pub fn at_least(beats: &[Beat], threshold: f64) -> impl Iterator<Item = &Beat> {
     beats.iter().filter(move |b| b.strength as f64 >= threshold)
@@ -182,6 +194,15 @@ mod tests {
             assert!(off(&beats) < 0.002, "a kick at {want}: {beats:?}");
             assert!(off(&without) > off(&beats), "closer than the step's start");
         }
+    }
+
+    #[test]
+    fn a_song_is_pulled_so_its_nearest_hit_lands_on_the_point() {
+        let beats = [(1.0, 0.9), (1.5, 0.2), (2.0, 0.8)].map(|(t, strength)| Beat { t, strength });
+        assert_eq!(pull_to(&beats, 0.5, 1.52), None, "the strong ones past reach");
+        assert!((pull_to(&beats, 0.0, 1.52).unwrap() - 0.02).abs() < 1e-12, "the weak one when it's shown");
+        assert!((pull_to(&beats, 0.5, 1.9).unwrap() + 0.1).abs() < 1e-12, "back onto the point");
+        assert_eq!(pull_to(&beats, 0.5, 5.0), None);
     }
 
     #[test]

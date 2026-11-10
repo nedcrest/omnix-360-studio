@@ -1,0 +1,3 @@
+# A function past 80 lines is split before more is added to it
+# (code-rules: "Functions stay short"). The lint is turned on in Cargo.toml.
+too-many-lines-threshold = 80

@@ -108,6 +108,38 @@ And two of process:
 - **Checks on the test project**: `<drive>/DAILIX/2026-08_test` (CONTEXT),
   every lane filled; add to its edit what a new feature needs to be seen.
 
+## Done means done
+
+The audit of 2026-11-10 took about twelve hours to work off, and half of
+it was steps skipped while building fast: a setting with no op or no
+`describe` line, a rule in a handler with no test, a function grown past
+80 lines. So a card goes to «чекає перевірки» only when, for what it
+added (user, 2026-11-11):
+
+- [ ] every change to the project is an op, range-checked, with a test;
+- [ ] `omnix describe` says the new value; its names, keys and ranges
+      are listed by a command (`looks`, `ops-schema`);
+- [ ] every rule it added (what a key, a menu, a drop does) is a pure
+      function with a test, the window only calling it;
+- [ ] no function it touched is over 80 lines (clippy's `too_many_lines`
+      says so: on in `Cargo.toml`, threshold in `clippy.toml`);
+- [ ] CPU and GPU agree where it draws, with a test;
+- [ ] no warning in a file it touched, old ones cleared in their own
+      commit.
+
+The 33 long functions there were when the lint came in are split as
+they're next touched, not in a package.
+
+## Audits: small and often
+
+- Every two or three days of features, a small audit: one or two review
+  agents over what changed since the last (`git log`), not five over
+  everything. An hour, not half a day.
+- Its findings sorted, not all worked off at once: bugs now; a gap in
+  the core API when a feature needs it; a refactor when its file is
+  next touched. Two or three hours at most; the rest stays in
+  `AUDIT.md`, each line with where it belongs.
+
 ## Before each commit
 
 ```sh

@@ -720,7 +720,7 @@ pub(crate) fn run() -> Result<()> {
         Cmd::Beats { song, threshold } => {
             let beats = crate::beats::read(&song)?;
             for b in crate::beats::at_least(&beats, threshold) {
-                println!("{:8.2} s  {:.2}", b.t, b.strength);
+                println!("{:8.3} s  {:.2}", b.t, b.strength);
             }
             eprintln!("{} of {} hits at {threshold} or stronger", crate::beats::at_least(&beats, threshold).count(), beats.len());
         }

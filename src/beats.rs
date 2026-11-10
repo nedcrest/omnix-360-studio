@@ -8,7 +8,9 @@
 //!
 //! ffmpeg has no beat tracker, so this is plain counting on mono samples;
 //! the rise curve is kept in the clip cache, the peaks picked from it each
-//! time (cheap) as the threshold changes.
+//! time (cheap) as the threshold changes. A hit's time is then found to
+//! the sample within its step (`onsets`): a step's start put the line up
+//! to 10 ms early, a pixel or two at a close zoom (the user, 2026-11-11).
 
 use anyhow::Result;
 use std::path::Path;
@@ -35,6 +37,24 @@ const APART: f64 = 0.07;
 pub struct Beat {
     pub t: f64,
     pub strength: f32,
+}
+
+/// Where in each `STEP` of `samples` (mono, `rate` a second) a hit would
+/// start, seconds in the song: the first sample past half the way from
+/// the level before (the step two back) to the loudest of this step and
+/// the one before; a hit picked at a step takes its time from here.
+pub fn onsets(samples: &[f32], rate: f64) -> Vec<f32> {
+    let per = ((STEP * rate).round() as usize).max(1);
+    let loudest = |from: usize, to: usize| samples[from.min(samples.len())..to.min(samples.len())].iter().fold(0.0f32, |m, v| m.max(v.abs()));
+    (0..samples.len().div_ceil(per))
+        .map(|i| {
+            let (from, to) = (i.saturating_sub(1) * per, (i + 1) * per);
+            let before = loudest(i.saturating_sub(2) * per, from);
+            let half = before + 0.5 * (loudest(from, to) - before);
+            let at = (from..to.min(samples.len())).find(|&n| samples[n].abs() > half).unwrap_or(i * per);
+            (at as f64 / rate) as f32
+        })
+        .collect()
 }
 
 /// How fast the energy rises at each `STEP` of `samples` (mono, `rate`
@@ -66,8 +86,9 @@ pub fn rise(samples: &[f32], rate: f64) -> Vec<f32> {
 
 /// The hits in a rise curve of `STEP` steps: each step that is the
 /// highest within `APART` and stands `ABOVE` its surroundings' mean; its
-/// strength against the strongest hit's.
-pub fn hits(rises: &[f32]) -> Vec<Beat> {
+/// strength against the strongest hit's; its time from `onsets` (the
+/// step's start without them).
+pub fn hits(rises: &[f32], onsets: Option<&[f32]>) -> Vec<Beat> {
     let around = (AROUND / STEP).round() as usize;
     let apart = (APART / STEP).round() as usize;
     let mut found: Vec<(usize, f32)> = Vec::new();
@@ -80,23 +101,27 @@ pub fn hits(rises: &[f32]) -> Vec<Beat> {
         }
     }
     let strongest = found.iter().fold(0.0f32, |m, &(_, s)| m.max(s)).max(f32::MIN_POSITIVE);
-    found.into_iter().map(|(i, s)| Beat { t: i as f64 * STEP, strength: (s / strongest).clamp(0.0, 1.0) }).collect()
+    let at = |i: usize| onsets.and_then(|o| o.get(i)).map_or(i as f64 * STEP, |&t| t as f64);
+    found.into_iter().map(|(i, s)| Beat { t: at(i), strength: (s / strongest).clamp(0.0, 1.0) }).collect()
 }
 
 /// Song `path`'s hits: its rise curve from the clip cache, else read
 /// (a few-minute song in about a second).
 pub fn read(path: &Path) -> Result<Vec<Beat>> {
-    const KIND: &str = "rise";
-    if let Some((rises, _)) = crate::cache::waveform(path, KIND, STEP) {
-        return Ok(hits(&rises));
+    const RISE: &str = "rise";
+    const ONSET: &str = "onset";
+    if let (Some((rises, _)), Some((onsets, _))) = (crate::cache::waveform(path, RISE, STEP), crate::cache::waveform(path, ONSET, STEP)) {
+        return Ok(hits(&rises, Some(&onsets)));
     }
     let samples = crate::ffmpeg::mono(path, RATE, None)?;
     if samples.is_empty() {
         anyhow::bail!("{} has no sound", path.display());
     }
-    let rises = rise(&samples, RATE as f64);
-    crate::cache::store_waveform(path, KIND, STEP, &rises, samples.len() as f64 / RATE as f64);
-    Ok(hits(&rises))
+    let (rises, at) = (rise(&samples, RATE as f64), onsets(&samples, RATE as f64));
+    let length = samples.len() as f64 / RATE as f64;
+    crate::cache::store_waveform(path, RISE, STEP, &rises, length);
+    crate::cache::store_waveform(path, ONSET, STEP, &at, length);
+    Ok(hits(&rises, Some(&at)))
 }
 
 /// The hits at `threshold` (0..1) or stronger.
@@ -109,8 +134,8 @@ mod tests {
     use super::*;
 
     /// `seconds` of soft noise with a kick (a low thump) every half second
-    /// and a softer click a quarter second after each.
-    fn drums(seconds: f64) -> Vec<f32> {
+    /// from `offset` and a softer click a quarter second after each.
+    fn drums(seconds: f64, offset: f64) -> Vec<f32> {
         let rate = RATE as f64;
         let mut seed = 1u32;
         let mut noise = move || {
@@ -120,9 +145,9 @@ mod tests {
         (0..(seconds * rate) as usize)
             .map(|n| {
                 let t = n as f64 / rate;
-                let since = |every: f64, offset: f64| (t - offset).rem_euclid(every);
-                let kick = (-since(0.5, 0.0) * 30.0).exp() * (2.0 * std::f64::consts::PI * 60.0 * since(0.5, 0.0)).sin();
-                let click = (-since(0.5, 0.25) * 200.0).exp() * noise() as f64 * 0.8;
+                let since = |every: f64, at: f64| (t - offset - at).rem_euclid(every);
+                let kick = if t < offset { 0.0 } else { (-since(0.5, 0.0) * 30.0).exp() * (2.0 * std::f64::consts::PI * 60.0 * since(0.5, 0.0)).sin() };
+                let click = if t < offset + 0.25 { 0.0 } else { (-since(0.5, 0.25) * 200.0).exp() * noise() as f64 * 0.8 };
                 (0.6 * kick + click + 0.01 * noise() as f64) as f32
             })
             .collect()
@@ -130,7 +155,8 @@ mod tests {
 
     #[test]
     fn kicks_and_clicks_are_found_where_they_fall_the_kicks_strongest() {
-        let beats = hits(&rise(&drums(4.0), RATE as f64));
+        let samples = drums(4.0, 0.0);
+        let beats = hits(&rise(&samples, RATE as f64), Some(&onsets(&samples, RATE as f64)));
         let near = |t: f64| beats.iter().find(|b| (b.t - t).abs() <= 0.03);
         for k in 1..8 {
             let kick = near(k as f64 * 0.5).unwrap_or_else(|| panic!("a kick at {} s in {beats:?}", k as f64 * 0.5));
@@ -144,8 +170,23 @@ mod tests {
     }
 
     #[test]
+    fn a_hit_is_placed_to_the_sample_not_the_step() {
+        // Kicks and clicks off the steps' grid: 3.7 ms past it.
+        let offset = 0.0037;
+        let samples = drums(4.0, offset);
+        let beats = hits(&rise(&samples, RATE as f64), Some(&onsets(&samples, RATE as f64)));
+        let without = hits(&rise(&samples, RATE as f64), None);
+        for k in 1..8 {
+            let want = offset + k as f64 * 0.5;
+            let off = |bs: &[Beat]| bs.iter().map(|b| (b.t - want).abs()).fold(f64::INFINITY, f64::min);
+            assert!(off(&beats) < 0.002, "a kick at {want}: {beats:?}");
+            assert!(off(&without) > off(&beats), "closer than the step's start");
+        }
+    }
+
+    #[test]
     fn silence_has_no_beats() {
-        assert!(hits(&rise(&vec![0.0; RATE as usize * 2], RATE as f64)).is_empty());
-        assert!(hits(&[]).is_empty());
+        assert!(hits(&rise(&vec![0.0; RATE as usize * 2], RATE as f64), None).is_empty());
+        assert!(hits(&[], None).is_empty());
     }
 }

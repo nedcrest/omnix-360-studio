@@ -109,6 +109,7 @@ done in part stays here until its last card is done.
 | 87 | Style looks (old film, VHS, neo-cyberpunk) for a video, an overlay picture or text; animation presets for text and pictures | [done](EDITOR-GAPS-DONE.md) |
 | 88 | The Osmo 360 II: its calibration and 8K50 decoding | below |
 | 89 | Auto colour: exposure and white balance set from the picture (or by an AI), keyed where the camera misses | below |
+| 98 | The Effects panel's extended view: its groups as framed blocks side by side, for a wide monitor | below |
 | 97 | The text and overlay lanes: names, dragging an item between them, hiding one | below |
 | 96 | A timeline that scrolls up and down: a «Scrollable» switch keeps the lanes' sizes, a vertical scroller, Alt+wheel | below |
 | 95 | Text: a colour of its own, letter spacing, a box behind it; its colour automatable | below |
@@ -1488,6 +1489,16 @@ mouse (today Alt+↑/↓: the lanes are canvases of their own, so a drag
 across them needs the drop worked out at the timeline's level); hiding
 a lane from the picture while editing (not from the export unless
 asked). Milestone «Ефекти, колір і розумний звук».
+
+### 98. The Effects panel's extended view — idea (user, 2026-11-10)
+
+The user: there are many effects now and the panel scrolls; on a big
+wide monitor (his, and others') the panel could take other forms: not a
+column, but the groups as blocks («divs») by category, framed, clearer.
+A switch at the top of the panel, «Extended view»: on, the panel grows
+wider and lays its groups out as framed blocks in columns side by side;
+off, the column as today. Kept in the settings. Milestone «Ефекти, колір
+і розумний звук».
 
 ## Format rule for all of these
 

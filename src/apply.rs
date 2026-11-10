@@ -32,6 +32,31 @@ pub fn run(project: &Path, ops: &Path, output: Option<&Path>) -> Result<()> {
     Ok(())
 }
 
+/// `omnix looks --save-template`: the join before cut `cut` of `project`
+/// saved to the templates' library as `name` (audit C7: the player alone
+/// could).
+pub fn save_template(project: &Path, cut: crate::project::Id, name: &str) -> Result<()> {
+    let p = Project::load(project)?;
+    let t = join_template(&p, cut)?;
+    crate::template::save(name, &t)?;
+    eprintln!("saved the join before cut #{cut} as «{name}»");
+    Ok(())
+}
+
+/// The join before cut `cut` as a template; none before the first cut, nor
+/// a join with nothing on it.
+fn join_template(p: &Project, cut: crate::project::Id) -> Result<crate::template::Template> {
+    let i = p.cut_index(cut).with_context(|| format!("no cut #{cut}"))?;
+    if i == 0 {
+        bail!("cut #{cut} is the first: there's no join before it");
+    }
+    let t = crate::template::Template::of_join(&p.cuts, i);
+    if t.overlap.is_none() && t.edge_out.is_none() && t.edge_in.is_none() {
+        bail!("the join before cut #{cut} is a plain cut: nothing to save");
+    }
+    Ok(t)
+}
+
 /// What the project names that isn't there, or reaches past its file: an
 /// op can't know (audit C4), so it's said after, not refused.
 fn warnings(p: &Project) -> Vec<String> {
@@ -339,6 +364,16 @@ mod tests {
         e.apply(&Op::Key(crate::model::ops::keys::KeyOp::EffectValue { on: crate::model::ops::keys::Graded::Item(1), param: "blur".into(), value: 0.5 })).unwrap();
         let said = super::describe_lines(&e).join("\n");
         assert!(said.contains("own time 0.00-3.00 s") && said.contains("place at 0.00 s (own): {") && said.contains("\"x\":0.25") && said.contains("effects at 0.00 s (own)") && said.contains("\"blur\":0.5"), "{said}");
+    }
+
+    #[test]
+    fn a_joins_template_is_taken_from_its_cut() {
+        use crate::project::{Cut, Project};
+        let mut p = Project { cuts: vec![Cut::new("a.mp4".into(), 0.0, 4.0), Cut::new("b.mp4".into(), 0.0, 4.0)], ..Default::default() };
+        p.settle_ids();
+        assert!(super::join_template(&p, 1).is_err() && super::join_template(&p, 2).is_err() && super::join_template(&p, 9).is_err(), "the first, a plain cut, none");
+        p.cuts[1].crossfade = 0.5;
+        assert_eq!(super::join_template(&p, 2).unwrap().overlap.map(|o| o.seconds), Some(0.5));
     }
 
     #[test]

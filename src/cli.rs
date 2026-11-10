@@ -158,10 +158,18 @@ pub(crate) enum Cmd {
     /// The looks an operation can set (a join's, an edge's, a cut's
     /// style): every one by its key, with its settings (key, range,
     /// default, choices), and the saved transition templates; with
-    /// --template NAME, that template as a `template` op takes it.
+    /// --template NAME, that template as a `template` op takes it; with
+    /// --save-template NAME --project FILE --cut ID, the join before that
+    /// cut (its overlap and the edges on both sides) saved as NAME.
     Looks {
         #[arg(long)]
         template: Option<String>,
+        #[arg(long, requires_all = ["project", "cut"])]
+        save_template: Option<String>,
+        #[arg(long)]
+        project: Option<PathBuf>,
+        #[arg(long)]
+        cut: Option<u32>,
     },
     /// Omnix's icon and a desktop entry, in the menu and on the desktop,
     /// starting this very binary (Linux).
@@ -659,7 +667,8 @@ pub(crate) fn run() -> Result<()> {
         Cmd::Apply { project, ops, output } => crate::apply::run(&project, &ops, output.as_deref())?,
         Cmd::Describe { project } => crate::apply::describe(&project)?,
         Cmd::OpsSchema => println!("{}", crate::apply::schema()),
-        Cmd::Looks { template } => print!("{}", crate::apply::looks(template.as_deref())?),
+        Cmd::Looks { save_template: Some(name), project: Some(project), cut: Some(cut), .. } => crate::apply::save_template(&project, cut, &name)?,
+        Cmd::Looks { template, .. } => print!("{}", crate::apply::looks(template.as_deref())?),
         Cmd::Install => {
             let written = crate::desktop::install("omnix", &crate::desktop::omnix_entry(&std::env::current_exe()?), crate::desktop::OMNIX_ICON).map_err(|e| anyhow::anyhow!("{e}"))?;
             for f in written {

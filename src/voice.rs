@@ -100,13 +100,6 @@ impl Made {
             lufs: None,
         })
     }
-
-    /// Whether it was made by `recipe` as it is from a source this big:
-    /// the source's path and time don't count (a project's footage is a
-    /// copy of the archive's, the same bytes).
-    pub fn is_current(&self, recipe: &Recipe, source_size: u64) -> bool {
-        self.recipe == recipe.name && self.kind == recipe.kind.key() && self.args.iter().map(String::as_str).eq(recipe.args.iter().copied()) && self.source_size == source_size
-    }
 }
 
 /// Voices are compared at this loudness, LUFS: a louder one would pass for
@@ -204,14 +197,14 @@ mod tests {
     }
 
     #[test]
-    fn a_variant_is_current_while_its_recipe_and_source_are() {
+    fn a_variants_record_is_written_and_read_back() {
         let tmp = std::env::temp_dir().join(format!("dailix-voice-{}", std::process::id()));
         std::fs::create_dir_all(&tmp).unwrap();
         let src = tmp.join("a.mp4");
         std::fs::write(&src, b"twelve bytes").unwrap();
         let dnn6 = recipe("dnn6").unwrap();
         let mut m = Made::stamp(dnn6, &src).unwrap();
-        assert!(m.is_current(dnn6, 12) && !m.is_current(dnn6, 13) && !m.is_current(recipe("dnn12").unwrap(), 12));
+        assert_eq!((m.source_size, m.args.join(" ")), (12, "-D -a 6".to_owned()));
         m.lufs = Some(-21.5);
         write_made(&tmp, &BTreeMap::from([("dnn6".to_owned(), m.clone())])).unwrap();
         std::fs::write(tmp.join("dnn6.flac"), b"").unwrap();
@@ -219,7 +212,7 @@ mod tests {
         // As footage-agent wrote it, without a loudness: read.
         let old = r#"{"dnn6": {"recipe": "dnn6", "kind": "dnn", "args": ["-D", "-a", "6"], "note": "n", "source": "/x/a.mp4", "source_size": 12, "source_mtime": 1}}"#;
         std::fs::write(tmp.join(MADE), old).unwrap();
-        assert!(made(&tmp)["dnn6"].is_current(dnn6, 12));
+        assert_eq!((made(&tmp)["dnn6"].source_size, made(&tmp)["dnn6"].lufs), (12, None));
         // Two recorded one after another: both kept.
         record(&tmp, "eq", Made::stamp(recipe("eq").unwrap(), &src).unwrap()).unwrap();
         assert_eq!(made(&tmp).keys().collect::<Vec<_>>(), ["dnn6", "eq"]);

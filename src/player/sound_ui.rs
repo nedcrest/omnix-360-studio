@@ -318,58 +318,8 @@ impl App {
         let mut rows = (0usize, 0usize, 0usize);
         match menu {
             Menu::Own(own) => {
-                let Some((keys, _)) = self.edit.own_line(own) else { return below };
-                let (gain, mute, even, loudness, low_cut, clean) = match own {
-                    Own::Cut(i) => self.edit.cuts.get(i).map(|c| (c.gain, c.mute, c.even, c.loudness, c.low_cut, c.clean)),
-                    Own::Clip(which, i) => self.edit.track(which).clips.get(i).map(|c| (c.gain, c.mute, c.even, c.loudness, c.low_cut, c.clean)),
-                }
-                .unwrap_or_default();
-                // In groups, each under a small heading (gap 47); a toggle
-                // keeps its words and shows its state by a tick.
-                let tick = |on: bool, label: &str| format!("{}{label}", if on { "✓ " } else { "" });
-                let mut level = vec![sound(format!("Lower for voice-over ({VOICE_OVER_DIP:+.0} dB)"), SoundMsg::Lower(own))];
-                if (gain - normal_gain(loudness)).abs() > 0.05 {
-                    level.push(sound(format!("Back to normal level ({:+.1} dB)", normal_gain(loudness)), SoundMsg::Restore(own)));
-                }
-                level.push(sound(tick(mute, "Mute"), SoundMsg::Mute(own, !mute)));
-                level.push(sound("Normalize…".into(), SoundMsg::Open(Scope::Own(own))));
-                let mut line = Vec::new();
-                // The line shows once it has points; then a click on it adds one.
-                if keys.is_empty() {
-                    line.push(sound("Show volume line".into(), SoundMsg::ShowLine(own)));
-                }
-                if self.edit.before(own).is_some() {
-                    line.push(sound("Continue the level of the one before".into(), SoundMsg::Continue(own)));
-                }
-                line.push(sound("Back to the original".into(), SoundMsg::Original(own)));
-                let clean_up = vec![
-                    sound(tick(even, "Even out quiet and loud"), SoundMsg::Even1(own, !even)),
-                    sound(tick(low_cut, "Cut the low rumble (wind)"), SoundMsg::LowCut(own, !low_cut)),
-                    sound(tick(clean, "Clean up steady noise"), SoundMsg::Clean(own, !clean)),
-                ];
-                let mut place = Vec::new();
-                // A sound split from its picture (a J- or L-cut, or short).
-                if let Own::Cut(i) = own
-                    && self.edit.cuts.get(i).is_some_and(|c| c.sound_before != 0.0 || c.sound_after != 0.0)
-                {
-                    place.push(sound("Sound back to the picture's edges".into(), SoundMsg::ToPicture(i)));
-                }
-                if let Own::Clip(which @ (SoundTrack::Sfx | SoundTrack::Sfx2), i) = own {
-                    let to = if which == SoundTrack::Sfx { "SFX 2" } else { "SFX" };
-                    place.push(sound(format!("Move to {to}"), SoundMsg::OtherSfx(which, i)));
-                }
-                // Auto-duck where a song is right-clicked too, not only on
-                // the lane's empty stretch or in the Audio panel.
-                let mut music = Vec::new();
-                if let Own::Clip(SoundTrack::Music, _) = own {
-                    music.push(item(format!("Lower the music under speech (−{:.0} dB)", self.duck_db), Message::Duck));
-                }
-                let info = match own {
-                    Own::Cut(i) => super::info::Of::Cut(i),
-                    Own::Clip(which, i) => super::info::Of::Music(which, i),
-                };
-                let groups = [("Level", level), ("Volume line", line), ("Clean up", clean_up), ("Placement", place), ("Music", music), ("", vec![item("Info".into(), Message::Info(info))])];
-                for (heading, group) in groups.into_iter().filter(|(_, g)| !g.is_empty()) {
+                let Some(groups) = own_entries(&self.edit, own, self.duck_db) else { return below };
+                for (heading, group) in groups {
                     if !items.is_empty() {
                         items.push(rule::horizontal(1).into());
                         rows.1 += 1;
@@ -379,7 +329,7 @@ impl App {
                         rows.2 += 1;
                     }
                     rows.0 += group.len();
-                    items.extend(group);
+                    items.extend(group.into_iter().map(|(label, msg)| item(label, msg)));
                 }
             }
             Menu::Track(which) => {
@@ -421,6 +371,67 @@ impl App {
 
 }
 
+/// A group of a menu: its heading (none: empty) and each entry's words
+/// and what it does.
+type MenuGroup = (&'static str, Vec<(String, Message)>);
+
+/// The right-click menu of `own`'s sound, in groups under their
+/// headings (gap 47), the empty ones left out: each entry's words and
+/// what it does. A toggle keeps its words and shows its state by a tick.
+/// None if `own` isn't there.
+fn own_entries(p: &crate::project::Project, own: Own, duck_db: f64) -> Option<Vec<MenuGroup>> {
+    let (keys, _) = p.own_line(own)?;
+    let (gain, mute, even, loudness, low_cut, clean) = match own {
+        Own::Cut(i) => p.cuts.get(i).map(|c| (c.gain, c.mute, c.even, c.loudness, c.low_cut, c.clean)),
+        Own::Clip(which, i) => p.track(which).clips.get(i).map(|c| (c.gain, c.mute, c.even, c.loudness, c.low_cut, c.clean)),
+    }?;
+    let sound = |label: String, msg: SoundMsg| (label, Message::Sound(msg));
+    let tick = |on: bool, label: &str| format!("{}{label}", if on { "✓ " } else { "" });
+    let mut level = vec![sound(format!("Lower for voice-over ({VOICE_OVER_DIP:+.0} dB)"), SoundMsg::Lower(own))];
+    if (gain - normal_gain(loudness)).abs() > 0.05 {
+        level.push(sound(format!("Back to normal level ({:+.1} dB)", normal_gain(loudness)), SoundMsg::Restore(own)));
+    }
+    level.push(sound(tick(mute, "Mute"), SoundMsg::Mute(own, !mute)));
+    level.push(sound("Normalize…".into(), SoundMsg::Open(Scope::Own(own))));
+    let mut line = Vec::new();
+    // The line shows once it has points; then a click on it adds one.
+    if keys.is_empty() {
+        line.push(sound("Show volume line".into(), SoundMsg::ShowLine(own)));
+    }
+    if p.before(own).is_some() {
+        line.push(sound("Continue the level of the one before".into(), SoundMsg::Continue(own)));
+    }
+    line.push(sound("Back to the original".into(), SoundMsg::Original(own)));
+    let clean_up = vec![
+        sound(tick(even, "Even out quiet and loud"), SoundMsg::Even1(own, !even)),
+        sound(tick(low_cut, "Cut the low rumble (wind)"), SoundMsg::LowCut(own, !low_cut)),
+        sound(tick(clean, "Clean up steady noise"), SoundMsg::Clean(own, !clean)),
+    ];
+    let mut place = Vec::new();
+    // A sound split from its picture (a J- or L-cut, or short).
+    if let Own::Cut(i) = own
+        && p.cuts.get(i).is_some_and(|c| c.sound_before != 0.0 || c.sound_after != 0.0)
+    {
+        place.push(sound("Sound back to the picture's edges".into(), SoundMsg::ToPicture(i)));
+    }
+    if let Own::Clip(which @ (SoundTrack::Sfx | SoundTrack::Sfx2), i) = own {
+        let to = if which == SoundTrack::Sfx { "SFX 2" } else { "SFX" };
+        place.push(sound(format!("Move to {to}"), SoundMsg::OtherSfx(which, i)));
+    }
+    // Auto-duck where a song is right-clicked too, not only on the lane's
+    // empty stretch or in the Audio panel.
+    let mut music = Vec::new();
+    if let Own::Clip(SoundTrack::Music, _) = own {
+        music.push((format!("Lower the music under speech (−{duck_db:.0} dB)"), Message::Duck));
+    }
+    let info = match own {
+        Own::Cut(i) => super::info::Of::Cut(i),
+        Own::Clip(which, i) => super::info::Of::Music(which, i),
+    };
+    let groups = vec![("Level", level), ("Volume line", line), ("Clean up", clean_up), ("Placement", place), ("Music", music), ("", vec![("Info".to_owned(), Message::Info(info))])];
+    Some(groups.into_iter().filter(|(_, g)| !g.is_empty()).collect())
+}
+
 /// A lane's own level in its menu: the name and level, and a slider (the
 /// Audio panel's, one undo step a drag).
 fn lane_level<'a>(name: &str, db: f64, set: impl Fn(f64) -> Message + 'a) -> Element<'a, Message> {
@@ -453,6 +464,21 @@ fn summary(done: usize, total: usize, gains: &[f64], silent: usize, failed: &[St
 mod tests {
     use super::*;
     use super::super::tests::app;
+
+    #[test]
+    fn the_sound_menu_offers_what_fits_the_sound() {
+        let mut app = app();
+        app.edit.cuts[1].sound_after = 0.5;
+        app.edit.cuts[1].mute = true;
+        app.edit.sfx.clips.push(crate::project::MusicClip { input: "bell.wav".into(), end: 1.0, ..Default::default() });
+        app.edit.music.clips.push(crate::project::MusicClip { input: "song.wav".into(), end: 9.0, ..Default::default() });
+        let labels = |own| own_entries(&app.edit, own, 18.0).unwrap().into_iter().map(|(h, g)| (h, g.into_iter().map(|(l, _)| l).collect::<Vec<_>>())).collect::<Vec<_>>();
+        let has = |own, words: &str| labels(own).iter().any(|(_, g)| g.iter().any(|l| l == words));
+        assert!(has(Own::Cut(1), "Sound back to the picture's edges") && has(Own::Cut(1), "✓ Mute") && !has(Own::Cut(0), "Sound back to the picture's edges"));
+        assert!(has(Own::Clip(SoundTrack::Sfx, 0), "Move to SFX 2") && has(Own::Clip(SoundTrack::Music, 0), "Lower the music under speech (−18 dB)"));
+        assert_eq!(labels(Own::Cut(0)).iter().map(|(h, _)| *h).collect::<Vec<_>>(), ["Level", "Volume line", "Clean up", ""], "empty groups left out");
+        assert!(own_entries(&app.edit, Own::Cut(9), 18.0).is_none());
+    }
 
     #[test]
     fn normalizing_every_cut_is_one_undo_step_and_says_what_it_did() {

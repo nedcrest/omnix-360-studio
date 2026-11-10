@@ -36,6 +36,7 @@ impl App {
         let typed = self.asking.take().and_then(|a| a.field);
         let message = match (message, typed) {
             (Message::LaneName(track, lane, _), Some(name)) => Message::LaneName(track, lane, name),
+            (Message::GroupName(group, _), Some(name)) => Message::GroupName(group, name),
             (m, _) => m,
         };
         self.update(message)

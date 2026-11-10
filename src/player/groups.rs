@@ -3,9 +3,12 @@
 //! click selects the clip alone and Alt+click its whole group (the user,
 //! 2026-11-11), Ctrl+G groups what's selected, Ctrl+Shift+G undoes it.
 
-use super::{App, Selection};
+use super::{App, Message, Selection, tip};
 use crate::model::ops::{Op, clips::ClipOp, cuts::CutOp, items::ItemOp, project::ProjectOp};
-use crate::project::Id;
+use crate::project::{GROUP_COLOURS, Group, Id};
+use crate::text::Colour;
+use iced::widget::{container, mouse_area, row, text, tooltip};
+use iced::{Element, Task};
 
 impl App {
     /// A clip clicked, `s` its selection: with Shift, added to (or taken
@@ -96,6 +99,80 @@ impl App {
         true
     }
 
+    /// The groups' tabs under the timeline (the user, 2026-11-11: as a
+    /// spreadsheet's sheets): each its colour and name; none without
+    /// groups.
+    pub(super) fn group_tabs(&self) -> Option<Element<'_, Message>> {
+        if self.edit.groups.is_empty() {
+            return None;
+        }
+        let tab = |g: &Group| -> Element<'_, Message> {
+            let colour = iced::Color::from_rgb8(g.colour.0[0], g.colour.0[1], g.colour.0[2]);
+            let label = container(text(group_name(g)).size(12).color(iced::Color::BLACK)).padding([2, 10]).style(move |_| container::background(colour).border(iced::Border::default().rounded(3)));
+            let area = mouse_area(label).on_press(Message::GroupPick(g.id)).on_double_click(Message::GroupEdit(g.id)).on_right_press(Message::GroupEdit(g.id)).interaction(iced::mouse::Interaction::Pointer);
+            tip(area, text("Click: select the group and show it · double- or right-click: its name, colour, ungroup"), tooltip::Position::Top)
+        };
+        Some(row(self.edit.groups.iter().map(tab)).spacing(4).padding([3, 8]).into())
+    }
+
+    /// A tab's message.
+    pub(super) fn on_groups(&mut self, message: Message) -> Task<Message> {
+        let find = |app: &App, id: Id| app.edit.groups.iter().find(|g| g.id == id).cloned();
+        match message {
+            Message::GroupPick(id) => self.pick_group(id),
+            Message::GroupEdit(id) => {
+                let Some(g) = find(self, id) else { return Task::none() };
+                return self.ask(super::ask::Ask {
+                    title: group_name(&g),
+                    text: "Its name, another colour, or the group undone (its clips stay).".to_owned(),
+                    answers: vec![("Rename".to_owned(), Message::GroupName(id, String::new())), ("Next colour".to_owned(), Message::GroupColourNext(id)), ("Ungroup".to_owned(), Message::GroupUndo(id))],
+                    cancel: Message::AskClosed,
+                    field: Some(g.name.clone()),
+                });
+            }
+            Message::GroupName(id, name) => {
+                if let Some(g) = find(self, id) {
+                    self.op(Op::Project(ProjectOp::GroupLook { group: id, colour: g.colour, name: Some(name) }));
+                }
+            }
+            Message::GroupColourNext(id) => {
+                if let Some(g) = find(self, id) {
+                    self.op(Op::Project(ProjectOp::GroupLook { group: id, colour: next_colour(g.colour), name: None }));
+                }
+            }
+            Message::GroupUndo(group) => {
+                self.op(Op::Project(ProjectOp::Ungroup { group }));
+                self.also.clear();
+            }
+            _ => {}
+        }
+        Task::none()
+    }
+
+    /// Group `id` selected, its first clip first, and the timeline taken to
+    /// where it starts if that's out of sight.
+    fn pick_group(&mut self, id: Id) {
+        let members = self.edit.members(id);
+        let Some(&first) = members.first() else { return };
+        self.selection = if self.edit.cut_index(first).is_some() {
+            Selection::Cut(first)
+        } else if self.edit.clip_index(first).is_some() {
+            Selection::Clip(first)
+        } else {
+            Selection::Item(first)
+        };
+        self.also = members[1..].to_vec();
+        self.picked_with = self.selection;
+        let starts = members.iter().filter_map(|&m| {
+            self.edit.cut_index(m).map(|i| self.edit.offset(i)).or_else(|| self.edit.clip_index(m).map(|(w, i)| self.edit.track(w).clips[i].at)).or_else(|| self.edit.item_by_id(m).map(|it| it.at))
+        });
+        let start = starts.fold(f64::INFINITY, f64::min);
+        let (from, span) = self.timeline_window();
+        if start.is_finite() && !(from..from + span).contains(&start) {
+            self.timeline_start = (start - span * 0.1).max(0.0);
+        }
+    }
+
     /// Ctrl+G: what's selected made a group; Ctrl+Shift+G: the selected
     /// clip's group undone.
     pub(super) fn group_selected(&mut self, undo: bool) {
@@ -115,10 +192,44 @@ impl App {
     }
 }
 
+/// A group's name, «Group N» until it's given one.
+fn group_name(g: &Group) -> String {
+    if g.name.is_empty() { format!("Group {}", g.id) } else { g.name.clone() }
+}
+
+/// The colour after `c` in `GROUP_COLOURS` (the first after one not in it).
+fn next_colour(c: Colour) -> Colour {
+    let at = GROUP_COLOURS.iter().position(|&k| k == c.0).map_or(0, |i| i + 1);
+    Colour(GROUP_COLOURS[at % GROUP_COLOURS.len()])
+}
+
 #[cfg(test)]
 mod tests {
     use super::super::{Message, tests::app};
     use super::*;
+
+    #[test]
+    fn a_groups_tab_selects_it_and_its_dialog_renames_recolours_and_undoes_it() {
+        let mut app = app();
+        let (a, b) = (app.edit.cuts[0].id, app.edit.cuts[1].id);
+        app.op(Op::Project(ProjectOp::Group { members: vec![a, b], name: None, colour: None }));
+        let g = app.edit.groups[0].id;
+        assert_eq!(group_name(&app.edit.groups[0]), format!("Group {g}"));
+        assert!(app.group_tabs().is_some());
+        let _ = app.update(Message::GroupPick(g));
+        assert_eq!(app.picked_ids(), [a, b]);
+        // Double-click: the dialog, the name typed, «Rename».
+        let _ = app.update(Message::GroupEdit(g));
+        let _ = app.update(Message::AskTyped("Opening".into()));
+        let _ = app.update(Message::Answer(Box::new(Message::GroupName(g, String::new()))));
+        assert_eq!(app.edit.groups[0].name, "Opening");
+        let was = app.edit.groups[0].colour;
+        let _ = app.update(Message::GroupColourNext(g));
+        assert_eq!(app.edit.groups[0].colour, next_colour(was));
+        assert_ne!(app.edit.groups[0].colour, was);
+        let _ = app.update(Message::GroupUndo(g));
+        assert!(app.edit.groups.is_empty() && app.group_tabs().is_none());
+    }
 
     #[test]
     fn alt_frees_a_drag_from_snapping_and_shift_no_longer_does() {

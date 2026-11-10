@@ -294,7 +294,11 @@ impl App {
 
     /// The timeline, built from the edit as it stands.
     pub(super) fn timeline_view(&self) -> Element<'_, Message> {
-        self.timeline_data().view()
+        let timeline = self.timeline_data().view();
+        match self.group_tabs() {
+            Some(tabs) => column![timeline, tabs].into(),
+            None => timeline,
+        }
     }
 
     /// The timeline's picture of the edit: blocks, lanes, what's selected.

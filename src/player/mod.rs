@@ -549,6 +549,13 @@ enum Message {
     AskTyped(String),
     /// A question let go with nothing to do.
     AskClosed,
+    /// The groups' tabs (gap 8): a group selected and shown; its dialog
+    /// opened; renamed, given the next colour, undone.
+    GroupPick(crate::project::Id),
+    GroupEdit(crate::project::Id),
+    GroupName(crate::project::Id, String),
+    GroupColourNext(crate::project::Id),
+    GroupUndo(crate::project::Id),
     /// A range marked on the ruler (Shift and a drag; gap 92), from where
     /// the drag began to where it is; none: let go of.
     Range(Option<(f64, f64)>),
@@ -1250,6 +1257,7 @@ impl App {
                 Task::none()
             }
             Message::AskClosed => Task::none(),
+            m @ (Message::GroupPick(_) | Message::GroupEdit(_) | Message::GroupName(..) | Message::GroupColourNext(_) | Message::GroupUndo(_)) => self.on_groups(m),
             Message::Range(range) => {
                 self.range = range.and_then(|r| transport::marked(r, self.edit.duration()));
                 Task::none()

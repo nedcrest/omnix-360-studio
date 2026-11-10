@@ -34,11 +34,10 @@ C1–C7 done: `describe` says a cut's view, settings and sound, the
 edit's own, a text's look, an item's own time and keys; the aspect is
 an op; ops hold values to their ranges and `apply` warns of what's
 missing; `looks` lists LUTs and fonts; `text_field` sets one field;
-`looks --save-template`.
+`looks --save-template`; `--cuts` takes ids (C8).
 
 | # | What | Fix |
 |---|---|---|
-| C8 | `--cuts` on `normalize`/`autocolour` numbers by position; ops and `describe` by id | Ids |
 | C9 | The schema hides defaults that aren't 0 (opacity, white_in, reveal…) and every range; some ops undocumented; «out of range» prints `f64::MAX` | `schemars` defaults and ranges; doc comments; «∞» |
 | C10 | Measures the GUI has, the CLI hasn't: scopes, a graded frame (`preview` draws no grade), the mix's loudness over time | `omnix scopes`, a graded `frame`, `mixcheck --every` |
 | C11 | `normalize`/`duck`/`autocolour` can't print the ops they'd apply | `--ops` |

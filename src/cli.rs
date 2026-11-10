@@ -90,9 +90,10 @@ pub(crate) enum Cmd {
     /// put it right; a line each says what was measured and set.
     Autocolour {
         project: PathBuf,
-        /// Only these cuts, numbered from 1 (all if none).
+        /// Only the cuts with these ids, as `describe` says them (all if
+        /// none).
         #[arg(long, value_delimiter = ',')]
-        cuts: Vec<usize>,
+        cuts: Vec<u32>,
         /// The levels alone (black and white points).
         #[arg(long)]
         levels: bool,
@@ -104,9 +105,10 @@ pub(crate) enum Cmd {
     /// peaks). Prints a line per cut; writes the project with -o.
     Normalize {
         project: PathBuf,
-        /// Only these cuts, numbered from 1 (all if none).
+        /// Only the cuts with these ids, as `describe` says them (all if
+        /// none).
         #[arg(long, value_delimiter = ',')]
-        cuts: Vec<usize>,
+        cuts: Vec<u32>,
         /// Every clip on this sound track instead of the cuts: music, sfx,
         /// sfx2 or voice.
         #[arg(long, value_parser = sound_track, conflicts_with = "cuts")]

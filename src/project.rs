@@ -1219,6 +1219,16 @@ impl Project {
         self.cuts.iter().position(|c| c.id == id)
     }
 
+    /// The places of the cuts with ids `ids` (every cut if none), in the
+    /// edit's order: a command names cuts as ops and `describe` do (audit
+    /// C8). An id that isn't there is refused.
+    pub fn cuts_by_id(&self, ids: &[Id]) -> Result<Vec<usize>> {
+        if let Some(gone) = ids.iter().find(|&&id| self.cut_index(id).is_none()) {
+            bail!("no cut #{gone}");
+        }
+        Ok((0..self.cuts.len()).filter(|&i| ids.is_empty() || ids.contains(&self.cuts[i].id)).collect())
+    }
+
     /// Which sound track the clip with id `id` is on, and where.
     pub fn clip_index(&self, id: Id) -> Option<(SoundTrack, usize)> {
         SoundTrack::ALL.into_iter().find_map(|w| self.track(w).clips.iter().position(|c| c.id == id).map(|i| (w, i)))
@@ -1438,6 +1448,17 @@ mod tests {
         assert_eq!(c.sound_fades(), (0.0, 2.0), "the blur keeps the sound, the black takes it");
         c.edge_out.as_mut().unwrap().params.insert("colour".into(), 1.0);
         assert_eq!(c.sound_fades(), (0.0, 0.5), "a fade to white leaves it");
+    }
+
+    #[test]
+    fn a_command_names_cuts_by_id() {
+        let mut p = Project { cuts: vec![Cut::new("a.mp4".into(), 0.0, 1.0), Cut::new("b.mp4".into(), 0.0, 1.0), Cut::new("c.mp4".into(), 0.0, 1.0)], ..Default::default() };
+        p.settle_ids();
+        p.cuts.swap(0, 2);
+        // Ids 3, 2, 1 in the edit's order: by id, not by place.
+        assert_eq!(p.cuts_by_id(&[1]).unwrap(), [2]);
+        assert_eq!(p.cuts_by_id(&[]).unwrap(), [0, 1, 2]);
+        assert!(p.cuts_by_id(&[1, 9]).unwrap_err().to_string().contains("no cut #9"));
     }
 
     #[test]

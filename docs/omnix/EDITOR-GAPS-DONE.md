@@ -1520,7 +1520,7 @@ the panel's commit): `autocolour.rs` measures a cut over 12 frames
 brightness; the correction is careful (levels only short of black or
 white; exposure only for a middle outside 0.33–0.58, within a stop;
 white balance only with 1 % grey or more; nothing for a small
-difference). `omnix autocolour [--cuts] [--levels] [-o]` says and sets
+difference). `omnix autocolour [--cuts IDS] [--levels] [-o]` says and sets
 it; the Effects header's «Auto» and Levels' «Auto» (levels alone) run
 it off the UI thread, one undo step. Ordinary video only (a 360 clip
 would need stitching first); 6–7 s a cut. Not yet: keyed where the

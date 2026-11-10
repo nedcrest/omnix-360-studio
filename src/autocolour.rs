@@ -147,20 +147,20 @@ pub fn ops(cut: crate::project::Id, c: &Correction, levels: bool) -> Vec<crate::
     values.into_iter().map(|(k, value)| Op::Key(KeyOp::EffectValue { on: Graded::Cut(cut), param: crate::grade::NAMES[k].to_owned(), value })).collect()
 }
 
-/// `omnix autocolour`: each cut (all, or those numbered in `only`, from 1)
-/// measured and corrected, a line each; one that can't be read is left
+/// `omnix autocolour`: each cut (all, or those with ids `only`) measured
+/// and corrected, a line each; one that can't be read is left
 /// as it was. Writes the project to `output` if given.
-pub fn run(project: &std::path::Path, only: &[usize], levels: bool, output: Option<&std::path::Path>) -> Result<()> {
+pub fn run(project: &std::path::Path, only: &[crate::project::Id], levels: bool, output: Option<&std::path::Path>) -> Result<()> {
     let p = crate::project::Project::load(project)?;
     let mut all = Vec::new();
-    for (n, cut) in p.cuts.iter().enumerate().filter(|(n, _)| only.is_empty() || only.contains(&(n + 1))) {
+    for cut in p.cuts_by_id(only)?.into_iter().map(|i| &p.cuts[i]) {
         let name = cut.input.file_name().map_or_else(String::new, |f| f.to_string_lossy().into_owned());
         match measure_cut(cut) {
             Ok(m) => {
                 let c = correction(&m);
                 println!(
-                    "cut {:<3} {name}  black {:.0} white {:.0} middle {:.0}{}  →  black_in {:.3} white_in {:.3} exposure {:+.2} temperature {:+.2} tint {:+.2}",
-                    n + 1,
+                    "cut #{:<3} {name}  black {:.0} white {:.0} middle {:.0}{}  →  black_in {:.3} white_in {:.3} exposure {:+.2} temperature {:+.2} tint {:+.2}",
+                    cut.id,
                     m.black * 255.0,
                     m.white * 255.0,
                     m.mid * 255.0,
@@ -173,7 +173,7 @@ pub fn run(project: &std::path::Path, only: &[usize], levels: bool, output: Opti
                 );
                 all.extend(ops(cut.id, &c, levels));
             }
-            Err(e) => println!("cut {:<3} {name}  left as it is: {e:#}", n + 1),
+            Err(e) => println!("cut #{:<3} {name}  left as it is: {e:#}", cut.id),
         }
     }
     let mut edit = crate::model::edit::Edit::default();

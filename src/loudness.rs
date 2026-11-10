@@ -129,13 +129,13 @@ pub fn bring_to(path: &Path, target: f64, format: crate::ffmpeg::Format) -> Resu
 /// (`SoundOp::Normalized`, as the player's dialog does), printing a line
 /// each; writes the project to `output` if given. One that can't be read
 /// is left as it was and the rest go on.
-pub fn normalize(project: &std::path::Path, only: &[usize], track: Option<crate::project::SoundTrack>, even: bool, output: Option<&std::path::Path>) -> Result<()> {
+pub fn normalize(project: &std::path::Path, only: &[crate::project::Id], track: Option<crate::project::SoundTrack>, even: bool, output: Option<&std::path::Path>) -> Result<()> {
     use crate::model::ops::{Op, SoundRef, sound::SoundOp};
     use crate::project::Own;
     let p = crate::project::Project::load(project)?;
     let owns: Vec<Own> = match track {
         Some(w) => (0..p.track(w).clips.len()).map(|i| Own::Clip(w, i)).collect(),
-        None => (0..p.cuts.len()).filter(|n| only.is_empty() || only.contains(&(n + 1))).map(Own::Cut).collect(),
+        None => p.cuts_by_id(only)?.into_iter().map(Own::Cut).collect(),
     };
     let mut ops = Vec::new();
     for own in owns {

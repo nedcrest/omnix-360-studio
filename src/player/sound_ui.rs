@@ -466,6 +466,17 @@ mod tests {
     use super::super::tests::app;
 
     #[test]
+    fn beats_are_read_once_a_track_shows_them() {
+        let mut app = app();
+        app.edit.music.clips.push(crate::project::MusicClip { input: "nowhere/song.wav".into(), end: 9.0, ..Default::default() });
+        let _ = app.read_beats();
+        assert!(app.beats.is_empty(), "off: nothing read");
+        app.edit.music.beats = Some(crate::project::Beats { threshold: 0.4, snap: false });
+        let _ = app.read_beats();
+        assert_eq!(app.beats.get(std::path::Path::new("nowhere/song.wav")), Some(&None), "being read, once");
+    }
+
+    #[test]
     fn the_sound_menu_offers_what_fits_the_sound() {
         let mut app = app();
         app.edit.cuts[1].sound_after = 0.5;

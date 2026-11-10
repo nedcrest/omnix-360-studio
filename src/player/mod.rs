@@ -328,6 +328,8 @@ enum Message {
     Check(mixcheck_ui::CheckMsg),
     /// A song's waveform, read off the UI thread.
     Waveform(PathBuf, Result<Arc<crate::waveform::Waveform>, String>),
+    /// A song's beats read (gap 13).
+    Beats(PathBuf, Result<Arc<Vec<crate::beats::Beat>>, String>),
     /// The waveform of what a cut plays, if it has sound.
     CutWave(PathBuf, bool, Option<Arc<crate::waveform::Waveform>>),
     /// A cut's sound's or a sound clip's fade in (`true`) or out dragged to
@@ -642,6 +644,9 @@ struct App {
     thumbs: std::collections::HashMap<PathBuf, Vec<(f64, image::Handle)>>,
     /// Waveforms of sound clips and of what cuts play, by file.
     waveforms: std::collections::HashMap<PathBuf, Arc<crate::waveform::Waveform>>,
+    /// Songs' beats by file (gap 13), read once a track shows them; none
+    /// while being read.
+    beats: std::collections::HashMap<PathBuf, Option<Arc<Vec<crate::beats::Beat>>>>,
     /// The same through the leveler, for cuts evened out.
     even_waves: std::collections::HashMap<PathBuf, Arc<crate::waveform::Waveform>>,
     /// The cuts' sound files whose waveforms were asked for, plain or
@@ -902,6 +907,7 @@ impl App {
             library: Vec::new(),
             thumbs: Default::default(),
             waveforms: Default::default(),
+            beats: Default::default(),
             meter: Default::default(),
             overlay_pictures: Default::default(),
             overlay_thumbs: Default::default(),
@@ -1106,7 +1112,7 @@ impl App {
             self.auto_key(before);
         }
         self.keep_hand_view(before);
-        let task = Task::batch([task, self.load_overlay_pictures(), self.load_cut_waves()]);
+        let task = Task::batch([task, self.load_overlay_pictures(), self.load_cut_waves(), self.read_beats()]);
         self.settle_look();
         self.settle_text();
         self.follow_crossfade();
@@ -1245,7 +1251,7 @@ impl App {
             m @ (Message::Select { .. } | Message::AddBlank | Message::SoundEdge { .. } | Message::Trim { .. } | Message::MoveCut { .. } | Message::AddMark | Message::SelectAtPlayhead | Message::MarkMove { .. } | Message::MarkSelect { .. } | Message::StepsRested { .. } | Message::ToastGone { .. } | Message::StepNoteGone { .. } | Message::TrimToPlayhead { .. } | Message::Crossfade { .. } | Message::ToggleCrossfade | Message::Split | Message::DeleteCut | Message::Undo | Message::Redo) => self.on_cuts(m),
             m @ (Message::LookDone | Message::Framing { .. } | Message::KeyMove { .. } | Message::KeyAdd | Message::KeyDelete | Message::KeyEase { .. } | Message::KeyFollow { .. } | Message::Stab { .. } | Message::Projection { .. } | Message::KeyJump { .. } | Message::Look { .. } | Message::Zoom { .. } | Message::Fov { .. } | Message::AngleInput { .. } | Message::AngleDone | Message::AngleScrubStart { .. } | Message::AngleScrubDone | Message::AngleScrub { .. } | Message::AngleNudge { .. } | Message::AngleArrow { .. } | Message::Source { .. } | Message::RollingShutter { .. } | Message::FullOnPause { .. } | Message::ResetView) => self.on_framing(m),
             m @ (Message::AddOverlay | Message::OverlayPicked { .. } | Message::OverlaySelect { .. } | Message::OverlayMove { .. } | Message::OverlayToLane(..) | Message::OverlayTrim { .. } | Message::OverlayJump { .. } | Message::OverlayKeyMove { .. } | Message::OverlayPicture { .. } | Message::AddText | Message::AddBars | Message::LaneAdd(_) | Message::LaneRemove(..) | Message::LaneActive(..) | Message::LaneRename(..) | Message::LaneName(..) | Message::LaneHide(..)) => self.on_overlay_ui(m),
-            m @ (Message::AddSound { .. } | Message::SoundPicked { .. } | Message::SoundProbed { .. } | Message::Waveform { .. } | Message::CutWave { .. } | Message::SelectMusic { .. } | Message::PointAdd { .. } | Message::PointSelect { .. } | Message::PointMove { .. } | Message::MusicMove { .. } | Message::MusicTrim { .. } | Message::Fade { .. } | Message::Level { .. } | Message::Listen { .. } | Message::SoundLevel { .. } | Message::TrackLevel { .. } | Message::DuckDepth { .. } | Message::Duck | Message::Ducked { .. } | Message::LevelDone) => self.on_tracks(m),
+            m @ (Message::AddSound { .. } | Message::SoundPicked { .. } | Message::SoundProbed { .. } | Message::Waveform { .. } | Message::Beats { .. } | Message::CutWave { .. } | Message::SelectMusic { .. } | Message::PointAdd { .. } | Message::PointSelect { .. } | Message::PointMove { .. } | Message::MusicMove { .. } | Message::MusicTrim { .. } | Message::Fade { .. } | Message::Level { .. } | Message::Listen { .. } | Message::SoundLevel { .. } | Message::TrackLevel { .. } | Message::DuckDepth { .. } | Message::Duck | Message::Ducked { .. } | Message::LevelDone) => self.on_tracks(m),
             Message::Snapped(at, inner) => {
                 self.snap_line = at;
                 self.update(*inner)

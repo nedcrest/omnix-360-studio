@@ -53,6 +53,25 @@ impl App {
         )
     }
 
+    /// Reads the beats of every song on a track that shows them (gap 13),
+    /// each file once, off the UI thread.
+    pub(super) fn read_beats(&mut self) -> Task<Message> {
+        let wanted: Vec<PathBuf> = SoundTrack::ALL
+            .into_iter()
+            .map(|w| self.edit.track(w))
+            .filter(|t| t.beats.is_some())
+            .flat_map(|t| t.clips.iter().map(|c| c.input.clone()))
+            .filter(|p| !self.beats.contains_key(p))
+            .collect();
+        Task::batch(wanted.into_iter().map(|path| {
+            self.beats.insert(path.clone(), None);
+            Task::perform(blocking({
+                let path = path.clone();
+                move || crate::beats::read(&path).map(Arc::new).map_err(|e| format!("{e:#}"))
+            }), move |r| Message::Beats(path.clone(), r))
+        }).collect::<Vec<_>>())
+    }
+
     /// Reads the waveforms of what the cuts play, each file once, two at a
     /// time (a project of 30 clips on a spinning drive would otherwise read
     /// them all at once): a cut's clip sound lane shows it once read. The
@@ -156,6 +175,13 @@ impl App {
                 self.waveforms.insert(path, wave);
             }
             Message::Waveform(path, Err(e)) => self.error = Some(format!("Can't read {}: {e}", path.display())),
+            Message::Beats(path, read) => match read {
+                Ok(beats) => {
+                    self.beats.insert(path, Some(beats));
+                }
+                // Left as being read: not tried again over and over.
+                Err(e) => self.error = Some(format!("Can't find the beats of {}: {e}", path.display())),
+            },
             Message::CutWave(path, even, wave) => {
                 self.cut_waves_reading = self.cut_waves_reading.saturating_sub(1);
                 if let Some(wave) = wave {

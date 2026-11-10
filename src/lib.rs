@@ -53,6 +53,7 @@ pub mod sibling;
 pub mod transition;
 mod template;
 mod style;
+mod autocolour;
 mod automation;
 mod animate;
 mod fsutil;

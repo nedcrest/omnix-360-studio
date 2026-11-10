@@ -85,6 +85,20 @@ pub(crate) enum Cmd {
         #[command(flatten)]
         opts: CheckOpts,
     },
+    /// Auto colour (gap 89): each cut measured over a dozen frames across
+    /// it (its LUT on), and its levels, exposure and white balance set to
+    /// put it right; a line each says what was measured and set.
+    Autocolour {
+        project: PathBuf,
+        /// Only these cuts, numbered from 1 (all if none).
+        #[arg(long, value_delimiter = ',')]
+        cuts: Vec<usize>,
+        /// The levels alone (black and white points).
+        #[arg(long)]
+        levels: bool,
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+    },
     /// Bring each cut's sound to -16 LUFS: measure what it plays over its
     /// own stretch and give it the gain (the export's limiter holds the
     /// peaks). Prints a line per cut; writes the project with -o.
@@ -639,6 +653,7 @@ pub(crate) fn run() -> Result<()> {
         }
         Cmd::Info { input } => info(&input)?,
         Cmd::Check { project, fast_pan, opts } => check::check(&project, &opts.into(), fast_pan)?,
+        Cmd::Autocolour { project, cuts, levels, output } => crate::autocolour::run(&project, &cuts, levels, output.as_deref())?,
         Cmd::Normalize { project, cuts, track, even, output } => loudness::normalize(&project, &cuts, track, even, output.as_deref())?,
         Cmd::Duck { project, depth, output } => crate::duck::run(&project, depth, output.as_deref())?,
         Cmd::Apply { project, ops, output } => crate::apply::run(&project, &ops, output.as_deref())?,

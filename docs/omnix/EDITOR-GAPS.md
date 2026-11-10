@@ -334,6 +334,20 @@ N ms off a beat (`omnix check` gains a `beat` rule), and draw the beats
 as marks on the music lane that cuts snap to (markers, gap 5, and
 snapping are there). Later (user, 2026-11-09).
 
+**Agreed with the user, 2026-11-10** (what helps now: finding the beats
+in a music clip, with a threshold of his own; cutting stays by hand,
+with C):
+1. The analyser finds a song's beats and draws them as purple vertical
+   lines half the music lane's height; a threshold the user sets (lower:
+   every beat, higher: the strong hits only).
+2. A switch on the music lane: edges and the playhead snap to them.
+3. Later, not critical: the user's own strong beats, full-height lines
+   placed by hand on the music.
+4. Explained, not asked for yet: a `beat` rule in the mix check (joins
+   under music more than ~80 ms off the nearest beat, marked on the
+   ruler) — for checking a cut made by ear.
+The cutting view is gap 57 (`BEAT-CUT.md`).
+
 ### 16. Subtitles from speech — medium (Kos TODO, 2026-10-23)
 
 Mar'yana can't be heard even cleaned (action-cam mic, distance). Run
@@ -1072,6 +1086,8 @@ the cutting in «ШІ-монтаж».
 Open when designing: which beat tracker (a Rust onset detector, or
 footage-agent's Python with librosa / madmom / aubio); which vision model
 (licence: permissive only, as for 53a); how the AI picks among the ways.
+
+The user's picture of it (2026-11-10), its own context: `BEAT-CUT.md`.
 
 ### 61. The contact sheet standalone, for DeX and tablets — far idea (user, 2026-11-03)
 

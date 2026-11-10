@@ -274,7 +274,9 @@ impl Lanes<'_> {
                 let o = &self.owners[*owner];
                 let shortest = crate::model::ops::auto::SHORTEST;
                 let t = self.snapped(o, self.own_time(o, p.x, b), b, shift);
-                *to = if *start { t.clamp(o.start, clip.to - shortest) } else { t.clamp(clip.from + shortest, o.start + o.len) };
+                if let Some(t) = crate::automation::trim_to(*start, (clip.from, clip.to), (o.start, o.start + o.len), shortest, t) {
+                    *to = t;
+                }
                 None
             }
             LaneDrag::Body { lane, owner, at, x0, moved, .. } => {
@@ -309,7 +311,13 @@ impl Lanes<'_> {
                 Some(Message::Auto(AutoMsg::Add { on: o.on, param: self.params[lane], from: self.own_time(o, x0, b), to: self.own_time(o, x1, b) }))
             }
             LaneDrag::New { .. } => None,
-            LaneDrag::Edge { lane, owner, at, start, to } => Some(Message::Auto(AutoMsg::Trim { on: self.owners[owner].on, param: self.params[lane], at, start, t: to })),
+            // Let go where it was pressed: nothing trimmed (a click on the
+            // edge of a clip hanging past its owner trimmed it, audit A1).
+            LaneDrag::Edge { lane, owner, at, start, to } => {
+                let clip = self.clip_at(lane, owner, at)?;
+                let was = if start { clip.from } else { clip.to };
+                ((to - was).abs() > 1e-9).then(|| Message::Auto(AutoMsg::Trim { on: self.owners[owner].on, param: self.params[lane], at, start, t: to }))
+            }
             LaneDrag::Body { lane, owner, at, moved: false, y0, .. } => Some(Message::Auto(AutoMsg::Point { on: self.owners[owner].on, param: self.params[lane], from: None, t: at, v: self.value(lane, y0) })),
             _ => Some(Message::ScrubDone),
         }

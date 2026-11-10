@@ -154,6 +154,15 @@ impl AutoClip {
     }
 }
 
+/// Where clip `from..to`'s start (`start`) or end may go for `t`, within
+/// its owner's `range` and keeping `shortest` of it; none when there's no
+/// room (a clip hanging past an edge its owner was trimmed to: a clamp
+/// with its ends crossed panicked, audit A1).
+pub fn trim_to(start: bool, (from, to): (f64, f64), range: (f64, f64), shortest: f64, t: f64) -> Option<f64> {
+    let (lo, hi) = if start { (range.0, to - shortest) } else { (from + shortest, range.1) };
+    (lo <= hi).then(|| t.clamp(lo, hi))
+}
+
 /// What `clips` give `param` at `t`, if one of them covers it.
 pub fn value(clips: &[AutoClip], param: &str, t: f64) -> Option<f64> {
     clips.iter().find(|c| c.param == param && c.covers(t)).map(|c| c.value_at(t))

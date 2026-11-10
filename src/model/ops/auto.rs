@@ -149,7 +149,11 @@ pub(super) fn apply(p: &mut Project, op: &AutoOp) -> Result<Outcome, OpError> {
             let o = owner(p, *on)?;
             let i = clip_at(o.clips, param, *at)?;
             let (from, to) = (o.clips[i].from, o.clips[i].to);
-            let (from, to) = if *end == End::In { (t.clamp(o.range.0, to - SHORTEST), to) } else { (from, t.clamp(from + SHORTEST, o.range.1)) };
+            let start = *end == End::In;
+            let Some(t) = crate::automation::trim_to(start, (from, to), o.range, SHORTEST, *t) else {
+                return Err(OpError::Invalid(format!("{param}'s clip has no room to trim there: it runs past its owner")));
+            };
+            let (from, to) = if start { (t, to) } else { (from, t) };
             clear(o.clips, param, from, to, Some(i))?;
             o.clips[i].trim(from, to);
             said(format!("{}: {param} clip {from:.2}-{to:.2} s", name(*on)))
@@ -309,6 +313,11 @@ mod tests {
             assert_eq!((c.points.len(), c.points[1].t, c.points[1].v), (2, t, 0.5), "kept on the edge at {t}");
         }
         assert!(e.apply(&op(AutoOp::Add { on, param: "sparkle".into(), from: 1.0, to: 2.0 })).is_err());
+        // A clip hanging past its owner's edge (the cut trimmed under it):
+        // no room to trim is an error, not a panic (audit A1).
+        e.cuts[0].start = 9.0 - SHORTEST / 2.0;
+        assert!(e.apply(&op(AutoOp::Trim { on, param: "exposure".into(), at: 8.0, end: End::In, t: 7.0 })).is_err());
+        e.cuts[0].start = 1.0;
         assert!(e.apply(&op(AutoOp::Add { on, param: "x".into(), from: 1.0, to: 2.0 })).is_err(), "a cut has no place to move");
         assert!(e.apply(&op(AutoOp::Add { on, param: "reveal".into(), from: 1.0, to: 2.0 })).is_err(), "nor a reveal");
         e.apply(&op(AutoOp::Delete { on, param: "vignette".into(), at: 4.0 })).unwrap();

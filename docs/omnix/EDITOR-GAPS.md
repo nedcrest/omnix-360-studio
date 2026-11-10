@@ -1490,6 +1490,15 @@ across them needs the drop worked out at the timeline's level); hiding
 a lane from the picture while editing (not from the export unless
 asked). Milestone «Ефекти, колір і розумний звук».
 
+**Built 2026-11-10, waiting for the check** (`b425624`, `d4724bb`):
+`Lane::name` and `Lane::hidden`, ops `lane_name` and `lane_hidden`. A
+hidden lane is out of the player and the export alike, as a muted sound
+lane is of the mix (decided: one rule, what's seen is what's exported).
+Right-click a lane's head: its name asked (the window's question gains
+a field); the head says it; an eye beside «+» and «×». A move drag
+follows the pointer onto another lane of its track («→ Subtitles»
+said), landing there on release; Alt+↑/↓ stay.
+
 ### 98. The Effects panel's extended view — idea (user, 2026-11-10)
 
 The user: there are many effects now and the panel scrolls; on a big

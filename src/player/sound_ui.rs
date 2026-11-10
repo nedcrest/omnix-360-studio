@@ -354,6 +354,10 @@ impl App {
                 if !track.clips.is_empty() {
                     items.push(sound(format!("Normalize every clip on {}…", which.name()), SoundMsg::Open(Scope::Track(which))));
                 }
+                let past: Vec<Id> = self.edit.past_end().into_iter().map(|(id, _)| id).filter(|&id| self.edit.clip_index(id).is_some_and(|(w, _)| w == which)).collect();
+                if !past.is_empty() {
+                    items.push(item(format!("Trim to the film's end ({})", past.len()), Message::TrimToEnd(past)));
+                }
                 if which == SoundTrack::Music && !track.clips.is_empty() {
                     items.push(item(format!("Lower the music under speech (−{:.0} dB)", self.duck_db), Message::Duck));
                 }
@@ -628,5 +632,18 @@ mod tests {
         assert_eq!(summary(3, 3, &[2.6, 7.7, 0.7], 0, &[], false), "3 clips done. Levels from +0.7 to +7.7 dB.");
         assert_eq!(summary(1, 1, &[16.1], 0, &[], false), "1 clip done. Level +16.1 dB.");
         assert_eq!(summary(2, 39, &[1.0, 2.0], 1, &[], true), "Stopped after 2 of 39 clips. Levels from +1.0 to +2.0 dB. 1 without sound, left as they were.");
+    }
+
+    #[test]
+    fn a_lanes_menu_trims_what_runs_past_the_film() {
+        use super::super::Message;
+        let mut app = app();
+        app.edit.sfx.clips.push(crate::project::MusicClip { input: "boom.wav".into(), at: 3.0, end: 2.0, ..Default::default() });
+        app.edit.settle_ids();
+        let boom = app.edit.sfx.clips[0].id;
+        assert_eq!(app.edit.past_end(), [(boom, 1.0)], "the film is 4 s");
+        let _ = app.update(Message::TrimToEnd(vec![boom]));
+        assert_eq!(app.edit.sfx.clips[0].ends(), 4.0);
+        assert!(app.edit.past_end().is_empty());
     }
 }

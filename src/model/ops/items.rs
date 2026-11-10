@@ -122,19 +122,7 @@ fn check_bars(b: &crate::overlay::Bars) -> Result<(), OpError> {
 
 pub(super) fn apply(p: &mut Project, op: &ItemOp) -> Result<Outcome, OpError> {
     match op {
-        ItemOp::AddPictures { inputs, at, len, lane } => {
-            positive(*len)?;
-            reachable(p, Track::Overlay, *lane)?;
-            let mut at = *at;
-            let mut last = None;
-            for input in inputs {
-                let id = p.next_id();
-                at = add(p, Track::Overlay, *lane, Item { id, input: input.clone(), text: None, at, start: 0.0, end: *len, motion: Vec::new(), effects: Vec::new(), bars: None, automation: Vec::new(), kind: None, style: None, group: None });
-                last = Some(id);
-            }
-            let Some(id) = last else { return Err(OpError::Invalid("no pictures to add".into())) };
-            Ok(Outcome { summary: format!("{} picture(s) added, the last item #{id}", inputs.len()), made: Some(id) })
-        }
+        ItemOp::AddPictures { inputs, at, len, lane } => add_pictures(p, inputs, *at, *len, *lane),
         ItemOp::AddText { text, at, len, lane } => {
             positive(*len)?;
             reachable(p, Track::Text, *lane)?;
@@ -150,16 +138,7 @@ pub(super) fn apply(p: &mut Project, op: &ItemOp) -> Result<Outcome, OpError> {
             add(p, Track::Overlay, *lane, Item { id, input: PathBuf::new(), text: None, at: *at, start: 0.0, end: *len, motion: Vec::new(), effects: Vec::new(), bars: Some(*bars), automation: Vec::new(), kind: None, style: None, group: None });
             Ok(Outcome { summary: format!("bars {:.2}:1, item #{id}", bars.ratio), made: Some(id) })
         }
-        ItemOp::SetBars { item, bars } => {
-            check_bars(bars)?;
-            let (track, lane, i) = find(p, *item)?;
-            let it = &mut p.track_lanes_mut(track)[lane].items[i];
-            if it.bars.is_none() {
-                return Err(OpError::Invalid(format!("item #{item} isn't bars")));
-            }
-            it.bars = Some(*bars);
-            said(format!("item #{item}: bars {:.2}:1", bars.ratio))
-        }
+        ItemOp::SetBars { item, bars } => set_bars(p, *item, bars),
         &ItemOp::Kind { item, kind } => {
             let (track, lane, i) = find(p, item)?;
             let it = &mut p.track_lanes_mut(track)[lane].items[i];
@@ -178,33 +157,7 @@ pub(super) fn apply(p: &mut Project, op: &ItemOp) -> Result<Outcome, OpError> {
             let style = styleable(p, *item)?.style.as_mut().ok_or_else(|| OpError::Invalid(format!("item #{item} has no style to set")))?;
             said(format!("item #{item}: {}", super::cuts::set_knob(style.look, &mut style.params, key, *value)?))
         }
-        &ItemOp::Move { item, at: want, lane: onto } => {
-            let (track, l, i) = find(p, item)?;
-            let film_end = p.film_end();
-            let it = &p.track_lanes_mut(track)[l].items[i];
-            let latest = crate::project::latest_start(film_end, it.end - it.start).max(it.at);
-            let at = want.min(latest);
-            match onto.filter(|&to| to != l) {
-                Some(to) => {
-                    if to >= p.track_lanes_mut(track).len() {
-                        return Err(OpError::NotFound(format!("lane {to} of the {track:?} track")));
-                    }
-                    let moved = p.track_lanes_mut(track)[l].items.remove(i);
-                    let lane = &mut p.track_lanes_mut(track)[to];
-                    lane.items.push(moved);
-                    let i = lane.items.len() - 1;
-                    lane.items[i].at = lane.place(i, at);
-                    lane.items.sort_by(|a, b| a.at.total_cmp(&b.at));
-                    let now = lane.items.iter().find(|it| it.id == item).map_or(at, |it| it.at);
-                    said(format!("item #{item} on lane {to} at {now:.2} s{}", super::held(want > latest)))
-                }
-                None => {
-                    let lane = &mut p.track_lanes_mut(track)[l];
-                    lane.move_to(i, at);
-                    said(format!("item #{item} at {:.2} s{}", lane.items[i].at, super::held(want > latest)))
-                }
-            }
-        }
+        &ItemOp::Move { item, at, lane } => move_item(p, item, at, lane),
         &ItemOp::AddLane { track } => {
             shown(p, track).push(crate::overlay::Lane::default());
             said(format!("{track:?} track: lane {} added on top", p.track_lanes_mut(track).len() - 1))
@@ -219,29 +172,8 @@ pub(super) fn apply(p: &mut Project, op: &ItemOp) -> Result<Outcome, OpError> {
             l.hidden = hidden;
             said(format!("{track:?} lane {lane}: {}", if hidden { "hidden" } else { "shown" }))
         }
-        &ItemOp::RemoveLane { track, lane } => {
-            let all = p.track_lanes_mut(track);
-            match all.get(lane) {
-                None => return Err(OpError::NotFound(format!("lane {lane} of the {track:?} track"))),
-                Some(_) if all.len() == 1 => return Err(OpError::Invalid("a track keeps one lane".into())),
-                Some(l) if !l.items.is_empty() => return Err(OpError::Invalid(format!("lane {lane} isn't empty"))),
-                Some(_) => {}
-            }
-            all.remove(lane);
-            said(format!("{track:?} track: lane {lane} taken away"))
-        }
-        &ItemOp::Trim { item, end, t, most } => {
-            let (track, lane, i) = find(p, item)?;
-            let film_end = p.film_end();
-            let lane = &mut p.track_lanes_mut(track)[lane];
-            let was = (lane.items[i].start, lane.items[i].end);
-            let latest = if end == End::Out { crate::project::latest_out(film_end, lane.items[i].at, was.0).max(was.1) } else { f64::INFINITY };
-            lane.trim(i, end == End::In, t.min(latest), MIN_CUT, most);
-            let it = &mut lane.items[i];
-            // Its ins and outs stay on their edges.
-            crate::animate::keep_on_edges(&mut it.automation, was, (it.start, it.end));
-            said(format!("item #{item}: {:.2}-{:.2} s on the edit{}", it.at, it.ends(), super::held(t > latest)))
-        }
+        &ItemOp::RemoveLane { track, lane } => remove_lane(p, track, lane),
+        &ItemOp::Trim { item, end, t, most } => trim_item(p, item, end, t, most),
         ItemOp::SetText { item, text } => {
             let (track, lane, i) = find(p, *item)?;
             let it = &mut p.track_lanes_mut(track)[lane].items[i];
@@ -297,6 +229,90 @@ fn reachable(p: &Project, track: Track, l: usize) -> Result<(), OpError> {
 fn shown(p: &mut Project, track: Track) -> &mut Vec<crate::overlay::Lane> {
     p.lane_mut(track, 0);
     p.track_lanes_mut(track)
+}
+
+/// `AddPictures`: one after another from `at`, each `len` long.
+fn add_pictures(p: &mut Project, inputs: &[PathBuf], mut at: f64, len: f64, lane: usize) -> Result<Outcome, OpError> {
+    positive(len)?;
+    reachable(p, Track::Overlay, lane)?;
+    let mut last = None;
+    for input in inputs {
+        let id = p.next_id();
+        at = add(p, Track::Overlay, lane, Item { id, input: input.clone(), text: None, at, start: 0.0, end: len, motion: Vec::new(), effects: Vec::new(), bars: None, automation: Vec::new(), kind: None, style: None, group: None });
+        last = Some(id);
+    }
+    let Some(id) = last else { return Err(OpError::Invalid("no pictures to add".into())) };
+    Ok(Outcome { summary: format!("{} picture(s) added, the last item #{id}", inputs.len()), made: Some(id) })
+}
+
+/// `Move`: the item to `want`, or onto another lane there; held at the
+/// film's end (gap 101).
+fn move_item(p: &mut Project, item: Id, want: f64, lane: Option<usize>) -> Result<Outcome, OpError> {
+    let (track, l, i) = find(p, item)?;
+    let film_end = p.film_end();
+    let it = &p.track_lanes_mut(track)[l].items[i];
+    let latest = crate::project::latest_start(film_end, it.end - it.start).max(it.at);
+    let at = want.min(latest);
+    match lane.filter(|&to| to != l) {
+        Some(to) => {
+            if to >= p.track_lanes_mut(track).len() {
+                return Err(OpError::NotFound(format!("lane {to} of the {track:?} track")));
+            }
+            let moved = p.track_lanes_mut(track)[l].items.remove(i);
+            let lane = &mut p.track_lanes_mut(track)[to];
+            lane.items.push(moved);
+            let i = lane.items.len() - 1;
+            lane.items[i].at = lane.place(i, at);
+            lane.items.sort_by(|a, b| a.at.total_cmp(&b.at));
+            let now = lane.items.iter().find(|it| it.id == item).map_or(at, |it| it.at);
+            said(format!("item #{item} on lane {to} at {now:.2} s{}", super::held(want > latest)))
+        }
+        None => {
+            let lane = &mut p.track_lanes_mut(track)[l];
+            lane.move_to(i, at);
+            said(format!("item #{item} at {:.2} s{}", lane.items[i].at, super::held(want > latest)))
+        }
+    }
+}
+
+/// `Trim`: an edge to `t` in its own time; the out edge held at the
+/// film's end (gap 101), its ins and outs kept on its edges.
+fn trim_item(p: &mut Project, item: Id, end: End, t: f64, most: f64) -> Result<Outcome, OpError> {
+    let (track, lane, i) = find(p, item)?;
+    let film_end = p.film_end();
+    let lane = &mut p.track_lanes_mut(track)[lane];
+    let was = (lane.items[i].start, lane.items[i].end);
+    let latest = if end == End::Out { crate::project::latest_out(film_end, lane.items[i].at, was.0).max(was.1) } else { f64::INFINITY };
+    lane.trim(i, end == End::In, t.min(latest), MIN_CUT, most);
+    let it = &mut lane.items[i];
+    // Its ins and outs stay on their edges.
+    crate::animate::keep_on_edges(&mut it.automation, was, (it.start, it.end));
+    said(format!("item #{item}: {:.2}-{:.2} s on the edit{}", it.at, it.ends(), super::held(t > latest)))
+}
+
+/// `RemoveLane`: an empty lane of several taken away.
+fn remove_lane(p: &mut Project, track: Track, lane: usize) -> Result<Outcome, OpError> {
+    let all = p.track_lanes_mut(track);
+    match all.get(lane) {
+        None => return Err(OpError::NotFound(format!("lane {lane} of the {track:?} track"))),
+        Some(_) if all.len() == 1 => return Err(OpError::Invalid("a track keeps one lane".into())),
+        Some(l) if !l.items.is_empty() => return Err(OpError::Invalid(format!("lane {lane} isn't empty"))),
+        Some(_) => {}
+    }
+    all.remove(lane);
+    said(format!("{track:?} track: lane {lane} taken away"))
+}
+
+/// `SetBars`: a bars item's shape.
+fn set_bars(p: &mut Project, item: Id, bars: &crate::overlay::Bars) -> Result<Outcome, OpError> {
+    check_bars(bars)?;
+    let (track, lane, i) = find(p, item)?;
+    let it = &mut p.track_lanes_mut(track)[lane].items[i];
+    if it.bars.is_none() {
+        return Err(OpError::Invalid(format!("item #{item} isn't bars")));
+    }
+    it.bars = Some(*bars);
+    said(format!("item #{item}: bars {:.2}:1", bars.ratio))
 }
 
 /// Item `id`, a text or a picture (bars take no style).

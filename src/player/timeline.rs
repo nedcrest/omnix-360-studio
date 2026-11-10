@@ -435,6 +435,8 @@ pub struct Timeline {
 enum Sign {
     /// A lane on top (the top lane's).
     Add,
+    /// What runs past the film's end trimmed to it (gap 101).
+    Trim,
     /// The lane taken away (an empty one of several).
     Remove,
     /// The lane hidden from the picture, or shown.
@@ -1202,11 +1204,16 @@ impl Timeline {
         }
         // Past the video's end the sound fades out in the export: dim it,
         // and mark the end.
+        // A clip reaching it: the mark red (gap 101).
+        let reaches = at_film_end(self.video, blocks.iter().map(|m| m.clip.at + m.len()));
         if self.duration > self.video + 1e-6 {
             let x = self.x(self.video, b);
             let to = self.x(self.duration, b);
             frame.fill(&Path::rectangle(Point::new(x, top), Size::new((to - x).max(0.0), h)), iced::Color::from_rgba(0.0, 0.0, 0.0, 0.55));
-            frame.fill(&Path::rectangle(Point::new(x - 1.0, self.rows.sound_top(li)), Size::new(2.0, self.rows.lane_h(li))), palette.background.base.text.scale_alpha(0.8));
+        }
+        if self.duration > self.video + 1e-6 || reaches {
+            let ink = if reaches { palette.danger.base.color } else { palette.background.base.text.scale_alpha(0.8) };
+            frame.fill(&Path::rectangle(Point::new(self.x(self.video, b) - 1.0, self.rows.sound_top(li)), Size::new(2.0, self.rows.lane_h(li))), ink);
         }
         // Each clip's own line, inside it.
         for (i, m) in blocks.iter().enumerate() {
@@ -1645,7 +1652,78 @@ impl OverlayLane {
             signs.push(Sign::Remove);
         }
         signs.push(Sign::Eye);
+        if !self.past_end().is_empty() {
+            signs.push(Sign::Trim);
+        }
         signs.into_iter().enumerate().map(|(k, s)| (s, Rectangle::new(Point::new(HEAD - 20.0 - 18.0 * k as f32, 4.0), Size::new(16.0, 16.0)))).collect()
+    }
+
+    /// A left press at `p` on the lane: what it does, and the drag it
+    /// starts.
+    fn press(&self, drag: &mut OverlayDrag, p: Point, bounds: Rectangle) -> Option<canvas::Action<Message>> {
+        let t = &self.0;
+        let per_px = t.span / Timeline::width(bounds) as f64;
+        let message = match self.hit(p, bounds) {
+            OverlayHit::Nothing => return None,
+            OverlayHit::Fold => Message::Fold(self.fold_lane(), !self.folded()),
+            OverlayHit::Sign(Sign::Add) => Message::LaneAdd(self.1),
+            OverlayHit::Sign(Sign::Remove) => Message::LaneRemove(self.1, self.2),
+            OverlayHit::Sign(Sign::Eye) => Message::LaneHide(self.1, self.2, !self.head().hidden),
+            OverlayHit::Sign(Sign::Trim) => Message::TrimToEnd(self.past_end()),
+            OverlayHit::LanesFold(motion) => Message::Fold(self.fold_of(motion), !self.lanes(motion).folded),
+            OverlayHit::Auto(motion, h) => match self.lanes(motion).press(h, p, t.held.command()) {
+                Ok(d) => {
+                    *drag = OverlayDrag::Auto(motion, d);
+                    return Some(canvas::Action::request_redraw().and_capture());
+                }
+                Err(message) => message,
+            },
+            OverlayHit::Key { item, effects, key, at } => {
+                // A jump there, and a drag retimes it.
+                *drag = OverlayDrag::Key { item, effects, key };
+                Message::OverlayJump(at)
+            }
+            OverlayHit::Seek => Message::OverlayJump(t.t(p.x, bounds)),
+            OverlayHit::Empty => Message::LaneActive(self.1, self.2),
+            OverlayHit::Edge { item, start } => {
+                let o = &self.blocks()[item];
+                *drag = OverlayDrag::Trim { item, start, x0: p.x, from: if start { o.item.start } else { o.item.start + o.len() }, per_px };
+                Message::OverlaySelect(Some(self.r(item)))
+            }
+            OverlayHit::Item(item) => {
+                let at = self.blocks()[item].item.at;
+                *drag = OverlayDrag::Move { item, x0: p.x, at, per_px, lane: self.2, aim: at };
+                Message::OverlaySelect(Some(self.r(item)))
+            }
+        };
+        Some(canvas::Action::publish(message).and_capture())
+    }
+
+    /// The lane's signs on its head: the track's «+» on its top lane, «×»
+    /// on an empty one of several, the eye, and a red «✂» when something
+    /// on it runs past the film's end.
+    fn draw_signs(&self, frame: &mut Frame, theme: &Theme) {
+        let palette = theme.extended_palette();
+        let ink = palette.background.base.text.scale_alpha(0.75);
+        let hidden = self.head().hidden;
+        for (s, r) in self.signs() {
+            let glyph = match s {
+                Sign::Add => "+",
+                Sign::Remove => "×",
+                Sign::Trim => "✂",
+                Sign::Eye if hidden => "○",
+                Sign::Eye => "◉",
+            };
+            frame.fill(&Path::rounded_rectangle(r.position(), r.size(), 3.0.into()), palette.background.strong.color.scale_alpha(0.6));
+            let ink = if s == Sign::Trim { palette.danger.base.color } else { ink };
+            frame.fill_text(Text { content: glyph.to_owned(), position: r.center(), color: ink, size: 13.0.into(), align_x: iced::advanced::text::Alignment::Center, align_y: Vertical::Center, ..Default::default() });
+        }
+    }
+
+    /// This lane's items past the film's end, by id (gap 101).
+    fn past_end(&self) -> Vec<crate::project::Id> {
+        let end = self.0.video;
+        self.blocks().iter().filter(|o| end > 0.0 && o.item.at + o.len() > end + 1e-3).map(|o| o.item.id).collect()
     }
 
     fn item_at(&self, x: f32, b: Rectangle) -> Option<usize> {
@@ -1911,43 +1989,7 @@ impl canvas::Program<Message> for OverlayLane {
                 let item = self.item_at(p.x, bounds).filter(|_| p.y < self.0.rows.overlay)?;
                 Some(canvas::Action::publish(Message::Info(super::info::Of::Overlay(self.r(item)))).and_capture())
             }
-            Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
-                let p = cursor.position_in(bounds)?;
-                let per_px = t.span / Timeline::width(bounds) as f64;
-                let message = match self.hit(p, bounds) {
-                    OverlayHit::Nothing => return None,
-                    OverlayHit::Fold => Message::Fold(self.fold_lane(), !self.folded()),
-                    OverlayHit::Sign(Sign::Add) => Message::LaneAdd(self.1),
-                    OverlayHit::Sign(Sign::Remove) => Message::LaneRemove(self.1, self.2),
-                    OverlayHit::Sign(Sign::Eye) => Message::LaneHide(self.1, self.2, !self.head().hidden),
-                    OverlayHit::LanesFold(motion) => Message::Fold(self.fold_of(motion), !self.lanes(motion).folded),
-                    OverlayHit::Auto(motion, h) => match self.lanes(motion).press(h, p, t.held.command()) {
-                        Ok(d) => {
-                            *drag = OverlayDrag::Auto(motion, d);
-                            return Some(canvas::Action::request_redraw().and_capture());
-                        }
-                        Err(message) => message,
-                    },
-                    OverlayHit::Key { item, effects, key, at } => {
-                        // A jump there, and a drag retimes it.
-                        *drag = OverlayDrag::Key { item, effects, key };
-                        Message::OverlayJump(at)
-                    }
-                    OverlayHit::Seek => Message::OverlayJump(t.t(p.x, bounds)),
-                    OverlayHit::Empty => Message::LaneActive(self.1, self.2),
-                    OverlayHit::Edge { item, start } => {
-                        let o = &self.blocks()[item];
-                        *drag = OverlayDrag::Trim { item, start, x0: p.x, from: if start { o.item.start } else { o.item.start + o.len() }, per_px };
-                        Message::OverlaySelect(Some(self.r(item)))
-                    }
-                    OverlayHit::Item(item) => {
-                        let at = self.blocks()[item].item.at;
-                        *drag = OverlayDrag::Move { item, x0: p.x, at, per_px, lane: self.2, aim: at };
-                        Message::OverlaySelect(Some(self.r(item)))
-                    }
-                };
-                Some(canvas::Action::publish(message).and_capture())
-            }
+            Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => self.press(drag, cursor.position_in(bounds)?, bounds),
             Mouse(mouse::Event::CursorMoved { position }) => {
                 let x = position.x - bounds.x;
                 if let OverlayDrag::Move { lane, .. } = drag {
@@ -2016,6 +2058,9 @@ impl canvas::Program<Message> for OverlayLane {
         let (top, h) = (2.0, self.0.rows.overlay - 4.0);
         lane_ground(&mut frame, t, bounds, (top, h), t.duration, 4.0, palette.background.weak.color.scale_alpha(0.5));
         self.draw_items(&mut frame, theme, bounds, (top, h), colour);
+        if at_film_end(t.video, self.blocks().iter().map(|o| o.item.at + o.len())) {
+            frame.fill(&Path::rectangle(Point::new(t.x(t.video, bounds) - 1.0, top), Size::new(2.0, h)), palette.danger.base.color);
+        }
         if !self.blocks().is_empty() {
             draw_rows(&mut frame, theme, t, bounds, self.0.rows.overlay, Some(self.motion_top()));
             for motion in [false, true] {
@@ -2045,19 +2090,7 @@ impl canvas::Program<Message> for OverlayLane {
         if self.count() > 1 && super::overlay_ui::active_lane(&self.0.active_lanes, self.1, self.count()) == self.2 {
             frame.fill(&Path::rectangle(Point::new(0.0, 0.0), Size::new(3.0, self.height())), colour);
         }
-        // The track's «+» on its top lane; «×» on an empty one of several.
-        let ink = palette.background.base.text.scale_alpha(0.75);
-        let hidden = self.head().hidden;
-        for (s, r) in self.signs() {
-            let glyph = match s {
-                Sign::Add => "+",
-                Sign::Remove => "×",
-                Sign::Eye if hidden => "○",
-                Sign::Eye => "◉",
-            };
-            frame.fill(&Path::rounded_rectangle(r.position(), r.size(), 3.0.into()), palette.background.strong.color.scale_alpha(0.6));
-            frame.fill_text(Text { content: glyph.to_owned(), position: r.center(), color: ink, size: 13.0.into(), align_x: iced::advanced::text::Alignment::Center, align_y: Vertical::Center, ..Default::default() });
-        }
+        self.draw_signs(&mut frame, theme);
         if !self.blocks().is_empty() {
             let (effects, motion) = (self.lanes(false), self.lanes(true));
             head_rows(&mut frame, theme, (self.0.rows.overlay, &effects.tag()), Some((self.motion_top(), &motion.tag())));
@@ -2956,6 +2989,13 @@ fn draw_fades(frame: &mut Frame, (l, r): (f32, f32), top: f32, h: f32, len: f64,
     }
 }
 
+/// Whether a lane's clips, ending at `ends`, reach the film's end
+/// `video` (gap 101): held there by a drag, or past it; its mark there
+/// turns red. Never without pictures.
+fn at_film_end(video: f64, mut ends: impl Iterator<Item = f64>) -> bool {
+    video > 0.0 && ends.any(|e| e >= video - 1e-3)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -3262,6 +3302,27 @@ mod tests {
         assert_eq!(low.r(0), (Track::Text, 0, 0));
         // A drag's lane by height: above the low lane is the high one.
         assert_eq!((low.lane_at_y(5.0), low.lane_at_y(-5.0), high.lane_at_y(high.height() + 5.0), high.lane_at_y(-50.0)), (0, 1, 0, 1), "none above the top");
+    }
+
+    #[test]
+    fn a_lane_running_past_the_film_shows_a_red_mark_and_a_trim_sign() {
+        let b = timeline().1;
+        // Text from 2 to 6 s on a film `video` long.
+        let lane = |video: f64| {
+            let mut t = timeline().0;
+            let item = crate::overlay::Item { id: 9, input: "".into(), text: Some(Default::default()), at: 2.0, start: 0.0, end: 4.0, motion: vec![], effects: vec![], bars: None, automation: vec![], kind: None, style: None, group: None };
+            t.texts = vec![vec![OverlayBlock { item, label: "hi".into(), thumb: None }]];
+            t.text_auto = vec![vec![]];
+            t.folds.text = false;
+            t.video = video;
+            OverlayLane(Arc::new(t), Track::Text, 0)
+        };
+        assert!(lane(6.0).signs().iter().all(|(s, _)| *s != Sign::Trim), "ends with the film: nothing to trim");
+        let lane = lane(5.0);
+        let trim = lane.signs().into_iter().find(|(s, _)| *s == Sign::Trim).unwrap().1.center();
+        assert_eq!((lane.hit(trim, b), lane.past_end()), (OverlayHit::Sign(Sign::Trim), vec![9]));
+        assert!(at_film_end(6.0, [2.0, 6.0].into_iter()) && at_film_end(5.0, [6.0].into_iter()), "held at it, or past it");
+        assert!(!at_film_end(6.0, [5.9].into_iter()) && !at_film_end(0.0, [3.0].into_iter()), "short of it, or no film");
     }
 
     #[test]

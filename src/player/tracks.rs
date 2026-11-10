@@ -183,6 +183,9 @@ impl App {
                 self.op(Op::Sound(SoundOp::TrackLevel { track: Some(which), db }));
             }
             Message::LevelDone => self.edit.commit(),
+            Message::TrimToEnd(things) if !things.is_empty() => {
+                self.op(Op::Project(crate::model::ops::project::ProjectOp::TrimToEnd { things }));
+            }
             Message::TrackSync(track, on) => {
                 self.op(Op::Sound(SoundOp::SyncLock { track, on }));
             }

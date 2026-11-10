@@ -1417,7 +1417,9 @@ struct OverlayLane(Arc<Timeline>, Track, usize);
 enum OverlayDrag {
     #[default]
     None,
-    Move { item: usize, x0: f32, at: f64, per_px: f64 },
+    /// An item moved along, and up or down onto lane `lane` of its track
+    /// (gap 97), landing there when let go.
+    Move { item: usize, x0: f32, at: f64, per_px: f64, lane: usize },
     /// An edge, at own time `from` when pressed.
     Trim { item: usize, start: bool, x0: f32, from: f64, per_px: f64 },
     /// A keyframe mark: item `item`'s effect keyframe `key` (`effects`) or
@@ -1483,6 +1485,28 @@ impl OverlayLane {
     }
     fn top(&self) -> bool {
         self.2 + 1 == self.count()
+    }
+
+    /// The lane of its track at height `y` (from this lane's top; above it
+    /// negative): the lanes above are drawn over it, the lowest last.
+    fn lane_at_y(&self, y: f32) -> usize {
+        let height = |l: usize| OverlayLane(self.0.clone(), self.1, l).height();
+        let mut l = self.2;
+        if y < 0.0 {
+            // How far above this lane's top the one reached starts.
+            let mut above = 0.0;
+            while l + 1 < self.count() && y < -above {
+                l += 1;
+                above += height(l);
+            }
+        } else {
+            let mut bottom = height(l);
+            while l > 0 && y >= bottom {
+                l -= 1;
+                bottom += height(l);
+            }
+        }
+        l
     }
 
     /// Its name and whether it's hidden (gap 97).
@@ -1741,7 +1765,7 @@ impl canvas::Program<Message> for OverlayLane {
                         Message::OverlaySelect(Some(self.r(item)))
                     }
                     OverlayHit::Item(item) => {
-                        *drag = OverlayDrag::Move { item, x0: p.x, at: self.blocks()[item].item.at, per_px };
+                        *drag = OverlayDrag::Move { item, x0: p.x, at: self.blocks()[item].item.at, per_px, lane: self.2 };
                         Message::OverlaySelect(Some(self.r(item)))
                     }
                 };
@@ -1749,9 +1773,12 @@ impl canvas::Program<Message> for OverlayLane {
             }
             Mouse(mouse::Event::CursorMoved { position }) => {
                 let x = position.x - bounds.x;
+                if let OverlayDrag::Move { lane, .. } = drag {
+                    *lane = self.lane_at_y(position.y - bounds.y);
+                }
                 let message = match drag {
                     OverlayDrag::None => return None,
-                    OverlayDrag::Move { item, x0, at, per_px } => {
+                    OverlayDrag::Move { item, x0, at, per_px, .. } => {
                         let (track, item) = (self.1, *item);
                         let at = *at + (x - *x0) as f64 * *per_px;
                         let len = self.blocks()[item].len();
@@ -1778,6 +1805,11 @@ impl canvas::Program<Message> for OverlayLane {
             Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => match std::mem::take(drag) {
                 OverlayDrag::None => None,
                 OverlayDrag::Auto(motion, d) => Some(self.lanes(motion).release(d, bounds).map_or_else(canvas::Action::request_redraw, canvas::Action::publish).and_capture()),
+                // Let go over another lane: it lands there, where it fits.
+                OverlayDrag::Move { item, lane, .. } if lane != self.2 => {
+                    let at = self.blocks().get(item)?.item.at;
+                    Some(canvas::Action::publish(Message::OverlayToLane(self.r(item), at, lane)).and_capture())
+                }
                 _ => Some(canvas::Action::publish(Message::ScrubDone).and_capture()),
             },
             _ => None,
@@ -1893,10 +1925,14 @@ impl canvas::Program<Message> for OverlayLane {
                 let edge = if start { o.item.start } else { o.item.start + o.len() };
                 format!("{} · {}", signed(edge - from), seconds(o.len()))
             }),
+            OverlayDrag::Move { lane, .. } if lane != self.2 => Some(format!("→ {}", OverlayLane(self.0.clone(), self.1, lane).tag_name(self.name().0).trim_start_matches("▾ "))),
             OverlayDrag::Move { item, at, .. } => self.blocks().get(item).map(|o| format!("{} · at {}", signed(o.item.at - at), dailix_sheet::clock(o.item.at, 1))),
             _ => None,
         };
-        if let (Some(p), Some(said)) = (cursor.position_in(bounds), said) {
+        // Over another lane the pointer is outside this one: said at the
+        // lane's edge it left by.
+        let p = cursor.position().map(|p| Point::new(p.x - bounds.x, (p.y - bounds.y).clamp(8.0, bounds.height - 8.0)));
+        if let (Some(p), Some(said)) = (p, said) {
             readout(&mut frame, bounds, p, &said);
         }
         draw_snap_line(&mut frame, t, bounds, bounds.height);
@@ -3012,6 +3048,8 @@ mod tests {
         assert_eq!((at(&low, Sign::Remove), low.blocks().len()), (None, 1), "one with items stays");
         assert_eq!(low.hit(at(&low, Sign::Eye).unwrap(), b), OverlayHit::Sign(Sign::Eye), "each can be hidden");
         assert_eq!(low.r(0), (Track::Text, 0, 0));
+        // A drag's lane by height: above the low lane is the high one.
+        assert_eq!((low.lane_at_y(5.0), low.lane_at_y(-5.0), high.lane_at_y(high.height() + 5.0), high.lane_at_y(-50.0)), (0, 1, 0, 1), "none above the top");
     }
 
     #[test]

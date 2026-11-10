@@ -217,6 +217,13 @@ impl App {
             Message::LaneRemove(track, lane) => {
                 self.op(Op::Item(ItemOp::RemoveLane { track, lane }));
             }
+            Message::OverlayToLane(r, at, lane) => {
+                if let Some(item) = self.edit.item(r).map(|it| it.id) {
+                    self.op(Op::Item(ItemOp::Move { item, at, lane: Some(lane) }));
+                    self.active_lanes[track_index(r.0)] = lane;
+                }
+                self.edit.commit();
+            }
             Message::OverlayMove(r, at) => {
                 if let Some(item) = self.edit.item(r).map(|it| it.id) {
                     self.edit.begin();

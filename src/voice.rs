@@ -167,6 +167,21 @@ pub fn write_made(dir: &Path, made: &BTreeMap<String, Made>) -> std::io::Result<
     crate::store::replace(&dir.join(MADE), serde_json::to_string_pretty(made).map_err(std::io::Error::other)?.as_bytes())
 }
 
+/// The clips whose marking names a voice that isn't made (deleted, or
+/// never made here): a line each, as `sheet check` says it (Omnix audit
+/// C12). The edit plays the clip's own sound for such a one.
+pub fn gone(layout: &Layout, sheet: &crate::Sheet) -> Vec<String> {
+    sheet
+        .clips
+        .iter()
+        .filter_map(|(key, c)| {
+            let name = c.audio.as_deref().filter(|a| !a.is_empty())?;
+            let made = dir(layout, key).is_some_and(|d| track(&d, name).is_file());
+            (!made).then(|| format!("clip {key}: uses voice {name}, which isn't made (its own sound plays)"))
+        })
+        .collect()
+}
+
 /// Held while `_recipes.json` is read and written again.
 static RECORDING: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
@@ -213,6 +228,13 @@ mod tests {
         let old = r#"{"dnn6": {"recipe": "dnn6", "kind": "dnn", "args": ["-D", "-a", "6"], "note": "n", "source": "/x/a.mp4", "source_size": 12, "source_mtime": 1}}"#;
         std::fs::write(tmp.join(MADE), old).unwrap();
         assert_eq!((made(&tmp)["dnn6"].source_size, made(&tmp)["dnn6"].lufs), (12, None));
+        // A marking naming a voice that's there passes; one gone is said.
+        let layout = Layout::new(&tmp);
+        let clip_dir = dir(&layout, "2030-05-01/A.MP4").unwrap();
+        std::fs::create_dir_all(&clip_dir).unwrap();
+        std::fs::write(track(&clip_dir, "dnn6"), b"").unwrap();
+        let sheet: crate::Sheet = serde_json::from_str(r#"{"clips": {"2030-05-01/A.MP4": {"audio": "dnn6"}, "2030-05-01/B.MP4": {"audio": "eq"}}}"#).unwrap();
+        assert_eq!(gone(&layout, &sheet), ["clip 2030-05-01/B.MP4: uses voice eq, which isn't made (its own sound plays)"]);
         // Two recorded one after another: both kept.
         record(&tmp, "eq", Made::stamp(recipe("eq").unwrap(), &src).unwrap()).unwrap();
         assert_eq!(made(&tmp).keys().collect::<Vec<_>>(), ["dnn6", "eq"]);

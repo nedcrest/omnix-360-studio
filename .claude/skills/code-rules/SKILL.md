@@ -125,7 +125,8 @@ added (user, 2026-11-11):
       says so: on in `Cargo.toml`, threshold in `clippy.toml`);
 - [ ] CPU and GPU agree where it draws, with a test;
 - [ ] no warning in a file it touched, old ones cleared in their own
-      commit.
+      commit — except `too_many_lines`, which holds for the functions
+      it touched (the old long ones wait till they're touched).
 
 The 33 long functions there were when the lint came in are split as
 they're next touched, not in a package.

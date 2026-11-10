@@ -1436,6 +1436,13 @@ under the same pictures.
   keep a song with its cuts). Sync lock first; groups use it later.
 - Milestone «Ритм і переходи».
 
+**Built 2026-11-11, waits for the user's check:** `Music::sync`,
+`SoundOp::SyncLock`, `ripple_of` and `Project::ripple_locked` run after
+every cut op; «Sync lock» on a sound lane's menu, «· sync» on its name;
+`describe` says it. A clip starting right at the point counts as across
+it (a trim dragged there and back puts it back). Beats found to the
+sample on the way (gap 13).
+
 ## Format rule for all of these
 
 New fields only, each `#[serde(default, skip_serializing_if = …)]`, so every

@@ -81,7 +81,7 @@ pub enum BinMsg {
 }
 
 /// The folder under `root` a file of `kind` goes in: the section's named
-/// `title`, else the first section of its kind (Footage, Music, Graphics).
+/// `title`, else the first section of its kind (Footage, Music, Pictures).
 pub fn folder_for(root: &Path, kind: Kind, title: Option<&str>) -> Option<PathBuf> {
     super::bin::SECTIONS.iter().find(|(t, k, _)| k.alike(kind) && title.is_none_or(|title| *t == title)).map(|(_, _, dirs)| root.join(dirs[0]))
 }
@@ -672,9 +672,9 @@ mod tests {
         assert_eq!(folder_for(root, Kind::Clip, None), Some(PathBuf::from("/p/01_footage")));
         assert_eq!(folder_for(root, Kind::Clip, Some("External video")), Some(PathBuf::from("/p/06_external")));
         assert_eq!(folder_for(root, Kind::Sound(SoundTrack::Music), Some("Sound effects")), Some(PathBuf::from("/p/07_sfx")));
-        assert_eq!(folder_for(root, Kind::Picture, None), Some(PathBuf::from("/p/08_graphics")));
-        // A sound picked for the Graphics section doesn't belong there.
-        assert_eq!(folder_for(root, Kind::Sound(SoundTrack::Music), Some("Graphics")), None);
+        assert_eq!(folder_for(root, Kind::Picture, None), Some(PathBuf::from("/p/08_pictures")));
+        // A sound picked for the Pictures section doesn't belong there.
+        assert_eq!(folder_for(root, Kind::Sound(SoundTrack::Music), Some("Pictures")), None);
     }
 
     #[test]

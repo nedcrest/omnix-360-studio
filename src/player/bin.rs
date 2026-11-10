@@ -73,7 +73,7 @@ pub(super) const SECTIONS: [(&str, Kind, &[&str]); 6] = [
     ("Music", Kind::Sound(SoundTrack::Music), &[SoundTrack::Music.folder()]),
     ("Voice-over", Kind::Sound(SoundTrack::Voice), &[SoundTrack::Voice.folder()]),
     ("Sound effects", Kind::Sound(SoundTrack::Sfx), &[SoundTrack::Sfx.folder()]),
-    ("Graphics", Kind::Picture, &["08_graphics"]),
+    ("Pictures", Kind::Picture, &[dailix_sheet::layout::PICTURES, dailix_sheet::layout::OLD_PICTURES]),
 ];
 
 pub(super) const CLIP_EXT: &[&str] = &["mp4", "mov", "mkv", "m4v", "avi", "mts", "webm", "osv", "insv"];
@@ -616,7 +616,7 @@ mod tests {
         let s = scan(&dir);
         let titles: Vec<_> = s.iter().map(|s| s.title).collect();
         // Cleaned voice belongs to its clip: not listed.
-        assert_eq!(titles, ["Footage", "Footage", "Footage", "Music", "Sound effects", "Graphics"]);
+        assert_eq!(titles, ["Footage", "Footage", "Footage", "Music", "Sound effects", "Pictures"]);
         assert_eq!(s[0].files, [dir.join("01_footage/DJI_0001.MP4")]);
         assert_eq!(s.iter().map(Section::heading).take(3).collect::<Vec<_>>(), ["Footage", "Footage · 2030-05-01", "Footage · 2030-05-02"]);
         assert_eq!(s[1].files, [dir.join("01_footage/2030-05-01/A.MP4")]);

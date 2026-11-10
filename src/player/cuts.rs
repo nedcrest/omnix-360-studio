@@ -99,7 +99,7 @@ impl App {
             Message::AddBlank => {
                 // In the project's graphics folder, so it travels with the
                 // project; before the first save, in the cache.
-                let dir = self.project.as_deref().and_then(bin::root).map(|r| r.join("08_graphics")).or_else(|| crate::cache::dir().map(|d| d.join("blank"))).unwrap_or_else(std::env::temp_dir);
+                let dir = self.project.as_deref().and_then(bin::root).map(|r| r.join(dailix_sheet::layout::PICTURES)).or_else(|| crate::cache::dir().map(|d| d.join("blank"))).unwrap_or_else(std::env::temp_dir);
                 match crate::blank::ensure(&dir) {
                     Ok(path) => {
                         // Placed from the playhead now, as a bin button does.

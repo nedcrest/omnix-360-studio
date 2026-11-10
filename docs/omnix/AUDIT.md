@@ -46,16 +46,6 @@ and Dailix).
 
 ## D. Stale comments and leftovers
 
-Omnix: `effects.rs:574` (`text_controls` says «the text panel»), `:786`,
-`:727` (a stray line on `style_of`), `:56` (`EffectMsg::Style` «the cut's»),
-the `PARAMS` doc («the first eleven»); `overlay_ui.rs:2`; `bars.rs:238`
-(«Text at the left»); `mod.rs:550` (`DeleteCut` deletes far more);
-`transitions_panel.rs:197` («a join» — any stretch); `selection.rs:51`;
-`cuts.rs:100` («graphics folder»); `bin.rs:68` and its test (voices at
-the project's root, made by footage-agent); `docs/omnix/CONTEXT.md:132`
-(`08_graphics`). Dailix: `Made::is_current` used only by tests (wire it
-in to flag a stale voice, or remove it); `Settings::tmp` used by
-nothing yet (say so).
-
-No large dead code was found; every message variant is built and
-matched; settings are each read and written.
+All fixed (Omnix `b17d380`, Dailix `9ad0500`). No large dead code was
+found; every message variant is built and matched; settings are each
+read and written.

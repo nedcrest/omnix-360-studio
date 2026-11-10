@@ -658,8 +658,7 @@ mod tests {
 
     #[test]
     fn uses_names_the_cuts_and_lanes_a_file_is_in() {
-        let mut p = Project::default();
-        p.cuts = vec![Cut::new(PathBuf::from("a.mp4"), 0.0, 4.0), Cut::new(PathBuf::from("b.mp4"), 0.0, 3.0), Cut::new(PathBuf::from("a.mp4"), 5.0, 9.0)];
+        let mut p = Project { cuts: vec![Cut::new(PathBuf::from("a.mp4"), 0.0, 4.0), Cut::new(PathBuf::from("b.mp4"), 0.0, 3.0), Cut::new(PathBuf::from("a.mp4"), 5.0, 9.0)], ..Default::default() };
         p.music.clips = vec![serde_json::from_value(serde_json::json!({"input": "song.mp3", "at": 0.0, "in": 0.0, "out": 5.0})).unwrap()];
         assert_eq!(uses(&p, Path::new("a.mp4")).as_deref(), Some("cuts 1, 3"));
         assert_eq!(uses(&p, Path::new("b.mp4")).as_deref(), Some("cut 2"));

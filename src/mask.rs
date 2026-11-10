@@ -4,10 +4,14 @@
 
 use rayon::prelude::*;
 
-/// `mask` moved `by` pixels right and down.
+/// `mask` moved `by` pixels right and down (all of it off a picture
+/// smaller than that).
 pub fn shift<T: Copy + Default>(mask: &[T], (w, h): (usize, usize), by: f64) -> Vec<T> {
     let d = by.round() as usize;
     let mut out = vec![T::default(); w * h];
+    if d >= w {
+        return out;
+    }
     for y in d..h {
         out[y * w + d..(y + 1) * w].copy_from_slice(&mask[(y - d) * w..(y - d + 1) * w - d]);
     }
@@ -18,7 +22,7 @@ pub fn shift<T: Copy + Default>(mask: &[T], (w, h): (usize, usize), by: f64) -> 
 /// Gaussian for a shadow.
 pub fn blur(mask: &[f32], (w, h): (usize, usize), r: f64) -> Vec<f32> {
     let r = r.round() as usize;
-    if r == 0 {
+    if r == 0 || w == 0 || h == 0 {
         return mask.to_vec();
     }
     let mut a = mask.to_vec();
@@ -59,6 +63,9 @@ fn transpose<T: Copy + Default>(m: &[T], w: usize, h: usize) -> Vec<T> {
 /// `inside`, in pixels (exact, in two passes: Felzenszwalb and
 /// Huttenlocher's distance transform).
 pub fn distance(inside: &[bool], (w, h): (usize, usize)) -> Vec<f32> {
+    if w == 0 || h == 0 {
+        return Vec::new();
+    }
     let far = ((w * w + h * h) as f64) * 4.0;
     let mut f: Vec<f64> = inside.iter().map(|&i| if i { 0.0 } else { far }).collect();
     f.par_chunks_mut(w).for_each(squared_1d);
@@ -102,5 +109,15 @@ mod tests {
         inside[3 * w + 4] = true;
         let d = super::distance(&inside, (w, h));
         assert_eq!((d[3 * w + 4], d[3 * w + 7], d[6 * w + 8]), (0.0, 3.0, 5.0));
+    }
+
+    #[test]
+    fn edge_sizes_dont_panic() {
+        let m = [1.0f32; 6];
+        assert_eq!(super::shift(&m, (3, 2), 1.0), [0.0, 0.0, 0.0, 0.0, 1.0, 1.0]);
+        assert_eq!(super::shift(&m, (3, 2), 3.0), [0.0; 6], "moved right off it");
+        assert_eq!(super::shift(&m, (3, 2), 2.0), [0.0; 6], "moved down off it");
+        assert!(super::blur(&[], (0, 4), 2.0).is_empty() && super::distance(&[], (5, 0)).is_empty());
+        assert_eq!(super::distance(&[true], (1, 1)), [0.0]);
     }
 }

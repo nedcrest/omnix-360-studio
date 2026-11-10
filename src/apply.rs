@@ -75,6 +75,33 @@ fn warnings(p: &Project) -> Vec<String> {
     said
 }
 
+/// How a measuring command (`normalize`, `duck`, `autocolour`) ends: its
+/// ops applied to `project` as one step and written to `output` if given;
+/// or, `print`, only checked and printed as an ops file `omnix apply`
+/// takes (audit C11), the project left alone.
+pub fn finish(project: Project, ops: &[Op], print: bool, output: Option<&Path>) -> Result<()> {
+    let mut edit = Edit::default();
+    edit.replace(project);
+    edit.batch(ops).map_err(|(n, e)| anyhow::anyhow!("op {} of {}: {e}", n + 1, ops.len()))?;
+    if print {
+        println!("{}", serde_json::to_string_pretty(ops)?);
+    } else if let Some(out) = output {
+        edit.save(out)?;
+        eprintln!("wrote {}", out.display());
+    }
+    Ok(())
+}
+
+/// What a measuring command says of each thing: on stdout, or on stderr
+/// while stdout carries its ops (`--ops`).
+pub fn say(print_ops: bool, line: &str) {
+    if print_ops {
+        eprintln!("{line}");
+    } else {
+        println!("{line}");
+    }
+}
+
 /// The JSON Schema of an ops file: a list of `Op`, each field described by
 /// its doc comment, so an agent's tools come from the same types the
 /// player applies.

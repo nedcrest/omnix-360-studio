@@ -91,24 +91,18 @@ pub fn find_speech(project: &Project) -> anyhow::Result<Vec<(f64, f64)>> {
 /// `omnix duck`: the music lowered `depth` dB under the project's
 /// speech, as the Audio panel's «Lower under speech» does; prints where,
 /// writes the project to `output` if given.
-pub fn run(path: &std::path::Path, depth: f64, output: Option<&std::path::Path>) -> anyhow::Result<()> {
+pub fn run(path: &std::path::Path, depth: f64, ops: bool, output: Option<&std::path::Path>) -> anyhow::Result<()> {
     let project = Project::load(path)?;
     let spans = find_speech(&project)?;
     for (a, b) in &spans {
-        println!("speech {a:7.2} – {b:7.2} s");
+        crate::apply::say(ops, &format!("speech {a:7.2} – {b:7.2} s"));
     }
     if spans.is_empty() {
-        println!("no speech found: it's looked for in cleaned voices and on the Voice lane");
+        crate::apply::say(ops, "no speech found: it's looked for in cleaned voices and on the Voice lane");
     }
     // Through the ops, as the Audio panel's button: checked, the same change.
-    let mut edit = crate::model::edit::Edit::default();
-    edit.replace(project);
-    edit.apply(&crate::model::ops::Op::Sound(crate::model::ops::sound::SoundOp::Duck { depth, speech: spans }))?;
-    if let Some(out) = output {
-        edit.save(out)?;
-        eprintln!("wrote {}", out.display());
-    }
-    Ok(())
+    let duck = crate::model::ops::Op::Sound(crate::model::ops::sound::SoundOp::Duck { depth, speech: spans });
+    crate::apply::finish(project, &[duck], ops, output)
 }
 
 /// The music lowered under `speech` (edit time): each clip's own line, in

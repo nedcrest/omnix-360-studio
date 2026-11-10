@@ -150,7 +150,7 @@ pub fn ops(cut: crate::project::Id, c: &Correction, levels: bool) -> Vec<crate::
 /// `omnix autocolour`: each cut (all, or those with ids `only`) measured
 /// and corrected, a line each; one that can't be read is left
 /// as it was. Writes the project to `output` if given.
-pub fn run(project: &std::path::Path, only: &[crate::project::Id], levels: bool, output: Option<&std::path::Path>) -> Result<()> {
+pub fn run(project: &std::path::Path, only: &[crate::project::Id], levels: bool, print_ops: bool, output: Option<&std::path::Path>) -> Result<()> {
     let p = crate::project::Project::load(project)?;
     let mut all = Vec::new();
     for cut in p.cuts_by_id(only)?.into_iter().map(|i| &p.cuts[i]) {
@@ -158,7 +158,7 @@ pub fn run(project: &std::path::Path, only: &[crate::project::Id], levels: bool,
         match measure_cut(cut) {
             Ok(m) => {
                 let c = correction(&m);
-                println!(
+                crate::apply::say(print_ops, &format!(
                     "cut #{:<3} {name}  black {:.0} white {:.0} middle {:.0}{}  →  black_in {:.3} white_in {:.3} exposure {:+.2} temperature {:+.2} tint {:+.2}",
                     cut.id,
                     m.black * 255.0,
@@ -170,20 +170,13 @@ pub fn run(project: &std::path::Path, only: &[crate::project::Id], levels: bool,
                     c.exposure,
                     c.temperature,
                     c.tint
-                );
+                ));
                 all.extend(ops(cut.id, &c, levels));
             }
-            Err(e) => println!("cut #{:<3} {name}  left as it is: {e:#}", cut.id),
+            Err(e) => crate::apply::say(print_ops, &format!("cut #{:<3} {name}  left as it is: {e:#}", cut.id)),
         }
     }
-    let mut edit = crate::model::edit::Edit::default();
-    edit.replace(p);
-    edit.batch(&all).map_err(|(n, e)| anyhow::anyhow!("op {} of {}: {e}", n + 1, all.len()))?;
-    if let Some(out) = output {
-        edit.save(out)?;
-        eprintln!("wrote {}", out.display());
-    }
-    Ok(())
+    crate::apply::finish(p, &all, print_ops, output)
 }
 
 #[cfg(test)]

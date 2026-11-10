@@ -129,7 +129,7 @@ pub fn bring_to(path: &Path, target: f64, format: crate::ffmpeg::Format) -> Resu
 /// (`SoundOp::Normalized`, as the player's dialog does), printing a line
 /// each; writes the project to `output` if given. One that can't be read
 /// is left as it was and the rest go on.
-pub fn normalize(project: &std::path::Path, only: &[crate::project::Id], track: Option<crate::project::SoundTrack>, even: bool, output: Option<&std::path::Path>) -> Result<()> {
+pub fn normalize(project: &std::path::Path, only: &[crate::project::Id], track: Option<crate::project::SoundTrack>, even: bool, print_ops: bool, output: Option<&std::path::Path>) -> Result<()> {
     use crate::model::ops::{Op, SoundRef, sound::SoundOp};
     use crate::project::Own;
     let p = crate::project::Project::load(project)?;
@@ -144,22 +144,15 @@ pub fn normalize(project: &std::path::Path, only: &[crate::project::Id], track: 
         match measure_stretch(&file, range, filter.as_deref()) {
             Ok(measured) => {
                 match measured {
-                    Some((lufs, gain)) => println!("{sound:<14} {name}  {lufs:.1} LUFS  {gain:+.1} dB"),
-                    None => println!("{sound:<14} {name}  silent, level kept"),
+                    Some((lufs, gain)) => crate::apply::say(print_ops, &format!("{sound:<14} {name}  {lufs:.1} LUFS  {gain:+.1} dB")),
+                    None => crate::apply::say(print_ops, &format!("{sound:<14} {name}  silent, level kept")),
                 }
                 ops.push(Op::Sound(SoundOp::Normalized { sound, lufs: measured.map(|(lufs, _)| lufs), even }));
             }
-            Err(e) => println!("{sound:<14} {name}  couldn't measure, left as it is: {e:#}"),
+            Err(e) => crate::apply::say(print_ops, &format!("{sound:<14} {name}  couldn't measure, left as it is: {e:#}")),
         }
     }
-    let mut edit = crate::model::edit::Edit::default();
-    edit.replace(p);
-    edit.batch(&ops).map_err(|(n, e)| anyhow::anyhow!("op {} of {}: {e}", n + 1, ops.len()))?;
-    if let Some(out) = output {
-        edit.save(out)?;
-        eprintln!("wrote {}", out.display());
-    }
-    Ok(())
+    crate::apply::finish(p, &ops, print_ops, output)
 }
 
 #[cfg(test)]

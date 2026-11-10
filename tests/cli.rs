@@ -386,3 +386,25 @@ fn mixcheck_says_the_films_loudness_over_time() {
     assert_eq!(lines.len(), 3, "{said}");
     assert!(lines.iter().all(|l| l.contains("LUFS") && !l.contains("silent")), "{said}");
 }
+
+#[test]
+fn a_measuring_command_prints_the_ops_it_would_apply() {
+    if !has_ffmpeg() {
+        return;
+    }
+    let d = dir("printops");
+    clip(&d, "a.mp4", 3.0, 440);
+    std::fs::write(d.join("edit.json"), r#"{"cuts": [{"input": "a.mp4", "in": 0, "out": 3}]}"#).unwrap();
+    // On stdout the ops alone; what it measured on stderr.
+    let out = Command::new(env!("CARGO_BIN_EXE_omnix")).current_dir(&d).args(["--no-cache", "normalize", "edit.json", "--ops"]).output().unwrap();
+    let ops: serde_json::Value = serde_json::from_slice(&out.stdout).expect("stdout is an ops file");
+    std::fs::write(d.join("ops.json"), serde_json::to_string(&ops).unwrap()).unwrap();
+    omnix(&d, &["apply", "edit.json", "ops.json", "-o", "applied.json"]);
+    omnix(&d, &["normalize", "edit.json", "-o", "direct.json"]);
+    let (applied, direct) = (std::fs::read_to_string(d.join("applied.json")).unwrap(), std::fs::read_to_string(d.join("direct.json")).unwrap());
+    let untouched = !d.join("edit.json.bak").exists() && std::fs::read_to_string(d.join("edit.json")).unwrap().len() < 80;
+    std::fs::remove_dir_all(&d).unwrap();
+    assert!(String::from_utf8_lossy(&out.stderr).contains("LUFS") && ops[0]["op"] == "normalized", "{ops}");
+    assert_eq!(applied, direct);
+    assert!(untouched, "--ops writes nothing");
+}

@@ -36,11 +36,10 @@ an op; ops hold values to their ranges and `apply` warns of what's
 missing; `looks` lists LUTs and fonts; `text_field` sets one field;
 `looks --save-template`; `--cuts` takes ids (C8); the schema gives every op a description and
 the values their ranges and defaults (C9); `omnix frame`, `omnix
-scopes` and `mixcheck --every` (C10).
+scopes` and `mixcheck --every` (C10); `--ops` on the measuring commands (C11).
 
 | # | What | Fix |
 |---|---|---|
-| C11 | `normalize`/`duck`/`autocolour` can't print the ops they'd apply | `--ops` |
 | C12 | Dailix: a trip's description and tags can't be changed by command after it's made; no `dailix voice use` shortcut; a marking naming a voice that's gone isn't flagged | `dailix about`, `voice use`, a `sheet check` warning |
 
 ## D. Stale comments and leftovers

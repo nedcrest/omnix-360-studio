@@ -97,6 +97,10 @@ pub(crate) enum Cmd {
         /// The levels alone (black and white points).
         #[arg(long)]
         levels: bool,
+        /// Print the ops it would apply (an ops file for `apply`) instead
+        /// of applying them; what it measured goes to stderr.
+        #[arg(long)]
+        ops: bool,
         #[arg(short, long)]
         output: Option<PathBuf>,
     },
@@ -117,6 +121,10 @@ pub(crate) enum Cmd {
         /// ones left alone.
         #[arg(long)]
         even: bool,
+        /// Print the ops it would apply (an ops file for `apply`) instead
+        /// of applying them; what it measured goes to stderr.
+        #[arg(long)]
+        ops: bool,
         #[arg(short, long)]
         output: Option<PathBuf>,
     },
@@ -141,6 +149,10 @@ pub(crate) enum Cmd {
         /// How far down, dB.
         #[arg(long, default_value_t = 18.0)]
         depth: f64,
+        /// Print the ops it would apply (an ops file for `apply`) instead
+        /// of applying them; what it measured goes to stderr.
+        #[arg(long)]
+        ops: bool,
         #[arg(short, long)]
         output: Option<PathBuf>,
     },
@@ -695,9 +707,9 @@ pub(crate) fn run() -> Result<()> {
         }
         Cmd::Info { input } => info(&input)?,
         Cmd::Check { project, fast_pan, opts } => check::check(&project, &opts.into(), fast_pan)?,
-        Cmd::Autocolour { project, cuts, levels, output } => crate::autocolour::run(&project, &cuts, levels, output.as_deref())?,
-        Cmd::Normalize { project, cuts, track, even, output } => loudness::normalize(&project, &cuts, track, even, output.as_deref())?,
-        Cmd::Duck { project, depth, output } => crate::duck::run(&project, depth, output.as_deref())?,
+        Cmd::Autocolour { project, cuts, levels, ops, output } => crate::autocolour::run(&project, &cuts, levels, ops, output.as_deref())?,
+        Cmd::Normalize { project, cuts, track, even, ops, output } => loudness::normalize(&project, &cuts, track, even, ops, output.as_deref())?,
+        Cmd::Duck { project, depth, ops, output } => crate::duck::run(&project, depth, ops, output.as_deref())?,
         Cmd::Apply { project, ops, output } => crate::apply::run(&project, &ops, output.as_deref())?,
         Cmd::Describe { project } => crate::apply::describe(&project)?,
         Cmd::OpsSchema => println!("{}", crate::apply::schema()),

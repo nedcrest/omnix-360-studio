@@ -56,7 +56,26 @@ pub struct Project {
     /// Lanes of text, over the overlays.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub text: Vec<crate::overlay::Lane>,
+    /// Groups of clips (gap 8): each a colour, its members by their
+    /// `group` field.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub groups: Vec<Group>,
 }
+
+/// A group of clips — cuts, sound clips, text, pictures — that select and
+/// move together, shown in its colour (gap 8).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Group {
+    pub id: Id,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub name: String,
+    pub colour: crate::text::Colour,
+}
+
+/// The colours new groups take in turn: apart from each other and from
+/// the lanes' own (Okabe-Ito's set, colour-blind safe).
+pub const GROUP_COLOURS: [[u8; 3]; 6] = [[230, 159, 0], [86, 180, 233], [0, 158, 115], [240, 228, 66], [213, 94, 0], [204, 121, 167]];
 
 /// The edit's fades from black at its start and to black at its end, in
 /// seconds, picture and sound together.
@@ -463,6 +482,9 @@ pub struct MusicClip {
     /// the line without it instead of lowering twice (user, 2026-11-02).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ducked: Option<Ducked>,
+    /// The group it's in (gap 8), by its id in `Project::groups`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group: Option<Id>,
 }
 
 /// An auto-duck as applied to a clip's own line: how far down, and where,
@@ -712,6 +734,9 @@ pub struct Cut {
     /// Its LUT, loaded (`resolve_lut`): found when the clip is opened.
     #[serde(skip)]
     pub lut_applied: Option<usize>,
+    /// The group it's in (gap 8), by its id in `Project::groups`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group: Option<Id>,
 }
 
 impl Cut {
@@ -753,6 +778,7 @@ impl Cut {
             loudness: None,
             flat: false,
             lut_applied: None,
+            group: None,
         }
     }
 
@@ -1164,6 +1190,57 @@ impl Project {
                 *id = next;
                 seen.insert(next);
                 next += 1;
+            }
+        }
+        self.settle_groups();
+    }
+
+    /// Every clip's id and the group it's in (gap 8), to change.
+    fn group_slots(&mut self) -> Vec<(Id, &mut Option<Id>)> {
+        let mut slots: Vec<(Id, &mut Option<Id>)> = self.cuts.iter_mut().map(|c| (c.id, &mut c.group)).collect();
+        let [music, sfx, sfx2, voice] = [&mut self.music, &mut self.sfx, &mut self.sfx2, &mut self.voice];
+        for t in [music, sfx, sfx2, voice] {
+            slots.extend(t.clips.iter_mut().map(|c| (c.id, &mut c.group)));
+        }
+        slots.extend(self.overlays.iter_mut().chain(&mut self.text).flat_map(|l| &mut l.items).map(|i| (i.id, &mut i.group)));
+        slots
+    }
+
+    /// The group clip `id` is in.
+    pub fn group_of(&self, id: Id) -> Option<Id> {
+        let tracks = SoundTrack::ALL.iter().flat_map(|&w| self.track(w).clips.iter().map(|c| (c.id, c.group)));
+        let items = self.overlays.iter().chain(&self.text).flat_map(|l| &l.items).map(|i| (i.id, i.group));
+        self.cuts.iter().map(|c| (c.id, c.group)).chain(tracks).chain(items).find(|&(i, _)| i == id).and_then(|(_, g)| g)
+    }
+
+    /// The ids of group `group`'s clips, in the edit's order: cuts, sound
+    /// clips, items.
+    pub fn members(&self, group: Id) -> Vec<Id> {
+        let tracks = SoundTrack::ALL.iter().flat_map(|&w| self.track(w).clips.iter().map(|c| (c.id, c.group)));
+        let items = self.overlays.iter().chain(&self.text).flat_map(|l| &l.items).map(|i| (i.id, i.group));
+        self.cuts.iter().map(|c| (c.id, c.group)).chain(tracks).chain(items).filter(|&(_, g)| g == Some(group)).map(|(i, _)| i).collect()
+    }
+
+    /// Clip `id` into group `group` (none: out of any). False if there's
+    /// no such clip.
+    pub fn set_group(&mut self, id: Id, group: Option<Id>) -> bool {
+        self.group_slots().into_iter().find(|(i, _)| *i == id).map(|(_, g)| *g = group).is_some()
+    }
+
+    /// Groups kept whole: one with fewer than two clips left goes, and a
+    /// clip naming a group that's gone is in none (a delete, an undo).
+    pub fn settle_groups(&mut self) {
+        let mut counts = std::collections::HashMap::new();
+        for (_, g) in self.group_slots() {
+            if let Some(g) = *g {
+                *counts.entry(g).or_insert(0usize) += 1;
+            }
+        }
+        self.groups.retain(|g| counts.get(&g.id).is_some_and(|&n| n >= 2));
+        let kept: std::collections::HashSet<Id> = self.groups.iter().map(|g| g.id).collect();
+        for (_, g) in self.group_slots() {
+            if g.is_some_and(|id| !kept.contains(&id)) {
+                *g = None;
             }
         }
     }
@@ -1616,7 +1693,7 @@ mod tests {
         let mut p = Project { cuts: vec![Cut::new("a.mp4".into(), 0.0, 4.0), Cut { audio: Some("voice.flac".into()), ..Cut::new("b.mp4".into(), 0.0, 3.0) }, Cut { audio: Some("voice.flac".into()), ..Cut::new("b.mp4".into(), 3.0, 5.0) }], ..Default::default() };
         p.music.append_part("song.wav".into(), 0.0, 0.0, 10.0);
         p.sfx.append_part("bang.wav".into(), 0.0, 0.0, 1.0);
-        let item = |input: &str, text| crate::overlay::Item { id: 0, input: input.into(), text, at: 0.0, start: 0.0, end: 5.0, motion: Vec::new(), effects: Vec::new(), bars: None, automation: Vec::new(), kind: None, style: None };
+        let item = |input: &str, text| crate::overlay::Item { id: 0, input: input.into(), text, at: 0.0, start: 0.0, end: 5.0, motion: Vec::new(), effects: Vec::new(), bars: None, automation: Vec::new(), kind: None, style: None, group: None };
         p.overlays.push(crate::overlay::Lane::default());
         let bars = crate::overlay::Item { bars: Some(Default::default()), ..item("", None) };
         p.overlays[0].items = vec![item("logo.png", None), item("", Some(Default::default())), bars];
@@ -1640,7 +1717,7 @@ mod tests {
         let mut p = Project { cuts: vec![Cut::new("a.mp4".into(), 0.0, 4.0), Cut { id: 7, ..Cut::new("b.mp4".into(), 0.0, 3.0) }], ..Default::default() };
         p.music.append_part("song.wav".into(), 0.0, 0.0, 10.0);
         p.text.push(crate::overlay::Lane::default());
-        p.text[0].items.push(crate::overlay::Item { id: 0, input: PathBuf::new(), text: Some(Default::default()), at: 0.0, start: 0.0, end: 5.0, motion: Vec::new(), effects: Vec::new(), bars: None, automation: Vec::new(), kind: None, style: None });
+        p.text[0].items.push(crate::overlay::Item { id: 0, input: PathBuf::new(), text: Some(Default::default()), at: 0.0, start: 0.0, end: 5.0, motion: Vec::new(), effects: Vec::new(), bars: None, automation: Vec::new(), kind: None, style: None, group: None });
         p.settle_ids();
         assert_eq!(p.cuts[1].id, 7, "an id given stays");
         assert_eq!((p.cuts[0].id, p.music.clips[0].id, p.text[0].items[0].id), (8, 9, 10), "past the highest, in order");

@@ -129,7 +129,7 @@ pub(super) fn apply(p: &mut Project, op: &ItemOp) -> Result<Outcome, OpError> {
             let mut last = None;
             for input in inputs {
                 let id = p.next_id();
-                at = add(p, Track::Overlay, *lane, Item { id, input: input.clone(), text: None, at, start: 0.0, end: *len, motion: Vec::new(), effects: Vec::new(), bars: None, automation: Vec::new(), kind: None, style: None });
+                at = add(p, Track::Overlay, *lane, Item { id, input: input.clone(), text: None, at, start: 0.0, end: *len, motion: Vec::new(), effects: Vec::new(), bars: None, automation: Vec::new(), kind: None, style: None, group: None });
                 last = Some(id);
             }
             let Some(id) = last else { return Err(OpError::Invalid("no pictures to add".into())) };
@@ -139,7 +139,7 @@ pub(super) fn apply(p: &mut Project, op: &ItemOp) -> Result<Outcome, OpError> {
             positive(*len)?;
             reachable(p, Track::Text, *lane)?;
             let id = p.next_id();
-            add(p, Track::Text, *lane, Item { id, input: PathBuf::new(), text: Some(text.clone()), at: *at, start: 0.0, end: *len, motion: Vec::new(), effects: Vec::new(), bars: None, automation: Vec::new(), kind: None, style: None });
+            add(p, Track::Text, *lane, Item { id, input: PathBuf::new(), text: Some(text.clone()), at: *at, start: 0.0, end: *len, motion: Vec::new(), effects: Vec::new(), bars: None, automation: Vec::new(), kind: None, style: None, group: None });
             Ok(Outcome { summary: format!("text item #{id} added"), made: Some(id) })
         }
         ItemOp::AddBars { bars, at, len, lane } => {
@@ -147,7 +147,7 @@ pub(super) fn apply(p: &mut Project, op: &ItemOp) -> Result<Outcome, OpError> {
             reachable(p, Track::Overlay, *lane)?;
             check_bars(bars)?;
             let id = p.next_id();
-            add(p, Track::Overlay, *lane, Item { id, input: PathBuf::new(), text: None, at: *at, start: 0.0, end: *len, motion: Vec::new(), effects: Vec::new(), bars: Some(*bars), automation: Vec::new(), kind: None, style: None });
+            add(p, Track::Overlay, *lane, Item { id, input: PathBuf::new(), text: None, at: *at, start: 0.0, end: *len, motion: Vec::new(), effects: Vec::new(), bars: Some(*bars), automation: Vec::new(), kind: None, style: None, group: None });
             Ok(Outcome { summary: format!("bars {:.2}:1, item #{id}", bars.ratio), made: Some(id) })
         }
         ItemOp::SetBars { item, bars } => {

@@ -3130,7 +3130,7 @@ mod tests {
     #[test]
     fn a_track_shows_its_lanes_as_a_group() {
         let (mut t, b) = timeline();
-        let item = crate::overlay::Item { id: 9, input: "".into(), text: Some(Default::default()), at: 2.0, start: 0.0, end: 4.0, motion: vec![], effects: vec![], bars: None, automation: vec![], kind: None, style: None };
+        let item = crate::overlay::Item { id: 9, input: "".into(), text: Some(Default::default()), at: 2.0, start: 0.0, end: 4.0, motion: vec![], effects: vec![], bars: None, automation: vec![], kind: None, style: None, group: None };
         t.texts = vec![vec![OverlayBlock { item, label: "hi".into(), thumb: None }], vec![]];
         t.text_auto = vec![vec![], vec![]];
         t.folds.text = false;
@@ -3152,7 +3152,7 @@ mod tests {
         let key = |t| crate::overlay::MotionKey { t, place: Default::default(), ease: Default::default() };
         let lane_with = |motion| {
             let (mut t, _) = timeline();
-            let item = crate::overlay::Item { id: 9, input: "logo.png".into(), text: None, at: 2.0, start: 0.0, end: 4.0, motion, effects: vec![], bars: None, automation: vec![], kind: None, style: None };
+            let item = crate::overlay::Item { id: 9, input: "logo.png".into(), text: None, at: 2.0, start: 0.0, end: 4.0, motion, effects: vec![], bars: None, automation: vec![], kind: None, style: None, group: None };
             t.overlays = vec![vec![OverlayBlock { item, label: "logo".into(), thumb: None }]];
             t.folds.overlay = false;
             OverlayLane(Arc::new(t), Track::Overlay, 0)
@@ -3174,7 +3174,7 @@ mod tests {
         let lane_with = |params: Vec<Param>, effects_open: bool| {
             let (mut t, _) = timeline();
             let x = AutoClip { param: "x".into(), from: 0.0, to: 4.0, points: vec![AutoPoint { t: 1.0, v: 0.25, ease: Default::default() }], follows: None, animation: None };
-            let item = crate::overlay::Item { id: 9, input: "logo.png".into(), text: None, at: 2.0, start: 0.0, end: 4.0, motion: vec![], effects: vec![], bars: None, automation: vec![x], kind: None, style: None };
+            let item = crate::overlay::Item { id: 9, input: "logo.png".into(), text: None, at: 2.0, start: 0.0, end: 4.0, motion: vec![], effects: vec![], bars: None, automation: vec![x], kind: None, style: None, group: None };
             t.overlays = vec![vec![OverlayBlock { item, label: "logo".into(), thumb: None }]];
             (t.overlay_auto, t.folds.overlay, t.folds.overlay_motion, t.folds.overlay_effects) = (vec![params], false, false, !effects_open);
             OverlayLane(Arc::new(t), Track::Overlay, 0)

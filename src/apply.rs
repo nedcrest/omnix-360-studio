@@ -187,6 +187,11 @@ fn describe_lines(p: &Project) -> Vec<String> {
             }
         }
     }
+    for g in &p.groups {
+        let name = if g.name.is_empty() { String::new() } else { format!(" «{}»", g.name) };
+        let members: Vec<String> = p.members(g.id).iter().map(|m| format!("#{m}")).collect();
+        println(format!("group #{}{name} {}: {}", g.id, g.colour.hex(), members.join(", ")));
+    }
     out
 }
 
@@ -377,7 +382,7 @@ mod tests {
     #[test]
     fn a_texts_look_is_said_and_one_field_changed() {
         use crate::model::ops::{Op, items::ItemOp};
-        let item = crate::overlay::Item { id: 0, input: "".into(), text: Some(Default::default()), at: 0.0, start: 0.0, end: 3.0, motion: Vec::new(), effects: Vec::new(), bars: None, automation: Vec::new(), kind: None, style: None };
+        let item = crate::overlay::Item { id: 0, input: "".into(), text: Some(Default::default()), at: 0.0, start: 0.0, end: 3.0, motion: Vec::new(), effects: Vec::new(), bars: None, automation: Vec::new(), kind: None, style: None, group: None };
         let mut p = crate::project::Project::default();
         p.text.push(crate::overlay::Lane { items: vec![item], ..Default::default() });
         p.settle_ids();
@@ -425,7 +430,11 @@ mod tests {
         let mut p = Project { cuts: vec![c], aspect: Some(crate::view::Aspect(16, 9)), ..Project::default() };
         (p.music.volume, p.music.beats, p.music.sync) = (-3.0, Some(crate::project::Beats { threshold: 0.4, snap: true }), true);
         p.music.clips.push(MusicClip { input: "song.wav".into(), end: 10.0, fade_out: 2.0, ..MusicClip::default() });
+        p.settle_ids();
+        (p.cuts[0].group, p.music.clips[0].group) = (Some(1), Some(1));
+        p.groups.push(crate::project::Group { id: 1, name: "Opening".into(), colour: crate::text::Colour([230, 159, 0]) });
         let lines = super::describe_lines(&p).join("\n");
+        assert!(lines.contains("group #1 «Opening» #e69f00: #1, #2"), "{lines}");
         for said in [
             "edit: aspect 16:9  clips' sound +0.0 dB  fades in 0.00 s, out 0.00 s",
             "view key 1.00 s (clip): yaw 30.0",

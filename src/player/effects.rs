@@ -819,7 +819,7 @@ mod tests {
     #[test]
     fn a_value_reset_goes_back_to_its_default_in_one_step() {
         let mut app = super::super::tests::app();
-        let item = crate::overlay::Item { id: 0, input: "".into(), text: Some(Default::default()), at: 0.0, start: 0.0, end: 3.0, motion: Vec::new(), effects: Vec::new(), bars: None, automation: Vec::new(), kind: None, style: None };
+        let item = crate::overlay::Item { id: 0, input: "".into(), text: Some(Default::default()), at: 0.0, start: 0.0, end: 3.0, motion: Vec::new(), effects: Vec::new(), bars: None, automation: Vec::new(), kind: None, style: None, group: None };
         app.edit.text.push(crate::overlay::Lane { items: vec![item], ..Default::default() });
         app.edit.settle_ids();
         let id = app.edit.text[0].items[0].id;

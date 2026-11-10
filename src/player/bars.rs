@@ -294,6 +294,11 @@ impl App {
 
     /// The timeline, built from the edit as it stands.
     pub(super) fn timeline_view(&self) -> Element<'_, Message> {
+        self.timeline_data().view()
+    }
+
+    /// The timeline's picture of the edit: blocks, lanes, what's selected.
+    pub(super) fn timeline_data(&self) -> timeline::Timeline {
         let current = self.current_key();
         let tolerance = self.tolerance();
         let offsets = crate::project::offsets(&self.edit.cuts);
@@ -355,6 +360,8 @@ impl App {
             active_lanes: self.active_lanes,
             range: self.range,
             carrying: self.carrying.clone(),
+            groups: self.edit.groups.iter().map(|g| (g.id, iced::Color::from_rgb8(g.colour.0[0], g.colour.0[1], g.colour.0[2]))).collect(),
+            also: self.also.clone(),
             lane_heads: crate::overlay::Track::ALL.map(|track| (0..self.shown_lanes(track)).map(|l| self.edit.lane(track, l).map(timeline::LaneHead::from).unwrap_or_default()).collect()),
             folds: self.folds,
             video: self.edit.duration(),
@@ -370,7 +377,6 @@ impl App {
             step_note: self.step_note.map(|(n, _)| n),
             rows: timeline::Rows::new(self.split, self.framing, self.folds, self.lanes_of(super::automation_ui::LaneOf::Cuts).len() + self.fixed_cut_rows()),
         }
-        .view()
     }
 
     /// The transport row: what acts on the timeline. Groups: play | add at

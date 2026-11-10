@@ -417,6 +417,10 @@ pub struct Timeline {
     /// Each lane's head (gap 97), of the overlay track and of the text's,
     /// lane by lane.
     pub lane_heads: [Vec<LaneHead>; 2],
+    /// The project's groups' colours (gap 8), and the clips selected
+    /// beside the first (Shift+clicked, or its group's).
+    pub groups: Vec<(crate::project::Id, iced::Color)>,
+    pub also: Vec<crate::project::Id>,
     /// The range marked on the ruler (gap 92), edit time.
     pub range: Option<(f64, f64)>,
     /// A picture carried from the bin (gap 91).
@@ -1106,6 +1110,7 @@ impl Timeline {
                 }
             }
             draw_fades(frame, (l, r), top, h, m.len(), (m.clip.fade_in, m.clip.fade_out));
+            belonging(frame, self, theme, (l, r), (top, h), (m.clip.id, m.clip.group));
             if selected {
                 selected_block(frame, theme, (l, r), (top, h), (m.clip.start > 1e-3, m.clip.start + m.len() < m.most - 1e-3));
             }
@@ -1342,7 +1347,7 @@ impl Timeline {
             }
         }
         // The sound lanes show a selected cut, clip or point; not an item.
-        format!("{:?}{:?}{:?}{:?}{:?}", self.rows, self.picked.cut(), self.picked.clip(), self.picked.point(), theme.extended_palette().background.base.color).hash(&mut h);
+        format!("{:?}{:?}{:?}{:?}{:?}{:?}{:?}", self.rows, self.picked.cut(), self.picked.clip(), self.picked.point(), theme.extended_palette().background.base.color, self.groups, self.also).hash(&mut h);
         h.finish()
     }
 
@@ -1749,6 +1754,52 @@ fn wheel(delta: &mouse::ScrollDelta, t: &Timeline, cursor: mouse::Cursor, bounds
     Some(canvas::Action::publish(Message::TimelineWheel(dx, dy, t.t(p.x, bounds))).and_capture())
 }
 
+impl OverlayLane {
+    /// Its items as blocks: framed when selected (and by their group's
+    /// colour), each with its picture and name where there's room.
+    fn draw_items(&self, frame: &mut Frame, theme: &Theme, bounds: Rectangle, (top, h): (f32, f32), colour: iced::Color) {
+        let t = &self.0;
+    for (i, o) in self.blocks().iter().enumerate() {
+        let (l, r) = (t.x(o.item.at, bounds) + GAP / 2.0, t.x(o.item.at + o.len(), bounds) - GAP / 2.0);
+        if r < 0.0 || l > bounds.width {
+            continue;
+        }
+        let selected = Some(self.r(i)) == t.picked.item();
+        // A hidden lane's items faint: they aren't in the picture.
+        let colour = if self.head().hidden { colour.scale_alpha(0.35) } else { colour };
+        coloured_block(frame, (l, r), (top, h), colour, selected);
+        belonging(frame, t, theme, (l, r), (top, h), (o.item.id, o.item.group));
+        if selected {
+            // A picture or text has no end of its own: footage both ways
+            // but before its start.
+            selected_block(frame, theme, (l, r), (top, h), (o.item.start > 1e-3, true));
+        }
+        // The picture, as tall as the lane at most and as wide as the
+        // block allows (user, 2026-11-07: shown at any size), then its
+        // name where there's room.
+        let mut text_x = l + 9.0;
+        if let Some(thumb) = &o.thumb {
+            let w = ((h - 4.0) * thumb.aspect).min(r - l - 16.0);
+            if w >= 12.0 {
+                let th = w / thumb.aspect;
+                frame.draw_image(Rectangle::new(Point::new(l + 8.0, top + (h - th) / 2.0), Size::new(w, th)), canvas::Image::new(thumb.image.clone()));
+                text_x += w + 2.0;
+            }
+        }
+        if r - text_x > o.label.chars().count() as f32 * 6.0 + 12.0 {
+            frame.fill_text(Text {
+                content: o.label.clone(),
+                position: Point::new(text_x, top + h / 2.0),
+                color: iced::Color::BLACK,
+                size: 11.0.into(),
+                align_y: Vertical::Center,
+                ..Default::default()
+            });
+        }
+    }
+    }
+}
+
 impl canvas::Program<Message> for OverlayLane {
     /// Its drag, and the drag epoch it began in (see `State::epoch`).
     type State = (OverlayDrag, u64);
@@ -1892,43 +1943,7 @@ impl canvas::Program<Message> for OverlayLane {
         }
         let (top, h) = (2.0, self.0.rows.overlay - 4.0);
         lane_ground(&mut frame, t, bounds, (top, h), t.duration, 4.0, palette.background.weak.color.scale_alpha(0.5));
-        for (i, o) in self.blocks().iter().enumerate() {
-            let (l, r) = (t.x(o.item.at, bounds) + GAP / 2.0, t.x(o.item.at + o.len(), bounds) - GAP / 2.0);
-            if r < 0.0 || l > bounds.width {
-                continue;
-            }
-            let selected = Some(self.r(i)) == t.picked.item();
-            // A hidden lane's items faint: they aren't in the picture.
-            let colour = if self.head().hidden { colour.scale_alpha(0.35) } else { colour };
-            coloured_block(&mut frame, (l, r), (top, h), colour, selected);
-            if selected {
-                // A picture or text has no end of its own: footage both ways
-                // but before its start.
-                selected_block(&mut frame, theme, (l, r), (top, h), (o.item.start > 1e-3, true));
-            }
-            // The picture, as tall as the lane at most and as wide as the
-            // block allows (user, 2026-11-07: shown at any size), then its
-            // name where there's room.
-            let mut text_x = l + 9.0;
-            if let Some(thumb) = &o.thumb {
-                let w = ((h - 4.0) * thumb.aspect).min(r - l - 16.0);
-                if w >= 12.0 {
-                    let th = w / thumb.aspect;
-                    frame.draw_image(Rectangle::new(Point::new(l + 8.0, top + (h - th) / 2.0), Size::new(w, th)), canvas::Image::new(thumb.image.clone()));
-                    text_x += w + 2.0;
-                }
-            }
-            if r - text_x > o.label.chars().count() as f32 * 6.0 + 12.0 {
-                frame.fill_text(Text {
-                    content: o.label.clone(),
-                    position: Point::new(text_x, top + h / 2.0),
-                    color: iced::Color::BLACK,
-                    size: 11.0.into(),
-                    align_y: Vertical::Center,
-                    ..Default::default()
-                });
-            }
-        }
+        self.draw_items(&mut frame, theme, bounds, (top, h), colour);
         if !self.blocks().is_empty() {
             draw_rows(&mut frame, theme, t, bounds, self.0.rows.overlay, Some(self.motion_top()));
             for motion in [false, true] {
@@ -2108,6 +2123,20 @@ fn folded_strips(frame: &mut Frame, t: &Timeline, b: Rectangle, mid: f32, spans:
 /// colour when selected.
 fn coloured_block(frame: &mut Frame, (l, r): (f32, f32), (top, h): (f32, f32), colour: iced::Color, selected: bool) {
     frame.fill(&block_path((l, r), top, h), if selected { colour } else { colour.scale_alpha(0.55) });
+}
+
+/// A clip's marks of belonging (gap 8): its group's colour as a frame
+/// round it and a band along its lane's top over it (a group's clips side
+/// by side make one band), and the selection's frame when it's selected
+/// beside the first.
+fn belonging(frame: &mut Frame, t: &Timeline, theme: &Theme, (l, r): (f32, f32), (top, h): (f32, f32), (id, group): (crate::project::Id, Option<crate::project::Id>)) {
+    if let Some(&(_, colour)) = group.and_then(|g| t.groups.iter().find(|(id, _)| *id == g)) {
+        frame.stroke(&block_path((l, r), top, h), Stroke::default().with_width(2.0).with_color(colour));
+        frame.fill(&Path::rectangle(Point::new(l - GAP / 2.0, top), Size::new(r - l + GAP, 4.0)), colour);
+    }
+    if t.also.contains(&id) {
+        selection_frame(frame, &block_path((l, r), top, h), theme);
+    }
 }
 
 fn block_path((l, r): (f32, f32), top: f32, h: f32) -> Path {
@@ -2695,6 +2724,7 @@ impl canvas::Program<Message> for Marks {
         self.draw_zones(&mut frame, theme, bounds, drag);
         for (i, c) in self.blocks.iter().enumerate() {
             let (l, r) = self.block_x(c, bounds);
+            belonging(&mut frame, self, theme, (l, r), (0.0, self.rows.cuts), (c.cut.id, c.cut.group));
             if Some(i) == self.picked.cut() {
                 selected_block(&mut frame, theme, (l, r), (0.0, self.rows.cuts), (c.cut.start > 1e-3, c.cut.start + c.len() < c.most - 1e-3));
             }
@@ -2906,6 +2936,8 @@ mod tests {
             text_auto: vec![vec![]],
             active_lanes: [0; 2],
             lane_heads: [vec![LaneHead::default()], vec![LaneHead::default()]],
+            groups: Vec::new(),
+            also: Vec::new(),
             range: None,
             carrying: None,
             held: Default::default(),

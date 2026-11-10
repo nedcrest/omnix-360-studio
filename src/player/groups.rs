@@ -72,6 +72,17 @@ mod tests {
     use super::*;
 
     #[test]
+    fn the_timeline_gets_the_groups_colours_and_the_clips_beside_the_first() {
+        let mut app = app();
+        let (a, b) = (app.edit.cuts[0].id, app.edit.cuts[1].id);
+        app.op(Op::Project(ProjectOp::Group { members: vec![a, b], name: None, colour: Some(crate::text::Colour([10, 20, 30])) }));
+        let _ = app.update(Message::Select(0));
+        let t = app.timeline_data();
+        assert_eq!((t.groups.len(), t.groups[0].1, t.also.as_slice()), (1, iced::Color::from_rgb8(10, 20, 30), &[b][..]));
+        assert_eq!(t.blocks[1].cut.group, app.edit.group_of(b));
+    }
+
+    #[test]
     fn shift_adds_ctrl_g_groups_and_a_click_then_selects_the_group() {
         let mut app = app();
         let (a, b) = (app.edit.cuts[0].id, app.edit.cuts[1].id);

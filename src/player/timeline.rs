@@ -806,7 +806,9 @@ impl Timeline {
 
     /// Where things snap, edit times, and whose they are: the edit's ends,
     /// the playhead, the pictures' joins, cuts' sounds split from their
-    /// pictures, markers, sound clips, overlays and text.
+    /// pictures, markers, sound clips, the beats of a track that snaps to
+    /// them (its clip's: a song dragged doesn't snap to its own), overlays
+    /// and text.
     fn snap_targets(&self) -> Vec<(f64, Of)> {
         let mut at = vec![(0.0, Of::Edit), (self.duration, Of::Edit), (self.position, Of::Playhead)];
         for (i, c) in self.blocks.iter().enumerate() {
@@ -818,6 +820,9 @@ impl Timeline {
         }
         for (li, l) in self.sounds.iter().enumerate() {
             at.extend(l.blocks.iter().enumerate().flat_map(|(i, m)| [(m.clip.at, Of::Sound(li, i)), (m.clip.at + m.len(), Of::Sound(li, i))]));
+            if let Some(b) = l.track.beats.filter(|b| b.snap) {
+                at.extend(l.blocks.iter().enumerate().flat_map(|(i, m)| m.beat_times(b.threshold).map(move |t| (t, Of::Sound(li, i)))));
+            }
         }
         for track in Track::ALL {
             for (l, items) in self.track_blocks(track).iter().enumerate() {
@@ -2904,6 +2909,22 @@ mod tests {
             held: Default::default(),
         };
         (t, Rectangle::new(Point::ORIGIN, Size::new(1000.0 + 2.0 * PICK, 300.0)))
+    }
+
+    #[test]
+    fn a_cut_snaps_to_the_beats_of_a_track_that_snaps_and_a_song_not_to_its_own() {
+        use crate::beats::Beat;
+        let (mut t, _) = timeline();
+        let li = t.sounds.iter().position(|l| l.which == crate::project::SoundTrack::Music).unwrap();
+        let clip = crate::project::MusicClip { input: "song.wav".into(), at: 0.0, start: 0.0, end: 20.0, ..Default::default() };
+        let beats = vec![Beat { t: 7.3, strength: 0.9 }];
+        t.sounds[li].blocks.push(MusicBlock { clip, label: String::new(), most: f64::INFINITY, wave: None, even_wave: None, beats: Some(Arc::new(beats)), level: String::new() });
+        let near = |t: &Timeline| t.snap_targets().iter().any(|&(at, _)| (at - 7.3).abs() < 1e-9);
+        assert!(!near(&t), "shown only, not snapping");
+        t.sounds[li].track.beats = Some(crate::project::Beats { threshold: 0.5, snap: true });
+        assert!(near(&t));
+        assert!(t.snap(&[7.32], 0.01, |of| of == Of::Sound(li, 0)).is_none(), "the song itself doesn't snap to its own");
+        assert!(t.snap(&[7.32], 0.01, |_| false).is_some_and(|(by, _)| (by + 0.02).abs() < 1e-9), "a cut's edge does");
     }
 
     #[test]

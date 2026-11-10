@@ -66,7 +66,7 @@ done in part stays here until its last card is done.
 | 44 | A clip's overall level, by hand: a knob after the duck | [done](EDITOR-GAPS-DONE.md) |
 | 45 | A mix check: the sound's levels against a platform's, drawn and clickable | [done](EDITOR-GAPS-DONE.md) |
 | 46 | More for the sound: what the review found | [done](EDITOR-GAPS-DONE.md) |
-| 47 | The sound menus in groups | below |
+| 47 | The sound menus in groups | [done](EDITOR-GAPS-DONE.md) |
 | 48 | Insta360 clips | below |
 | 49 | Several angles from one 360 clip, cut between like a multicam | below |
 | 50 | A readable timeline: a time ruler, main lanes first, folding lanes | [done](EDITOR-GAPS-DONE.md) |
@@ -108,15 +108,15 @@ done in part stays here until its last card is done.
 | 86 | A program of its own: animated cutaways from a prompt and parameters (8-bit game, animated slides) | below |
 | 87 | Style looks (old film, VHS, neo-cyberpunk) for a video, an overlay picture or text; animation presets for text and pictures | [done](EDITOR-GAPS-DONE.md) |
 | 88 | The Osmo 360 II: its calibration and 8K50 decoding | below |
-| 89 | Auto colour: exposure and white balance set from the picture (or by an AI), keyed where the camera misses | below |
-| 98 | The Effects panel's extended view: its groups as framed blocks side by side, for a wide monitor | below |
-| 97 | The text and overlay lanes: names, dragging an item between them, hiding one | below |
+| 89 | Auto colour: exposure and white balance set from the picture (or by an AI), keyed where the camera misses | [done](EDITOR-GAPS-DONE.md) |
+| 98 | The Effects panel's extended view: its groups as framed blocks side by side, for a wide monitor | [done](EDITOR-GAPS-DONE.md) |
+| 97 | The text and overlay lanes: names, dragging an item between them, hiding one | [done](EDITOR-GAPS-DONE.md) |
 | 96 | A timeline that scrolls up and down: a «Scrollable» switch keeps the lanes' sizes, a vertical scroller, Alt+wheel | below |
 | 95 | Text: a colour of its own, letter spacing, a box behind it; its colour automatable | below |
 | 94 | The Effects and Text panels tidied: text's look in Effects, groups for items (Place, Show, Animate), the film's fades to Transitions, consistent controls | [done](EDITOR-GAPS-DONE.md) |
 | 93 | Effects edit the selected clip only, with the playhead on it; a clear notice when they're apart | [done](EDITOR-GAPS-DONE.md) |
-| 92 | Play a stretch: drag a range on the ruler, Shift+Space plays it once and comes back to its start, paused; a button beside Play | below |
-| 91 | Pictures from the bin or the file manager dragged onto the overlay lane; a «Pictures» folder in every project | below |
+| 92 | Play a stretch: drag a range on the ruler, Shift+Space plays it once and comes back to its start, paused; a button beside Play | [done](EDITOR-GAPS-DONE.md) |
+| 91 | Pictures from the bin or the file manager dragged onto the overlay lane; a «Pictures» folder in every project | [done](EDITOR-GAPS-DONE.md) |
 | 90 | The Effects panel sorted: groups, a side panel for complex controls, one scope | [done](EDITOR-GAPS-DONE.md) |
 
 ## Open gaps
@@ -851,28 +851,6 @@ also found two colours with two meanings (orange: overlays and «over full
 scale»; cyan: the clip sound lane and a clip's own line) and Music's
 colour following the theme.
 
-### 47. The sound menus in groups — idea (user, 2026-11-01)
-
-User, after 46c/46d (confirmed): "group the action buttons in the sound
-lanes' context menus into specific groups". The menu on a cut's sound or
-a sound clip has grown to ten items in one list. Proposed: sections with
-a thin rule and a small dim heading each:
-- **Level:** lower for voice-over, back to normal, mute, normalize…;
-- **Volume line:** show it, continue the level of the one before, back to
-  the original;
-- **Clean up:** even out, cut the low rumble, clean up steady noise;
-- **Music** (songs only): lower the music under speech;
-- **Info.**
-Items that toggle show their state (a tick) instead of changing their
-words. The lane's own menu (empty stretch) and the point and line menus
-keep their one or two items.
-
-**Built 2026-11-10, waiting for the check** (`ffd2583`): Level (lower for
-voice-over, back to normal, ✓ Mute, Normalize…), Volume line (show,
-continue the one before, back to the original), Clean up (✓ even out,
-✓ low rumble, ✓ steady noise), Placement (back to the picture's edges,
-to the other SFX lane), Music (lower under speech), Info.
-
 ### 48. Insta360 clips — idea, very far off (user, 2026-11-02)
 
 Asked about after «what format does our 360 stitch?» (DJI Osmo 360 `.OSV`
@@ -1396,102 +1374,6 @@ measured ~2× headroom on the 3060, unverified). A raw Osmo 360 II sample
 exists (found 2026-11-09, `CONTEXT.md` «Samples»): its calibration and
 decoding can be tried on it before the camera comes.
 
-### 89. Auto colour: exposure and white balance from the picture — idea (user, 2026-11-09)
-
-The user: "an AI can choose white balance and exposure better than me,
-make a good frame; and where the camera copes badly, it could give
-automatic moves of these or those colour values in the Effects tab, so
-the frame is neither blown out nor too dark." Why the core must let an
-agent set every value (`omnix describe`, `ops-schema`, ops for effect
-keys).
-
-- A measure first, in the core and tested: per stretch of a cut, the
-  picture's levels (the scopes of 69: clipped highlights, crushed
-  shadows, the grey balance), so «too bright», «too dark», «too blue»
-  are numbers, not looks.
-- From it, effect keyframes on the cut (exposure, highlights, shadows,
-  temperature, tint) that keep the frame in range, eased, written as ops
-  (`omnix` command and a button in Effects: «Auto»); the user's own keys
-  kept or replaced by choice.
-- An agent (or a local model) may choose instead, from frames and the
-  measure, through the same ops; nothing it does is hidden from undo.
-- **Levels' «Auto» over the whole cut** (the user, 2026-11-10): today it
-  reads the one frame shown; measured over 10–20 frames across the cut
-  (its darkest and brightest, specks aside), one value fits the whole of
-  it; further, levels keyed where the light changes.
-- In the milestone «Ефекти, колір і розумний звук», with the colour
-  tools (after 69 scopes).
-
-**Built 2026-11-10, waiting for the check** (`3075b8f`, `2b212f9` and
-the panel's commit): `autocolour.rs` measures a cut over 12 frames
-(GPU-decoded where it can, through its LUT): its darkest and brightest
-(specks aside), its middle, the mean of the pixels nearly grey for their
-brightness; the correction is careful (levels only short of black or
-white; exposure only for a middle outside 0.33–0.58, within a stop;
-white balance only with 1 % grey or more; nothing for a small
-difference). `omnix autocolour [--cuts] [--levels] [-o]` says and sets
-it; the Effects header's «Auto» and Levels' «Auto» (levels alone) run
-it off the UI thread, one undo step. Ordinary video only (a 360 clip
-would need stitching first); 6–7 s a cut. Not yet: keyed where the
-light changes, an agent's or a model's choice.
-
-### 91. Pictures dragged onto the overlay lane; a «Pictures» folder — idea (user, 2026-11-10)
-
-The user, asking how to put a picture on the overlay lane: there's no
-drag. Today a picture comes in by the toolbar's «Add pictures» (a file
-dialog, at the playhead) or the bin's right-click «Add over the picture
-at the playhead»; a file dropped on the window goes to the bin only.
-
-- Drag a picture from the bin onto the overlay lane, landing where it's
-  let go (as a clip from the bin onto the cuts, if that exists; the same
-  hit test as the lane's drop).
-- Drop a picture from the file manager onto the overlay lane: copied
-  into the project's pictures folder (as the bin copies), then placed.
-- Every project has a folder for pictures and photos, named simply
-  «Pictures» (the user). Today the bin's «Graphics» section reads
-  `08_graphics` (footage-agent's `layout.py`: «картинки поверх відео:
-  логотипи, підписи, стрілки»). Default to settle when it's built:
-  rename the section «Pictures» and the folder `08_pictures`, still
-  reading an old `08_graphics`; footage-agent's layout changed with it
-  (its docs are shared with another agent: change only the layout line
-  and say so).
-- Milestone «Матеріал і бін».
-
-**Built 2026-11-10, waiting for the check** (`03fc508`, `064f536`;
-Dailix `dd18a6b`, footage-agent `4b4a13c`): the folder is `08_pictures`
-(`dailix_sheet::layout::PICTURES`), the bin's section «Pictures», an old
-`08_graphics` still read; footage-agent's layout line changed with it.
-A picture's tile in the bin (the view and the panel) is taken up when
-pressed and goes onto the overlay lane it's let go over, at the
-pointer; a picture file dropped from a file manager onto an overlay
-lane is copied into `08_pictures` and placed so (X11: winit passes no
-drops on Wayland yet). Elsewhere a drop goes into the bin as before.
-
-### 92. Play a stretch marked on the ruler — idea (user, 2026-11-10)
-
-The user: "on the timeline's ruler you can select a range; Shift+Space
-plays only that range, plays it to its end, puts the cursor back at its
-start and pauses. Plain Space plays as it likes. A separate button with
-this beside our Play."
-
-- A range on the ruler: drag on it (today a click or drag there seeks;
-  a drag with a modifier, or a drag past a few pixels, marks a range
-  instead: settle which when it's built, the seek must stay easy).
-  Shown as a band on the ruler, kept until cleared (Esc, or a click
-  outside it).
-- Shift+Space: plays from the range's start to its end, then the
-  playhead goes back to the start, paused. Space unchanged.
-- A button beside Play doing the same, lit while a range is marked.
-- «Play the join» (transitions) already plays a stretch and stops: share
-  its stop-and-return.
-- Milestone «Зручний таймлайн».
-
-**Built 2026-11-10, waiting for the check** (`c997d40`): Shift and a
-drag on the ruler marks the range (decided: a plain click or drag
-still moves the playhead), a band with its ends; Esc lets it go.
-Shift+Space or the button beside Play plays it once and pauses back at
-its start; «Play the join» shares the same `play_stretch`.
-
 ### 95. Text: its own colour, letter spacing, a box behind it — idea (Claude's UI review, 2026-11-10)
 
 From gap 94's review, for later: the text's colour is one of a few
@@ -1514,39 +1396,6 @@ lanes fit the place as today.
 - The header column scrolls with the lanes; the ruler stays on top.
 - Alt + wheel scrolls; the wheel alone keeps what it does now.
 - Milestone «Зручний таймлайн».
-
-### 97. Text and overlay lanes: names, dragging between them, hiding one — idea (left from gap 70, 2026-11-10)
-
-Gap 70 gave the tracks lanes; what it left: a lane's name of the user's
-(«Subtitles», «Place names»), shown in its head and kept in the project
-(`Lane::name`, optional); dragging an item onto another lane with the
-mouse (today Alt+↑/↓: the lanes are canvases of their own, so a drag
-across them needs the drop worked out at the timeline's level); hiding
-a lane from the picture while editing (not from the export unless
-asked). Milestone «Ефекти, колір і розумний звук».
-
-**Built 2026-11-10, waiting for the check** (`b425624`, `d4724bb`):
-`Lane::name` and `Lane::hidden`, ops `lane_name` and `lane_hidden`. A
-hidden lane is out of the player and the export alike, as a muted sound
-lane is of the mix (decided: one rule, what's seen is what's exported).
-Right-click a lane's head: its name asked (the window's question gains
-a field); the head says it; an eye beside «+» and «×». A move drag
-follows the pointer onto another lane of its track («→ Subtitles»
-said), landing there on release; Alt+↑/↓ stay.
-
-### 98. The Effects panel's extended view — idea (user, 2026-11-10)
-
-The user: there are many effects now and the panel scrolls; on a big
-wide monitor (his, and others') the panel could take other forms: not a
-column, but the groups as blocks («divs») by category, framed, clearer.
-A switch at the top of the panel, «Extended view»: on, the panel grows
-wider and lays its groups out as framed blocks in columns side by side;
-off, the column as today. Kept in the settings. Milestone «Ефекти, колір
-і розумний звук».
-
-**Built 2026-11-10, waiting for the check** (`364b5dc`): the toggle «Extended
-view» at the panel's top (kept in the settings); on, the panel is three
-blocks wide, each group framed, wrapping to rows.
 
 ## Format rule for all of these
 

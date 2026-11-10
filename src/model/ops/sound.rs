@@ -72,6 +72,9 @@ pub enum SoundOp {
     /// stronger, edges and the playhead snapping to them if `snap`; none:
     /// off. `omnix beats` lists a song's.
     Beats { track: SoundTrack, beats: Option<crate::project::Beats> },
+    /// A track's sync lock (gap 99): on, the picture's edit made shorter
+    /// or longer at a point moves its clips after it with it.
+    SyncLock { track: SoundTrack, on: bool },
     /// The whole edit's fade from or to black, its sound with it: seconds,
     /// 0 to `EDIT_FADE_MOST`.
     EditFade { end: End, seconds: f64 },
@@ -207,6 +210,10 @@ pub(super) fn apply(p: &mut Project, op: &SoundOp) -> Result<Outcome, OpError> {
                 None => format!("{}: beats off", track.name()),
             })
         }
+        &SoundOp::SyncLock { track, on } => {
+            p.track_mut(track).sync = on;
+            said(format!("{}: sync lock {}", track.name(), if on { "on" } else { "off" }))
+        }
         &SoundOp::TrackLevel { track, db } => {
             if !(OFF_DB..=TRACK_MOST).contains(&db) {
                 return Err(OpError::OutOfRange { what: "track level", value: db, least: OFF_DB, most: TRACK_MOST });
@@ -290,6 +297,8 @@ mod tests {
         assert!(e.apply(&beats(1.5, false)).is_err() && e.music.beats == Some(crate::project::Beats { threshold: 0.4, snap: true }));
         e.apply(&op(SoundOp::Beats { track: SoundTrack::Music, beats: None })).unwrap();
         assert_eq!(e.music.beats, None);
+        e.apply(&op(SoundOp::SyncLock { track: SoundTrack::Music, on: true })).unwrap();
+        assert!(e.music.sync);
         e.apply(&op(SoundOp::TrackLevel { track: Some(SoundTrack::Sfx), db: -6.0 })).unwrap();
         e.apply(&op(SoundOp::TrackLevel { track: None, db: 3.0 })).unwrap();
         e.apply(&op(SoundOp::EditFade { end: End::Out, seconds: 2.5 })).unwrap();

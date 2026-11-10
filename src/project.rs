@@ -175,6 +175,11 @@ pub struct Music {
     /// Its songs' beats shown on the lane (gap 13): none, off.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub beats: Option<Beats>,
+    /// Sync lock (gap 99): when the picture's edit gets shorter or longer
+    /// at some point, this track's clips after it move with it
+    /// (`Project::ripple_locked`), so what's under the cuts stays there.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub sync: bool,
     /// The track's own volume line of older projects (edit times), read
     /// and folded into its clips' lines on load (`fold_track_line`), never
     /// written: it lay over the clips' own lines and the two got in each
@@ -891,6 +896,27 @@ pub fn offsets(cuts: &[Cut]) -> Vec<f64> {
 }
 
 /// The edit's length: the cuts' less their crossfades.
+/// Where a change of the cuts from `before` to `after` made the picture
+/// shorter or longer, and by how much (gap 99): the edit time after which
+/// the picture moved, and the shift; none if the edit's length is as it
+/// was (a split, a move). The point is the first cut that changed: its
+/// start when its in point, its crossfade or the cut itself changed
+/// (deleted, added); its end when only its out point did.
+pub fn ripple_of(before: &[Cut], after: &[Cut]) -> Option<(f64, f64)> {
+    let by = edit_length(after) - edit_length(before);
+    if by.abs() < 1e-9 {
+        return None;
+    }
+    let same = |b: &Cut, a: &Cut| b.id == a.id && b.start == a.start && b.end == a.end && b.crossfade == a.crossfade;
+    let k = (0..before.len().max(after.len())).find(|&k| !matches!((before.get(k), after.get(k)), (Some(b), Some(a)) if same(b, a)))?;
+    let at = match (before.get(k), after.get(k)) {
+        (Some(b), Some(a)) if b.id == a.id && b.start == a.start && b.crossfade == a.crossfade => offsets(before)[k] + b.len(),
+        (Some(_), _) => offsets(before)[k],
+        (None, _) => edit_length(before),
+    };
+    Some((at, by))
+}
+
 pub fn edit_length(cuts: &[Cut]) -> f64 {
     cuts.iter().map(|c| c.len() - c.crossfade).sum()
 }
@@ -1199,6 +1225,39 @@ impl Project {
         edit_length(&self.cuts)
     }
 
+    /// The sync-locked tracks' clips after edit time `at` moved by `by`
+    /// seconds, as the picture there was (gap 99). A clip across `at`
+    /// stays and its song moves under it — `by` taken from (or given
+    /// back to) its head — so what plays after `at` stays under the same
+    /// pictures; none starts before the edit or before its file.
+    pub fn ripple_locked(&mut self, (at, by): (f64, f64)) {
+        for which in SoundTrack::ALL {
+            let track = self.track_mut(which);
+            if !track.sync {
+                continue;
+            }
+            for c in &mut track.clips {
+                if c.ends() <= at {
+                    continue;
+                }
+                if c.at >= at {
+                    c.at += by;
+                } else {
+                    c.start -= by;
+                }
+                // Not before the edit's start (its head goes) nor its file's
+                // (it starts later), and never shorter than a clip can be.
+                if c.at < 0.0 {
+                    (c.start, c.at) = (c.start - c.at, 0.0);
+                }
+                if c.start < 0.0 {
+                    (c.at, c.start) = (c.at - c.start, 0.0);
+                }
+                c.start = c.start.min(c.end - crate::model::edit::MIN_CUT);
+            }
+        }
+    }
+
     /// The project as a file should hold what the player shows: each sound
     /// track's clips in edit order (a lane keeps the order they were added
     /// and split in), and the views looked at by hand held as keyframes.
@@ -1475,6 +1534,40 @@ mod tests {
         assert_eq!(c.sound_fades(), (0.0, 2.0), "the blur keeps the sound, the black takes it");
         c.edge_out.as_mut().unwrap().params.insert("colour".into(), 1.0);
         assert_eq!(c.sound_fades(), (0.0, 0.5), "a fade to white leaves it");
+    }
+
+    #[test]
+    fn a_locked_song_keeps_its_beats_under_the_cuts_after_a_trim() {
+        use crate::model::ops::{End, Op, cuts::CutOp};
+        // Three 4 s cuts; a song under all of them, a beat at its 6 s:
+        // 2 s into the second cut.
+        let make = |sync| {
+            let mut p = Project { cuts: (0..3).map(|_| Cut::new("a.mp4".into(), 0.0, 4.0)).collect(), ..Default::default() };
+            p.music.clips.push(MusicClip { input: "song.wav".into(), at: 0.0, start: 0.0, end: 20.0, ..Default::default() });
+            p.music.sync = sync;
+            p.settle_ids();
+            crate::model::edit::Edit::new(p)
+        };
+        let song_under_second = |e: &crate::model::edit::Edit| e.music.clips[0].local(e.offset(1) + 2.0);
+        for (end, t) in [(End::In, 1.0), (End::Out, 3.0)] {
+            let mut e = make(true);
+            let first = e.cuts[0].id;
+            e.apply(&Op::Cut(CutOp::Trim { cut: first, end, t, most: 10.0 })).unwrap();
+            assert!((song_under_second(&e) - 6.0).abs() < 1e-9, "{end:?}: the beat still 2 s into the second cut");
+            assert_eq!(e.music.clips[0].at, 0.0, "the song still starts the film");
+        }
+        // Unlocked, the song stays put and the cuts slide over it.
+        let mut e = make(false);
+        let first = e.cuts[0].id;
+        e.apply(&Op::Cut(CutOp::Trim { cut: first, end: End::In, t: 1.0, most: 10.0 })).unwrap();
+        assert!((song_under_second(&e) - 5.0).abs() < 1e-9);
+        // Deleting the first cut: the song gives up its first 4 s.
+        let mut e = make(true);
+        let first = e.cuts[0].id;
+        e.apply(&Op::Cut(CutOp::Delete { cut: first })).unwrap();
+        assert_eq!((e.music.clips[0].at, e.music.clips[0].start), (0.0, 4.0));
+        // A split doesn't move it.
+        assert_eq!(ripple_of(&e.cuts.clone(), &e.cuts), None);
     }
 
     #[test]

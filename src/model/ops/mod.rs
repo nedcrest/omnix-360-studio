@@ -135,7 +135,16 @@ impl std::error::Error for OpError {}
 /// Applies `op` to `p`, or leaves it as it was and says why.
 fn apply(p: &mut Project, op: &Op) -> Result<Outcome, OpError> {
     match op {
-        Op::Cut(op) => cuts::apply(p, op),
+        // A cut made shorter or longer moves the sync-locked tracks after
+        // it (gap 99).
+        Op::Cut(op) => {
+            let before = p.cuts.clone();
+            let outcome = cuts::apply(p, op)?;
+            if let Some(ripple) = crate::project::ripple_of(&before, &p.cuts) {
+                p.ripple_locked(ripple);
+            }
+            Ok(outcome)
+        }
         Op::Clip(op) => clips::apply(p, op),
         Op::Item(op) => items::apply(p, op),
         Op::Key(op) => keys::apply(p, op),

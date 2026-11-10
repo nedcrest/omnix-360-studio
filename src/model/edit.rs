@@ -441,6 +441,16 @@ impl Project {
         if j >= landed { j + 1 } else { j }
     }
 
+    /// Cuts `ids` taken out and put back side by side, in the order they
+    /// were, just before cut `before` (one not among them), or last.
+    pub fn move_cuts(&mut self, ids: &[crate::project::Id], before: Option<crate::project::Id>) {
+        let (moved, mut rest): (Vec<_>, Vec<_>) = std::mem::take(&mut self.cuts).into_iter().partition(|c| ids.contains(&c.id));
+        let at = before.and_then(|b| rest.iter().position(|c| c.id == b)).unwrap_or(rest.len());
+        rest.splice(at..at, moved);
+        self.cuts = rest;
+        crate::project::settle_crossfades(&mut self.cuts);
+    }
+
     /// Moves cut `from` so it plays at position `to` (counted before the move).
     pub fn move_cut(&mut self, from: usize, to: usize) {
         let cut = self.cuts.remove(from);

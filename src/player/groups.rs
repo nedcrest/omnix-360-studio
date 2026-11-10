@@ -69,6 +69,26 @@ impl App {
         }
     }
 
+    /// Cut `from` dragged to place `to` with other cuts selected beside it
+    /// (a group Alt+clicked, or Shift+clicked ones): all of them moved
+    /// there together, in their order (the user, 2026-11-11). Whether it
+    /// was so.
+    pub(super) fn move_together(&mut self, from: usize, to: usize) -> bool {
+        let picked = self.picked_ids();
+        let cuts: Vec<Id> = self.edit.cuts.iter().map(|c| c.id).filter(|id| picked.contains(id)).collect();
+        let Some(dragged) = self.edit.cuts.get(from).map(|c| c.id) else { return false };
+        if cuts.len() < 2 || !cuts.contains(&dragged) {
+            return false;
+        }
+        // Before the first cut at or after `to` that isn't moving.
+        let before = self.edit.cuts[to.min(self.edit.cuts.len())..].iter().map(|c| c.id).find(|id| !cuts.contains(id));
+        let playing = self.edit.cuts.get(self.current).map(|c| c.id);
+        if self.op(Op::Cut(CutOp::MoveTogether { cuts, before })).is_some() {
+            self.current = playing.and_then(|id| self.edit.cut_index(id)).unwrap_or(0);
+        }
+        true
+    }
+
     /// Del with clips selected beside the first: all of them gone, one undo
     /// step. Whether there were any.
     pub(super) fn delete_picked(&mut self) -> bool {
@@ -207,6 +227,25 @@ fn next_colour(c: Colour) -> Colour {
 mod tests {
     use super::super::{Message, tests::app};
     use super::*;
+
+    #[test]
+    fn a_groups_cuts_dragged_go_together() {
+        let mut app = app();
+        app.edit.cuts.push(crate::project::Cut::new("nowhere/c.mp4".into(), 0.0, 2.0));
+        app.edit.settle_ids();
+        let ids: Vec<Id> = app.edit.cuts.iter().map(|c| c.id).collect();
+        app.op(Op::Project(ProjectOp::Group { members: vec![ids[0], ids[2]], name: None, colour: None }));
+        // A plain click and a drag: the cut alone, as ever.
+        let _ = app.update(Message::Select(0));
+        let _ = app.update(Message::MoveCut(0, 2));
+        assert_eq!(app.edit.cuts.iter().map(|c| c.id).collect::<Vec<_>>(), [ids[1], ids[0], ids[2]]);
+        // Alt+click and a drag to the start: the group's two together.
+        app.modifiers = iced::keyboard::Modifiers::ALT;
+        let _ = app.update(Message::Select(2));
+        app.modifiers = iced::keyboard::Modifiers::empty();
+        let _ = app.update(Message::MoveCut(2, 0));
+        assert_eq!(app.edit.cuts.iter().map(|c| c.id).collect::<Vec<_>>(), [ids[0], ids[2], ids[1]]);
+    }
 
     #[test]
     fn a_groups_tab_selects_it_and_its_dialog_renames_recolours_and_undoes_it() {

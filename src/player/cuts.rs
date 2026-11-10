@@ -98,6 +98,7 @@ impl App {
             }
             Message::AddBlank => return self.add_blank(),
             m @ (Message::SoundEdge(..) | Message::Trim(..) | Message::TrimToPlayhead(_) | Message::Crossfade(..) | Message::ToggleCrossfade) => return self.on_trims(m),
+            Message::MoveCut(from, to) if self.move_together(from, to) => {}
             Message::MoveCut(from, to) => {
                 if to != from && to != from + 1 && from < self.edit.cuts.len() {
                     let (cut, before) = (self.edit.cuts[from].id, self.edit.cuts.get(to).map(|c| c.id));

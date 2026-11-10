@@ -42,6 +42,9 @@ pub enum CutOp {
     Trim { cut: Id, end: End, t: f64, most: f64 },
     /// Moved to play just before cut `before`, or last if none.
     Move { cut: Id, before: Option<Id> },
+    /// Several cuts moved together (a group's, gap 8): side by side, in the
+    /// order they were, just before cut `before` (not one of them), or last.
+    MoveTogether { cuts: Vec<Id>, before: Option<Id> },
     /// Split at `t` (clip time); the second half is a new cut.
     Split { cut: Id, t: f64 },
     /// How far it overlaps the cut before, seconds; kept within both.
@@ -134,6 +137,19 @@ pub(super) fn apply(p: &mut Project, op: &CutOp) -> Result<Outcome, OpError> {
             };
             p.move_cut(from, to);
             said(format!("cut #{cut} moved, {}", position(find(p, cut)?, p.cuts.len())))
+        }
+        CutOp::MoveTogether { cuts, before } => {
+            for &c in cuts {
+                find(p, c)?;
+            }
+            if let Some(b) = before {
+                find(p, *b)?;
+                if cuts.contains(b) {
+                    return Err(OpError::Invalid(format!("cut #{b} is one of those moved")));
+                }
+            }
+            p.move_cuts(cuts, *before);
+            said(format!("{} cuts moved together", cuts.len()))
         }
         &CutOp::Split { cut, t } => {
             let i = find(p, cut)?;
@@ -375,6 +391,20 @@ mod tests {
 
     fn names(e: &Edit) -> Vec<String> {
         e.cuts.iter().map(|c| format!("{}#{}", c.input.display(), c.id)).collect()
+    }
+
+    #[test]
+    fn several_cuts_move_together_in_their_order() {
+        let mut p = Project { cuts: (0..5).map(|k| Cut::new(format!("{k}.mp4").into(), 0.0, 2.0)).collect(), ..Default::default() };
+        p.settle_ids();
+        let mut e = crate::model::edit::Edit::new(p);
+        // Cuts #2 and #4 before #1: 2, 4, 1, 3, 5.
+        e.apply(&Op::Cut(CutOp::MoveTogether { cuts: vec![4, 2], before: Some(1) })).unwrap();
+        assert_eq!(e.cuts.iter().map(|c| c.id).collect::<Vec<_>>(), [2, 4, 1, 3, 5]);
+        // To the end; refused before one of themselves.
+        e.apply(&Op::Cut(CutOp::MoveTogether { cuts: vec![2, 4], before: None })).unwrap();
+        assert_eq!(e.cuts.iter().map(|c| c.id).collect::<Vec<_>>(), [1, 3, 5, 2, 4]);
+        assert!(e.apply(&Op::Cut(CutOp::MoveTogether { cuts: vec![2, 4], before: Some(4) })).is_err());
     }
 
     #[test]

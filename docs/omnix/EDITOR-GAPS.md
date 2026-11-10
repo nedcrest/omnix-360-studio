@@ -109,6 +109,7 @@ done in part stays here until its last card is done.
 | 87 | Style looks (old film, VHS, neo-cyberpunk) for a video, an overlay picture or text; animation presets for text and pictures | [done](EDITOR-GAPS-DONE.md) |
 | 88 | The Osmo 360 II: its calibration and 8K50 decoding | below |
 | 89 | Auto colour: exposure and white balance set from the picture (or by an AI), keyed where the camera misses | [done](EDITOR-GAPS-DONE.md) |
+| 100 | Dailix fetches music, sound effects and video from a link (YouTube and the like) into the project, with its licence noted | below |
 | 99 | Sync lock on a sound track: when the picture's edit gets shorter or longer, the music after that point moves with it | below |
 | 98 | The Effects panel's extended view: its groups as framed blocks side by side, for a wide monitor | [done](EDITOR-GAPS-DONE.md) |
 | 97 | The text and overlay lanes: names, dragging an item between them, hiding one | [done](EDITOR-GAPS-DONE.md) |
@@ -290,6 +291,16 @@ effects, a move where the magnetic edit allows. With sync lock (99) a
 group can later mean «these cuts and this song move together». The
 format: a group id on cuts, sound clips and items, and the project's
 groups (name, colour); after 99.
+
+**Decided with the user (2026-11-11):** a group shows as a frame in its
+colour round each of its clips and a faint band of it behind them; it
+selects and moves together — a click selects the whole group (Alt+click
+one clip), Delete removes it all, its sound clips, text and pictures move
+together when one is dragged; its cuts stay where the magnetic edit puts
+them. Made as Premiere does: Ctrl+click adds a clip to the selection,
+Ctrl+G groups, Ctrl+Shift+G ungroups. Steps: (1) the core — group ids,
+the project's groups, ops, `describe`; (2) Ctrl+click selecting several;
+(3) the frame and band; (4) together — select, delete, move.
 
 ### 9. Timeline ease and accessibility — research done (user, 2026-10-23)
 
@@ -1442,6 +1453,16 @@ every cut op; «Sync lock» on a sound lane's menu, «· sync» on its name;
 `describe` says it. A clip starting right at the point counts as across
 it (a trim dragged there and back puts it back). Beats found to the
 sample on the way (gap 13).
+
+### 100. Fetching outside material in Dailix — medium (recorded 2026-11-04, «Далі» 2026-11-11)
+
+From footage-agent's `grab.py`, recorded in Dailix's CONTEXT: yt-dlp
+run as a CLI program (never linked); a URL, an optional span and a
+name; music into `02_audio/music`, sound effects into `07_sfx`, video
+into `06_external`; a line in that folder's `LICENSES.md` (where from,
+the licence, the date). In the window: paste a link, pick the kind;
+`dailix fetch` by command. Omnix's bin shows them in its sections.
+Milestone «Матеріал і бін». The user moved it to «Далі» (2026-11-11).
 
 ## Format rule for all of these
 

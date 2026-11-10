@@ -328,6 +328,8 @@ impl Project {
         // its edge look at its own outer end only; the join before is the
         // first half's.
         let mut second = c.clone();
+        // Both pieces remember the clip they were («This was one clip»).
+        second.origin = Some(c.origin.unwrap_or(c.id));
         second.start = t;
         second.crossfade = 0.0;
         second.transition = None;
@@ -335,6 +337,7 @@ impl Project {
         second.sound_fade_in = 0.0;
         second.sound_before = 0.0;
         second.edge_in = None;
+        self.cuts[i].origin = second.origin;
         self.cuts[i].end = t;
         self.cuts[i].sound_fade_out = 0.0;
         self.cuts[i].sound_after = 0.0;

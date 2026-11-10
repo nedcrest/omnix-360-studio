@@ -47,6 +47,10 @@ pub enum CutOp {
     MoveTogether { cuts: Vec<Id>, before: Option<Id> },
     /// Split at `t` (clip time); the second half is a new cut.
     Split { cut: Id, t: f64 },
+    /// Cut `cut`'s pieces (what one clip was split into) joined back into
+    /// one where the first is, from the earliest start to the latest end:
+    /// its join and effects from the first, its out end's from the last.
+    JoinPieces { cut: Id },
     /// How far it overlaps the cut before, seconds; kept within both.
     Crossfade { cut: Id, seconds: f64 },
     /// How its crossfade looks (`transition::Look`); none: a dissolve.
@@ -114,6 +118,7 @@ pub(super) fn apply(p: &mut Project, op: &CutOp) -> Result<Outcome, OpError> {
         &CutOp::Move { cut, before } => move_cut(p, cut, before),
         CutOp::MoveTogether { cuts, before } => move_together(p, cuts, before),
         &CutOp::Split { cut, t } => split(p, cut, t),
+        &CutOp::JoinPieces { cut } => join_pieces(p, cut),
         &CutOp::Transition { cut, look } => transition(p, cut, look),
         CutOp::TransitionKnob { cut, key, value } => {
             let i = find(p, *cut)?;
@@ -245,6 +250,26 @@ fn split(p: &mut Project, cut: Id, t: f64) -> Result<Outcome, OpError> {
     let id = p.next_id();
     p.cuts[i + 1].id = id;
     Ok(Outcome { summary: format!("cut #{cut} split at {t:.2} s; the second half is cut #{id}"), made: Some(id) })
+}
+
+/// `JoinPieces`: cut `cut`'s pieces one cut again.
+fn join_pieces(p: &mut Project, cut: Id) -> Result<Outcome, OpError> {
+    let pieces = p.pieces(find(p, cut)?);
+    let (Some(&first), Some(&last)) = (pieces.first(), pieces.iter().max_by(|&&a, &&b| p.cuts[a].end.total_cmp(&p.cuts[b].end))) else {
+        return Err(OpError::Invalid(format!("cut #{cut} isn't one of several pieces: nothing to join")));
+    };
+    let start = pieces.iter().map(|&k| p.cuts[k].start).fold(f64::INFINITY, f64::min);
+    let tail = p.cuts[last].clone();
+    for &k in pieces[1..].iter().rev() {
+        p.cuts.remove(k);
+    }
+    let c = &mut p.cuts[first];
+    (c.start, c.end, c.origin) = (start, tail.end, None);
+    (c.sound_fade_out, c.sound_after, c.edge_out) = (tail.sound_fade_out, tail.sound_after, tail.edge_out);
+    c.settle_sound(f64::INFINITY);
+    let (id, end) = (c.id, c.end);
+    crate::project::settle_crossfades(&mut p.cuts);
+    said(format!("cut #{id}: {} pieces joined back, {start:.2}-{end:.2} s of its clip", pieces.len()))
 }
 
 /// The join before cut `cut`: its look.
@@ -595,5 +620,30 @@ mod tests {
         e.apply(&Op::Cut(CutOp::Stabilize { cut: a, mode: Some(Mode::Level) })).unwrap();
         assert_eq!(e.cuts[0].stabilize, Some(Mode::Level));
         check(&e).unwrap();
+    }
+
+    #[test]
+    fn a_clips_pieces_are_joined_back_and_undo_splits_them_again() {
+        let mut e = Edit::default();
+        let a = e.apply(&add("a.mp4", 9.0, Place::End)).unwrap().made.unwrap();
+        e.apply(&add("b.mp4", 2.0, Place::End)).unwrap();
+        e.apply(&Op::Cut(CutOp::Edge { cut: a, end: End::Out, look: Some(crate::transition::Look::EdgeFade), seconds: 0.5 })).unwrap();
+        let mid = e.apply(&Op::Cut(CutOp::Split { cut: a, t: 3.0 })).unwrap().made.unwrap();
+        let last = e.apply(&Op::Cut(CutOp::Split { cut: mid, t: 6.0 })).unwrap().made.unwrap();
+        assert_eq!(e.pieces(0), [0, 1, 2], "three pieces of one clip");
+        assert!(e.pieces(3).is_empty(), "b.mp4 was never split");
+        // The middle one trimmed, and moved after b.mp4.
+        e.apply(&Op::Cut(CutOp::Trim { cut: mid, end: End::Out, t: 5.0, most: 9.0 })).unwrap();
+        e.apply(&Op::Cut(CutOp::Move { cut: last, before: None })).unwrap();
+        let before = e.cuts.len();
+        e.apply(&Op::Cut(CutOp::JoinPieces { cut: mid })).unwrap();
+        let c = &e.cuts[0];
+        assert_eq!((e.cuts.len(), c.id, c.start, c.end, c.origin), (before - 2, a, 0.0, 9.0, None), "all of it again, where the first was");
+        assert!(c.edge_out.is_some(), "its out end's look back from the last piece");
+        check(&e).unwrap();
+        assert!(e.undo() && e.cuts.len() == before && e.pieces(0).len() == 3);
+        assert!(matches!(e.apply(&Op::Cut(CutOp::JoinPieces { cut: e.cuts[1].id })), Ok(_)));
+        let b = e.cuts.iter().find(|c| c.input == std::path::Path::new("b.mp4")).unwrap().id;
+        assert!(e.apply(&Op::Cut(CutOp::JoinPieces { cut: b })).is_err(), "one piece: nothing to join");
     }
 }

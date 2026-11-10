@@ -129,8 +129,11 @@ fn describe_lines(p: &Project) -> Vec<String> {
     println(format!("edit: aspect {aspect}  clips' sound {:+.1} dB  fades in {:.2} s, out {:.2} s", p.sound.volume, p.fades.fade_in, p.fades.fade_out));
     let offsets = crate::project::offsets(&p.cuts);
     println("cuts:".to_owned());
-    for (c, at) in p.cuts.iter().zip(offsets) {
+    for (i, (c, at)) in p.cuts.iter().zip(offsets).enumerate() {
         println(format!("  cut #{:<3} {:7.2}-{:7.2} s  {} {:.2}-{:.2}  level {:+.1} dB{}", c.id, at, at + c.len(), name(&c.input), c.start, c.end, c.gain, if c.mute { " muted" } else { "" }));
+        if let (Some(origin), false) = (c.origin, p.pieces(i).is_empty()) {
+            println(format!("    a piece of clip #{origin} (join_pieces joins them back)"));
+        }
         for line in cut_lines(c).into_iter().chain(look_lines(c)) {
             println(format!("    {line}"));
         }
@@ -515,5 +518,14 @@ mod tests {
         let said = super::describe_lines(&p).join("\n");
         assert!(said.contains(&format!("past the film's end at 4.00 s: #{} by 2.00 s", p.music.clips[0].id)), "{said}");
         assert!(super::warnings(&p).iter().any(|w| w.contains("2.00 s past the film's end")));
+    }
+
+    #[test]
+    fn describe_names_a_clips_pieces() {
+        let mut e = crate::model::edit::Edit::new(crate::project::Project { cuts: vec![crate::project::Cut::new("a.mp4".into(), 0.0, 4.0)], ..Default::default() });
+        let a = e.cuts[0].id;
+        e.apply(&crate::model::ops::Op::Cut(crate::model::ops::cuts::CutOp::Split { cut: a, t: 2.0 })).unwrap();
+        let said = super::describe_lines(&e).join("\n");
+        assert_eq!(said.matches(&format!("a piece of clip #{a}")).count(), 2, "{said}");
     }
 }

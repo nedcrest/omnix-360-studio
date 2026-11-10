@@ -742,6 +742,10 @@ pub struct Cut {
     /// The group it's in (gap 8), by its id in `Project::groups`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub group: Option<Id>,
+    /// The cut it was split from, by the first one's id: pieces of one
+    /// clip share it, and can be joined back («This was one clip»).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub origin: Option<Id>,
 }
 
 impl Cut {
@@ -784,6 +788,7 @@ impl Cut {
             flat: false,
             lut_applied: None,
             group: None,
+            origin: None,
         }
     }
 
@@ -1288,6 +1293,14 @@ impl Project {
     /// a song laid down first runs as long as it is.
     pub fn film_end(&self) -> Option<f64> {
         Some(self.duration()).filter(|&d| d > 0.0)
+    }
+
+    /// The pieces cut `i` was split into, itself among them, by index in
+    /// edit order: none unless there are two at least.
+    pub fn pieces(&self, i: usize) -> Vec<usize> {
+        let Some(origin) = self.cuts.get(i).and_then(|c| c.origin) else { return Vec::new() };
+        let all: Vec<usize> = (0..self.cuts.len()).filter(|&k| self.cuts[k].origin == Some(origin)).collect();
+        if all.len() < 2 { Vec::new() } else { all }
     }
 
     /// What runs past the film's end (gap 101): each sound clip, text and

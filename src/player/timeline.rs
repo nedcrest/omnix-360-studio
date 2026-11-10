@@ -1248,14 +1248,16 @@ impl Timeline {
     }
 
     /// Sound lane `li`'s name tag: with its fold arrow for SFX 2 («▸ SFX 2
-    /// (3)» folded, «▾ SFX 2» open), plain for the others.
+    /// (3)» folded, «▾ SFX 2» open), plain for the others; «· sync» while
+    /// its sync lock is on (gap 99).
     fn sound_tag(&self, li: usize) -> String {
         let lane = &self.sounds[li];
-        match lane.which {
+        let name = match lane.which {
             SoundTrack::Sfx2 if self.rows.folded[li] => format!("▸ {} ({})", lane.which.name(), lane.blocks.len()),
             SoundTrack::Sfx2 => format!("▾ {}", lane.which.name()),
             w => w.name().to_owned(),
-        }
+        };
+        if lane.track.sync { format!("{name} · sync") } else { name }
     }
 
     /// The header column over the cut, clip sound, keyframe and sound
@@ -2925,6 +2927,15 @@ mod tests {
         assert!(near(&t));
         assert!(t.snap(&[7.32], 0.01, |of| of == Of::Sound(li, 0)).is_none(), "the song itself doesn't snap to its own");
         assert!(t.snap(&[7.32], 0.01, |_| false).is_some_and(|(by, _)| (by + 0.02).abs() < 1e-9), "a cut's edge does");
+    }
+
+    #[test]
+    fn a_locked_lane_says_so_on_its_name() {
+        let (mut t, _) = timeline();
+        let li = t.sounds.iter().position(|l| l.which == crate::project::SoundTrack::Music).unwrap();
+        assert_eq!(t.sound_tag(li), "Music");
+        t.sounds[li].track.sync = true;
+        assert_eq!(t.sound_tag(li), "Music · sync");
     }
 
     #[test]

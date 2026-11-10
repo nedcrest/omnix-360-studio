@@ -335,6 +335,8 @@ impl App {
             Menu::Track(which) => {
                 let track = self.edit.track(which);
                 items.push(lane_level(which.name(), track.volume, move |db| Message::TrackLevel(which, db)));
+                let lock = button(text(format!("{}Sync lock", if track.sync { "✓ " } else { "" })).size(13)).style(button::text).width(Length::Fill).padding([5, 10]).on_press(Message::TrackSync(which, !track.sync));
+                items.push(tip(lock, text("Trimming or deleting a cut moves this lane's clips after it with the picture, so they stay under the same cuts"), tooltip::Position::Right));
                 if !track.clips.is_empty() {
                     items.push(sound(format!("Normalize every clip on {}…", which.name()), SoundMsg::Open(Scope::Track(which))));
                 }
@@ -508,6 +510,20 @@ mod tests {
         assert!(app.edit.undo() && app.edit.music.beats == Some(on), "the drag one step");
         assert_eq!(beat_entries(SoundTrack::Music, None).len(), 1, "off: «Show the beats» alone");
         assert_eq!(beat_entries(SoundTrack::Music, Some(on)).len(), 3);
+    }
+
+    #[test]
+    fn the_music_lanes_sync_lock_keeps_the_song_under_the_cuts() {
+        use super::super::Message;
+        use crate::model::ops::{End, Op, cuts::CutOp};
+        let mut app = app();
+        app.edit.music.clips.push(crate::project::MusicClip { input: "song.wav".into(), end: 9.0, ..Default::default() });
+        let _ = app.update(Message::TrackSync(SoundTrack::Music, true));
+        assert!(app.edit.music.sync);
+        let cut = app.edit.cuts[0].id;
+        app.op(Op::Cut(CutOp::Trim { cut, end: End::In, t: 0.5, most: 2.0 }));
+        assert_eq!((app.edit.music.clips[0].at, app.edit.music.clips[0].start), (0.0, 0.5), "the song gave up its head with the picture");
+        assert!(app.edit.undo() && app.edit.music.clips[0].start == 0.0, "one undo step with the trim");
     }
 
     #[test]

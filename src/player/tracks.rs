@@ -277,6 +277,9 @@ impl App {
                 self.op(Op::Sound(SoundOp::TrackLevel { track: Some(which), db }));
             }
             Message::LevelDone => self.edit.commit(),
+            Message::TrackSync(track, on) => {
+                self.op(Op::Sound(SoundOp::SyncLock { track, on }));
+            }
             Message::TrackBeats(track, beats, press) => {
                 self.edit.begin();
                 self.op(Op::Sound(SoundOp::Beats { track, beats }));

@@ -1195,7 +1195,10 @@ impl Project {
                 if c.ends() <= at {
                     continue;
                 }
-                if c.at >= at {
+                // One starting at the point counts as across it: its song
+                // moves under it, so a trim dragged there and back puts
+                // it back as it was.
+                if c.at > at {
                     c.at += by;
                 } else {
                     c.start -= by;
@@ -1570,6 +1573,13 @@ mod tests {
             assert!((song_under_second(&e) - 6.0).abs() < 1e-9, "{end:?}: the beat still 2 s into the second cut");
             assert_eq!(e.music.clips[0].at, 0.0, "the song still starts the film");
         }
+        // A trim dragged in and back out leaves the song as it was.
+        let mut e = make(true);
+        let first = e.cuts[0].id;
+        for t in [0.5, 1.5, 0.7, 0.0] {
+            e.apply(&Op::Cut(CutOp::Trim { cut: first, end: End::In, t, most: 10.0 })).unwrap();
+        }
+        assert_eq!((e.music.clips[0].at, e.music.clips[0].start), (0.0, 0.0));
         // Unlocked, the song stays put and the cuts slide over it.
         let mut e = make(false);
         let first = e.cuts[0].id;

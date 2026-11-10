@@ -21,9 +21,12 @@ use iced::{Alignment, Element, Length};
 pub enum EffectMsg {
     /// Open or close the panel.
     Toggle,
-    /// Levels set from the scopes' measure (gap 14): the picture's darkest
-    /// to black, its brightest to white.
-    AutoLevels,
+    /// The cut measured over a dozen frames across it and put right (gap
+    /// 89): levels, exposure and white balance, or the levels alone.
+    AutoColour(bool),
+    /// What that measure found: the cut, levels alone or not, its
+    /// correction.
+    AutoColoured(crate::project::Id, bool, Result<crate::autocolour::Correction, String>),
     /// The playhead onto the selected clip, the panel's to edit (gap 93).
     GoToSelected,
     /// Effect `i` (as in `PARAMS`) moved to this value.
@@ -359,11 +362,24 @@ impl App {
         }
     }
 
-    pub(super) fn effect_message(&mut self, m: EffectMsg) {
+    pub(super) fn effect_message(&mut self, m: EffectMsg) -> iced::Task<Message> {
         let target = self.effect_target();
         match m {
             EffectMsg::Toggle => self.toggle_side(super::Side::Effects),
-            EffectMsg::AutoLevels => self.auto_levels(),
+            EffectMsg::AutoColour(levels) => return self.auto_colour(levels),
+            EffectMsg::AutoColoured(cut, levels, found) => {
+                self.auto_measuring = None;
+                match found {
+                    Ok(c) => {
+                        self.edit.begin();
+                        for op in crate::autocolour::ops(cut, &c, levels) {
+                            self.op(op);
+                        }
+                        self.edit.commit();
+                    }
+                    Err(e) => self.error = Some(e),
+                }
+            }
             EffectMsg::GoToSelected => {
                 if let Focus::Apart(target) = self.effect_focus() {
                     self.go_to(target);
@@ -387,8 +403,8 @@ impl App {
                 let starting = !self.edit.changing();
                 self.edit.begin();
                 // Each value it changed, for the whole item.
-                let Some((Target::Overlay(i), t)) = self.pinned(starting) else { return };
-                let Some(it) = self.edit.item(i) else { return };
+                let Some((Target::Overlay(i), t)) = self.pinned(starting) else { return iced::Task::none() };
+                let Some(it) = self.edit.item(i) else { return iced::Task::none() };
                 let (was, now) = (crate::automation::placed(place_at(&it.motion, t), &it.automation, t).values(), to.values());
                 for p in (0..4).filter(|&p| was[p] != now[p]) {
                     self.set_place(false, p, now[p]);
@@ -412,7 +428,7 @@ impl App {
             EffectMsg::Extra(extra) => self.effect_extra = extra,
             EffectMsg::AutoLane(p) => {
                 use super::automation_ui::LaneOf;
-                let Some(of) = self.lane_owner() else { return };
+                let Some(of) = self.lane_owner() else { return iced::Task::none() };
                 if self.extra_lanes.contains(&(of, p)) {
                     self.extra_lanes.retain(|&q| q != (of, p));
                 } else {
@@ -429,7 +445,7 @@ impl App {
                 }
             }
             EffectMsg::Bars(bars, press) => {
-                let Some(item) = self.selection.item(&self.edit).and_then(|i| self.edit.item(i)).map(|it| it.id) else { return };
+                let Some(item) = self.selection.item(&self.edit).and_then(|i| self.edit.item(i)).map(|it| it.id) else { return iced::Task::none() };
                 self.edit.begin();
                 self.op(Op::Item(crate::model::ops::items::ItemOp::SetBars { item, bars }));
                 if press {
@@ -437,11 +453,11 @@ impl App {
                 }
             }
             m @ (EffectMsg::Style(_) | EffectMsg::StyleKnob(..) | EffectMsg::StyleReset) => {
-                let Some((target, _)) = target else { return };
+                let Some((target, _)) = target else { return iced::Task::none() };
                 self.on_style(target, m);
             }
             EffectMsg::Lut(choice) => {
-                let Some((Target::Cut(i), _)) = target else { return };
+                let Some((Target::Cut(i), _)) = target else { return iced::Task::none() };
                 let cut = self.edit.cuts[i].id;
                 self.op(crate::model::ops::Op::Cut(crate::model::ops::cuts::CutOp::Lut { cut, lut: choice.name() }));
                 // Its file read here, in the player: the core only names it.
@@ -460,7 +476,7 @@ impl App {
                 }
             }
             EffectMsg::Text(change) => {
-                let Some((item, mut text)) = self.selected_text() else { return };
+                let Some((item, mut text)) = self.selected_text() else { return iced::Task::none() };
                 // Sliders are one undo step a drag, the rest one a click.
                 if matches!(change, TextChange::Size(_) | TextChange::OutlineWidth(_)) {
                     self.edit.begin();
@@ -499,12 +515,12 @@ impl App {
                 self.edit.commit();
             }
             EffectMsg::Reset(None) => {
-                let Some((target, _)) = target else { return };
+                let Some((target, _)) = target else { return iced::Task::none() };
                 let on = self.graded(target);
                 self.op(Op::Key(KeyOp::Clear { on }));
             }
             EffectMsg::ToAll => {
-                let Some((_, t)) = self.playing_cut() else { return };
+                let Some((_, t)) = self.playing_cut() else { return iced::Task::none() };
                 let cut = self.edit.cuts[self.current].id;
                 self.op(Op::Key(KeyOp::LookToAll { cut, t }));
             }
@@ -534,7 +550,7 @@ impl App {
             }
             EffectMsg::KeyMove(cut, key, t) => {
                 self.follow = true;
-                let Some((id, from)) = self.edit.cuts.get(cut).and_then(|c| Some((c.id, c.effects.get(key)?.t))) else { return };
+                let Some((id, from)) = self.edit.cuts.get(cut).and_then(|c| Some((c.id, c.effects.get(key)?.t))) else { return iced::Task::none() };
                 self.edit.begin();
                 let gap = 1.0 / self.fps();
                 self.op(Op::Key(KeyOp::Retime { line: Line::Effects(Graded::Cut(id)), from, t, gap, tolerance: EXACT }));
@@ -543,6 +559,7 @@ impl App {
                 }
             }
         }
+        iced::Task::none()
     }
 
     /// The selected item's id and text, if it's a text item.
@@ -650,21 +667,17 @@ impl App {
         }
     }
 
-    /// The cut's levels from what the scopes measured of it: its darkest
-    /// to black, its brightest to white. The measure is of the picture as
-    /// graded, so the levels it already has are undone first; pressed
-    /// again, it settles.
-    fn auto_levels(&mut self) {
-        use crate::grade::{BLACK_IN, WHITE_IN};
-        let Some((target @ Target::Cut(_), t)) = self.effect_target() else { return };
-        let Some(s) = self.scope.lock().ok().and_then(|f| f.latest.clone()) else { return };
-        let g = self.shown_grade(target, t);
-        let (b, span) = (g.black_in, g.white_in - g.black_in);
-        let at = |level: u8| b + level as f64 / 255.0 * span;
-        self.edit.begin();
-        self.set_effect(true, BLACK_IN, at(s.black).clamp(0.0, 0.5));
-        self.set_effect(false, WHITE_IN, at(s.white).clamp(0.5, 1.0));
-        self.edit.commit();
+    /// The cut on the panel measured off the UI thread (a dozen frames
+    /// decoded: seconds) and put right (`autocolour`), the levels alone if
+    /// `levels`.
+    fn auto_colour(&mut self, levels: bool) -> iced::Task<Message> {
+        let Some((Target::Cut(i), _)) = self.effect_target() else { return iced::Task::none() };
+        if self.auto_measuring.is_some() {
+            return iced::Task::none();
+        }
+        let cut = self.edit.cuts[i].clone();
+        self.auto_measuring = Some(cut.id);
+        iced::Task::perform(super::blocking(move || (cut.id, crate::autocolour::measure_cut(&cut).map(|m| crate::autocolour::correction(&m)).map_err(|e| format!("{e:#}")))), move |(id, found)| Message::Effect(EffectMsg::AutoColoured(id, levels, found)))
     }
 
     /// The selected picture dressed as `kind`, or plain.

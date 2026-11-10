@@ -788,6 +788,8 @@ struct App {
     effects_folded: Vec<String>,
     /// The scopes' feed, read by the Effects panel (gap 69).
     scope: gpu::Scope,
+    /// The cut being measured for auto colour (gap 89), its id.
+    auto_measuring: Option<crate::project::Id>,
     /// The overlay track's lane and the text track's that new things go
     /// on (gap 70): the last one clicked, an item selected on, or added.
     active_lanes: [usize; 2],
@@ -972,6 +974,7 @@ impl App {
             effects_folded: saved.effects_folded.clone(),
             scope: Default::default(),
             active_lanes: [0; 2],
+            auto_measuring: None,
             effect_extra: None,
             extra_lanes: Vec::new(),
             last_edge: crate::transition::Look::EdgeFade,
@@ -1228,10 +1231,7 @@ impl App {
                 self.snap_line = at;
                 self.update(*inner)
             }
-            Message::Effect(e) => {
-                self.effect_message(e);
-                Task::none()
-            }
+            Message::Effect(e) => self.effect_message(e),
             Message::Key(key, mods) => {
                 let before = self.position();
                 let task = self.key(key, mods);

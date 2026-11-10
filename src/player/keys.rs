@@ -269,7 +269,7 @@ impl App {
                     };
                     return self.update(Message::Stab(next));
                 }
-                "g" | "G" => self.effect_message(effects::EffectMsg::Toggle),
+                "g" | "G" => return self.effect_message(effects::EffectMsg::Toggle),
                 "r" | "R" => return self.update(Message::RollingShutter(!self.rolling_shutter)),
                 // D selects the cut under the playhead (Premiere's key): ↓ to a
                 // cut, D, then Alt+← moves it (gap 58).

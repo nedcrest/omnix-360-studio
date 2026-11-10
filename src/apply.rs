@@ -72,6 +72,9 @@ fn warnings(p: &Project) -> Vec<String> {
             said.push(format!("cut #{} runs to {:.2} s of a clip {long:.2} s long", c.id, c.end));
         }
     }
+    for (id, by) in p.past_end() {
+        said.push(format!("#{id} runs {by:.2} s past the film's end (the trim_to_end op trims it)"));
+    }
     said
 }
 

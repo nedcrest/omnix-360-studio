@@ -2,6 +2,7 @@
 //! player's alone, so an agent could neither see nor set it).
 
 use super::{OpError, Outcome, said};
+use crate::model::edit::MIN_CUT;
 use crate::project::{Group, Id, Project};
 use crate::text::Colour;
 use crate::view::Aspect;
@@ -22,6 +23,10 @@ pub enum ProjectOp {
     Ungroup { group: Id },
     /// The group's colour, and its name if given.
     GroupLook { group: Id, colour: Colour, #[serde(default)] name: Option<String> },
+    /// Each of `things` (sound clips, text, pictures, by id; none: all)
+    /// that runs past the film's end trimmed to it, and one that starts
+    /// there or later taken away (gap 101).
+    TrimToEnd { #[serde(default)] things: Vec<Id> },
 }
 
 pub(super) fn apply(p: &mut Project, op: &ProjectOp) -> Result<Outcome, OpError> {
@@ -35,6 +40,7 @@ pub(super) fn apply(p: &mut Project, op: &ProjectOp) -> Result<Outcome, OpError>
             said(format!("aspect {}", aspect.map_or("free".to_owned(), String::from)))
         }
         ProjectOp::Group { members, name, colour } => group(p, members, name.clone(), *colour),
+        ProjectOp::TrimToEnd { things } => trim_to_end(p, things),
         &ProjectOp::Ungroup { group } => {
             if !p.groups.iter().any(|g| g.id == group) {
                 return Err(OpError::NotFound(format!("group #{group}")));
@@ -77,6 +83,40 @@ fn group(p: &mut Project, members: &[Id], name: Option<String>, colour: Option<C
     Ok(Outcome { summary: format!("group #{id} of {} clips", ids.len()), made: Some(id) })
 }
 
+/// `TrimToEnd`: what of `things` (all, if none) runs past the film's
+/// end, trimmed to it or, starting there, taken away.
+fn trim_to_end(p: &mut Project, things: &[Id]) -> Result<Outcome, OpError> {
+    let end = p.film_end().ok_or_else(|| OpError::Invalid("no pictures yet: the film has no end to trim to".into()))?;
+    let past: Vec<Id> = p.past_end().into_iter().map(|(id, _)| id).filter(|id| things.is_empty() || things.contains(id)).collect();
+    let (mut trimmed, mut gone) = (0, 0);
+    for id in past {
+        if let Some((w, i)) = p.clip_index(id) {
+            let clips = &mut p.track_mut(w).clips;
+            if clips[i].at >= end - MIN_CUT {
+                clips.remove(i);
+                gone += 1;
+            } else {
+                clips[i].end = clips[i].start + (end - clips[i].at);
+                trimmed += 1;
+            }
+        } else if let Some((track, lane, i)) = p.item_index(id) {
+            let items = &mut p.track_lanes_mut(track)[lane].items;
+            if items[i].at >= end - MIN_CUT {
+                items.remove(i);
+                gone += 1;
+            } else {
+                let it = &mut items[i];
+                let was = (it.start, it.end);
+                it.end = it.local(end);
+                crate::animate::keep_on_edges(&mut it.automation, was, (it.start, it.end));
+                trimmed += 1;
+            }
+        }
+    }
+    p.settle_groups();
+    said(format!("{trimmed} trimmed to the film's end at {end:.2} s, {gone} past it taken away"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -115,5 +155,26 @@ mod tests {
         assert_eq!(p.aspect, None);
         let op: super::super::Op = serde_json::from_str(r#"{"area": "project", "op": "aspect", "aspect": "4:3"}"#).unwrap();
         assert_eq!(op, super::super::Op::Project(ProjectOp::Aspect { aspect: Some(Aspect(4, 3)) }));
+    }
+
+    #[test]
+    fn what_runs_past_the_film_is_trimmed_to_its_end_or_taken_away() {
+        use super::super::{Op, check};
+        use crate::model::edit::Edit;
+        use crate::project::{Cut, MusicClip, SoundTrack};
+        let mut p = Project { cuts: vec![Cut::new("a.mp4".into(), 0.0, 10.0)], ..Default::default() };
+        p.music.clips.push(MusicClip { input: "song.wav".into(), at: 4.0, end: 30.0, ..Default::default() });
+        p.sfx.clips.push(MusicClip { input: "boom.wav".into(), at: 12.0, end: 1.0, ..Default::default() });
+        p.sfx2.clips.push(MusicClip { input: "bell.wav".into(), at: 1.0, end: 1.0, ..Default::default() });
+        let mut e = Edit::default();
+        e.replace(p);
+        let (song, boom) = (e.music.clips[0].id, e.sfx.clips[0].id);
+        assert_eq!(e.past_end(), [(song, 24.0), (boom, 3.0)], "the bell inside the film");
+        let said = e.apply(&Op::Project(ProjectOp::TrimToEnd { things: vec![song] })).unwrap().summary;
+        assert_eq!((e.music.clips[0].ends(), e.sfx.clips.len()), (10.0, 1), "{said}: the song alone, as asked");
+        e.apply(&Op::Project(ProjectOp::TrimToEnd { things: vec![] })).unwrap();
+        assert!(e.sfx.clips.is_empty() && e.past_end().is_empty() && e.track(SoundTrack::Sfx2).clips.len() == 1);
+        check(&e).unwrap();
+        assert!(e.undo() && e.sfx.clips.len() == 1);
     }
 }

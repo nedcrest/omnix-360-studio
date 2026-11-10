@@ -55,6 +55,8 @@ pub struct Measured {
     /// dBFS.
     pub mix: Option<f64>,
     pub peak: f64,
+    /// Where the film ends, seconds (gap 101); none without pictures.
+    pub end: Option<f64>,
 }
 
 /// The rules' numbers: a platform's target and the mixing guides'.
@@ -149,6 +151,12 @@ pub fn check(m: &Measured, rules: &Rules) -> Vec<Finding> {
             }
         }
     }
+    // Sound past the pictures (gap 101).
+    if let Some(end) = m.end {
+        for i in m.items.iter().filter(|i| matches!(i.lane, Lane::Track(_)) && i.at + i.len > end + 1e-3) {
+            say((end, i.at + i.len), Some(i.own), Severity::Fix, format!("Runs {:.1} s past the film's end: «Trim to the film's end» on its lane's menu.", i.at + i.len - end));
+        }
+    }
     found.sort_by(|a, b| a.at.total_cmp(&b.at).then(b.severity.cmp(&a.severity)));
     found
 }
@@ -173,6 +181,7 @@ mod tests {
             speech: vec![Speech { from: 1.0, to: 3.0, voice: -16.0, under: vec![(Own::Clip(SoundTrack::Music, 0), -33.0)] }],
             mix: Some(-14.3),
             peak: -1.5,
+            end: Some(6.0),
         };
         assert_eq!(check(&m, &Rules::at(-14.0)), vec![]);
     }
@@ -191,6 +200,7 @@ mod tests {
             speech: vec![Speech { from: 5.0, to: 7.0, voice: -17.0, under: vec![(song, -25.0)] }],
             mix: Some(-19.0),
             peak: -0.4,
+            end: Some(10.0),
         };
         let found = check(&m, &Rules::at(-14.0));
         assert!(says(&found, None, "5.0 LU under -14"), "{found:#?}");
@@ -198,6 +208,10 @@ mod tests {
         assert!(says(&found, Some(quiet), "Speech 6.0 LU quieter"));
         assert!(says(&found, Some(loud_sfx), "9.0 dB over the speech"), "against the speech's typical loudest, -13");
         assert!(says(&found, Some(lost_sfx), "may be lost"));
+        assert!(!found.iter().any(|f| f.text.contains("past the film")), "all within 10 s");
+        let m = Measured { end: Some(8.0), ..m };
+        assert!(says(&check(&m, &Rules::at(-14.0)), Some(lost_sfx), "1.0 s past the film's end"), "7-9 s against 8: the sound clip's tail");
+        assert!(!says(&check(&m, &Rules::at(-14.0)), Some(quiet), "past the film"), "a cut's own sound ends with it");
         assert!(says(&found, Some(song), "only 8.0 dB under the voice") && says(&found, Some(song), "7 dB more"));
         // In edit order, the whole film's first.
         assert!(found.windows(2).all(|w| w[0].at <= w[1].at));

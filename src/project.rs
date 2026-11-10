@@ -1290,6 +1290,16 @@ impl Project {
         Some(self.duration()).filter(|&d| d > 0.0)
     }
 
+    /// What runs past the film's end (gap 101): each sound clip, text and
+    /// picture by id, and how many seconds past; none without pictures.
+    pub fn past_end(&self) -> Vec<(Id, f64)> {
+        const PAST: f64 = 1e-3;
+        let Some(end) = self.film_end() else { return Vec::new() };
+        let clips = SoundTrack::ALL.iter().flat_map(|&w| self.track(w).clips.iter().map(|c| (c.id, c.ends())));
+        let items = self.overlays.iter().chain(&self.text).flat_map(|l| &l.items).map(|i| (i.id, i.ends()));
+        clips.chain(items).map(|(id, e)| (id, e - end)).filter(|&(_, by)| by > PAST).collect()
+    }
+
     /// The sync-locked tracks' clips after edit time `at` moved by `by`
     /// seconds, as the picture there was (gap 99). A clip across `at`
     /// stays and its song moves under it — `by` taken from (or given

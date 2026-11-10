@@ -132,7 +132,7 @@ pub fn measure(project: &Project, progress: &mut dyn FnMut(usize, usize)) -> Res
             Some(Speech { from, to, voice, under })
         })
         .collect();
-    Ok(Measured { items, speech, mix: whole.loudness.integrated(), peak })
+    Ok(Measured { items, speech, mix: whole.loudness.integrated(), peak, end: project.film_end() })
 }
 
 /// A stretch of the film from `at`: its integrated and loudest LUFS

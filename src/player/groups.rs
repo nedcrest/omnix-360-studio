@@ -142,11 +142,14 @@ impl App {
                 }
             })
             .collect();
+        let at = self.position();
         match self.edit.batch(&ops) {
             Ok(_) => {
                 self.selection = Selection::None;
                 self.also.clear();
                 self.save_status = Some(format!("{} clips deleted (Ctrl+Z brings them back)", ops.len()));
+                // The playing cut found again, as a single delete does (the audit, 2026-11-11).
+                self.after_edit(at);
             }
             Err((_, e)) => self.error = Some(e.to_string()),
         }
@@ -484,5 +487,20 @@ mod tests {
         app.modifiers = iced::keyboard::Modifiers::empty();
         let _ = app.update(Message::MoveCut(0, 2));
         assert_eq!((app.edit.cuts[1].id, app.edit.music.clips[0].at), (a, 2.0), "the cut last, its song 2 s on with it");
+    }
+
+    #[test]
+    fn deleting_a_selection_finds_the_playing_cut_again() {
+        let mut app = app();
+        app.edit.cuts.push(crate::project::Cut::new("nowhere/c.mp4".into(), 0.0, 2.0));
+        app.edit.settle_ids();
+        app.current = 2;
+        let _ = app.update(Message::Select(0));
+        app.modifiers = iced::keyboard::Modifiers::SHIFT;
+        let _ = app.update(Message::Select(1));
+        app.modifiers = iced::keyboard::Modifiers::empty();
+        let _ = app.update(Message::DeleteCut);
+        assert_eq!(app.edit.cuts.len(), 1);
+        assert!(app.current < app.edit.cuts.len(), "not an index past the edit: {}", app.current);
     }
 }

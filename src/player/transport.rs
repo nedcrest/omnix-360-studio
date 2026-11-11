@@ -511,6 +511,9 @@ impl App {
                     self.clip = None;
                 }
                 self.goto(i, t, false);
+                // A clip that can't be opened leaves `goto` early: still not
+                // an index past the edit (the audit, 2026-11-11).
+                self.current = i;
             }
             None => {
                 self.clip = None;

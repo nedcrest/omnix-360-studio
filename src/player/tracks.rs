@@ -134,8 +134,12 @@ impl App {
                 self.op(Op::Project(crate::model::ops::project::ProjectOp::TrimToEnd { things }));
             }
             Message::JoinPieces(i) => {
-                if let Some(cut) = self.edit.cuts.get(i).map(|c| c.id) {
-                    self.op(Op::Cut(crate::model::ops::cuts::CutOp::JoinPieces { cut }));
+                let at = self.position();
+                if let Some(cut) = self.edit.cuts.get(i).map(|c| c.id)
+                    && self.op(Op::Cut(crate::model::ops::cuts::CutOp::JoinPieces { cut })).is_some()
+                {
+                    // Pieces gone: the playing cut and the selection found again.
+                    self.after_edit(at);
                 }
             }
             _ => {}

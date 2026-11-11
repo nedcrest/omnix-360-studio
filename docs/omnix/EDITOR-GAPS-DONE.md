@@ -1952,3 +1952,45 @@ shorter) may move earlier or get shorter, never later or longer — else
 a long song would jump to 0 on any drag; a dragged group stops whole.
 Adding a clip doesn't trim it: the warning, the red mark and the trim
 say it instead. `TrimToEnd` takes away what starts at the end or later.
+
+### 99. Sync lock on a sound track — medium (user, 2026-11-11)
+
+The user cut a film to a song's beats (gap 13), then trimmed a few
+seconds off the first cut's start: the edit is magnetic, so every cut
+after it moved left, while the song stayed where it was — every cut
+fell off its beat.
+
+Agreed (2026-11-11, Claude's plan, the user approved): **sync lock**,
+Premiere's name. A lock on a sound track's head; while it's on, an edit
+that makes the picture shorter or longer at some point (a cut trimmed,
+deleted, added, a crossfade changed) moves that track's clips after the
+point by the same amount. A clip across the point moves too and loses
+(or gets back) as much at its head, so what's after the point stays
+under the same pictures.
+
+- A rule of the core (`Project::ripple(at, by)` or so), run inside the
+  cut ops when a track is locked; a setting of the track (`Music::sync`)
+  and an op; `describe` says it. Tests: trimming the first cut's start
+  keeps a beat under the second cut's start.
+- Weighed: FCP's connected clips (a song pinned to one cut: a song under
+  many cuts pins badly) and groups (gap 8: they need the same shift to
+  keep a song with its cuts). Sync lock first; groups use it later.
+- Milestone «Ритм і переходи».
+
+**Built 2026-11-11, waits for the user's check:** `Music::sync`,
+`SoundOp::SyncLock`, `ripple_of` and `Project::ripple_locked` run after
+every cut op; «Sync lock» on a sound lane's menu, «· sync» on its name;
+`describe` says it. A clip starting right at the point counts as across
+it (a trim dragged there and back puts it back). Beats found to the
+sample on the way (gap 13).
+
+
+**Rebuilt 2026-11-11 after the small audit, the user's choice** («розрізати
+пісню»): a locked clip follows the picture it lay under, stretch by
+stretch (`kept_picture`, `follow_picture`): a clip across a trimmed or
+inserted edit is cut there, what lay under picture taken away goes with
+it, nothing plays under an inserted cut; inside a drag the tracks follow
+from the drag's start (`Edit::follow_from_base`), so dragging back
+restores them. Moves and splits change nothing under the picture.
+
+**Checked by the user 2026-11-11:** it works; on music the tempo goes off at a trim (a cut mid-bar removes part of a bar) — expected, kept.

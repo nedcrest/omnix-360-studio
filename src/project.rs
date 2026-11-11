@@ -781,10 +781,11 @@ pub struct Cut {
 }
 
 impl Cut {
-    /// Its frame at clip time `t` (gap 107), if it's framed: the base for
-    /// now; the Frame lanes animate it next.
-    pub fn frame_at(&self, _t: f64) -> Option<crate::frame::Frame> {
-        self.frame
+    /// Its frame at clip time `t` (gap 107), if it's framed: its base
+    /// (the whole picture if none) with what its Frame lanes move there.
+    pub fn frame_at(&self, t: f64) -> Option<crate::frame::Frame> {
+        let lanes = self.automation.iter().any(|c| crate::frame::PARAMS.contains(&c.param.as_str()));
+        (self.frame.is_some() || lanes).then(|| crate::automation::framed(self.frame.unwrap_or_default(), &self.automation, t))
     }
 
     /// A cut of `input` from `start` to `end` seconds, nothing else set.

@@ -40,6 +40,13 @@ impl Default for Frame {
 /// The frame's values by name, as ops, `describe` and the lanes call them.
 pub const NAMES: [&str; 4] = ["x", "y", "zoom", "rotation"];
 
+/// The values as automation clips name them (gap 107, step b): `frame.`
+/// first, as an overlay's place has an `x` of its own.
+pub const PARAMS: [&str; 4] = ["frame.x", "frame.y", "frame.zoom", "frame.rotation"];
+
+/// The values as the lanes and the panel call them.
+pub const LABELS: [&str; 4] = ["Across %", "Down %", "Zoom %", "Rotation °"];
+
 /// Each value's range, in `NAMES` order: the centre within a picture's
 /// height either way, from the whole picture to an eighth of it, a turn
 /// either way.
@@ -55,6 +62,16 @@ impl Frame {
             "rotation" => self.rotation,
             _ => return None,
         })
+    }
+
+    /// Its values in `NAMES` order.
+    pub fn values(&self) -> [f64; 4] {
+        [self.x, self.y, self.zoom, self.rotation]
+    }
+
+    /// The frame of `values` (`NAMES` order).
+    pub fn from_values([x, y, zoom, rotation]: [f64; 4]) -> Frame {
+        Frame { x, y, zoom, rotation }
     }
 
     /// Whether every value is within its range, or the first that isn't.

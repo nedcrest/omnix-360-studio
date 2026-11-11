@@ -446,6 +446,16 @@ impl App {
                 self.unautomate(vec![Place::NAMES[k].to_owned()]);
                 self.set_place(true, k, Place::default().values()[k]);
             }
+            Param::Frame(k) => {
+                use crate::frame::{Frame, PARAMS};
+                self.unautomate(vec![PARAMS[k].to_owned()]);
+                if let Some(i) = self.selection.cut(&self.edit) {
+                    let mut v = self.edit.cuts[i].frame.unwrap_or_default().values();
+                    v[k] = Frame::default().values()[k];
+                    let frame = Some(Frame::from_values(v)).filter(|f| *f != Frame::default());
+                    self.op(Op::Cut(crate::model::ops::cuts::CutOp::Frame { cut: self.edit.cuts[i].id, frame }));
+                }
+            }
         }
         self.edit.commit();
     }

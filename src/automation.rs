@@ -182,6 +182,17 @@ pub fn graded(grade: Grade, clips: &[AutoClip], t: f64) -> Grade {
     Grade { black: grade.black, ..Grade::from_values(values) }
 }
 
+/// `frame` with what `clips` move at `t` (gap 107: the Frame lanes).
+pub fn framed(frame: crate::frame::Frame, clips: &[AutoClip], t: f64) -> crate::frame::Frame {
+    let mut values = frame.values();
+    for (k, name) in crate::frame::PARAMS.iter().enumerate() {
+        if let Some(v) = value(clips, name, t) {
+            values[k] = v;
+        }
+    }
+    crate::frame::Frame::from_values(values)
+}
+
 /// `place` with what `clips` move at `t`.
 pub fn placed(place: Place, clips: &[AutoClip], t: f64) -> Place {
     let mut values = place.values();

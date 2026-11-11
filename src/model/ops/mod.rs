@@ -201,16 +201,13 @@ impl Edit {
     }
 }
 
-/// What must hold in any project an op leaves: ids given and unique,
-/// stretches the right way round, volume points in time order and
-/// numbers. The tests run it after every op, undo and redo.
-/// Automation clips that have a length and a point, points in time order,
-/// and no two of one value overlapping.
-/// Value `v` of `param`, an effect (`grade::EFFECTS`) or a place value
-/// (`Place::RANGES`), within its range (audit C4: exposure 1000 was taken).
+/// Value `v` of `param`, an effect (`grade::EFFECTS`), a place value
+/// (`Place::RANGES`) or a frame value (`frame::RANGES`), within its range
+/// (audit C4: exposure 1000 was taken).
 pub(super) fn in_range(param: &str, v: f64) -> Result<(), OpError> {
     use crate::overlay::Place;
-    let range = crate::grade::NAMES.iter().position(|n| *n == param).map(|k| crate::grade::RANGES[k]).or_else(|| Place::NAMES.iter().position(|n| *n == param).map(|k| Place::RANGES[k]));
+    let of = |names: &[&str], ranges: &[(f64, f64)]| names.iter().position(|n| *n == param).map(|k| ranges[k]);
+    let range = of(&crate::grade::NAMES, &crate::grade::RANGES).or_else(|| of(&Place::NAMES, &Place::RANGES)).or_else(|| of(&crate::frame::PARAMS, &crate::frame::RANGES));
     match range {
         Some((lo, hi)) if (lo..=hi).contains(&v) => Ok(()),
         Some((lo, hi)) => Err(OpError::Invalid(format!("{param} {v} is outside {lo}..{hi}"))),
@@ -251,6 +248,11 @@ fn automation(what: &str, clips: &[crate::automation::AutoClip]) -> Result<(), S
     Ok(())
 }
 
+/// What must hold in any project an op leaves: ids given and unique,
+/// stretches the right way round, volume points in time order and
+/// numbers; automation clips that have a length and a point, points in
+/// time order, and no two of one value overlapping. The tests run it after
+/// every op, undo and redo.
 pub fn check(p: &Project) -> Result<(), String> {
     let mut ids = std::collections::HashSet::new();
     let mut id = |what: &str, id: Id| if id == 0 || !ids.insert(id) { Err(format!("{what} has id {id}, not given or taken")) } else { Ok(()) };

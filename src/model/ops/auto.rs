@@ -71,8 +71,13 @@ fn owner(p: &mut Project, on: Graded) -> Result<Owner<'_>, OpError> {
         Graded::Cut(id) => {
             let i = p.cut_index(id).ok_or_else(|| OpError::NotFound(format!("cut #{id}")))?;
             let c = &mut p.cuts[i];
-            let (effects, range) = (c.effects.clone(), (c.start, c.end));
-            Ok(Owner { clips: &mut c.automation, range, base: Box::new(move |param, t| grade_value(&effects, param, t)), item: false })
+            let (effects, frame, range) = (c.effects.clone(), c.frame.unwrap_or_default(), (c.start, c.end));
+            // A Frame lane's value where no clip is: the cut's frame (gap 107).
+            let base = move |param: &str, t: f64| match crate::frame::PARAMS.iter().position(|n| *n == param) {
+                Some(k) => frame.values()[k],
+                None => grade_value(&effects, param, t),
+            };
+            Ok(Owner { clips: &mut c.automation, range, base: Box::new(base), item: false })
         }
         Graded::Item(id) => {
             let it = p.item_mut(id).ok_or_else(|| OpError::NotFound(format!("item #{id}")))?;
@@ -93,7 +98,7 @@ fn grade_value(effects: &[crate::grade::EffectKey], param: &str, t: f64) -> f64 
 
 /// `param` names something `o` can move.
 fn check_param(o: &Owner, param: &str) -> Result<(), OpError> {
-    let place = o.item && crate::overlay::Place::NAMES.contains(&param);
+    let place = o.item && crate::overlay::Place::NAMES.contains(&param) || !o.item && crate::frame::PARAMS.contains(&param);
     let effect = crate::grade::NAMES.iter().position(|n| *n == param).is_some_and(|k| o.item || !crate::grade::ITEM_ONLY.contains(&k));
     if effect || place {
         Ok(())
@@ -366,4 +371,22 @@ mod tests {
         check(&e).unwrap();
     }
 
+
+    #[test]
+    fn a_cuts_frame_lanes_zoom_it_from_its_base() {
+        use crate::frame::Frame;
+        let mut e = Edit::default();
+        let cut = e.apply(&Op::Cut(crate::model::ops::cuts::CutOp::Add { input: "a.mp4".into(), start: 0.0, end: 4.0, place: crate::model::ops::cuts::Place::End, stabilize: None, lut: None })).unwrap().made.unwrap();
+        e.apply(&Op::Cut(crate::model::ops::cuts::CutOp::Frame { cut, frame: Some(Frame { x: 10.0, ..Frame::default() }) })).unwrap();
+        let on = Graded::Cut(cut);
+        e.apply(&Op::Auto(AutoOp::Add { on, param: "frame.zoom".into(), from: 0.0, to: 4.0 })).unwrap();
+        for (t, v) in [(0.0, 100.0), (4.0, 200.0)] {
+            e.apply(&Op::Auto(AutoOp::Point { on, param: "frame.zoom".into(), t, v, from: None, tolerance: 0.0 })).unwrap();
+        }
+        let at = |t| e.cuts[0].frame_at(t).unwrap();
+        assert_eq!((at(0.0).zoom, at(4.0).zoom, at(2.0).x), (100.0, 200.0, 10.0), "the zoom moves, the base's x stays");
+        assert!(at(2.0).zoom > 100.0 && at(2.0).zoom < 200.0);
+        assert!(e.apply(&Op::Auto(AutoOp::Add { on, param: "x".into(), from: 0.0, to: 1.0 })).is_err(), "an overlay's place isn't a cut's");
+        check(&e).unwrap();
+    }
 }

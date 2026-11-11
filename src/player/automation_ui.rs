@@ -30,6 +30,8 @@ pub enum LaneOf {
 pub enum Param {
     Grade(usize),
     Place(usize),
+    /// A cut's frame value (gap 107), `frame::PARAMS`' order.
+    Frame(usize),
 }
 
 impl Param {
@@ -38,6 +40,7 @@ impl Param {
         match self {
             Param::Grade(k) => crate::grade::NAMES[k],
             Param::Place(k) => crate::overlay::Place::NAMES[k],
+            Param::Frame(k) => crate::frame::PARAMS[k],
         }
     }
 
@@ -46,6 +49,7 @@ impl Param {
         match self {
             Param::Grade(k) => crate::grade::EFFECTS.get(k).map_or("?", |e| e.label),
             Param::Place(k) => crate::overlay::Place::ABOUT[k].0,
+            Param::Frame(k) => crate::frame::LABELS[k],
         }
     }
 
@@ -53,6 +57,7 @@ impl Param {
         match self {
             Param::Grade(k) => crate::grade::RANGES[k],
             Param::Place(k) => crate::overlay::Place::RANGES[k],
+            Param::Frame(k) => crate::frame::RANGES[k],
         }
     }
 
@@ -60,7 +65,8 @@ impl Param {
     pub fn label(self, v: f64) -> String {
         match self {
             Param::Grade(k) => super::effects::label(k, v),
-            Param::Place(3) => format!("{v:+.0}°"),
+            Param::Place(3) | Param::Frame(3) => format!("{v:+.0}°"),
+            Param::Frame(_) => format!("{v:.0} %"),
             Param::Place(_) => format!("{v:.2}"),
         }
     }

@@ -1129,7 +1129,9 @@ impl App {
     fn update(&mut self, message: Message) -> Task<Message> {
         // Editing: what turns or keys the view does nothing (its controls
         // are hidden too; the mouse on the picture and the keys still send).
-        if !self.framing && framing_only(&message) {
+        // On an ordinary cut the mouse on the picture frames it (gap 107).
+        let framing_flat = matches!(message, Message::Look { .. } | Message::Zoom(_)) && self.frames_by_hand();
+        if !self.framing && framing_only(&message) && !framing_flat {
             return Task::none();
         }
         let before = if self.look_flat { (self.other_look, self.look) } else { (self.look, self.other_look) };

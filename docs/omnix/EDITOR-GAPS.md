@@ -1469,6 +1469,14 @@ picture under it is taken away). Whether text is cut in two at an edit
 like a song, or only shortened, to decide with him (a title in two
 pieces is odd). Milestone «Зручний таймлайн».
 
+
+**Built 2026-11-11, waits for a check** (the user chose: shortened, not cut
+in two). A lane's sync (`overlay::Lane::sync`, `ItemOp::LaneSync`, its
+menu on a right-click of its name with «Rename…», «· sync» in its name);
+`follow_picture_items`: an item stays one, starts where its first
+stretch still shown went, is as long as what's left under it, and goes
+when nothing is; `Project::locked`/`follow_from` hold sound and item
+lanes alike, so a drag follows from its start for both.
 ### 102. Copy and paste clips — small (user, 2026-11-11)
 
 The user, sorting stingers from cutaways: «a clip selected, Ctrl+C, the

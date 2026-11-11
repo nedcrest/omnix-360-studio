@@ -2816,7 +2816,8 @@ fn release(drag: Drag) -> Option<canvas::Action<Message>> {
     match drag {
         Drag::None => None,
         Drag::Move { cut, moved: true, to, .. } => Some(canvas::Action::publish(Message::MoveCut(cut, to)).and_capture()),
-        Drag::Move { .. } | Drag::Scroll { .. } => Some(canvas::Action::request_redraw().and_capture()),
+        Drag::Move { cut, .. } => Some(canvas::Action::publish(Message::SelectOne(cut)).and_capture()),
+        Drag::Scroll { .. } => Some(canvas::Action::request_redraw().and_capture()),
         // The drawn zone and the lanes' drags are let go in `Marks::update`,
         // which knows the times.
         Drag::Zone { .. } | Drag::Auto(_) | Drag::Range { .. } => Some(canvas::Action::request_redraw().and_capture()),

@@ -27,10 +27,27 @@ impl App {
             self.picked_with = self.selection;
             return;
         }
+        // A press on a clip of the selected ones keeps them all: it's
+        // where a drag of them starts (the user, 2026-11-11: an
+        // Alt+clicked group couldn't be dragged). Let go without a drag,
+        // that clip alone stays (`pick_one`).
+        if !self.modifiers.alt() && !self.also.is_empty() && id.is_some_and(|i| self.picked_ids().contains(&i)) {
+            return;
+        }
         self.selection = s;
         let group = id.and_then(|i| self.edit.group_of(i)).filter(|_| self.modifiers.alt());
         self.also = group.map_or_else(Vec::new, |g| self.edit.members(g).into_iter().filter(|&m| Some(m) != id).collect());
         self.picked_with = self.selection;
+    }
+
+    /// A click on cut `i` let go without a drag: of the clips selected,
+    /// it alone stays (Alt or Shift held: the selection as it is).
+    pub(super) fn pick_one(&mut self, i: usize) {
+        if !self.modifiers.alt() && !self.modifiers.shift() && !self.also.is_empty() {
+            self.also.clear();
+            self.selection = Selection::cut_at(&self.edit, i);
+            self.picked_with = self.selection;
+        }
     }
 
     /// The clips selected: the first, then those beside it.
@@ -95,9 +112,16 @@ impl App {
         // Before the first cut at or after `to` that isn't moving.
         let before = self.edit.cuts[to.min(self.edit.cuts.len())..].iter().map(|c| c.id).find(|id| !cuts.contains(id));
         let playing = self.edit.cuts.get(self.current).map(|c| c.id);
+        let first = cuts[0];
+        let at = |e: &crate::model::edit::Edit| e.cut_index(first).map_or(0.0, |i| crate::project::offsets(&e.cuts)[i]);
+        let was = at(&self.edit);
+        self.edit.begin();
         if self.op(Op::Cut(CutOp::MoveTogether { cuts, before })).is_some() {
             self.current = playing.and_then(|id| self.edit.cut_index(id)).unwrap_or(0);
+            // The group's sound clips, text and pictures go with its cuts.
+            self.move_also(at(&self.edit) - was);
         }
+        self.edit.commit();
         true
     }
 
@@ -338,8 +362,9 @@ mod tests {
         app.group_selected(false);
         let g = app.edit.group_of(a).unwrap();
         assert_eq!(app.edit.members(g), [a, b]);
-        // A click: the clip alone; Alt+click, its group with it.
+        // A click (pressed and let go): the clip alone; Alt+click, its group with it.
         let _ = app.update(Message::Select(1));
+        let _ = app.update(Message::SelectOne(1));
         assert_eq!(app.picked_ids(), [b]);
         app.modifiers = iced::keyboard::Modifiers::ALT;
         let _ = app.update(Message::Select(1));
@@ -372,5 +397,31 @@ mod tests {
         let _ = app.update(Message::MusicMove(SoundTrack::Music, 0, end + 5.0, false));
         let (s, t) = (app.edit.music.clips[0].at, app.edit.text[0].items[0].at);
         assert!((t + 1.0 - end).abs() < 1e-9 && (t - s - 0.5).abs() < 1e-9, "the text at the end, the song still half a second before it: {s} {t} of {end}");
+    }
+
+    #[test]
+    fn an_alt_clicked_group_is_pressed_again_and_dragged_whole_its_song_along() {
+        use crate::project::SoundTrack;
+        let mut app = app();
+        app.edit.cuts.push(crate::project::Cut::new("nowhere/c.mp4".into(), 0.0, 2.0));
+        app.edit.music.clips.push(crate::project::MusicClip { input: "song.wav".into(), at: 2.0, end: 4.0, ..Default::default() });
+        app.edit.settle_ids();
+        let ids: Vec<Id> = app.edit.cuts.iter().map(|c| c.id).collect();
+        let song = app.edit.music.clips[0].id;
+        app.op(Op::Project(ProjectOp::Group { members: vec![ids[1], ids[2], song], name: None, colour: None }));
+        // Alt+click the group; then, as a drag starts, a plain press on one of it.
+        app.modifiers = iced::keyboard::Modifiers::ALT;
+        let _ = app.update(Message::Select(2));
+        app.modifiers = iced::keyboard::Modifiers::empty();
+        let _ = app.update(Message::Select(2));
+        assert_eq!(app.picked_ids().len(), 3, "the press keeps the group");
+        let _ = app.update(Message::MoveCut(2, 0));
+        assert_eq!(app.edit.cuts.iter().map(|c| c.id).collect::<Vec<_>>(), [ids[1], ids[2], ids[0]]);
+        assert_eq!(app.edit.track(SoundTrack::Music).clips[0].at, 0.0, "the song went 2 s earlier with its cuts");
+        assert!(app.edit.undo() && app.edit.cuts[0].id == ids[0] && app.edit.music.clips[0].at == 2.0, "one undo step");
+        // A click let go without a drag: that cut alone.
+        let _ = app.update(Message::Select(1));
+        let _ = app.update(Message::SelectOne(1));
+        assert_eq!(app.picked_ids(), [ids[1]]);
     }
 }

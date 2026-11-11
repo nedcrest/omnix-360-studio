@@ -505,6 +505,8 @@ enum Message {
     /// Drag keyframe `.1` of cut `.0` to clip time `.2`.
     KeyMove(usize, usize, f64),
     Select(usize),
+    /// A click on cut `.0` let go without a drag (`App::pick_one`).
+    SelectOne(usize),
     /// Drag cut `.0`'s in (`.1` true) or out point to clip time `.2`.
     Trim(usize, bool, f64),
     /// Move cut `.0` to position `.1`.
@@ -1283,7 +1285,7 @@ impl App {
             }
             m @ (Message::MarkEdit { .. } | Message::MarkNote { .. } | Message::MarkSave | Message::MarkDelete | Message::MarkClose | Message::AddMark | Message::MarkMove { .. } | Message::MarkSelect { .. }) => self.on_marks(m),
             m @ (Message::Tick | Message::TimelineZoom { .. } | Message::TimelineWheel { .. } | Message::TimelineZoomTo { .. } | Message::TimelinePan { .. } | Message::Toggle | Message::Scrub { .. } | Message::ScrubDone) => self.on_transport(m),
-            m @ (Message::Select { .. } | Message::AddBlank | Message::SoundEdge { .. } | Message::Trim { .. } | Message::MoveCut { .. } | Message::SelectAtPlayhead | Message::StepsRested { .. } | Message::ToastGone { .. } | Message::StepNoteGone { .. } | Message::TrimToPlayhead { .. } | Message::Crossfade { .. } | Message::ToggleCrossfade | Message::Split | Message::DeleteCut | Message::Undo | Message::Redo) => self.on_cuts(m),
+            m @ (Message::Select { .. } | Message::SelectOne(_) | Message::AddBlank | Message::SoundEdge { .. } | Message::Trim { .. } | Message::MoveCut { .. } | Message::SelectAtPlayhead | Message::StepsRested { .. } | Message::ToastGone { .. } | Message::StepNoteGone { .. } | Message::TrimToPlayhead { .. } | Message::Crossfade { .. } | Message::ToggleCrossfade | Message::Split | Message::DeleteCut | Message::Undo | Message::Redo) => self.on_cuts(m),
             m @ (Message::LookDone | Message::Framing { .. } | Message::KeyMove { .. } | Message::KeyAdd | Message::KeyDelete | Message::KeyEase { .. } | Message::KeyFollow { .. } | Message::Stab { .. } | Message::Projection { .. } | Message::KeyJump { .. } | Message::Look { .. } | Message::Zoom { .. } | Message::Fov { .. } | Message::AngleInput { .. } | Message::AngleDone | Message::AngleScrubStart { .. } | Message::AngleScrubDone | Message::AngleScrub { .. } | Message::AngleNudge { .. } | Message::AngleArrow { .. } | Message::Source { .. } | Message::RollingShutter { .. } | Message::FullOnPause { .. } | Message::ResetView) => self.on_framing(m),
             m @ (Message::AddOverlay | Message::OverlayPicked { .. } | Message::OverlaySelect { .. } | Message::OverlayMove { .. } | Message::OverlayToLane(..) | Message::OverlayTrim { .. } | Message::OverlayJump { .. } | Message::OverlayKeyMove { .. } | Message::OverlayPicture { .. } | Message::AddText | Message::AddBars | Message::LaneAdd(_) | Message::LaneRemove(..) | Message::LaneActive(..) | Message::LaneRename(..) | Message::LaneName(..) | Message::LaneHide(..)) => self.on_overlay_ui(m),
             m @ (Message::TrimToEnd(_) | Message::JoinPieces(_)) => {

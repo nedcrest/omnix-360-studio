@@ -96,6 +96,7 @@ impl App {
                 }
                 self.pick(Selection::cut_at(&self.edit, i));
             }
+            Message::SelectOne(i) => self.pick_one(i),
             Message::AddBlank => return self.add_blank(),
             m @ (Message::SoundEdge(..) | Message::Trim(..) | Message::TrimToPlayhead(_) | Message::Crossfade(..) | Message::ToggleCrossfade) => return self.on_trims(m),
             Message::MoveCut(from, to) if self.move_together(from, to) => {}

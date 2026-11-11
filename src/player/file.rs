@@ -190,77 +190,154 @@ impl App {
 
 impl App {
     /// The project file and loading clips: this area's messages, as `handle` passes them on.
+    /// «Add clips»: the file dialog, from the playing clip's folder.
+    fn pick_clips(&mut self) -> Task<Message> {
+            let dir = self.clip.as_ref().and_then(|c| c.playback.media.input.parent().map(Path::to_owned));
+            Task::perform(
+                async move {
+                    let mut dialog = rfd::AsyncFileDialog::new()
+                        .set_title("Add clips")
+                        .add_filter("Videos and pictures", &super::bin::exts([super::bin::CLIP_EXT, super::bin::PICTURE_EXT].concat().as_slice()))
+                        .add_filter("Osmo 360 video", &["OSV", "osv"]);
+                    if let Some(dir) = dir {
+                        dialog = dialog.set_directory(dir);
+                    }
+                    dialog.pick_files().await.unwrap_or_default().iter().map(|f| f.path().to_owned()).collect()
+                },
+                Message::Picked,
+            )
+    }
+
+    /// A clip opened (or not): taken in, added if asked, the next one opened.
+    fn loaded(&mut self, result: Arc<Result<Media, String>>) -> Task<Message> {
+            self.loading = None;
+            self.loaded += 1;
+            match Arc::into_inner(result).expect("loaded clip is not shared") {
+                Ok(media) => {
+                    let (input, duration) = (media.input.clone(), media.duration);
+                    let thumbs = self.take_in(media);
+                    if self.loading_adds {
+                        self.add_cut(input, duration);
+                    }
+                    return Task::batch([self.open_next(), thumbs]);
+                }
+                Err(e) => self.error = Some(e),
+            }
+            self.open_next()
+    }
+
+    /// A project chosen: read, what's gone left out and said, opened.
+    fn project_picked(&mut self, path: PathBuf) -> Task<Message> {
+            let mut project = match Project::read(&path) {
+                Ok(p) => p,
+                Err(e) => {
+                    self.error = Some(format!("{e:#}"));
+                    return Task::none();
+                }
+            };
+            // What's gone can't play: left out, and said. A cut's sound
+            // file gone plays its clip's own, its name kept.
+            let missing = project.drop_missing(Path::exists);
+            self.error = missing.said();
+            // Each cut gets a mode of its own, so changing one leaves the rest.
+            for c in &mut project.cuts {
+                c.stabilize.get_or_insert(self.opts.stabilize);
+            }
+            self.forget_edit_state();
+            let waves: Vec<_> = project.sound_clips().map(|c| self.load_waveform(&c.input)).collect();
+            self.queue.extend(project.cuts.iter().map(|c| (c.input.clone(), false)));
+            let complete = missing.is_complete();
+            self.edit.replace(project);
+            self.mark_flat();
+            self.saved_version = if complete { self.edit.version } else { 0 };
+            settings::remember(&mut self.recent, &path);
+            self.project = Some(path);
+            // An empty one is built from its bin: open it.
+            if !self.has_edit() {
+                self.bin.open = true;
+            }
+            let next = if self.loading.is_none() { self.open_next() } else { Task::none() };
+            // Voices chosen in Dailix since this edit was made (gap 103).
+            let voices = self.offer_sheet_voices();
+            Task::batch(waves.into_iter().chain([next, voices]))
+    }
+
+    /// «Save» (to its file) or «Save as» (`as_new`: a new name asked).
+    fn save_project(&mut self, as_new: bool) -> Task<Message> {
+            if !self.has_edit() {
+                return Task::none();
+            }
+            if let (Some(path), false) = (&self.project, as_new) {
+                return self.update(Message::SaveProjectTo(Some(path.clone())));
+            }
+            // Named after the first clip, or the song (or sound effect) a
+            // project starts from: `has_edit` holds one of them.
+            let Some(first) = self.edit.cuts.first().map(|c| &c.input).or(self.edit.sound_clips().next().map(|c| &c.input)) else {
+                return Task::none();
+            };
+            let dir = self.project.as_ref().unwrap_or(first).parent().map(Path::to_owned);
+            let name = self.project.as_ref().and_then(|p| p.file_name()).map_or_else(
+                || format!("{}_edit.json", first.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default()),
+                |n| n.to_string_lossy().into_owned(),
+            );
+            Task::perform(
+                async move {
+                    let mut dialog = rfd::AsyncFileDialog::new().set_title("Save project").add_filter("Omnix project", &["json"]).set_file_name(name);
+                    if let Some(dir) = dir {
+                        dialog = dialog.set_directory(dir);
+                    }
+                    dialog.save_file().await.map(|f| f.path().to_owned())
+                },
+                Message::SaveProjectTo,
+            )
+    }
+
+    /// Back to the start screen with an empty edit. Loaded clips stay in
+    /// the library, so adding them again is instant; one still loading
+    /// finishes there without becoming a cut. The shape stays for the next.
+    fn new_project(&mut self) {
+        self.new_menu = None;
+        self.edit.replace(Project { aspect: self.edit.aspect, ..Project::default() });
+        self.forget_edit_state();
+        self.saved_version = self.edit.version;
+        self.project = None;
+        self.queue.clear();
+        self.loading_adds = false;
+        self.error = None;
+    }
+
+    /// «Stop and quit»: the work under way stopped; quits now if nothing
+    /// is left running, else once it has stopped.
+    fn stop_and_close(&mut self) -> Task<Message> {
+        self.cancel_work();
+        self.closing = self.busy();
+        if !self.closing {
+            return self.update(Message::CloseRequested);
+        }
+        self.save_status = Some("Stopping, then quitting…".to_owned());
+        Task::none()
+    }
+
     pub(super) fn on_file(&mut self, message: Message) -> Task<Message> {
         match message {
-            Message::Open => {
-                let dir = self.clip.as_ref().and_then(|c| c.playback.media.input.parent().map(Path::to_owned));
-                return Task::perform(
-                    async move {
-                        let mut dialog = rfd::AsyncFileDialog::new()
-                            .set_title("Add clips")
-                            .add_filter("Videos and pictures", &super::bin::exts([super::bin::CLIP_EXT, super::bin::PICTURE_EXT].concat().as_slice()))
-                            .add_filter("Osmo 360 video", &["OSV", "osv"]);
-                        if let Some(dir) = dir {
-                            dialog = dialog.set_directory(dir);
-                        }
-                        dialog.pick_files().await.unwrap_or_default().iter().map(|f| f.path().to_owned()).collect()
-                    },
-                    Message::Picked,
-                );
-            }
+            Message::Open => return self.pick_clips(),
             Message::Picked(paths) => {
                 self.queue.extend(paths.into_iter().map(|p| (p, true)));
                 if self.loading.is_none() {
                     return self.open_next();
                 }
             }
-            Message::Loaded(result) => {
-                self.loading = None;
-                self.loaded += 1;
-                match Arc::into_inner(result).expect("loaded clip is not shared") {
-                    Ok(media) => {
-                        let (input, duration) = (media.input.clone(), media.duration);
-                        let thumbs = self.take_in(media);
-                        if self.loading_adds {
-                            self.add_cut(input, duration);
-                        }
-                        return Task::batch([self.open_next(), thumbs]);
-                    }
-                    Err(e) => self.error = Some(e),
-                }
-                return self.open_next();
-            }
+            Message::Loaded(result) => return self.loaded(result),
             Message::OpenProject if self.unsaved() => return self.confirm(Then::OpenProject),
             Message::NewProject if self.unsaved() => return self.confirm(Then::NewProject),
             Message::NewMenu if self.unsaved() => return self.confirm(Then::NewMenu),
             Message::NewMenu => return self.on_new_menu(Message::NewMenu),
-            Message::NewProject => {
-                self.new_menu = None;
-                // Back to the start screen with an empty edit. Loaded clips
-                // stay in the library, so adding them again is instant; one
-                // still loading finishes there without becoming a cut.
-                // The shape stays for the next.
-                self.edit.replace(Project { aspect: self.edit.aspect, ..Project::default() });
-                self.forget_edit_state();
-                self.saved_version = self.edit.version;
-                self.project = None;
-                self.queue.clear();
-                self.loading_adds = false;
-                self.error = None;
-            }
+            Message::NewProject => self.new_project(),
             // A question up already: the close button again does nothing.
             Message::CloseRequested if self.asking.is_some() => {}
             Message::CloseRequested if self.busy() => return self.confirm_stop(),
-            Message::StopAndClose(stop) => {
-                if stop {
-                    self.cancel_work();
-                    self.closing = self.busy();
-                    if !self.closing {
-                        return self.update(Message::CloseRequested);
-                    }
-                    self.save_status = Some("Stopping, then quitting…".to_owned());
-                }
-            }
+            Message::StopAndClose(true) => return self.stop_and_close(),
+            Message::StopAndClose(false) => {}
             Message::CloseRequested if self.unsaved() => return self.confirm(Then::Close),
             Message::CloseRequested => {
                 self.stop_preview();
@@ -293,66 +370,8 @@ impl App {
             }
             Message::ProjectPicked(None) => {}
             Message::SaveProjectTo(None) => self.after_save = None,
-            Message::ProjectPicked(Some(path)) => {
-                let mut project = match Project::read(&path) {
-                    Ok(p) => p,
-                    Err(e) => {
-                        self.error = Some(format!("{e:#}"));
-                        return Task::none();
-                    }
-                };
-                // What's gone can't play: left out, and said. A cut's sound
-                // file gone plays its clip's own, its name kept.
-                let missing = project.drop_missing(Path::exists);
-                self.error = missing.said();
-                // Each cut gets a mode of its own, so changing one leaves the rest.
-                for c in &mut project.cuts {
-                    c.stabilize.get_or_insert(self.opts.stabilize);
-                }
-                self.forget_edit_state();
-                let waves: Vec<_> = project.sound_clips().map(|c| self.load_waveform(&c.input)).collect();
-                self.queue.extend(project.cuts.iter().map(|c| (c.input.clone(), false)));
-                let complete = missing.is_complete();
-                self.edit.replace(project);
-                self.mark_flat();
-                self.saved_version = if complete { self.edit.version } else { 0 };
-                settings::remember(&mut self.recent, &path);
-                self.project = Some(path);
-                // An empty one is built from its bin: open it.
-                if !self.has_edit() {
-                    self.bin.open = true;
-                }
-                let next = if self.loading.is_none() { self.open_next() } else { Task::none() };
-                return Task::batch(waves.into_iter().chain([next]));
-            }
-            Message::SaveProject(as_new) => {
-                if !self.has_edit() {
-                    return Task::none();
-                }
-                if let (Some(path), false) = (&self.project, as_new) {
-                    return self.update(Message::SaveProjectTo(Some(path.clone())));
-                }
-                // Named after the first clip, or the song (or sound effect) a
-                // project starts from: `has_edit` holds one of them.
-                let Some(first) = self.edit.cuts.first().map(|c| &c.input).or(self.edit.sound_clips().next().map(|c| &c.input)) else {
-                    return Task::none();
-                };
-                let dir = self.project.as_ref().unwrap_or(first).parent().map(Path::to_owned);
-                let name = self.project.as_ref().and_then(|p| p.file_name()).map_or_else(
-                    || format!("{}_edit.json", first.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default()),
-                    |n| n.to_string_lossy().into_owned(),
-                );
-                return Task::perform(
-                    async move {
-                        let mut dialog = rfd::AsyncFileDialog::new().set_title("Save project").add_filter("Omnix project", &["json"]).set_file_name(name);
-                        if let Some(dir) = dir {
-                            dialog = dialog.set_directory(dir);
-                        }
-                        dialog.save_file().await.map(|f| f.path().to_owned())
-                    },
-                    Message::SaveProjectTo,
-                );
-            }
+            Message::ProjectPicked(Some(path)) => return self.project_picked(path),
+            Message::SaveProject(as_new) => return self.save_project(as_new),
             Message::SaveProjectTo(Some(path)) => match self.to_project().save(&path) {
                 Ok(()) => {
                     self.saved_version = self.edit.version;

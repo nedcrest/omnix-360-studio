@@ -70,6 +70,7 @@ pub fn build(root: &Path, day: Option<&str>) -> Result<Project> {
             let mut cut = Cut::new(clip.path.clone(), start, end);
             cut.note = (!note.is_empty()).then_some(note);
             cut.audio = voice.clone();
+            cut.sheet_voice = chosen.as_ref().map(|(r, _)| (*r).clone());
             if let Some(v) = &voice {
                 cut.loudness = stretch_loudness(v, (start, end), whole);
                 cut.gain = crate::model::ops::sound::normal_gain(cut.loudness);
@@ -106,6 +107,23 @@ pub fn voices(root: &Path, clip: &Path) -> Voices {
     let sheet = std::fs::read_to_string(layout.sheet()).ok().and_then(|t| Doc::parse(&t).ok()?.sheet().ok());
     let chosen = sheet.and_then(|s| s.clips.get(&key)?.audio.clone());
     Voices { made, chosen }
+}
+
+/// The cuts of `project` whose clip has a voice chosen in the marking of
+/// the trip at `root` (and made) that the cut hasn't seen yet
+/// (`Cut::sheet_voice`): (cut, the voice's name, its file), to offer
+/// when the edit opens (gap 103).
+pub fn newer_voices(root: &Path, project: &Project) -> Vec<(crate::project::Id, String, PathBuf)> {
+    let mut known: std::collections::HashMap<&Path, Voices> = std::collections::HashMap::new();
+    let mut newer = Vec::new();
+    for c in &project.cuts {
+        let v = known.entry(&c.input).or_insert_with(|| voices(root, &c.input));
+        let Some(name) = v.chosen.clone().filter(|n| Some(n) != c.sheet_voice.as_ref()) else { continue };
+        if let Some((_, file)) = v.made.iter().find(|(n, _)| *n == name) {
+            newer.push((c.id, name, file.clone()));
+        }
+    }
+    newer
 }
 
 /// A voice's loudness over a cut's `span`, LUFS (`stretch_loudness`),
@@ -243,6 +261,11 @@ mod tests {
         assert_eq!((v.made, v.chosen.as_deref()), (vec![("dnn6".to_owned(), layout.voice().join("2030-05-01/A/dnn6.flac"))], Some("dnn6")));
         assert_eq!(voices(&root, &layout.clip("2030-05-01/B.MP4")), Voices::default(), "none made");
         assert_eq!(voices(&root, Path::new("/elsewhere/A.MP4")), Voices::default());
+        // An edit made from the marking has seen its choice; one chosen later is offered.
+        assert!(newer_voices(&root, &p).is_empty());
+        let mut seen_none = p.clone();
+        seen_none.cuts[1].sheet_voice = None;
+        assert_eq!(newer_voices(&root, &seen_none).iter().map(|(id, n, _)| (*id, n.as_str())).collect::<Vec<_>>(), [(p.cuts[1].id, "dnn6")]);
 
         // Written beside the others, never over one.
         let a = write(&root, Some("2030-05-01")).unwrap();

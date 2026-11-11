@@ -452,6 +452,55 @@ impl App {
         }
     }
 
+    /// Voices chosen in Dailix since the edit was made (gap 103), asked
+    /// when it opens: none asked when there are none.
+    pub(super) fn offer_sheet_voices(&mut self) -> Task<Message> {
+        let Some(root) = self.project.as_deref().and_then(dailix_sheet::project::of_edit) else { return Task::none() };
+        let n = crate::from_sheet::newer_voices(&root, &self.edit).len();
+        if n == 0 {
+            return Task::none();
+        }
+        self.ask(super::ask::Ask {
+            title: "Voices chosen in Dailix".to_owned(),
+            text: format!("{n} cut{} of this edit got a cleaned voice chosen in Dailix since it was made. Use {}?", if n == 1 { "" } else { "s" }, if n == 1 { "it" } else { "them" }),
+            answers: vec![("Use them".to_owned(), Message::SheetVoices(Some(true))), ("Keep as it is".to_owned(), Message::SheetVoices(Some(false)))],
+            cancel: Message::SheetVoices(None),
+            field: None,
+        })
+    }
+
+    /// The answer: the voices measured over their cuts and set, one undo
+    /// step, or let pass so they aren't offered again.
+    fn on_sheet_voices(&mut self, message: Message) -> Task<Message> {
+        use crate::model::ops::cuts::CutOp;
+        match message {
+            Message::SheetVoices(Some(take)) => {
+                let Some(root) = self.project.as_deref().and_then(dailix_sheet::project::of_edit) else { return Task::none() };
+                let newer = crate::from_sheet::newer_voices(&root, &self.edit);
+                if !take {
+                    let ops: Vec<Op> = newer.into_iter().map(|(cut, name, _)| Op::Cut(CutOp::SheetVoice { cut, name: Some(name) })).collect();
+                    if let Err((_, e)) = self.edit.batch(&ops) {
+                        self.error = Some(e.to_string());
+                    }
+                    return Task::none();
+                }
+                let spans: Vec<_> = newer.into_iter().filter_map(|(cut, name, file)| self.edit.cut_index(cut).map(|i| (cut, file, name, (self.edit.cuts[i].start, self.edit.cuts[i].end)))).collect();
+                let measure = move || spans.into_iter().map(|(cut, file, name, span)| (cut, file.clone(), name, crate::from_sheet::voice_loudness(&file, span))).collect();
+                return Task::perform(blocking(measure), Message::SheetVoicesMeasured);
+            }
+            Message::SheetVoicesMeasured(found) => {
+                let ops: Vec<Op> = found.into_iter().flat_map(|(cut, file, name, lufs)| [Op::Cut(CutOp::Voice { cut, audio: Some(file), lufs }), Op::Cut(CutOp::SheetVoice { cut, name: Some(name) })]).collect();
+                let at = self.position();
+                match self.edit.batch(&ops) {
+                    Ok(_) => self.after_edit(at),
+                    Err((_, e)) => self.error = Some(e.to_string()),
+                }
+            }
+            _ => {}
+        }
+        Task::none()
+    }
+
     /// A cut's voice chosen (measured over the cut first, then set) or its
     /// own sound marked as speech; the menu closes (gap 103).
     pub(super) fn on_cut_voice(&mut self, message: Message) -> Task<Message> {
@@ -475,6 +524,7 @@ impl App {
             Message::CutSpeech(cut, on) => {
                 self.op(Op::Cut(CutOp::Speech { cut, on }));
             }
+            m @ (Message::SheetVoices(_) | Message::SheetVoicesMeasured(_)) => return self.on_sheet_voices(m),
             _ => {}
         }
         Task::none()
@@ -762,5 +812,16 @@ mod tests {
         let c = &app.edit.cuts[0];
         assert_eq!((c.audio.as_deref(), c.loudness, c.speech), (Some(std::path::Path::new("v/eq.flac")), Some(-26.0), true));
         assert!(voice_entries(c, &voices)[2].0.starts_with("✓ "), "the one it plays ticked");
+    }
+
+    #[test]
+    fn voices_chosen_in_dailix_are_set_in_one_step_and_not_offered_again() {
+        use super::super::Message;
+        let mut app = app();
+        let cut = app.edit.cuts[0].id;
+        let _ = app.update(Message::SheetVoicesMeasured(vec![(cut, "v/dnn6.flac".into(), "dnn6".into(), Some(-26.0))]));
+        let c = &app.edit.cuts[0];
+        assert_eq!((c.audio.as_deref(), c.sheet_voice.as_deref()), (Some(std::path::Path::new("v/dnn6.flac")), Some("dnn6")));
+        assert!(app.edit.undo() && app.edit.cuts[0].audio.is_none() && app.edit.cuts[0].sheet_voice.is_none(), "one undo step");
     }
 }

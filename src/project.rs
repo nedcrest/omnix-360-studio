@@ -768,6 +768,11 @@ pub struct Cut {
     /// (gap 103): auto-duck and the mix check count it as a voice.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub speech: bool,
+    /// The voice Dailix's marking had chosen for its clip when this cut
+    /// last took it in or let it pass (gap 103): a choice made there later
+    /// is offered once when the edit opens, not every time.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sheet_voice: Option<String>,
 }
 
 impl Cut {
@@ -812,6 +817,7 @@ impl Cut {
             group: None,
             origin: None,
             speech: false,
+            sheet_voice: None,
         }
     }
 

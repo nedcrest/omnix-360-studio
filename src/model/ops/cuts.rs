@@ -50,6 +50,9 @@ pub enum CutOp {
     /// loudness over the cut, LUFS, measured by the caller, its level is
     /// set from it as Normalize would (gap 103).
     Voice { cut: Id, #[serde(default)] audio: Option<std::path::PathBuf>, #[serde(default)] lufs: Option<f64> },
+    /// The voice Dailix's marking chose for its clip, as this cut has now
+    /// seen it (taken in or let pass): it isn't offered again (gap 103).
+    SheetVoice { cut: Id, #[serde(default)] name: Option<String> },
     /// Its own sound is speech (or not): auto-duck and the mix check count
     /// it as a voice (gap 103).
     Speech { cut: Id, on: bool },
@@ -127,12 +130,11 @@ pub(super) fn apply(p: &mut Project, op: &CutOp) -> Result<Outcome, OpError> {
         CutOp::MoveTogether { cuts, before } => move_together(p, cuts, before),
         &CutOp::Split { cut, t } => split(p, cut, t),
         &CutOp::JoinPieces { cut } => join_pieces(p, cut),
-        CutOp::Voice { cut, audio, lufs } => {
+        CutOp::Voice { cut, audio, lufs } => set_voice(p, *cut, audio.clone(), *lufs),
+        CutOp::SheetVoice { cut, name } => {
             let i = find(p, *cut)?;
-            let c = &mut p.cuts[i];
-            (c.audio, c.loudness) = (audio.clone(), *lufs);
-            c.gain = if lufs.is_some() { super::sound::normal_gain(*lufs) } else { 0.0 };
-            said(format!("cut #{cut}: {}", audio.as_ref().map_or("its own sound".to_owned(), |a| format!("voice {}", a.display()))))
+            p.cuts[i].sheet_voice = name.clone();
+            said(format!("cut #{cut}: Dailix's voice {} seen", name.as_deref().unwrap_or("(none)")))
         }
         &CutOp::Speech { cut, on } => {
             let i = find(p, cut)?;
@@ -270,6 +272,17 @@ fn split(p: &mut Project, cut: Id, t: f64) -> Result<Outcome, OpError> {
     let id = p.next_id();
     p.cuts[i + 1].id = id;
     Ok(Outcome { summary: format!("cut #{cut} split at {t:.2} s; the second half is cut #{id}"), made: Some(id) })
+}
+
+/// `Voice`: the cut's sound, a voice's file or its own, and its level
+/// from the voice's loudness as Normalize would set it.
+fn set_voice(p: &mut Project, cut: Id, audio: Option<std::path::PathBuf>, lufs: Option<f64>) -> Result<Outcome, OpError> {
+    let i = find(p, cut)?;
+    let c = &mut p.cuts[i];
+    let said_as = audio.as_ref().map_or("its own sound".to_owned(), |a| format!("voice {}", a.display()));
+    (c.audio, c.loudness) = (audio, lufs);
+    c.gain = if lufs.is_some() { super::sound::normal_gain(lufs) } else { 0.0 };
+    said(format!("cut #{cut}: {said_as}"))
 }
 
 /// `JoinPieces`: cut `cut`'s pieces one cut again.

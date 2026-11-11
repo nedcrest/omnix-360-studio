@@ -349,6 +349,11 @@ enum Message {
     CutVoiceMeasured(crate::project::Id, Option<PathBuf>, Option<f64>),
     /// Cut `.0`'s own sound marked as speech, or not (gap 103).
     CutSpeech(crate::project::Id, bool),
+    /// The voices chosen in Dailix since the edit was made: used (true),
+    /// let pass (false), or asked again next time (none) (gap 103).
+    SheetVoices(Option<bool>),
+    /// Those voices measured over their cuts: (cut, file, name, LUFS).
+    SheetVoicesMeasured(Vec<(crate::project::Id, PathBuf, String, Option<f64>)>),
     /// The waveform of what a cut plays, if it has sound.
     CutWave(PathBuf, bool, Option<Arc<crate::waveform::Waveform>>),
     /// A cut's sound's or a sound clip's fade in (`true`) or out dragged to
@@ -1298,7 +1303,7 @@ impl App {
             m @ (Message::Select { .. } | Message::SelectOne(_) | Message::AddBlank | Message::SoundEdge { .. } | Message::Trim { .. } | Message::MoveCut { .. } | Message::SelectAtPlayhead | Message::StepsRested { .. } | Message::ToastGone { .. } | Message::StepNoteGone { .. } | Message::TrimToPlayhead { .. } | Message::Crossfade { .. } | Message::ToggleCrossfade | Message::Split | Message::DeleteCut | Message::Undo | Message::Redo) => self.on_cuts(m),
             m @ (Message::LookDone | Message::Framing { .. } | Message::KeyMove { .. } | Message::KeyAdd | Message::KeyDelete | Message::KeyEase { .. } | Message::KeyFollow { .. } | Message::Stab { .. } | Message::Projection { .. } | Message::KeyJump { .. } | Message::Look { .. } | Message::Zoom { .. } | Message::Fov { .. } | Message::AngleInput { .. } | Message::AngleDone | Message::AngleScrubStart { .. } | Message::AngleScrubDone | Message::AngleScrub { .. } | Message::AngleNudge { .. } | Message::AngleArrow { .. } | Message::Source { .. } | Message::RollingShutter { .. } | Message::FullOnPause { .. } | Message::ResetView) => self.on_framing(m),
             m @ (Message::AddOverlay | Message::OverlayPicked { .. } | Message::OverlaySelect { .. } | Message::OverlayMove { .. } | Message::OverlayToLane(..) | Message::OverlayTrim { .. } | Message::OverlayJump { .. } | Message::OverlayKeyMove { .. } | Message::OverlayPicture { .. } | Message::AddText | Message::AddBars | Message::LaneAdd(_) | Message::LaneRemove(..) | Message::LaneActive(..) | Message::LaneRename(..) | Message::LaneName(..) | Message::LaneHide(..)) => self.on_overlay_ui(m),
-            m @ (Message::CutVoice(..) | Message::CutVoiceMeasured(..) | Message::CutSpeech(..)) => self.on_cut_voice(m),
+            m @ (Message::CutVoice(..) | Message::CutVoiceMeasured(..) | Message::CutSpeech(..) | Message::SheetVoices(_) | Message::SheetVoicesMeasured(_)) => self.on_cut_voice(m),
             m @ (Message::TrimToEnd(_) | Message::JoinPieces(_)) => {
                 self.on_mending(m);
                 Task::none()

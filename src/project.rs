@@ -171,6 +171,14 @@ pub fn edits(root: &Path) -> Vec<PathBuf> {
     found.into_iter().map(|(_, p)| p).collect()
 }
 
+/// The trip's edits of videos called `name` or `name-<n>` (made from the
+/// same day, or all days), newest first (Omnix gap 104: «→ Omnix» offers
+/// them before making another).
+pub fn videos_named(root: &Path, name: &str) -> Vec<PathBuf> {
+    let numbered = |v: &str| v.strip_prefix(name).and_then(|r| r.strip_prefix('-')).is_some_and(|n| !n.is_empty() && n.chars().all(|c| c.is_ascii_digit()));
+    edits(root).into_iter().filter(|e| video_of(e).is_some_and(|(_, v)| v == name || numbered(&v))).collect()
+}
+
 /// The project and the video an edit file is (`<root>/videos/<name>/edit.json`).
 pub fn of_edit(edit: &Path) -> Option<PathBuf> {
     video_of(edit).map(|(root, _)| root)
@@ -303,6 +311,10 @@ mod tests {
         std::fs::create_dir_all(Layout::new(&trip).video("not-yet")).unwrap();
         assert_eq!(new, Layout::new(&trip).video_edit("2030-05-01-2"));
         assert_eq!(edits(&trip), [new.clone(), old.clone()]);
+        let other = new_video(&trip, "2030-05-01-short").unwrap();
+        std::fs::write(&other, "{}").unwrap();
+        assert_eq!(videos_named(&trip, "2030-05-01"), [new.clone(), old.clone()], "not «-short»: another video");
+        assert!(videos_named(&trip, "all-days").is_empty());
         assert!(edits(&place.join("b_trip")).is_empty());
         assert_eq!(video_of(&new), Some((trip.clone(), "2030-05-01-2".to_owned())));
         assert_eq!(export_dir(&new), Some(trip.join("videos/2030-05-01-2/export")));

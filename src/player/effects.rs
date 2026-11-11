@@ -41,6 +41,10 @@ pub enum EffectMsg {
     Place(usize, f64),
     /// Its place value `i` back to the default here.
     ResetPlace(usize),
+    /// The selected ordinary cut's frame value `k` (`frame::NAMES`) moved
+    /// to this (gap 107), and back to its default.
+    Frame(usize, f64),
+    ResetFrame(usize),
     /// Its place dragged on the view (`handles`).
     Drag(Place),
     /// The selected text overlay's words edited, and its look.
@@ -316,6 +320,43 @@ impl App {
         self.op(Op::Key(KeyOp::PlaceValue { item, param, value: v }));
     }
 
+    /// The selected cut's frame value `k` at `v` (gap 107): a point on its
+    /// Frame lane where one moves it now, else its base frame.
+    pub(super) fn set_frame_value(&mut self, starting: bool, k: usize, v: f64) {
+        let Some((Target::Cut(i), t)) = self.pinned(starting) else { return };
+        let mut values = self.edit.cuts[i].frame_at(t).unwrap_or_default().values();
+        values[k] = v;
+        for op in self.frame_ops(i, t, values) {
+            self.op(op);
+        }
+    }
+
+    /// Cut `i`'s frame at clip time `t` set to `values` (`frame::NAMES`):
+    /// each value a Frame lane moves there as a point on it, the others in
+    /// its base frame (gap 107).
+    pub(super) fn frame_ops(&self, i: usize, t: f64, values: [f64; 4]) -> Vec<Op> {
+        use crate::frame::{Frame, PARAMS, RANGES};
+        let c = &self.edit.cuts[i];
+        let (now, mut base) = (c.frame_at(t).unwrap_or_default().values(), c.frame.unwrap_or_default().values());
+        let mut ops = Vec::new();
+        for k in 0..PARAMS.len() {
+            let v = values[k].clamp(RANGES[k].0, RANGES[k].1);
+            if (v - now[k]).abs() < 1e-9 {
+                continue;
+            }
+            if crate::automation::value(&c.automation, PARAMS[k], t).is_some() {
+                let on = crate::model::ops::keys::Graded::Cut(c.id);
+                ops.push(Op::Auto(crate::model::ops::auto::AutoOp::Point { on, param: PARAMS[k].to_owned(), t, v, from: None, tolerance: self.tolerance() }));
+            } else {
+                base[k] = v;
+            }
+        }
+        if base != c.frame.unwrap_or_default().values() {
+            ops.push(Op::Cut(crate::model::ops::cuts::CutOp::Frame { cut: c.id, frame: Some(Frame::from_values(base)) }));
+        }
+        ops
+    }
+
     /// Applies `ops` as one undo step, showing a refusal.
     pub(super) fn ops(&mut self, ops: &[Op]) {
         if let Err((_, e)) = self.edit.batch(ops) {
@@ -357,6 +398,12 @@ impl App {
                 self.edit.begin();
                 self.set_place(starting, p, v);
             }
+            EffectMsg::Frame(k, v) => {
+                let starting = !self.edit.changing();
+                self.edit.begin();
+                self.set_frame_value(starting, k, v);
+            }
+            EffectMsg::ResetFrame(k) => self.reset_value(super::automation_ui::Param::Frame(k)),
             EffectMsg::Drag(to) => self.drag_place(to),
             EffectMsg::Done => self.edit.commit(),
             EffectMsg::Fold(name) => self.toggle_fold(name),
@@ -733,6 +780,12 @@ impl App {
         if g == Group::Kind {
             self.dress(None);
         }
+        if g == Group::Frame
+            && let Target::Cut(i) = target
+        {
+            self.unautomate(crate::frame::PARAMS.iter().map(|n| n.to_string()).collect());
+            self.op(Op::Cut(crate::model::ops::cuts::CutOp::Frame { cut: self.edit.cuts[i].id, frame: None }));
+        }
         if g == Group::Animate {
             for edge in [crate::model::ops::End::In, crate::model::ops::End::Out] {
                 self.animate(edge, None, None);
@@ -887,5 +940,25 @@ mod tests {
         assert!(pin.at(true, None).is_none());
         assert!(pin.at(false, Some((Target::Cut(1), 2.0))) == Some((Target::Cut(1), 2.0)));
         assert!(pin.at(false, Some((Target::Cut(1), 2.1))) == Some((Target::Cut(1), 2.0)));
+    }
+
+    #[test]
+    fn a_frame_slider_sets_the_base_or_the_lanes_point_there() {
+        let mut app = super::super::tests::app();
+        app.edit.cuts[0].flat = true;
+        let cut = app.edit.cuts[0].id;
+        app.selection = Selection::Cut(cut);
+        let _ = app.effect_message(EffectMsg::Frame(2, 150.0));
+        let _ = app.effect_message(EffectMsg::Done);
+        assert_eq!(app.edit.cuts[0].frame.map(|f| f.zoom), Some(150.0), "no lane: the base");
+        // A zoom lane over the cut: the slider moves its point at the playhead.
+        let on = crate::model::ops::keys::Graded::Cut(cut);
+        app.op(Op::Auto(crate::model::ops::auto::AutoOp::Add { on, param: "frame.zoom".into(), from: 0.0, to: 2.0 }));
+        let _ = app.effect_message(EffectMsg::Frame(2, 180.0));
+        let _ = app.effect_message(EffectMsg::Done);
+        let c = &app.edit.cuts[0];
+        assert_eq!((c.frame.map(|f| f.zoom), c.frame_at(0.0).map(|f| f.zoom)), (Some(150.0), Some(180.0)), "the base kept, the lane's point at 180");
+        let _ = app.effect_message(EffectMsg::ResetGroup(super::super::effects_view::Group::Frame));
+        assert!(app.edit.cuts[0].frame.is_none() && app.edit.cuts[0].automation.is_empty(), "the group's ↺: whole again");
     }
 }

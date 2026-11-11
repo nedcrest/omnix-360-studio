@@ -56,6 +56,8 @@ pub enum Group {
     Colour,
     Look,
     Finish,
+    /// An ordinary cut's frame (gap 107).
+    Frame,
 }
 
 impl Group {
@@ -73,6 +75,7 @@ impl Group {
             Group::Colour => "Colour",
             Group::Look => "Look",
             Group::Finish => "Finish",
+            Group::Frame => "Frame",
         }
     }
 
@@ -87,7 +90,7 @@ impl Group {
             Group::Finish if item => &[VIGNETTE, SHAPE, VIGNETTE_REACH, VIGNETTE_SOFT],
             Group::Finish => &[VIGNETTE, OPACITY, SHAPE, VIGNETTE_REACH, VIGNETTE_SOFT],
             Group::Show => &[OPACITY, REVEAL, BLUR],
-            Group::Scopes | Group::Text | Group::Kind | Group::Place | Group::Animate | Group::Bars => &[],
+            Group::Scopes | Group::Text | Group::Kind | Group::Place | Group::Animate | Group::Bars | Group::Frame => &[],
         }
     }
 
@@ -153,6 +156,10 @@ impl App {
             self.group(Group::Light, column![levels, self.sliders(&grade, light, enabled)].spacing(10).into()),
             self.group(Group::Colour, column![row![text("White balance").size(13).width(Length::Fill), picker].align_y(Alignment::Center), self.sliders(&grade, Group::Colour.params(false), enabled)].spacing(6).into()),
         ];
+        // An ordinary cut's frame first: the most often set (gap 107).
+        if let Some((i, t)) = cut.filter(|&(i, _)| self.edit.cuts.get(i).is_some_and(|c| c.flat)) {
+            groups.insert(0, self.group(Group::Frame, self.frame_sliders(i, t)));
+        }
         if let Some((i, _)) = cut {
             groups.push(self.group(Group::Look, column![self.lut_controls(i, &grade), self.style_tiles(Target::Cut(i))].spacing(10).into()));
         }
@@ -288,6 +295,22 @@ impl App {
         let more = button(text(format!("{shape} ▸")).size(12)).padding([3, 8]).style(if out { button::primary } else { button::secondary });
         let more = more.on_press_maybe((enabled && grade.vignette > 0.0).then_some(Message::Effect(EffectMsg::Extra((!out).then_some(Extra::Vignette)))));
         column![self.param_row(crate::grade::VIGNETTE, grade.vignette, enabled), tip(more, text("Its shape, reach and softness, beside"), tooltip::Position::Left)].spacing(4).into()
+    }
+
+    /// An ordinary cut's frame at clip time `t` (gap 107): across, down,
+    /// zoom, rotation — what its Frame lanes give there, else its base.
+    fn frame_sliders(&self, i: usize, t: f64) -> Element<'static, Message> {
+        use crate::frame::{Frame, LABELS, RANGES};
+        let frame = self.edit.cuts.get(i).and_then(|c| c.frame_at(t)).unwrap_or_default();
+        let hints = ["Where the frame's centre is across the picture, in % of its height from the middle", "Where the frame's centre is down the picture, in % of its height from the middle", "100 % shows the picture's whole height; 200 % half of it, twice as big", "Turned clockwise, degrees"];
+        let rows = LABELS.iter().zip(RANGES).zip(hints).enumerate().map(|(k, ((name, (lo, hi)), hint))| {
+            let v = frame.values()[k];
+            let shown = if k == 3 { format!("{v:+.0}°") } else { format!("{v:.0} %") };
+            let reset = button(text("↺").size(13)).padding([0, 5]).style(button::text).on_press_maybe((v != Frame::default().values()[k]).then_some(Message::Effect(EffectMsg::ResetFrame(k))));
+            let control = slider(lo..=hi, v, move |v| Message::Effect(EffectMsg::Frame(k, v))).step(1.0).on_release(Message::Effect(EffectMsg::Done));
+            tip(column![row![text(*name).width(Length::Fill), text(shown).size(13), reset].spacing(4).align_y(Alignment::Center), control].spacing(2), text(hint), tooltip::Position::Left)
+        });
+        column(rows).spacing(6).into()
     }
 
     /// The overlay's place: across, down, size, rotation.

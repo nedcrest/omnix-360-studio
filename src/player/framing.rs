@@ -98,6 +98,42 @@ impl App {
         follows.into_iter().map(|f| (f.clone(), self.aim(&f, t))).collect()
     }
 
+    /// Whether the viewer's drag and wheel set the playing cut's frame
+    /// (gap 107): an ordinary cut while editing; in Framing they key a 360
+    /// view.
+    pub(super) fn frames_by_hand(&self) -> bool {
+        !self.framing && self.edit.cuts.get(self.current).is_some_and(|c| c.flat) && self.playing_cut().is_some()
+    }
+
+    /// The viewer dragged (the picture follows the hand at any zoom),
+    /// right-dragged (it turns) or scrolled (it zooms) on an ordinary cut:
+    /// its frame there, one undo step a drag or a notch (gap 107).
+    pub(super) fn frame_by_hand(&mut self, message: Message) {
+        let Some((_, t)) = self.playing_cut() else { return };
+        let i = self.current;
+        let now = self.edit.cuts[i].frame_at(t).unwrap_or_default();
+        let mut v = now.values();
+        let notch = matches!(message, Message::Zoom(_));
+        match message {
+            Message::Look { yaw, pitch, roll } => {
+                let per = 100.0 / self.look.fov * 100.0 / now.zoom;
+                v[0] += yaw.to_degrees() * per;
+                v[1] -= pitch.to_degrees() * per;
+                v[3] += roll.to_degrees();
+            }
+            Message::Zoom(steps) => v[2] *= 1.1f64.powf(-steps),
+            Message::LookDone => return self.edit.commit(),
+            _ => return,
+        }
+        self.edit.begin();
+        for op in self.frame_ops(i, t, v) {
+            self.op(op);
+        }
+        if notch {
+            self.edit.commit();
+        }
+    }
+
     /// The playing cut's frame now, if it's framed (gap 107): what it
     /// shows, whatever the free look.
     fn playing_frame(&self) -> Option<crate::frame::Frame> {

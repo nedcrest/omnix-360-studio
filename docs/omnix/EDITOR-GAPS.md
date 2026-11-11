@@ -1435,6 +1435,12 @@ new one; none, as now. A day's edits by name: `<day>` or `<day>-<n>`
 (`all-days` likewise), a pure tested function. The trip page's
 «Videos» list stays as it is.
 
+
+**Built 2026-11-11 (Dailix `c1f34c1`), waits for a check.** When the day (or the trip, for
+«all days») has videos made that way, a dialog lists them newest first
+with when each was changed: a click opens one; «New from the marking»
+(«New empty video» for «Empty day») makes another; Cancel or a click
+outside does nothing. `dailix_sheet::project::videos_named`.
 ### 107. Framing a flat video: crop a little, zoom in and out — medium (user, 2026-11-11)
 
 For ordinary (flat) video, not 360: trim the frame a little (crop in,

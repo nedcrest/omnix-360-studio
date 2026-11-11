@@ -715,6 +715,12 @@ already. Both lanes' items already have motion keys, so a track only
 writes those keys (position, and size as the subject nears); the same
 tracking serves either lane.
 
+
+**Seeded tracking (the user, 2026-11-11):** the user marks the object —
+a point or a box, named — on a few frames by hand, and the tracker
+follows it between them (easier for a model to hold); the track then
+drives an ordinary cut's Frame lanes (`frame.x`, `frame.y`, gap 107) by
+`AutoOp::Follow` grown to cuts, as it drives an overlay's place now.
 ### 39. Automation lanes: Effects and View as folding groups of curves — large (user, 2026-11-01)
 
 User (pointing at the two thin rows «Effects» and «View» under the clips,
@@ -1490,6 +1496,17 @@ playhead, else the base), and the Effects panel's Frame group (sliders,
 ↺); d as buttons in that group. Left: the box over the whole picture, a
 zoom lane eased in log space (linear now), `AutoOp::Follow` for a cut's
 Frame lanes (object tracking).
+
+**Step e (the user, 2026-11-11), keyframing the frame by time, as in
+Kdenlive:** stand at 5 s, zoom onto the scooter → a key; at 12 s move
+onto the two of us → a key, the motion 5→12 s made; at 15 s zoom all the
+way out → a key. Today a slider or the mouse sets a point only where a
+lane already runs, else the base. To build: (1) a frame key — points on
+all four Frame lanes at the playhead, the lanes made over the cut if
+missing; written on every change while «Auto keyframe» is on (the
+toggle 360 framing has), else by K on an ordinary cut while editing;
+(2) aim by a click: a click on the picture puts the frame's centre there
+at the zoom chosen, and keys it.
 ### 106. Cinematic processing for the user's Canon R50 — idea (user, 2026-11-11)
 
 Later, maybe a small program of its own: footage from the user's Canon

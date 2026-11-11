@@ -438,7 +438,11 @@ Steps:
   becomes stinger templates — e.g. a YouTube video of several light leak
   transitions in a row (https://youtu.be/b-jt77qrRoA) cut into one
   template each, ready to drop on a join; its licence checked and noted
-  in `LICENSES.md` first, the files never committed. Also a «white noise»
+  in `LICENSES.md` first, the files never committed. The user looks for
+  free packs («FREE» on YouTube), one compilation video to many
+  templates, so the cutting is the core: I/O points in the bin player →
+  «Save as transition…», the licence line inside each template. Card
+  renamed «Стінгери» (2026-11-11): «перебивка» is Dailix's cutaway role. Also a «white noise»
   transition of our own: noise on the picture and hiss in the sound,
   generated, no file needed.
 - **25e. 360 looks:** a whip round the sphere, little-planet zoom,
@@ -1439,6 +1443,16 @@ every cut op; «Sync lock» on a sound lane's menu, «· sync» on its name;
 `describe` says it. A clip starting right at the point counts as across
 it (a trim dragged there and back puts it back). Beats found to the
 sample on the way (gap 13).
+
+### 104. Dailix's «→ Omnix» opens the day's edit that's there — small (user, 2026-11-11)
+
+«→ Omnix» (and «Empty day», and the trip's «all days») makes a new video
+each time (`from_sheet::write` → a fresh `videos/<day>`, `-2`, `-3`…),
+so the test trip piled up copies. The user: when the day already has
+edits, a dialog lists them (name, when changed) — open one, or make a
+new one; none, as now. A day's edits by name: `<day>` or `<day>-<n>`
+(`all-days` likewise), a pure tested function. The trip page's
+«Videos» list stays as it is.
 
 ### 103. A cut's voice chosen in the edit, and its own sound as speech — small (user, 2026-11-11)
 

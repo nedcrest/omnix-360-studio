@@ -4,7 +4,8 @@ The user asked to plan the four cards in «Далі» as one piece of work, so
 that doing them one after another doesn't mean redoing code: gap 100
 (outside material), 25d (stingers), 31 (speed) and 31c (the speed curve
 window). On the way he split 25d in two himself and added copy and paste
-(gap 102). This is the analysis; the order is his to approve.
+(gap 102). This is the analysis; the user accepted it on 2026-11-11 (card 25d
+renamed «Стінгери», card 4 brought into «Далі» before it).
 
 ## What each thing really is
 
@@ -71,6 +72,9 @@ apart: 25d → «стінгери» (stingers), «перебивка» stays Dai
 
 ## A proposed order
 
+0. A cut's voice chosen in the edit, and «its own sound is speech»
+   (gap 103) — small, felt at once in ducking; the user put it first.
+   Dailix's «→ Omnix» opening the day's existing edit (gap 104) beside it.
 1. The time seam — small, nothing visible.
 2. Copy and paste (102) with the fragment — small, useful at once; covers
    cutaways.

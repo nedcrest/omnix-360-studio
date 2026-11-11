@@ -390,6 +390,11 @@ impl App {
     pub(super) fn frame_ops(&self, i: usize, t: f64, values: [f64; 4]) -> Vec<Op> {
         use crate::frame::{Frame, PARAMS, RANGES};
         let c = &self.edit.cuts[i];
+        // Auto keyframe: the whole frame keyed here, as Kdenlive does.
+        if self.auto_key {
+            let values: [f64; 4] = std::array::from_fn(|k| values[k].clamp(RANGES[k].0, RANGES[k].1));
+            return vec![Op::Auto(crate::model::ops::auto::AutoOp::FrameKey { cut: c.id, t, frame: Frame::from_values(values), tolerance: self.tolerance() })];
+        }
         let (now, mut base) = (c.frame_at(t).unwrap_or_default().values(), c.frame.unwrap_or_default().values());
         let mut ops = Vec::new();
         for k in 0..PARAMS.len() {
@@ -1039,5 +1044,18 @@ mod tests {
         let _ = app.effect_message(EffectMsg::FrameSpread(true));
         assert_eq!(zooms(&app), [Some(150.0); 3], "the whole film");
         assert!(app.edit.undo() && zooms(&app)[1].is_none(), "one step");
+    }
+
+    #[test]
+    fn with_auto_keyframe_a_frame_change_keys_the_whole_frame() {
+        let mut app = super::super::tests::app();
+        app.edit.cuts[0].flat = true;
+        app.selection = Selection::Cut(app.edit.cuts[0].id);
+        app.auto_key = true;
+        let _ = app.effect_message(EffectMsg::Frame(2, 150.0));
+        let _ = app.effect_message(EffectMsg::Done);
+        let c = &app.edit.cuts[0];
+        assert!(c.frame.is_none(), "no base: a key");
+        assert_eq!((c.automation.len(), c.frame_at(1.0).map(|f| f.zoom)), (4, Some(150.0)), "all four lanes, held after it");
     }
 }

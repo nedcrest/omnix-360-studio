@@ -35,6 +35,10 @@ pub(super) struct Drag {
     pub(super) size: Option<Size>,
     /// Where a colour-picking box started, in the view.
     pub(super) pick: Option<Point>,
+    /// Where the press was, and whether it has moved from there: a press
+    /// let go where it was is a click (it aims an ordinary cut's frame).
+    pub(super) from: Option<Point>,
+    pub(super) moved: bool,
 }
 
 impl Sphere {
@@ -71,16 +75,20 @@ impl Sphere {
         match event {
             iced::Event::Mouse(mouse::Event::ButtonPressed(b @ (mouse::Button::Left | mouse::Button::Right))) => {
                 drag.last = Some(cursor.position_over(bounds)?);
-                drag.button = Some(*b);
+                (drag.button, drag.from, drag.moved) = (Some(*b), drag.last, false);
                 Some(shader::Action::capture())
             }
             iced::Event::Mouse(mouse::Event::ButtonReleased(_)) if drag.button.is_some() => {
+                let clicked = drag.button == Some(mouse::Button::Left) && !drag.moved;
                 drag.button = None;
-                Some(shader::Action::publish(Message::LookDone).and_capture())
+                // A click: where on the view, -1..1 each way (gap 107).
+                let aim = drag.from.filter(|_| clicked).map(|p| Message::Aim([2.0 * ((p.x - bounds.x) / bounds.width) as f64 - 1.0, 2.0 * ((p.y - bounds.y) / bounds.height) as f64 - 1.0]));
+                Some(shader::Action::publish(aim.unwrap_or(Message::LookDone)).and_capture())
             }
             iced::Event::Mouse(mouse::Event::CursorMoved { position }) => {
                 let (button, last) = (drag.button?, drag.last?);
                 drag.last = Some(*position);
+                drag.moved |= drag.from.is_some_and(|f| f.distance(*position) > 3.0);
                 // Grab-style: the picture follows the pointer.
                 let k = self.fov_deg.to_radians() / bounds.height as f64;
                 let (dx, dy) = ((position.x - last.x) as f64, (position.y - last.y) as f64);

@@ -123,6 +123,8 @@ impl App {
             }
             Message::Zoom(steps) => v[2] *= 1.1f64.powf(-steps),
             Message::LookDone => return self.edit.commit(),
+            Message::Aim(at) => return self.aim_frame(at),
+            Message::KeyAdd => return self.frame_key_here(),
             _ => return,
         }
         self.edit.begin();
@@ -132,6 +134,36 @@ impl App {
         if notch {
             self.edit.commit();
         }
+    }
+
+    /// A click on the picture of an ordinary cut while editing (gap 107):
+    /// the frame's centre on the point clicked, its zoom kept; a key there
+    /// while Auto keyframe is on. One undo step.
+    pub(super) fn aim_frame(&mut self, ndc: [f64; 2]) {
+        if !self.frames_by_hand() {
+            return;
+        }
+        let (Some((_, t)), Some(c)) = (self.playing_cut(), self.clip.as_ref()) else { return };
+        let picture = super::viewer::aspect(&c.playback) as f64;
+        let view = (self.view_size.width / self.view_size.height.max(1.0)) as f64;
+        let Some([u, v]) = self.camera().flat_uv(view, picture, ndc) else { return };
+        let i = self.current;
+        let mut values = self.edit.cuts[i].frame_at(t).unwrap_or_default().values();
+        (values[0], values[1]) = ((u - 0.5) * picture * 100.0, (v - 0.5) * 100.0);
+        self.edit.begin();
+        for op in self.frame_ops(i, t, values) {
+            self.op(op);
+        }
+        self.edit.commit();
+    }
+
+    /// K on an ordinary cut while editing: its frame now keyed here, on all
+    /// four Frame lanes (gap 107).
+    pub(super) fn frame_key_here(&mut self) {
+        let Some((_, t)) = self.playing_cut() else { return };
+        let c = &self.edit.cuts[self.current];
+        let op = crate::model::ops::auto::AutoOp::FrameKey { cut: c.id, t, frame: c.frame_at(t).unwrap_or_default(), tolerance: self.tolerance() };
+        self.op(crate::model::ops::Op::Auto(op));
     }
 
     /// The playing cut's frame now, if it's framed (gap 107): what it

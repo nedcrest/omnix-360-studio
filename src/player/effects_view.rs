@@ -14,7 +14,7 @@ use crate::grade::{BLACK_IN, BLUR, CONTRAST, EFFECTS, EXPOSURE, HIGHLIGHTS, LUT,
 use super::{App, Message, icon_button, tip};
 use crate::grade::{Grade, grade_at};
 use crate::overlay::{Place, place_at};
-use iced::widget::{button, column, container, pick_list, row, scrollable, slider, space, text, tooltip};
+use iced::widget::{button, checkbox, column, container, pick_list, row, scrollable, slider, space, text, tooltip};
 use iced::{Alignment, Element, Length};
 
 /// An in or an out in its list, by name.
@@ -321,7 +321,12 @@ impl App {
             small("Whole film", EffectMsg::FrameSpread(true), "This frame and its motion on every ordinary cut of the film, the motion stretched to each cut's length"),
         ]
         .spacing(4);
-        column(rows).push(zoom).push(spread).spacing(6).into()
+        let keyed = tip(
+            checkbox(self.auto_key).label("Auto keyframe").size(14).text_size(13).on_toggle(Message::AutoKey),
+            text("On: every change of the frame — a slider, a drag, a click on the picture — keys it at the playhead, and the frame moves from key to key (K keys it too)"),
+            tooltip::Position::Left,
+        );
+        column(rows).push(keyed).push(zoom).push(spread).spacing(6).into()
     }
 
     /// The overlay's place: across, down, size, rotation.

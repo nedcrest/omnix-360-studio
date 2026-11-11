@@ -289,6 +289,9 @@ enum Message {
     DlogMLut(effects::LutChoice),
     /// A drag on the view let go.
     LookDone,
+    /// A click on the view at `.0` (-1..1 across and down): an ordinary
+    /// cut's frame centred there while editing (gap 107).
+    Aim([f64; 2]),
     /// Open the Info panel on a file on the timeline (right-click).
     Info(info::Of),
     /// What was read about a file for the Info panel.
@@ -1130,7 +1133,7 @@ impl App {
         // Editing: what turns or keys the view does nothing (its controls
         // are hidden too; the mouse on the picture and the keys still send).
         // On an ordinary cut the mouse on the picture frames it (gap 107).
-        let framing_flat = matches!(message, Message::Look { .. } | Message::Zoom(_)) && self.frames_by_hand();
+        let framing_flat = matches!(message, Message::Look { .. } | Message::Zoom(_) | Message::KeyAdd) && self.frames_by_hand();
         if !self.framing && framing_only(&message) && !framing_flat {
             return Task::none();
         }
@@ -1306,11 +1309,11 @@ impl App {
             m @ (Message::MarkEdit { .. } | Message::MarkNote { .. } | Message::MarkSave | Message::MarkDelete | Message::MarkClose | Message::AddMark | Message::MarkMove { .. } | Message::MarkSelect { .. }) => self.on_marks(m),
             m @ (Message::Tick | Message::TimelineZoom { .. } | Message::TimelineWheel { .. } | Message::TimelineZoomTo { .. } | Message::TimelinePan { .. } | Message::Toggle | Message::Scrub { .. } | Message::ScrubDone) => self.on_transport(m),
             m @ (Message::Select { .. } | Message::SelectOne(_) | Message::AddBlank | Message::SoundEdge { .. } | Message::Trim { .. } | Message::MoveCut { .. } | Message::SelectAtPlayhead | Message::StepsRested { .. } | Message::ToastGone { .. } | Message::StepNoteGone { .. } | Message::TrimToPlayhead { .. } | Message::Crossfade { .. } | Message::ToggleCrossfade | Message::Split | Message::DeleteCut | Message::Undo | Message::Redo) => self.on_cuts(m),
-            m @ (Message::Look { .. } | Message::Zoom(_) | Message::LookDone) if self.frames_by_hand() => {
+            m @ (Message::Look { .. } | Message::Zoom(_) | Message::LookDone | Message::KeyAdd | Message::Aim(_)) if self.frames_by_hand() => {
                 self.frame_by_hand(m);
                 Task::none()
             }
-            m @ (Message::LookDone | Message::Framing { .. } | Message::KeyMove { .. } | Message::KeyAdd | Message::KeyDelete | Message::KeyEase { .. } | Message::KeyFollow { .. } | Message::Stab { .. } | Message::Projection { .. } | Message::KeyJump { .. } | Message::Look { .. } | Message::Zoom { .. } | Message::Fov { .. } | Message::AngleInput { .. } | Message::AngleDone | Message::AngleScrubStart { .. } | Message::AngleScrubDone | Message::AngleScrub { .. } | Message::AngleNudge { .. } | Message::AngleArrow { .. } | Message::Source { .. } | Message::RollingShutter { .. } | Message::FullOnPause { .. } | Message::ResetView) => self.on_framing(m),
+            m @ (Message::LookDone | Message::Aim(_) | Message::Framing { .. } | Message::KeyMove { .. } | Message::KeyAdd | Message::KeyDelete | Message::KeyEase { .. } | Message::KeyFollow { .. } | Message::Stab { .. } | Message::Projection { .. } | Message::KeyJump { .. } | Message::Look { .. } | Message::Zoom { .. } | Message::Fov { .. } | Message::AngleInput { .. } | Message::AngleDone | Message::AngleScrubStart { .. } | Message::AngleScrubDone | Message::AngleScrub { .. } | Message::AngleNudge { .. } | Message::AngleArrow { .. } | Message::Source { .. } | Message::RollingShutter { .. } | Message::FullOnPause { .. } | Message::ResetView) => self.on_framing(m),
             m @ (Message::AddOverlay | Message::OverlayPicked { .. } | Message::OverlaySelect { .. } | Message::OverlayMove { .. } | Message::OverlayToLane(..) | Message::OverlayTrim { .. } | Message::OverlayJump { .. } | Message::OverlayKeyMove { .. } | Message::OverlayPicture { .. } | Message::AddText | Message::AddBars | Message::LaneAdd(_) | Message::LaneRemove(..) | Message::LaneActive(..) | Message::LaneRename(..) | Message::LaneName(..) | Message::LaneHide(..) | Message::LaneSync(..)) => self.on_overlay_ui(m),
             m @ (Message::CutVoice(..) | Message::CutVoiceMeasured(..) | Message::CutSpeech(..) | Message::SheetVoices(_) | Message::SheetVoicesMeasured(_)) => self.on_cut_voice(m),
             m @ (Message::TrimToEnd(_) | Message::JoinPieces(_)) => {

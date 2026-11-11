@@ -71,3 +71,9 @@ English term in brackets the first time (`~/.claude/rules/talking-to-dmytro.md`)
 
 `python3 docs/omnix/roadmap/serve.py` (stdlib only); `--install` puts the
 shortcut on the desktop and in the menu. A second start just opens the browser.
+
+## «Далі» is closed (the user, 2026-11-11)
+
+Until everything in «Далі» is done, a new idea goes to «Потім» or «Ідеї»,
+not «Далі», unless the user moves it in himself. When «Далі» is empty,
+development pauses and he edits his own videos.

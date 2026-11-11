@@ -53,7 +53,9 @@ apart: 25d → «стінгери» (stingers), «перебивка» stays Dai
 4. **Video on the overlay lane (card 4, «Відео на доріжці накладок»).**
    A stinger over a join is a video blended on top (screen/add for light
    leaks): an extra decoder in the player and the export. B-roll needs the
-   same. Building stingers before it means a join-only decoder, redone
+   same, and so does gap 105 (several videos in the frame: picture-in-
+   picture, split screen, kin to multicam 73) — so build the decoding for
+   **any number of video layers**, not one, or 105 redoes it. Building stingers before it means a join-only decoder, redone
    for B-roll later.
 5. **Speed stored as a curve from the start.** 31 is a constant, 31c a
    curve; store one key for a constant so 31c changes no format. Sound:

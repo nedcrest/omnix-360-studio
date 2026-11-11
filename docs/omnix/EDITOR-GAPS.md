@@ -1449,6 +1449,21 @@ every cut op; «Sync lock» on a sound lane's menu, «· sync» on its name;
 it (a trim dragged there and back puts it back). Beats found to the
 sample on the way (gap 13).
 
+### 105. Several videos in the frame: picture-in-picture and split screen — idea (user, 2026-11-11)
+
+Two or more videos on screen at once: a small one in a corner over the
+main (picture-in-picture), side by side, or a grid; kin to multicam (73:
+the cameras of one moment shown together instead of cut between). Built
+on video on the overlay lane (card 4): each extra video is an overlay
+item with a place and size (the overlay kinds' frame, gap 87, already
+draws a picture-in-picture border for pictures), plus layout presets
+(«2 side by side», «corner», «grid 2×2») that place several at once; a
+synced multicam group (73) offers «show together» from its angles. Its
+sound: the main's, the others muted unless chosen. Core API first: the
+layout is ops, so an agent can use it. Milestone «Мультикамерність».
+Ties into `PLAN-NEXT.md`: card 4's decoding must take any number of
+video layers, not one.
+
 ### 104. Dailix's «→ Omnix» opens the day's edit that's there — small (user, 2026-11-11)
 
 «→ Omnix» (and «Empty day», and the trip's «all days») makes a new video

@@ -275,6 +275,18 @@ User: would split into video tracks and sound tracks.
   model as step B (a link between items), so it is designed with it and
   with 8 (multi-select), as one format change.
 
+### 8c. A locked group — small (user, 2026-11-11)
+
+A group can be locked (a padlock by its name on its tab under the
+timeline). Locked: nothing gets inside it — no cut is put or dragged
+between its cuts (it lands before or after the run), no sound clip, text
+or picture lands among its members on their lanes; a plain click and
+drag on any of it acts as Alt+click and drag (the whole group). A
+`locked` field on `Group` (serde default, old projects open), an op to
+lock and unlock (`GroupLook` or its own), `describe` says it, the rules
+in the core so an agent meets them too. Found the same night: two
+groups swapped left their music behind — fixed (`Project::follow_groups`).
+
 ### 8b. Effects on a whole group at once — small (left from gap 8, 2026-11-11)
 
 With a group selected (Alt+click), a style, LUT, sound level or effect

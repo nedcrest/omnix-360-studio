@@ -355,11 +355,12 @@ impl MusicBlock {
 pub struct LaneHead {
     pub name: Option<String>,
     pub hidden: bool,
+    pub sync: bool,
 }
 
 impl From<&crate::overlay::Lane> for LaneHead {
     fn from(lane: &crate::overlay::Lane) -> LaneHead {
-        LaneHead { name: lane.name.clone(), hidden: lane.hidden }
+        LaneHead { name: lane.name.clone(), hidden: lane.hidden, sync: lane.sync }
     }
 }
 
@@ -1895,9 +1896,15 @@ impl OverlayLane {
         };
         match (self.folded(), self.top()) {
             (true, _) => format!("▸ {name} ({all})"),
-            (false, true) => format!("▾ {label}"),
-            (false, false) => label,
+            (false, true) => format!("▾ {label}{}", self.sync_mark()),
+            (false, false) => format!("{label}{}", self.sync_mark()),
         }
+    }
+
+    /// «· sync» after the name while its sync lock is on (gap 99b), as a
+    /// sound lane's.
+    fn sync_mark(&self) -> &'static str {
+        if self.head().sync { " · sync" } else { "" }
     }
 }
 
@@ -1993,9 +2000,10 @@ impl canvas::Program<Message> for OverlayLane {
                 let message = [false, true].into_iter().find_map(|m| Some(self.lanes(m)).filter(|l| l.lane_at(p.y).is_some())?.right(p, bounds))?;
                 Some(canvas::Action::publish(message).and_capture())
             }
-            // Right-click its name: the lane named (gap 97).
+            // Right-click its name: its menu, to name it (gap 97) or lock it (99b).
             Mouse(mouse::Event::ButtonPressed(mouse::Button::Right)) if cursor.position_in(bounds).is_some_and(|p| p.x < HEAD && p.y < self.0.rows.overlay && !self.folded() && !self.signs().iter().any(|(_, r)| r.contains(p))) => {
-                Some(canvas::Action::publish(Message::LaneRename(self.1, self.2)).and_capture())
+                let menu = super::sound_ui::Menu::Lane(self.1, self.2);
+                Some(canvas::Action::publish(Message::Sound(super::sound_ui::SoundMsg::Menu(Some((menu, cursor.position()?))))).and_capture())
             }
             // Right-click an overlay picture: what file it is (text has none).
             Mouse(mouse::Event::ButtonPressed(mouse::Button::Right)) if self.1 == Track::Overlay => {

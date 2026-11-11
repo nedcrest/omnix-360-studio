@@ -44,6 +44,8 @@ pub enum Menu {
     Line(Own),
     /// A cut that's one of a clip's pieces («This was one clip»).
     Pieces(usize),
+    /// A text or picture lane's head: its name and its sync lock.
+    Lane(crate::overlay::Track, usize),
 }
 
 
@@ -387,6 +389,12 @@ impl App {
             // On their own, so a misplaced right-click only opens a menu.
             Menu::Point(own, i) => items.push(sound("Delete point".into(), SoundMsg::DeletePoint(own, i))),
             Menu::Line(own) => items.push(sound("Delete the whole line".into(), SoundMsg::DeleteLine(own))),
+            Menu::Lane(track, lane) => {
+                let sync = self.edit.lane(track, lane).is_some_and(|l| l.sync);
+                items.push(item("Rename…".into(), Message::LaneRename(track, lane)));
+                let lock = button(text(format!("{}Sync lock", if sync { "✓ " } else { "" })).size(13)).style(button::text).width(Length::Fill).padding([5, 10]).on_press(Message::LaneSync(track, lane, !sync));
+                items.push(tip(lock, text("Trimming, deleting or adding a cut keeps the text and pictures over each picture with it: shortened where it goes"), tooltip::Position::Right));
+            }
             Menu::Pieces(i) => {
                 items.push(item(format!("Join the pieces back ({})", self.edit.pieces(i).len()), Message::JoinPieces(i)));
                 items.push(item("Info".into(), Message::Info(super::info::Of::Cut(i))));

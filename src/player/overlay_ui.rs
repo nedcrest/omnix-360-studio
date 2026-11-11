@@ -195,7 +195,7 @@ impl App {
                     None => {}
                 }
             }
-            m @ (Message::LaneAdd(_) | Message::LaneRename(..) | Message::LaneName(..) | Message::LaneHide(..) | Message::LaneActive(..) | Message::LaneRemove(..)) => return self.on_lane(m),
+            m @ (Message::LaneAdd(_) | Message::LaneRename(..) | Message::LaneName(..) | Message::LaneHide(..) | Message::LaneSync(..) | Message::LaneActive(..) | Message::LaneRemove(..)) => return self.on_lane(m),
             Message::OverlayToLane(r, at, lane) => {
                 if let Some(item) = self.edit.item(r).map(|it| it.id) {
                     self.op(Op::Item(ItemOp::Move { item, at, lane: Some(lane) }));
@@ -255,7 +255,12 @@ impl App {
                 self.op(Op::Item(ItemOp::AddLane { track }));
                 self.active_lanes[track.index()] = self.edit.track_lanes(track).len() - 1;
             }
+            Message::LaneSync(track, lane, on) => {
+                self.sound_menu = None;
+                self.op(Op::Item(ItemOp::LaneSync { track, lane, on }));
+            }
             Message::LaneRename(track, lane) => {
+                self.sound_menu = None;
                 let now = self.edit.lane(track, lane).and_then(|l| l.name.clone()).unwrap_or_default();
                 return self.ask(super::ask::Ask {
                     title: "Lane name".to_owned(),
@@ -399,11 +404,24 @@ mod tests {
         let active = [3, 0];
         assert_eq!((super::active_lane(&active, Track::Overlay, 5), super::active_lane(&active, Track::Overlay, 2), super::active_lane(&active, Track::Text, 1)), (3, 1, 0));
         let lane = crate::overlay::Lane { name: Some("Subtitles".into()), hidden: true, ..Default::default() };
-        assert_eq!(super::super::timeline::LaneHead::from(&lane), super::super::timeline::LaneHead { name: Some("Subtitles".into()), hidden: true });
+        assert_eq!(super::super::timeline::LaneHead::from(&lane), super::super::timeline::LaneHead { name: Some("Subtitles".into()), hidden: true, sync: false });
     }
 
     #[test]
     fn lanes_above_a_removed_one_move_down() {
         assert_eq!([0, 1, 2].map(|l| super::after_removing(l, 1)), [Some(0), None, Some(1)]);
+    }
+
+    #[test]
+    fn a_lanes_menu_locks_it_and_its_name_says_so() {
+        use crate::overlay::Track;
+        use crate::player::{Message, tests::app};
+        let mut app = app();
+        let _ = app.update(Message::LaneSync(Track::Text, 0, true));
+        assert!(app.edit.text[0].sync);
+        let t = app.timeline_data();
+        assert!(t.lane_heads[Track::Text.index()][0].sync, "the timeline's lane head knows it");
+        let _ = app.update(Message::LaneSync(Track::Text, 0, false));
+        assert!(!app.edit.text[0].sync);
     }
 }

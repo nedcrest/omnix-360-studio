@@ -503,4 +503,22 @@ mod tests {
         assert_eq!(app.edit.cuts.len(), 1);
         assert!(app.current < app.edit.cuts.len(), "not an index past the edit: {}", app.current);
     }
+
+    #[test]
+    fn alt_arrows_step_a_group_of_cuts_both_ways() {
+        let mut app = app();
+        for name in ["c", "d"] {
+            app.edit.cuts.push(crate::project::Cut::new(format!("nowhere/{name}.mp4").into(), 0.0, 2.0));
+        }
+        app.edit.settle_ids();
+        let ids: Vec<Id> = app.edit.cuts.iter().map(|c| c.id).collect();
+        app.op(Op::Project(ProjectOp::Group { members: vec![ids[1], ids[2]], name: None, colour: None }));
+        app.modifiers = iced::keyboard::Modifiers::ALT;
+        let _ = app.update(Message::Select(1));
+        let order = |app: &super::super::App| app.edit.cuts.iter().map(|c| c.id).collect::<Vec<_>>();
+        let _ = app.key(iced::keyboard::Key::Named(iced::keyboard::key::Named::ArrowRight), iced::keyboard::Modifiers::ALT);
+        assert_eq!(order(&app), [ids[0], ids[3], ids[1], ids[2]], "right, past the cut after the run");
+        let _ = app.key(iced::keyboard::Key::Named(iced::keyboard::key::Named::ArrowLeft), iced::keyboard::Modifiers::ALT);
+        assert_eq!(order(&app), [ids[0], ids[1], ids[2], ids[3]], "and back");
+    }
 }

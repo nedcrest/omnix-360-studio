@@ -203,7 +203,12 @@ impl App {
         }
         Key::Named(arrow @ (Named::ArrowLeft | Named::ArrowRight)) if mods.alt() => {
             let Some(i) = self.selection.cut(&self.edit) else { return Task::none() };
-            let to = if arrow == Named::ArrowLeft { i.checked_sub(1) } else { Some(i + 2).filter(|&to| to <= self.edit.cuts.len()) };
+            // A group's cuts step past the cut beside the whole run, not
+            // beside the selected one (the audit, 2026-11-11).
+            let picked = self.picked_ids();
+            let run: Vec<usize> = (0..self.edit.cuts.len()).filter(|&k| k == i || picked.contains(&self.edit.cuts[k].id)).collect();
+            let (lo, hi) = (run[0], run[run.len() - 1]);
+            let to = if arrow == Named::ArrowLeft { lo.checked_sub(1) } else { Some(hi + 2).filter(|&to| to <= self.edit.cuts.len()) };
             return to.map_or_else(Task::none, |to| self.update(Message::MoveCut(i, to)));
         }
         Key::Named(Named::ArrowLeft) if mods.shift() => self.free_look().yaw -= 2.0 * LOOK_STEP,

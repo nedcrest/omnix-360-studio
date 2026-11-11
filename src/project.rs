@@ -962,6 +962,13 @@ pub fn latest_start(end: Option<f64>, len: f64) -> f64 {
     end.map_or(f64::INFINITY, |e| (e - len).max(0.0))
 }
 
+/// Whether a thing that ended at `was` (within the film's `end`) now ends
+/// past it: the lane's own placement pushed it on (the audit, 2026-11-11),
+/// so the move is held back.
+pub fn pushed_past(end: Option<f64>, was: f64, now: f64) -> bool {
+    end.is_some_and(|e| was <= e + 1e-6 && now > e + 1e-6)
+}
+
 /// The latest out time, in its own file, of a thing starting at `at` on
 /// the edit from `start` in its file, so it ends by `end` (gap 101).
 pub fn latest_out(end: Option<f64>, at: f64, start: f64) -> f64 {

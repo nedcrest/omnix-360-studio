@@ -46,9 +46,13 @@ pub(super) fn apply(p: &mut Project, op: &ClipOp) -> Result<Outcome, OpError> {
         &ClipOp::Move { clip, at, overlap } => {
             let (w, i) = find(p, clip)?;
             let c = &p.track(w).clips[i];
-            let latest = crate::project::latest_start(p.film_end(), c.end - c.start).max(c.at);
+            let (latest, was) = (crate::project::latest_start(p.film_end(), c.end - c.start).max(c.at), (c.at, c.ends()));
             p.track_mut(w).drag_to(i, at.min(latest), overlap);
-            said(format!("sound clip #{clip} at {:.2} s{}", p.track(w).clips[i].at, held(at > latest)))
+            let pushed = crate::project::pushed_past(p.film_end(), was.1, p.track(w).clips[i].ends());
+            if pushed {
+                p.track_mut(w).clips[i].at = was.0;
+            }
+            said(format!("sound clip #{clip} at {:.2} s{}", p.track(w).clips[i].at, held(at > latest || pushed)))
         }
         &ClipOp::Trim { clip, end, t, most, overlap } => {
             let (w, i) = find(p, clip)?;
@@ -152,6 +156,14 @@ mod tests {
         e.apply(&Op::Clip(ClipOp::Trim { clip: long, end: End::Out, t: 20.0, most: 60.0, overlap: false })).unwrap();
         e.apply(&Op::Clip(ClipOp::Trim { clip: long, end: End::Out, t: 25.0, most: 60.0, overlap: false })).unwrap();
         assert_eq!(e.sfx.clips[0].end, 20.0, "shorter, then not longer again");
+        // A lane full to the end: its placement would push a clip past it.
+        let mut e2 = Edit::default();
+        e2.apply(&Op::Cut(super::super::cuts::CutOp::Add { input: "a.mp4".into(), start: 0.0, end: 10.0, place: super::super::cuts::Place::End, stabilize: None, lut: None })).unwrap();
+        add(&mut e2, SoundTrack::Sfx, 1.0, 9.0);
+        let b = add(&mut e2, SoundTrack::Sfx, 0.0, 1.0);
+        let said = e2.apply(&Op::Clip(ClipOp::Move { clip: b, at: 9.0, overlap: false })).unwrap().summary;
+        let (w, i) = e2.clip_index(b).unwrap();
+        assert_eq!((w, e2.track(w).clips[i].at, said.contains("held")), (SoundTrack::Sfx, 0.0, true), "kept where it was");
         check(&e).unwrap();
     }
 }

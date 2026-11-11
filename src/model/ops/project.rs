@@ -99,6 +99,9 @@ fn group(p: &mut Project, members: &[Id], name: Option<String>, colour: Option<C
 /// end, trimmed to it or, starting there, taken away.
 fn trim_to_end(p: &mut Project, things: &[Id]) -> Result<Outcome, OpError> {
     let end = p.film_end().ok_or_else(|| OpError::Invalid("no pictures yet: the film has no end to trim to".into()))?;
+    if let Some(id) = things.iter().find(|&&id| p.clip_index(id).is_none() && p.item_index(id).is_none()) {
+        return Err(OpError::NotFound(format!("sound clip or item #{id}")));
+    }
     let past: Vec<Id> = p.past_end().into_iter().map(|(id, _)| id).filter(|id| things.is_empty() || things.contains(id)).collect();
     let (mut trimmed, mut gone) = (0, 0);
     for id in past {
@@ -108,7 +111,11 @@ fn trim_to_end(p: &mut Project, things: &[Id]) -> Result<Outcome, OpError> {
                 clips.remove(i);
                 gone += 1;
             } else {
-                clips[i].end = clips[i].start + (end - clips[i].at);
+                let c = &mut clips[i];
+                c.end = c.start + (end - c.at);
+                // Its fades within what's left (the audit, 2026-11-11).
+                c.fade_out = c.fade_out.min(c.end - c.start);
+                c.fade_in = c.fade_in.min(c.end - c.start - c.fade_out);
                 trimmed += 1;
             }
         } else if let Some((track, lane, i)) = p.item_index(id) {
@@ -188,6 +195,21 @@ mod tests {
         assert!(e.sfx.clips.is_empty() && e.past_end().is_empty() && e.track(SoundTrack::Sfx2).clips.len() == 1);
         check(&e).unwrap();
         assert!(e.undo() && e.sfx.clips.len() == 1);
+        assert!(e.apply(&Op::Project(ProjectOp::TrimToEnd { things: vec![999] })).is_err(), "an unknown id says so");
+    }
+
+    #[test]
+    fn a_trimmed_songs_fades_stay_within_it() {
+        use super::super::Op;
+        use crate::model::edit::Edit;
+        use crate::project::{Cut, MusicClip};
+        let mut p = Project { cuts: vec![Cut::new("a.mp4".into(), 0.0, 10.0)], ..Default::default() };
+        p.music.clips.push(MusicClip { input: "song.wav".into(), at: 9.0, end: 10.0, fade_in: 0.8, fade_out: 3.0, ..Default::default() });
+        let mut e = Edit::default();
+        e.replace(p);
+        e.apply(&Op::Project(ProjectOp::TrimToEnd { things: vec![] })).unwrap();
+        let c = &e.music.clips[0];
+        assert!(c.fade_in + c.fade_out <= c.end - c.start + 1e-9, "{c:?}");
     }
 
     #[test]

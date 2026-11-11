@@ -252,7 +252,7 @@ fn move_item(p: &mut Project, item: Id, want: f64, lane: Option<usize>) -> Resul
     let film_end = p.film_end();
     let it = &p.track_lanes_mut(track)[l].items[i];
     let latest = crate::project::latest_start(film_end, it.end - it.start).max(it.at);
-    let at = want.min(latest);
+    let (at, was) = (want.min(latest), (it.at, it.ends()));
     match lane.filter(|&to| to != l) {
         Some(to) => {
             if to >= p.track_lanes_mut(track).len() {
@@ -264,13 +264,20 @@ fn move_item(p: &mut Project, item: Id, want: f64, lane: Option<usize>) -> Resul
             let i = lane.items.len() - 1;
             lane.items[i].at = lane.place(i, at);
             lane.items.sort_by(|a, b| a.at.total_cmp(&b.at));
-            let now = lane.items.iter().find(|it| it.id == item).map_or(at, |it| it.at);
+            let (now, ends) = lane.items.iter().find(|it| it.id == item).map_or((at, at), |it| (it.at, it.ends()));
+            if crate::project::pushed_past(film_end, was.1, ends) {
+                return Err(OpError::Invalid(format!("no room on lane {to} before the film's end")));
+            }
             said(format!("item #{item} on lane {to} at {now:.2} s{}", super::held(want > latest)))
         }
         None => {
             let lane = &mut p.track_lanes_mut(track)[l];
             lane.move_to(i, at);
-            said(format!("item #{item} at {:.2} s{}", lane.items[i].at, super::held(want > latest)))
+            let pushed = crate::project::pushed_past(film_end, was.1, lane.items[i].ends());
+            if pushed {
+                lane.items[i].at = was.0;
+            }
+            said(format!("item #{item} at {:.2} s{}", lane.items[i].at, super::held(want > latest || pushed)))
         }
     }
 }

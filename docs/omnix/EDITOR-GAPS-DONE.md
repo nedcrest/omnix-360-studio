@@ -1994,3 +1994,33 @@ from the drag's start (`Edit::follow_from_base`), so dragging back
 restores them. Moves and splits change nothing under the picture.
 
 **Checked by the user 2026-11-11:** it works; on music the tempo goes off at a trim (a cut mid-bar removes part of a bar) — expected, kept.
+
+### 13. Cuts on the beat — medium (Kos TODO, 2026-10-23)
+
+The TODO: "a cut doesn't land on the beat", found by ear. Find the music's
+beats (onset or beat tracking: ffmpeg has no beat tracker, so a small Rust
+onset detector, or a tool run as a CLI process), list the cuts more than
+N ms off a beat (`omnix check` gains a `beat` rule), and draw the beats
+as marks on the music lane that cuts snap to (markers, gap 5, and
+snapping are there). Later (user, 2026-11-09).
+
+**Agreed with the user, 2026-11-10** (what helps now: finding the beats
+in a music clip, with a threshold of his own; cutting stays by hand,
+with C):
+1. The analyser finds a song's beats and draws them as purple vertical
+   lines half the music lane's height; a threshold the user sets (lower:
+   every beat, higher: the strong hits only).
+2. A switch on the music lane: edges and the playhead snap to them.
+3. Later, not critical: the user's own strong beats, full-height lines
+   placed by hand on the music.
+4. Explained, not asked for yet: a `beat` rule in the mix check (joins
+   under music more than ~80 ms off the nearest beat, marked on the
+   ruler) — for checking a cut made by ear.
+The cutting view is gap 57 (`BEAT-CUT.md`).
+
+**Built 2026-11-11, waits for the user's check** (1 and 2): `beats.rs`,
+`omnix beats`, `Music::beats` and `SoundOp::Beats`, the purple lines,
+the music lane's menu (shown, threshold, snapping), the beats in
+`snap_targets`. 3 and 4 stay for later.
+
+**Checked by the user 2026-11-11.** Left as gap 13b and card «Сильні долі вручну й правило в перевірці міксу»; the cutting view is gap 57.

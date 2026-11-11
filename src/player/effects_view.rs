@@ -310,7 +310,18 @@ impl App {
             let control = slider(lo..=hi, v, move |v| Message::Effect(EffectMsg::Frame(k, v))).step(1.0).on_release(Message::Effect(EffectMsg::Done));
             tip(column![row![text(*name).width(Length::Fill), text(shown).size(13), reset].spacing(4).align_y(Alignment::Center), control].spacing(2), text(hint), tooltip::Position::Left)
         });
-        column(rows).spacing(6).into()
+        let small = |label: &'static str, msg: EffectMsg, hint: &'static str| tip(button(text(label).size(12)).padding([3, 8]).style(button::secondary).on_press(Message::Effect(msg)), text(hint), tooltip::Position::Left);
+        let zoom = row![
+            small("Zoom in", EffectMsg::FrameZoom(true), "A slow zoom in over the whole cut, from its frame to a fifth closer"),
+            small("Zoom out", EffectMsg::FrameZoom(false), "A slow zoom out over the whole cut, to its frame"),
+        ]
+        .spacing(4);
+        let spread = row![
+            small("All of this clip", EffectMsg::FrameSpread(false), "This frame on every cut of the same clip"),
+            small("Whole film", EffectMsg::FrameSpread(true), "This frame on every ordinary cut of the film"),
+        ]
+        .spacing(4);
+        column(rows).push(zoom).push(spread).spacing(6).into()
     }
 
     /// The overlay's place: across, down, size, rotation.

@@ -45,6 +45,10 @@ pub enum EffectMsg {
     /// to this (gap 107), and back to its default.
     Frame(usize, f64),
     ResetFrame(usize),
+    /// A slow zoom in (true) or out over the whole cut, from its frame.
+    FrameZoom(bool),
+    /// Its base frame put on every cut of its clip (false) or of the film.
+    FrameSpread(bool),
     /// Its place dragged on the view (`handles`).
     Drag(Place),
     /// The selected text overlay's words edited, and its look.
@@ -206,6 +210,9 @@ fn focus(t: f64, selected: Option<Selected>, playing: Option<(usize, f64)>) -> F
     }
 }
 
+/// How much closer «Zoom in» goes over a cut (gap 107): a fifth.
+const ZOOM_STEP: f64 = 1.2;
+
 impl App {
     /// What the panel works on (`Focus`).
     pub(super) fn effect_focus(&self) -> Focus {
@@ -331,6 +338,31 @@ impl App {
         }
     }
 
+    /// A slow zoom over the selected cut (gap 107): its zoom lane from its
+    /// frame's zoom to a fifth closer (`inwards`) or back from there, its
+    /// other lanes of zoom gone; one undo step.
+    fn frame_zoom(&mut self, inwards: bool) {
+        use crate::model::ops::auto::AutoOp;
+        let Some((Target::Cut(i), _)) = self.effect_target() else { return };
+        let c = &self.edit.cuts[i];
+        let (on, param) = (crate::model::ops::keys::Graded::Cut(c.id), crate::frame::PARAMS[2].to_owned());
+        let z = c.frame.unwrap_or_default().zoom;
+        let close = (z * ZOOM_STEP).min(crate::frame::RANGES[2].1);
+        let (a, b) = if inwards { (z, close) } else { (close, z) };
+        let point = |t: f64, v: f64| Op::Auto(AutoOp::Point { on, param: param.clone(), t, v, from: None, tolerance: 0.0 });
+        let ops = [Op::Auto(AutoOp::Clear { on, params: vec![param.clone()] }), Op::Auto(AutoOp::Add { on, param: param.clone(), from: c.start, to: c.end }), point(c.start, a), point(c.end, b)];
+        self.ops(&ops);
+    }
+
+    /// The selected cut's base frame on every ordinary cut of its clip, or
+    /// of the whole `film` (the user, 2026-11-11: both); one undo step.
+    fn frame_spread(&mut self, film: bool) {
+        let Some((Target::Cut(i), _)) = self.effect_target() else { return };
+        let (input, frame) = (self.edit.cuts[i].input.clone(), self.edit.cuts[i].frame);
+        let ops: Vec<Op> = self.edit.cuts.iter().filter(|c| c.flat && (film || c.input == input)).map(|c| Op::Cut(crate::model::ops::cuts::CutOp::Frame { cut: c.id, frame })).collect();
+        self.ops(&ops);
+    }
+
     /// Cut `i`'s frame at clip time `t` set to `values` (`frame::NAMES`):
     /// each value a Frame lane moves there as a point on it, the others in
     /// its base frame (gap 107).
@@ -404,6 +436,8 @@ impl App {
                 self.set_frame_value(starting, k, v);
             }
             EffectMsg::ResetFrame(k) => self.reset_value(super::automation_ui::Param::Frame(k)),
+            EffectMsg::FrameZoom(inwards) => self.frame_zoom(inwards),
+            EffectMsg::FrameSpread(film) => self.frame_spread(film),
             EffectMsg::Drag(to) => self.drag_place(to),
             EffectMsg::Done => self.edit.commit(),
             EffectMsg::Fold(name) => self.toggle_fold(name),
@@ -960,5 +994,27 @@ mod tests {
         assert_eq!((c.frame.map(|f| f.zoom), c.frame_at(0.0).map(|f| f.zoom)), (Some(150.0), Some(180.0)), "the base kept, the lane's point at 180");
         let _ = app.effect_message(EffectMsg::ResetGroup(super::super::effects_view::Group::Frame));
         assert!(app.edit.cuts[0].frame.is_none() && app.edit.cuts[0].automation.is_empty(), "the group's ↺: whole again");
+    }
+
+    #[test]
+    fn a_slow_zoom_and_a_frame_for_the_clip_or_the_film() {
+        let mut app = super::super::tests::app();
+        app.edit.cuts.push(crate::project::Cut::new("nowhere/a.mp4".into(), 2.0, 4.0));
+        app.edit.settle_ids();
+        for c in &mut app.edit.cuts {
+            c.flat = true;
+        }
+        app.selection = Selection::Cut(app.edit.cuts[0].id);
+        let _ = app.effect_message(EffectMsg::Frame(2, 150.0));
+        let _ = app.effect_message(EffectMsg::Done);
+        let _ = app.effect_message(EffectMsg::FrameZoom(true));
+        let z = |t| app.edit.cuts[0].frame_at(t).unwrap().zoom;
+        assert!((z(0.0) - 150.0).abs() < 1e-9 && (z(2.0) - 180.0).abs() < 1e-9, "from its frame to a fifth closer");
+        let _ = app.effect_message(EffectMsg::FrameSpread(false));
+        let zooms = |app: &App| app.edit.cuts.iter().map(|c| c.frame.map(|f| f.zoom)).collect::<Vec<_>>();
+        assert_eq!(zooms(&app), [Some(150.0), None, Some(150.0)], "the clip's other cut, not b.mp4");
+        let _ = app.effect_message(EffectMsg::FrameSpread(true));
+        assert_eq!(zooms(&app), [Some(150.0); 3], "the whole film");
+        assert!(app.edit.undo() && zooms(&app)[1].is_none(), "one step");
     }
 }

@@ -76,6 +76,8 @@ pub struct Settings {
     pub fold_transitions: bool,
     /// The Effects row's automation lanes folded away.
     pub fold_effects: bool,
+    /// The cuts' Frame row folded (gap 107).
+    pub fold_frame: bool,
     pub fold_overlay_effects: bool,
     pub fold_text_effects: bool,
     pub fold_overlay_motion: bool,
@@ -148,6 +150,7 @@ impl Default for Settings {
             fold_marks: false,
             fold_transitions: false,
             fold_effects: true,
+            fold_frame: true,
             fold_overlay_effects: true,
             fold_text_effects: true,
             fold_overlay_motion: true,

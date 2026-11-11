@@ -1425,19 +1425,53 @@ layout is ops, so an agent can use it. Milestone «Мультикамерніс�
 Ties into `PLAN-NEXT.md`: card 4's decoding must take any number of
 video layers, not one.
 
-### 107. Framing a flat video: crop a little, zoom in and out — medium (user, 2026-11-11)
+### 107. Framing a flat video: a base frame, Frame lanes with keys and curves, a box in the viewer — large (user, 2026-11-11)
 
-For ordinary (flat) video, not 360: trim the frame a little (crop in,
-re-centre), and a zoom in or out over a cut as automation — the plain
-things. The core can already: a flat cut's view keys crop it (`View`
-fov/yaw/pitch as a crop, `flat_views_crop_the_picture`), the Framing
-mode keys them. What's missing is the plain way: a crop in % and a
-position by dragging the frame in the viewer, «Zoom in» / «Zoom out»
-over the cut (or between two points) with an ease, the keys on the View
-row (39's lanes later), no degrees shown for a flat clip; ops and
-`describe` in % for an agent. Ties to 53 (framing grown up) and 39
-(View lanes); 360 keeps its own way.
+The user tried today's Framing on an ordinary clip: inconvenient. He
+wants a «Frame» row like the Effects row — keys or curves moving the
+camera, cropping, zooming — and a crop set once for the whole cut or the
+whole film, fixed as the starting point. Analysed 2026-11-11 (the code
+mapped by an agent):
 
+**Why it's awkward now.** Framing is a mode of its own, made for 360. A
+flat clip's crop is stored as a 360 view (yaw/pitch/fov in degrees,
+`FLAT_DEGREES`); keys are whole-view snapshots (`Cut::keyframes`), so
+keying the zoom keys the position too; the timeline's View row shows
+dots only, no values, no curves; a drag in the viewer turns a camera
+(`-dx·k`), it doesn't move a picture; there is no base: a flat cut with
+no keys shows the whole picture, nothing per cut or per film.
+
+**The design proposed** (one model with Effects and the overlays' Motion,
+which already are «a base value + automation clips per value»):
+1. **A frame** `{x, y, zoom, rotation}` in % (x, y the centre from the
+   middle in % of the picture's height; zoom 100 = the whole height),
+   always the film's aspect. A **base** on the cut (`Cut::frame`) and a
+   **film default** (`Project::frame`): cut's, else film's, else whole.
+2. **Frame lanes**: `AutoClip`s on params `frame.x`, `frame.y`,
+   `frame.zoom`, `frame.rotation` (`Param::Frame`), under a «Frame» row
+   beside «Effects», with the same lanes, points, eases and later the
+   bent curves (33h); zoom eased in log space so it feels even.
+3. **One hook**: `project::camera_at` turns the resolved frame into
+   `Camera.crop`; the shader and the CPU path stay as they are.
+4. **In the viewer, no mode for a flat clip**: with a cut picked and the
+   Frame row open, a box shows the frame over the picture — drag inside
+   moves it (the picture follows the hand), corners zoom, keeping the
+   aspect; with a point under the playhead it sets that point, else the
+   base.
+5. **Shortcuts** on a cut's menu: «Zoom in slowly», «Zoom out slowly»
+   (two points over the cut, an ease), «Frame for the whole cut»,
+   «…for all cuts of this clip», «…for the whole film».
+6. **Old projects**: a flat cut's view keys turn into a base (one key)
+   or Frame lanes (several) on load, as overlays' motion keys did
+   (`from_keys`). 360 keeps its View keys (follow, tracking) for now.
+7. **Core API**: `CutOp::Frame`, `ProjectOp::Frame`, frame params in
+   `AutoOp`; `describe` and `omnix looks` in %.
+
+**Order**: (a) the frame and its base, the hook, ops, describe,
+migration; (b) the Frame row and lanes; (c) the box in the viewer;
+(d) the shortcuts. Open questions for the user: «the whole video» as
+the whole film, or all cuts of one clip, or both; whether Framing as a
+mode stays only for 360.
 ### 106. Cinematic processing for the user's Canon R50 — idea (user, 2026-11-11)
 
 Later, maybe a small program of its own: footage from the user's Canon

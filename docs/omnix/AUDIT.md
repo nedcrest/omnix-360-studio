@@ -1,4 +1,49 @@
-# Audit of 2026-11-10 — the list to work off
+# Audits — the lists to work off
+
+## Small audit of 2026-11-11 (since `ef776a3`: beats, sync lock, groups, the film's end, pieces)
+
+Two read-only reviews, the core and the window, the day after the big
+one (the tracker hook said so: 2799 lines, 52 commits). Fixed the same
+night, each with tests:
+- a selection moves as one op, `ProjectOp::Shift` (a group dragged by
+  any but its first clip moved that one twice and left the first; lane
+  mates broke apart; a beat pulled moved unrelated clips in several
+  steps; a grouped single cut left its song; Alt narrowed a set; a song
+  or text couldn't be clicked out of a set) — `6721c8c`;
+- joined pieces keep each one's marks, points, automation, effect keys
+  and tracks — `0d0ba37`;
+- the film's end holds when a lane's placement would push past it;
+  trimmed fades stay within; unknown ids said — `b76a354`;
+- the playing cut found again after deleting a set or joining pieces —
+  `e92d6f6`; Alt+←/→ steps a group's run — `69aa091`;
+- `check()` sees the groups; doc comments back in place — `275c56d`;
+- sync lock rebuilt on the user's choice (cut the song where the
+  picture is): inserts, joins apart, songs across the edit, drags back,
+  clips under deleted picture — `6fac766`.
+
+Left, each with when it's due:
+- **When beats get their next step:** `beats::pull_to` as an op or an
+  `omnix beats --pull` option, and `describe` listing a clip's shown
+  hits in edit time (an agent can't line a song up now). `onsets` may
+  place a hit up to 10 ms early over a loud steady sound (unproven: try
+  on the user's songs; then take the onset from the band `rise` chose).
+- **Next time `props.rs` is touched:** the property test has none of
+  MoveTogether, JoinPieces, Group/Ungroup/GroupLook, TrimToEnd, Shift,
+  SyncLock, Beats, and no sync-locked track in its fixture.
+- **Next time the timeline is touched:** `OverlayLane::past_end` repeats
+  `Project::past_end`; `Timeline::on_frame` uses the playing clip's fps
+  for every cut (mixed frame rates snap wrong); the sound lane's cache
+  key leaves out the fps (stale beat notches); a second `impl
+  OverlayLane` block to merge; the sound menu's hand-counted rows.
+- **Next time `project.rs`'s groups are touched:** one helper for every
+  clip's (id, group), written out four times now.
+- **With 360 footage:** joined pieces keep the first piece's view keys
+  only.
+- **Ask the user:** Shift+Del deletes the whole selected set, like Del.
+- Ops files written with the old `SoundOp::Beats { track }` no longer
+  parse (only agents' saved files; none known).
+
+## Audit of 2026-11-10
 
 Five read-only reviews (dead and stale code; bugs in the week's work;
 design against `code-rules`; the core API's gaps for an agent; Dailix's

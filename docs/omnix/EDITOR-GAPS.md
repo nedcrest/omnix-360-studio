@@ -1449,6 +1449,14 @@ every cut op; «Sync lock» on a sound lane's menu, «· sync» on its name;
 it (a trim dragged there and back puts it back). Beats found to the
 sample on the way (gap 13).
 
+
+**Rebuilt 2026-11-11 after the small audit, the user's choice** («розрізати
+пісню»): a locked clip follows the picture it lay under, stretch by
+stretch (`kept_picture`, `follow_picture`): a clip across a trimmed or
+inserted edit is cut there, what lay under picture taken away goes with
+it, nothing plays under an inserted cut; inside a drag the tracks follow
+from the drag's start (`Edit::follow_from_base`), so dragging back
+restores them. Moves and splits change nothing under the picture.
 ### 105. Several videos in the frame: picture-in-picture and split screen — idea (user, 2026-11-11)
 
 Two or more videos on screen at once: a small one in a corner over the

@@ -260,16 +260,54 @@ fn join_pieces(p: &mut Project, cut: Id) -> Result<Outcome, OpError> {
     };
     let start = pieces.iter().map(|&k| p.cuts[k].start).fold(f64::INFINITY, f64::min);
     let tail = p.cuts[last].clone();
+    // What was set on any piece since the split stays (the audit,
+    // 2026-11-11: the others' marks and points were dropped).
+    let kept = owned_lists(&pieces.iter().map(|&k| p.cuts[k].clone()).collect::<Vec<_>>());
     for &k in pieces[1..].iter().rev() {
         p.cuts.remove(k);
     }
     let c = &mut p.cuts[first];
     (c.start, c.end, c.origin) = (start, tail.end, None);
+    (c.volume, c.automation, c.tracks, c.effects, c.marks) = kept;
     (c.sound_fade_out, c.sound_after, c.edge_out) = (tail.sound_fade_out, tail.sound_after, tail.edge_out);
     c.settle_sound(f64::INFINITY);
     let (id, end) = (c.id, c.end);
     crate::project::settle_crossfades(&mut p.cuts);
     said(format!("cut #{id}: {} pieces joined back, {start:.2}-{end:.2} s of its clip", pieces.len()))
+}
+
+/// The clip-time lists of a clip's `pieces` as one cut keeps them: each
+/// entry from the piece whose span holds it (outside all, the first's), so
+/// what a split copied to both halves isn't doubled. View keys stay the
+/// first piece's.
+#[allow(clippy::type_complexity)]
+fn owned_lists(pieces: &[crate::project::Cut]) -> (Vec<crate::project::VolumeKey>, Vec<crate::automation::AutoClip>, Vec<crate::automation::ObjectTrack>, Vec<crate::grade::EffectKey>, Vec<crate::project::Mark>) {
+    let owner = |t: f64| pieces.iter().position(|c| t >= c.start - 1e-9 && t <= c.end + 1e-9).unwrap_or(0);
+    fn gather<T: Clone>(pieces: &[crate::project::Cut], owner: &dyn Fn(f64) -> usize, list: fn(&crate::project::Cut) -> &[T], t: fn(&T) -> f64) -> Vec<T> {
+        let mut out: Vec<T> = pieces.iter().enumerate().flat_map(|(k, c)| list(c).iter().filter(move |e| owner(t(e)) == k).cloned()).collect();
+        out.sort_by(|a, b| t(a).total_cmp(&t(b)));
+        out
+    }
+    let mut tracks: Vec<crate::automation::ObjectTrack> = Vec::new();
+    for (k, c) in pieces.iter().enumerate() {
+        for tr in &c.tracks {
+            let own = tr.samples.iter().filter(|s| owner(s.t) == k).cloned();
+            match tracks.iter_mut().find(|t| t.name == tr.name) {
+                Some(t) => t.samples.extend(own),
+                None => tracks.push(crate::automation::ObjectTrack { samples: own.collect(), ..tr.clone() }),
+            }
+        }
+    }
+    for t in &mut tracks {
+        t.samples.sort_by(|a, b| a.t.total_cmp(&b.t));
+    }
+    (
+        gather(pieces, &owner, |c| &c.volume, |k| k.t),
+        gather(pieces, &owner, |c| &c.automation, |a| a.from),
+        tracks,
+        gather(pieces, &owner, |c| &c.effects, |e| e.t),
+        gather(pieces, &owner, |c| &c.marks, |m| m.t),
+    )
 }
 
 /// The join before cut `cut`: its look.
@@ -645,5 +683,20 @@ mod tests {
         assert!(e.apply(&Op::Cut(CutOp::JoinPieces { cut: e.cuts[1].id })).is_ok());
         let b = e.cuts.iter().find(|c| c.input == std::path::Path::new("b.mp4")).unwrap().id;
         assert!(e.apply(&Op::Cut(CutOp::JoinPieces { cut: b })).is_err(), "one piece: nothing to join");
+    }
+
+    #[test]
+    fn joined_pieces_keep_what_was_set_on_each_since_the_split() {
+        let mut e = Edit::default();
+        let a = e.apply(&add("a.mp4", 9.0, Place::End)).unwrap().made.unwrap();
+        let second = e.apply(&Op::Cut(CutOp::Split { cut: a, t: 3.0 })).unwrap().made.unwrap();
+        // A marker and a volume point on the second piece only.
+        e.apply(&Op::Cut(CutOp::Mark { cut: second, t: 7.0, note: "hit".into() })).unwrap();
+        e.apply(&Op::Sound(crate::model::ops::sound::SoundOp::AddPoint { sound: super::super::SoundRef::Cut(second), t: 6.0, db: -12.0 })).unwrap();
+        e.apply(&Op::Cut(CutOp::JoinPieces { cut: a })).unwrap();
+        let c = &e.cuts[0];
+        assert_eq!((c.marks.len(), c.marks[0].t), (1, 7.0), "{:?}", c.marks);
+        assert!(c.volume.iter().any(|k| k.t == 6.0), "{:?}", c.volume);
+        check(&e).unwrap();
     }
 }

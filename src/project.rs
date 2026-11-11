@@ -931,7 +931,6 @@ pub fn offsets(cuts: &[Cut]) -> Vec<f64> {
         .collect()
 }
 
-/// The edit's length: the cuts' less their crossfades.
 /// Where a change of the cuts from `before` to `after` made the picture
 /// shorter or longer, and by how much (gap 99): the edit time after which
 /// the picture moved, and the shift; none if the edit's length is as it
@@ -975,6 +974,7 @@ pub fn latest_out(end: Option<f64>, at: f64, start: f64) -> f64 {
     end.map_or(f64::INFINITY, |e| start + (e - at))
 }
 
+/// The edit's length: the cuts' less their crossfades.
 pub fn edit_length(cuts: &[Cut]) -> f64 {
     cuts.iter().map(|c| c.len() - c.crossfade).sum()
 }

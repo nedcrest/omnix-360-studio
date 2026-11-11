@@ -232,7 +232,7 @@ fn normalized(p: &mut Project, sound: SoundRef, lufs: Option<f64>, even: bool) -
     })
 }
 
-/// A track's beats shown or not (gap 13).
+/// A song's beats shown or not, and how (gap 13: per clip).
 fn show_beats(p: &mut Project, clip: Id, beats: Option<crate::project::Beats>) -> Result<Outcome, OpError> {
     if let Some(b) = beats
         && !(0.0..=1.0).contains(&b.threshold)

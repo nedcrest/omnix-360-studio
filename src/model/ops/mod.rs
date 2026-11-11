@@ -89,12 +89,12 @@ pub struct Outcome {
     pub made: Option<Id>,
 }
 
-/// An outcome that made nothing.
 /// What a move or trim adds when the film's end held it back (gap 101).
 fn held(was: bool) -> &'static str {
     if was { ", held at the film's end" } else { "" }
 }
 
+/// An outcome that made nothing.
 fn said(summary: String) -> Result<Outcome, OpError> {
     Ok(Outcome { summary, made: None })
 }
@@ -291,6 +291,28 @@ pub fn check(p: &Project) -> Result<(), String> {
         }
         if i.end <= i.start {
             return Err(format!("overlay #{} ends before it starts", i.id));
+        }
+    }
+    groups(p)
+}
+
+/// The groups' rules (gap 8; the audit, 2026-11-11: `check` didn't see
+/// them): each group's id its own, each member's group there, two members
+/// at least.
+fn groups(p: &Project) -> Result<(), String> {
+    let mut seen = std::collections::HashSet::new();
+    for g in &p.groups {
+        if !seen.insert(g.id) {
+            return Err(format!("group #{} twice", g.id));
+        }
+        if p.members(g.id).len() < 2 {
+            return Err(format!("group #{} has fewer than two clips", g.id));
+        }
+    }
+    let ids = p.cuts.iter().map(|c| (c.id, c.group)).chain(crate::project::SoundTrack::ALL.iter().flat_map(|&w| p.track(w).clips.iter().map(|c| (c.id, c.group)))).chain(p.overlays.iter().chain(&p.text).flat_map(|l| &l.items).map(|i| (i.id, i.group)));
+    for (id, group) in ids {
+        if let Some(g) = group.filter(|g| !seen.contains(g)) {
+            return Err(format!("#{id} is in group #{g}, which isn't there"));
         }
     }
     Ok(())

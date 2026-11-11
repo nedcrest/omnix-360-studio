@@ -235,4 +235,17 @@ mod tests {
         assert!(e.apply(&Op::Project(ProjectOp::Shift { things: vec![e.cuts[0].id], by: 1.0 })).is_err(), "a cut isn't shifted");
         check(&e).unwrap();
     }
+
+    #[test]
+    fn check_sees_a_group_without_its_clips_or_a_clip_without_its_group() {
+        use crate::project::{Cut, Group};
+        let mut p = Project { cuts: vec![Cut::new("a.mp4".into(), 0.0, 1.0), Cut::new("b.mp4".into(), 0.0, 1.0)], ..Default::default() };
+        p.settle_ids();
+        p.cuts[0].group = Some(9);
+        assert!(super::super::check(&p).unwrap_err().contains("group #9"), "a member of no group");
+        p.groups.push(Group { id: 9, name: String::new(), colour: crate::text::Colour([1, 2, 3]) });
+        assert!(super::super::check(&p).unwrap_err().contains("fewer than two"));
+        p.cuts[1].group = Some(9);
+        super::super::check(&p).unwrap();
+    }
 }

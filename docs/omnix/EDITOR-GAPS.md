@@ -1452,6 +1452,29 @@ sound is speech» switch for a clean recording that needs no cleaning,
 which `duck::sources` then counts. Milestone «Ефекти, колір і розумний
 звук».
 
+### 101b. The film's end for groups only; past a group's video, muted and greyed — to think over (user, 2026-11-11)
+
+After checking 101 the user narrowed it: the hold at the film's end
+matters for moving grouped clips (so their music, text and overlays
+don't run onto others); while cutting, a clip may run past — let it.
+His idea, undecided («подумати потім»): when a group is moved, what runs
+past the group's own video is muted from that video's end and drawn
+greyer — a sign «this won't play here, rework it» — rather than held.
+Today 101 holds every sound clip, text and picture at the film's end
+(`EDITOR-GAPS-DONE.md`). Decide with him before changing it.
+
+### 99b. Sync lock on text and overlay lanes — small (user, 2026-11-11)
+
+The user: voice-over read over a video with useless pauses, then cut
+together with the video to drop the empty moments — and the same for
+overlays. The voice-over half works already: the Voice lane has sync
+lock (99): lock it, cut the pauses out of the picture, the take is cut
+with them. To add: a lane's «Sync lock» on text and overlay lanes too;
+an item follows the picture it lay under (moved with it; shortened where
+picture under it is taken away). Whether text is cut in two at an edit
+like a song, or only shortened, to decide with him (a title in two
+pieces is odd). Milestone «Зручний таймлайн».
+
 ### 102. Copy and paste clips — small (user, 2026-11-11)
 
 The user, sorting stingers from cutaways: «a clip selected, Ctrl+C, the

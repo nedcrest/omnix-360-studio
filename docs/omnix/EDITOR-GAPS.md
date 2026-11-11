@@ -1480,6 +1480,16 @@ object's track (`AutoClip::follows`): object tracking (37, 53b) fills a
 cut's `frame.x`/`frame.y` lanes from a track by an op, no second
 mechanism. **Step a built** (`frame::Frame`, `Cut::frame`, `frame_at`,
 `CutOp::Frame`, `describe`, `omnix looks`).
+
+**Built 2026-11-11, waits for a check** (`bc541e0`, `d0cef0a`, `9cdb309`,
+`66c821e`, `10eb67e` and step d): a, b as designed; c without the box over
+the whole picture — the viewer itself frames an ordinary cut while
+editing (a drag moves the picture with the hand at any zoom, a right-drag
+turns it, the wheel zooms; a point on a lane moving that value at the
+playhead, else the base), and the Effects panel's Frame group (sliders,
+↺); d as buttons in that group. Left: the box over the whole picture, a
+zoom lane eased in log space (linear now), `AutoOp::Follow` for a cut's
+Frame lanes (object tracking).
 ### 106. Cinematic processing for the user's Canon R50 — idea (user, 2026-11-11)
 
 Later, maybe a small program of its own: footage from the user's Canon

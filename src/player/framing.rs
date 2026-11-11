@@ -157,6 +157,25 @@ impl App {
         self.edit.commit();
     }
 
+    /// A frame key on the folded Frame row picked (the playhead to it, Del
+    /// takes it away) or dragged to another time, all four lanes with it
+    /// (gap 107).
+    pub(super) fn on_frame_key(&mut self, message: Message) {
+        let (i, t) = match message {
+            Message::FrameKeyPick(i, t) => (i, t),
+            Message::FrameKeyMove(i, from, t) => {
+                let Some(cut) = self.edit.cuts.get(i).map(|c| c.id) else { return };
+                self.op(crate::model::ops::Op::Auto(crate::model::ops::auto::AutoOp::FrameKeyMove { cut, from, t, tolerance: 1e-6 }));
+                (i, t)
+            }
+            _ => return,
+        };
+        let Some(cut) = self.edit.cuts.get(i).map(|c| c.id) else { return };
+        self.pick(Selection::Cut(cut));
+        self.frame_key = Some((cut, t));
+        self.goto(i, t, false);
+    }
+
     /// K on an ordinary cut while editing: its frame now keyed here, on all
     /// four Frame lanes (gap 107).
     pub(super) fn frame_key_here(&mut self) {

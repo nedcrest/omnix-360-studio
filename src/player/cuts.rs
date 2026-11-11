@@ -236,6 +236,13 @@ impl App {
     /// the playhead), said in a toast with Undo a moment.
     fn delete_selected(&mut self) -> Task<Message> {
         self.sound_menu = None;
+        // A frame key picked on the Frame row (gap 107): it alone.
+        if let Some((cut, t)) = self.frame_key.take()
+            && self.selection == Selection::Cut(cut)
+        {
+            self.op(Op::Auto(crate::model::ops::auto::AutoOp::FrameKeyDelete { cut, t, tolerance: 1e-6 }));
+            return Task::none();
+        }
         if self.delete_picked() {
             return Task::none();
         }

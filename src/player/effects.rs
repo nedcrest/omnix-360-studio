@@ -1058,4 +1058,20 @@ mod tests {
         assert!(c.frame.is_none(), "no base: a key");
         assert_eq!((c.automation.len(), c.frame_at(1.0).map(|f| f.zoom)), (4, Some(150.0)), "all four lanes, held after it");
     }
+
+    #[test]
+    fn a_frame_key_picked_is_moved_and_deleted_not_its_cut() {
+        use super::super::Message;
+        use crate::model::ops::auto::AutoOp;
+        let mut app = super::super::tests::app();
+        let cut = app.edit.cuts[0].id;
+        for t in [0.5, 1.5] {
+            app.op(Op::Auto(AutoOp::FrameKey { cut, t, frame: crate::frame::Frame { zoom: 100.0 + 100.0 * t, ..Default::default() }, tolerance: 1e-6 }));
+        }
+        let _ = app.update(Message::FrameKeyPick(0, 1.5));
+        let _ = app.update(Message::FrameKeyMove(0, 1.5, 1.8));
+        assert_eq!(app.edit.cuts[0].automation[0].points.iter().map(|q| q.t).collect::<Vec<_>>(), [0.5, 1.8]);
+        let _ = app.update(Message::DeleteCut);
+        assert_eq!((app.edit.cuts.len(), app.edit.cuts[0].automation[0].points.len()), (2, 1), "the key gone, the cut kept");
+    }
 }

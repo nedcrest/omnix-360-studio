@@ -292,6 +292,10 @@ enum Message {
     /// A click on the view at `.0` (-1..1 across and down): an ordinary
     /// cut's frame centred there while editing (gap 107).
     Aim([f64; 2]),
+    /// A frame key on the folded Frame row picked: cut, clip time; and one
+    /// dragged from a time to another (gap 107).
+    FrameKeyPick(usize, f64),
+    FrameKeyMove(usize, f64, f64),
     /// Open the Info panel on a file on the timeline (right-click).
     Info(info::Of),
     /// What was read about a file for the Info panel.
@@ -711,6 +715,9 @@ struct App {
     normalize: Option<sound_ui::Dialog>,
     /// The right-click menu on a cut's sound: which cut, where.
     sound_menu: Option<(sound_ui::Menu, iced::Point)>,
+    /// The frame key picked on the Frame row (gap 107): cut id, clip time;
+    /// Del takes it away.
+    frame_key: Option<(crate::project::Id, f64)>,
     /// The voices offered in the menu open on a cut's sound, read once as
     /// it opens (gap 103).
     menu_voices: crate::from_sheet::Voices,
@@ -965,6 +972,7 @@ impl App {
             framing: false,
             normalize: None,
             sound_menu: None,
+            frame_key: None,
             menu_voices: Default::default(),
             cut_waves_asked: Default::default(),
             even_waves: Default::default(),
@@ -1309,6 +1317,10 @@ impl App {
             m @ (Message::MarkEdit { .. } | Message::MarkNote { .. } | Message::MarkSave | Message::MarkDelete | Message::MarkClose | Message::AddMark | Message::MarkMove { .. } | Message::MarkSelect { .. }) => self.on_marks(m),
             m @ (Message::Tick | Message::TimelineZoom { .. } | Message::TimelineWheel { .. } | Message::TimelineZoomTo { .. } | Message::TimelinePan { .. } | Message::Toggle | Message::Scrub { .. } | Message::ScrubDone) => self.on_transport(m),
             m @ (Message::Select { .. } | Message::SelectOne(_) | Message::AddBlank | Message::SoundEdge { .. } | Message::Trim { .. } | Message::MoveCut { .. } | Message::SelectAtPlayhead | Message::StepsRested { .. } | Message::ToastGone { .. } | Message::StepNoteGone { .. } | Message::TrimToPlayhead { .. } | Message::Crossfade { .. } | Message::ToggleCrossfade | Message::Split | Message::DeleteCut | Message::Undo | Message::Redo) => self.on_cuts(m),
+            m @ (Message::FrameKeyPick(..) | Message::FrameKeyMove(..)) => {
+                self.on_frame_key(m);
+                Task::none()
+            }
             m @ (Message::Look { .. } | Message::Zoom(_) | Message::LookDone | Message::KeyAdd | Message::Aim(_)) if self.frames_by_hand() => {
                 self.frame_by_hand(m);
                 Task::none()

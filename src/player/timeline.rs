@@ -431,6 +431,9 @@ pub struct Timeline {
     /// frames (gap 13: a beat between frames is snapped to the nearest).
     pub fps: f64,
     pub also: Vec<crate::project::Id>,
+    /// The frame key picked on the folded Frame row (gap 107): cut index,
+    /// clip time.
+    pub frame_key: Option<(usize, f64)>,
     /// The range marked on the ruler (gap 92), edit time.
     pub range: Option<(f64, f64)>,
     /// A picture carried from the bin (gap 91).
@@ -490,6 +493,9 @@ pub enum Drag {
     Trim { cut: usize, start: bool, x0: f32, from: f64, per_px: f64 },
     /// Moving a cut; `to` is where it would go.
     Move { cut: usize, id: crate::project::Id, x0: f32, moved: bool, to: usize },
+    /// A frame key on the folded Frame row dragged (gap 107): its cut,
+    /// where it was and is now (clip time).
+    FrameKey { cut: usize, from: f64, to: f64, x0: f32, per_px: f64, moved: bool },
     /// Dragging the scrollbar, which was at `start` when pressed at `x0`.
     Scroll { x0: f32, start: f64 },
     /// Moving clip `clip` of sound lane `lane`, which started at `at` when
@@ -833,6 +839,74 @@ impl Timeline {
         (others > 1).then(|| iced::Color::from_rgb8(r, g, b).scale_alpha(0.85))
     }
 
+    /// What `p` meets on the Effects and Frame rows: a frame key on the
+    /// folded Frame row, else a lane's.
+    fn lane_hit(&self, p: Point, b: Rectangle) -> Option<Hit> {
+        if let Some((cut, t)) = self.frame_key_at(p, b) {
+            return Some(Hit::FrameKey(cut, t));
+        }
+        [false, true].into_iter().find_map(|frame| self.cut_group(frame).hit(p, b).map(|h| Hit::Auto(frame, h)))
+    }
+
+    /// The frame keys on the folded Frame row (gap 107): (cut, clip time)
+    /// of each time a Frame lane has a point, once.
+    fn frame_keys(&self) -> Vec<(usize, f64)> {
+        let mut keys = Vec::new();
+        for (i, c) in self.blocks.iter().enumerate() {
+            let mut ts: Vec<f64> = c.cut.automation.iter().filter(|a| crate::frame::PARAMS.contains(&a.param.as_str())).flat_map(|a| a.points.iter().map(|q| q.t)).collect();
+            ts.sort_by(f64::total_cmp);
+            ts.dedup_by(|a, b| (*a - *b).abs() < 1e-6);
+            keys.extend(ts.into_iter().map(|t| (i, t)));
+        }
+        keys
+    }
+
+    /// The frame key under `p` on the folded Frame row, if any.
+    fn frame_key_at(&self, p: Point, b: Rectangle) -> Option<(usize, f64)> {
+        let row = self.rows.frame_top..self.rows.frame_top + EFFECTS;
+        if !self.folds.frame || !row.contains(&p.y) {
+            return None;
+        }
+        let x = |&(i, t): &(usize, f64)| self.x(self.blocks[i].from + t - self.blocks[i].cut.start, b);
+        self.frame_keys().into_iter().filter(|k| (x(k) - p.x).abs() <= PICK).min_by(|a, b| (x(a) - p.x).abs().total_cmp(&(x(b) - p.x).abs()))
+    }
+
+    /// A cut dragged to `x`: where it would drop.
+    fn drag_cut(&self, drag: &mut Drag, x: f32, bounds: Rectangle) -> Option<canvas::Action<Message>> {
+        if let Drag::Move { x0, moved, to, .. } = drag {
+            *moved |= (x - *x0).abs() > DRAG_FROM;
+            *to = self.drop_at(x, bounds);
+        }
+        Some(canvas::Action::request_redraw().and_capture())
+    }
+
+    /// A frame key dragged to `x`: its new time, within its cut.
+    fn drag_frame_key(&self, drag: &mut Drag, x: f32) -> Option<canvas::Action<Message>> {
+        if let Drag::FrameKey { cut, from, to, x0, per_px, moved } = drag {
+            *moved |= (x - *x0).abs() > DRAG_FROM;
+            let c = &self.blocks[*cut].cut;
+            *to = (*from + (x - *x0) as f64 * *per_px).clamp(c.start, c.end);
+        }
+        Some(canvas::Action::request_redraw().and_capture())
+    }
+
+    /// The picked frame key ringed, and one being dragged at its new time.
+    fn draw_frame_key(&self, frame: &mut Frame, theme: &Theme, b: Rectangle, drag: &Drag) {
+        if !self.folds.frame {
+            return;
+        }
+        let ink = theme.extended_palette().primary.strong.color;
+        let mid = self.rows.frame_top + EFFECTS / 2.0;
+        let at = |i: usize, t: f64| self.blocks.get(i).map(|c| self.x(c.from + t - c.cut.start, b));
+        let shown = match *drag {
+            Drag::FrameKey { cut, to, moved: true, .. } => Some((cut, to)),
+            _ => self.frame_key,
+        };
+        if let Some(x) = shown.and_then(|(i, t)| at(i, t)) {
+            frame.stroke(&Path::circle(Point::new(x, mid), 6.0), Stroke::default().with_width(1.5).with_color(ink));
+        }
+    }
+
     /// Over the cuts: their frames (selected, grouped), labels, effect
     /// keys, edge looks and crossfades.
     fn draw_cut_marks(&self, frame: &mut Frame, theme: &Theme, bounds: Rectangle) {
@@ -964,10 +1038,8 @@ impl Timeline {
         if self.rows.on_transitions(p.y) {
             return self.zone_hit(p.x, b);
         }
-        for frame in [false, true] {
-            if let Some(h) = self.cut_group(frame).hit(p, b) {
-                return Hit::Auto(frame, h);
-            }
+        if let Some(h) = self.lane_hit(p, b) {
+            return h;
         }
         if let Some((cut, key, t)) = self.effect_at(p, b) {
             return Hit::Effect { cut, key, t };
@@ -1090,6 +1162,8 @@ enum Hit {
     /// On an automation lane (gap 39).
     /// On an automation lane: the Frame row's (true) or the Effects row's.
     Auto(bool, auto::LaneHit),
+    /// A frame key on the folded Frame row: cut, clip time (gap 107).
+    FrameKey(usize, f64),
 }
 
 impl Hit {
@@ -1101,6 +1175,7 @@ impl Hit {
             Hit::Listen(..) | Hit::Fold(..) | Hit::Head | Hit::CutSound(_) | Hit::Playhead | Hit::Join(_) | Hit::Zone { .. } => I::Pointer,
             Hit::ZoneDraw => I::Crosshair,
             Hit::Auto(_, h) => h.pointer(),
+            Hit::FrameKey(..) => I::Grab,
             Hit::Scroll | Hit::Effect { .. } | Hit::Point { .. } | Hit::Cut(_) | Hit::Clip { edge: None, .. } | Hit::Key { .. } => I::Grab,
             Hit::CutFade { .. } | Hit::SoundEdge { .. } | Hit::CutEdge { .. } | Hit::ClipFade { .. } | Hit::Clip { edge: Some(_), .. } | Hit::ZoneEdge { .. } => I::ResizingHorizontally,
             Hit::LevelTag(_) => I::ResizingVertically,
@@ -2656,6 +2731,10 @@ impl Timeline {
                 *drag = Drag::Move { cut, id: self.blocks[cut].cut.id, x0: p.x, moved: false, to: cut };
                 Message::Select(cut)
             }
+            Hit::FrameKey(cut, t) => {
+                *drag = Drag::FrameKey { cut, from: t, to: t, x0: p.x, per_px, moved: false };
+                Message::FrameKeyPick(cut, t)
+            }
             Hit::Join(cut) => Message::SelectJoin(cut),
             h @ Hit::ZoneEdge { .. } => self.press_zone(h, drag, p.x, per_px)?,
             Hit::Zone { join, side } => Message::TransitionZone(join, side),
@@ -2778,11 +2857,8 @@ impl Timeline {
                 let (cut, start) = (*cut, *start);
                 snapped(at, |by| Message::SoundEdge(cut, start, t + by))
             }
-            Drag::Move { x0, moved, to, .. } => {
-                *moved |= (x - *x0).abs() > DRAG_FROM;
-                *to = self.drop_at(x, bounds);
-                return Some(canvas::Action::request_redraw().and_capture());
-            }
+            Drag::Move { .. } => return self.drag_cut(drag, x, bounds),
+            Drag::FrameKey { .. } => return self.drag_frame_key(drag, x),
             Drag::Scroll { x0, start } => Message::TimelinePan(*start + (x - *x0) as f64 * self.duration / Timeline::width(bounds) as f64),
             Drag::MusicMove { lane, clip, x0, at, per_px, moved, .. } => {
                 *moved |= (x - *x0).abs() > DRAG_FROM;
@@ -2842,6 +2918,8 @@ fn release(drag: Drag) -> Option<canvas::Action<Message>> {
     match drag {
         Drag::None => None,
         Drag::Move { cut, moved: true, to, .. } => Some(canvas::Action::publish(Message::MoveCut(cut, to)).and_capture()),
+        Drag::FrameKey { cut, from, to, moved: true, .. } => Some(canvas::Action::publish(Message::FrameKeyMove(cut, from, to)).and_capture()),
+        Drag::FrameKey { .. } => Some(canvas::Action::request_redraw().and_capture()),
         Drag::Move { id, .. } | Drag::MusicMove { id, moved: false, .. } => Some(canvas::Action::publish(Message::SelectOne(id)).and_capture()),
         Drag::Scroll { .. } => Some(canvas::Action::request_redraw().and_capture()),
         // The drawn zone and the lanes' drags are let go in `Marks::update`,
@@ -2894,6 +2972,7 @@ impl canvas::Program<Message> for Marks {
         for group in [false, true] {
             self.cut_group(group).draw(&mut frame, theme, bounds, if let Drag::Auto(g, d) = drag && *g == group { Some(d) } else { None });
         }
+        self.draw_frame_key(&mut frame, theme, bounds, drag);
         self.draw_zones(&mut frame, theme, bounds, drag);
         self.draw_cut_marks(&mut frame, theme, bounds);
         if let Drag::Move { moved: true, to, .. } = drag {
@@ -3084,6 +3163,7 @@ mod tests {
             groups: Vec::new(),
             fps: 30.0,
             also: Vec::new(),
+            frame_key: None,
             range: None,
             carrying: None,
             held: Default::default(),
@@ -3341,6 +3421,20 @@ mod tests {
         t.folds.frame = true;
         t.rows = Rows::new(1.0, false, t.folds, 0);
         assert_eq!(t.rows.keys_top, t.rows.frame_auto_top);
+    }
+
+    #[test]
+    fn the_folded_frame_row_is_a_bar_of_frame_keys() {
+        use crate::automation::{AutoClip, AutoPoint};
+        let (mut t, b) = timeline();
+        let lane = |param: &str, ts: &[f64]| AutoClip { param: param.into(), from: 0.0, to: 4.0, points: ts.iter().map(|&t| AutoPoint { t, v: 100.0, ease: Default::default() }).collect(), follows: None, animation: None };
+        t.blocks[0].cut.automation = vec![lane("frame.zoom", &[1.0, 3.0]), lane("frame.x", &[1.0]), lane("exposure", &[2.0])];
+        assert_eq!(t.frame_keys(), [(0, 1.0), (0, 3.0)], "once a time, the Frame lanes' only");
+        let mid = t.rows.frame_top + EFFECTS / 2.0;
+        assert!(matches!(t.hit(Point::new(t.x(3.0, b), mid), b, false, false), Hit::FrameKey(0, k) if k == 3.0));
+        t.folds.frame = false;
+        t.rows = Rows::new(1.0, false, t.folds, 0);
+        assert_eq!(t.frame_key_at(Point::new(t.x(3.0, b), mid), b), None, "open, its lanes take the clicks");
     }
 
     #[test]

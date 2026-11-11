@@ -68,6 +68,10 @@ impl App {
     /// The selection changed some other way (a key, Esc, a delete): the
     /// clips beside it go.
     pub(super) fn settle_picked(&mut self) {
+        // A frame key stays picked while its cut does (gap 107).
+        if self.frame_key.is_some_and(|(cut, _)| self.selection != Selection::Cut(cut)) {
+            self.frame_key = None;
+        }
         if self.selection != self.picked_with {
             self.also.clear();
             self.picked_with = self.selection;

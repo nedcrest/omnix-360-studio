@@ -1452,6 +1452,14 @@ sound is speech» switch for a clean recording that needs no cleaning,
 which `duck::sources` then counts. Milestone «Ефекти, колір і розумний
 звук».
 
+### 106. Cinematic processing for the user's Canon R50 — idea (user, 2026-11-11)
+
+Later, maybe a small program of its own: footage from the user's Canon
+R50 (video mode) worked into a more cinematic look, to experiment with.
+Nothing decided: what the camera records (its picture profiles), whether
+it is Omnix's colour (LUTs, styles, levels are there) or a tool beside
+it. Ask him when he has shot some.
+
 ### 101b. The film's end for groups only; past a group's video, muted and greyed — to think over (user, 2026-11-11)
 
 After checking 101 the user narrowed it: the hold at the film's end

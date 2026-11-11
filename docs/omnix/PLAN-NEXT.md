@@ -60,6 +60,20 @@ apart: 25d → «стінгери» (stingers), «перебивка» stays Dai
    `atempo` (pitch kept, chained under 0.5×) or `asetrate` (tape) for a
    constant; a curve in pieces of constant tempo.
 
+6. **The core API for an AI (the user, 2026-11-11: «so the AI can put
+   stingers on joins itself, at will»).** Every step above is an op an
+   agent can apply, never a window-only action: a stinger is part of a
+   join's `Template`, so `CutOp::Template` (already there) puts one on
+   any join; `omnix looks` lists the templates with what an agent needs to
+   choose (stinger or not, length, its sound, its licence, a few tags such
+   as «light leak», «warm», «fast»); `describe` names each join's stinger;
+   making a template from a file's span is a command too (`omnix stinger
+   save FILE --in --out --name`), not only «Save as transition…». The same
+   rule holds for paste (`ProjectOp::Paste`), a cut's voice
+   (`CutOp::Voice`) and speed. An agent then picks joins from what
+   `describe` and `omnix beats` say (on a beat, between days, at a change
+   of place).
+
 ## Where it would be redone if done in the wrong order
 
 - Stingers over a join before card 4: the decoder twice.

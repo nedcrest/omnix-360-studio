@@ -442,7 +442,12 @@ Steps:
   free packs («FREE» on YouTube), one compilation video to many
   templates, so the cutting is the core: I/O points in the bin player →
   «Save as transition…», the licence line inside each template. Card
-  renamed «Стінгери» (2026-11-11): «перебивка» is Dailix's cutaway role. Also a «white noise»
+  renamed «Стінгери» (2026-11-11): «перебивка» is Dailix's cutaway role.
+  Core API first (user, 2026-11-11): an AI must be able to put stingers
+  on joins by itself — the stinger lives in a join's `Template`
+  (`CutOp::Template` puts it), `omnix looks` lists templates with their
+  length, sound, licence and tags, `describe` names a join's stinger, and
+  `omnix stinger save` makes one from a file's span (`PLAN-NEXT.md`, 6). Also a «white noise»
   transition of our own: noise on the picture and hiss in the sound,
   generated, no file needed.
 - **25e. 360 looks:** a whip round the sphere, little-planet zoom,

@@ -200,34 +200,40 @@ fn frame_key_delete(p: &mut Project, cut: Id, t: f64, tolerance: f64) -> Result<
     said(format!("cut #{cut}: frame key at {t:.2} s gone"))
 }
 
+/// `Add`: a clip of `param` over `from`..`to`, flat at the value there.
+fn add_clip(p: &mut Project, on: Graded, param: &str, from: f64, to: f64) -> Result<Outcome, OpError> {
+    let o = owner(p, on)?;
+    check_param(&o, param)?;
+    let (from, to) = (from.min(to).max(o.range.0), from.max(to).min(o.range.1));
+    if (to - from).partial_cmp(&SHORTEST) == Some(std::cmp::Ordering::Less) || (to - from).is_nan() {
+        return Err(OpError::Invalid(format!("an automation clip runs {SHORTEST} s at least, within its own")));
+    }
+    clear(o.clips, param, from, to, None)?;
+    let points = [from, to].map(|t| AutoPoint { t, v: (o.base)(param, t), ease: Ease::Smooth }).to_vec();
+    let i = o.clips.partition_point(|c| c.from <= from);
+    o.clips.insert(i, AutoClip { param: param.to_owned(), from, to, points, follows: None, animation: None });
+    said(format!("{}: {param} automated {from:.2}-{to:.2} s", name(on)))
+}
+
+/// `Move`: the clip of `param` at `at` to start at `from`, within its owner.
+fn move_clip(p: &mut Project, on: Graded, param: &str, at: f64, from: f64) -> Result<Outcome, OpError> {
+    let o = owner(p, on)?;
+    let i = clip_at(o.clips, param, at)?;
+    let len = o.clips[i].to - o.clips[i].from;
+    let from = from.clamp(o.range.0, (o.range.1 - len).max(o.range.0));
+    clear(o.clips, param, from, from + len, Some(i))?;
+    let c = &mut o.clips[i];
+    let by = from - c.from;
+    (c.from, c.to) = (from, from + len);
+    c.points.iter_mut().for_each(|q| q.t += by);
+    o.clips.sort_by(|a, b| a.from.total_cmp(&b.from));
+    said(format!("{}: {param} clip to {from:.2} s", name(on)))
+}
+
 pub(super) fn apply(p: &mut Project, op: &AutoOp) -> Result<Outcome, OpError> {
     match op {
-        AutoOp::Add { on, param, from, to } => {
-            let o = owner(p, *on)?;
-            check_param(&o, param)?;
-            let (from, to) = (from.min(*to).max(o.range.0), from.max(*to).min(o.range.1));
-            if (to - from).partial_cmp(&SHORTEST) == Some(std::cmp::Ordering::Less) || (to - from).is_nan() {
-                return Err(OpError::Invalid(format!("an automation clip runs {SHORTEST} s at least, within its own")));
-            }
-            clear(o.clips, param, from, to, None)?;
-            let points = [from, to].map(|t| AutoPoint { t, v: (o.base)(param, t), ease: Ease::Smooth }).to_vec();
-            let i = o.clips.partition_point(|c| c.from <= from);
-            o.clips.insert(i, AutoClip { param: param.clone(), from, to, points, follows: None, animation: None });
-            said(format!("{}: {param} automated {from:.2}-{to:.2} s", name(*on)))
-        }
-        AutoOp::Move { on, param, at, from } => {
-            let o = owner(p, *on)?;
-            let i = clip_at(o.clips, param, *at)?;
-            let len = o.clips[i].to - o.clips[i].from;
-            let from = from.clamp(o.range.0, (o.range.1 - len).max(o.range.0));
-            clear(o.clips, param, from, from + len, Some(i))?;
-            let c = &mut o.clips[i];
-            let by = from - c.from;
-            (c.from, c.to) = (from, from + len);
-            c.points.iter_mut().for_each(|q| q.t += by);
-            o.clips.sort_by(|a, b| a.from.total_cmp(&b.from));
-            said(format!("{}: {param} clip to {from:.2} s", name(*on)))
-        }
+        AutoOp::Add { on, param, from, to } => add_clip(p, *on, param, *from, *to),
+        AutoOp::Move { on, param, at, from } => move_clip(p, *on, param, *at, *from),
         AutoOp::Trim { on, param, at, end, t } => {
             let o = owner(p, *on)?;
             let i = clip_at(o.clips, param, *at)?;

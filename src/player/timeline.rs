@@ -482,12 +482,12 @@ pub enum Drag {
     /// the press: the timeline rescales as the edit's length changes.
     Trim { cut: usize, start: bool, x0: f32, from: f64, per_px: f64 },
     /// Moving a cut; `to` is where it would go.
-    Move { cut: usize, x0: f32, moved: bool, to: usize },
+    Move { cut: usize, id: crate::project::Id, x0: f32, moved: bool, to: usize },
     /// Dragging the scrollbar, which was at `start` when pressed at `x0`.
     Scroll { x0: f32, start: f64 },
     /// Moving clip `clip` of sound lane `lane`, which started at `at` when
     /// pressed at `x0`.
-    MusicMove { lane: usize, clip: usize, x0: f32, at: f64, per_px: f64 },
+    MusicMove { lane: usize, clip: usize, id: crate::project::Id, x0: f32, at: f64, per_px: f64, moved: bool },
     /// Trimming its in (`start`) or out edge, at file time `from` when
     /// pressed.
     MusicTrim { lane: usize, clip: usize, start: bool, x0: f32, from: f64, per_px: f64 },
@@ -1559,7 +1559,7 @@ enum OverlayDrag {
     None,
     /// An item moved along, and up or down onto lane `lane` of its track
     /// (gap 97), landing there when let go at the pointer's time `aim`.
-    Move { item: usize, x0: f32, at: f64, per_px: f64, lane: usize, aim: f64 },
+    Move { item: usize, x0: f32, at: f64, per_px: f64, lane: usize, aim: f64, moved: bool },
     /// An edge, at own time `from` when pressed.
     Trim { item: usize, start: bool, x0: f32, from: f64, per_px: f64 },
     /// A keyframe mark: item `item`'s effect keyframe `key` (`effects`) or
@@ -1706,7 +1706,7 @@ impl OverlayLane {
             }
             OverlayHit::Item(item) => {
                 let at = self.blocks()[item].item.at;
-                *drag = OverlayDrag::Move { item, x0: p.x, at, per_px, lane: self.2, aim: at };
+                *drag = OverlayDrag::Move { item, x0: p.x, at, per_px, lane: self.2, aim: at, moved: false };
                 Message::OverlaySelect(Some(self.r(item)))
             }
         };
@@ -2011,7 +2011,8 @@ impl canvas::Program<Message> for OverlayLane {
                 }
                 let message = match drag {
                     OverlayDrag::None => return None,
-                    OverlayDrag::Move { item, x0, at, per_px, lane, aim } => {
+                    OverlayDrag::Move { item, x0, at, per_px, lane, aim, moved } => {
+                        *moved |= (x - *x0).abs() > DRAG_FROM;
                         let (track, item) = (self.1, *item);
                         let at = *at + (x - *x0) as f64 * *per_px;
                         // Over another lane it stays put on its own, where
@@ -2047,6 +2048,8 @@ impl canvas::Program<Message> for OverlayLane {
                 OverlayDrag::Auto(motion, d) => Some(self.lanes(motion).release(d, bounds).map_or_else(canvas::Action::request_redraw, canvas::Action::publish).and_capture()),
                 // Let go over another lane: it lands there, where it fits.
                 OverlayDrag::Move { item, lane, aim, .. } if lane != self.2 => Some(canvas::Action::publish(Message::OverlayToLane(self.r(item), aim, lane)).and_capture()),
+                // A click, no drag: of the clips selected, it alone stays.
+                OverlayDrag::Move { item, moved: false, .. } => Some(canvas::Action::publish(Message::SelectOne(self.blocks().get(item)?.item.id)).and_capture()),
                 _ => Some(canvas::Action::publish(Message::ScrubDone).and_capture()),
             },
             _ => None,
@@ -2628,7 +2631,7 @@ impl Timeline {
                 Message::Select(cut)
             }
             Hit::Cut(cut) => {
-                *drag = Drag::Move { cut, x0: p.x, moved: false, to: cut };
+                *drag = Drag::Move { cut, id: self.blocks[cut].cut.id, x0: p.x, moved: false, to: cut };
                 Message::Select(cut)
             }
             Hit::Join(cut) => Message::SelectJoin(cut),
@@ -2692,7 +2695,7 @@ impl Timeline {
                 let m = &self.sounds[lane].blocks[clip];
                 *drag = match edge {
                     Some(start) => Drag::MusicTrim { lane, clip, start, x0: x, from: if start { m.clip.start } else { m.clip.start + m.len() }, per_px },
-                    None => Drag::MusicMove { lane, clip, x0: x, at: m.clip.at, per_px },
+                    None => Drag::MusicMove { lane, clip, id: m.clip.id, x0: x, at: m.clip.at, per_px, moved: false },
                 };
                 Message::SelectMusic(self.sounds[lane].which, clip)
             }
@@ -2759,7 +2762,8 @@ impl Timeline {
                 return Some(canvas::Action::request_redraw().and_capture());
             }
             Drag::Scroll { x0, start } => Message::TimelinePan(*start + (x - *x0) as f64 * self.duration / Timeline::width(bounds) as f64),
-            Drag::MusicMove { lane, clip, x0, at, per_px } => {
+            Drag::MusicMove { lane, clip, x0, at, per_px, moved, .. } => {
+                *moved |= (x - *x0).abs() > DRAG_FROM;
                 let at = *at + (x - *x0) as f64 * *per_px;
                 let len = self.sounds[*lane].blocks[*clip].len();
                 let (lane, clip, overlap) = (*lane, *clip, state.shift);
@@ -2816,7 +2820,7 @@ fn release(drag: Drag) -> Option<canvas::Action<Message>> {
     match drag {
         Drag::None => None,
         Drag::Move { cut, moved: true, to, .. } => Some(canvas::Action::publish(Message::MoveCut(cut, to)).and_capture()),
-        Drag::Move { cut, .. } => Some(canvas::Action::publish(Message::SelectOne(cut)).and_capture()),
+        Drag::Move { id, .. } | Drag::MusicMove { id, moved: false, .. } => Some(canvas::Action::publish(Message::SelectOne(id)).and_capture()),
         Drag::Scroll { .. } => Some(canvas::Action::request_redraw().and_capture()),
         // The drawn zone and the lanes' drags are let go in `Marks::update`,
         // which knows the times.

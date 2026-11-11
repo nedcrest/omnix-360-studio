@@ -156,9 +156,12 @@ impl App {
             Message::MusicMove(which, i, want, overlap) => {
                 self.edit.begin();
                 let (clip, was) = (self.edit.track(which).clips[i].id, self.edit.track(which).clips[i].at);
-                self.op(Op::Clip(ClipOp::Move { clip, at: want.min(was + self.also_room()), overlap }));
-                let now = self.edit.clip_index(clip).map_or(was, |(w, i)| self.edit.track(w).clips[i].at);
-                self.move_also(now - was);
+                // One of several selected: all of them, together.
+                if self.moving_with(clip).is_some() {
+                    self.shift_picked(want - was);
+                } else {
+                    self.op(Op::Clip(ClipOp::Move { clip, at: want, overlap }));
+                }
             }
             Message::MusicTrim(which, i, in_edge, t, overlap) => {
                 self.edit.begin();
@@ -208,8 +211,14 @@ impl App {
                 if let Some(shift) = self.beat_pull(i) {
                     let clip = self.edit.music.clips[i].id;
                     let at = self.edit.music.clips[i].at + shift;
-                    self.op(Op::Clip(ClipOp::Move { clip, at, overlap: false }));
-                    self.move_also(shift);
+                    // The song's selection with it, if it's one of it; one step.
+                    self.edit.begin();
+                    if self.moving_with(clip).is_some() {
+                        self.shift_picked(shift);
+                    } else {
+                        self.op(Op::Clip(ClipOp::Move { clip, at, overlap: false }));
+                    }
+                    self.edit.commit();
                 }
             }
             Message::ClipBeats(clip, beats, press) => {

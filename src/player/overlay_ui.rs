@@ -208,9 +208,11 @@ impl App {
             Message::OverlayMove(r, at) => {
                 if let Some((item, was)) = self.edit.item(r).map(|it| (it.id, it.at)) {
                     self.edit.begin();
-                    self.op(Op::Item(ItemOp::Move { item, at: at.min(was + self.also_room()), lane: None }));
-                    let now = self.edit.item_by_id(item).map_or(was, |it| it.at);
-                    self.move_also(now - was);
+                    if self.moving_with(item).is_some() {
+                        self.shift_picked(at - was);
+                    } else {
+                        self.op(Op::Item(ItemOp::Move { item, at, lane: None }));
+                    }
                 }
             }
             Message::OverlayTrim(r, start, t) => {

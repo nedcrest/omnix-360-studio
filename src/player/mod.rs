@@ -505,8 +505,8 @@ enum Message {
     /// Drag keyframe `.1` of cut `.0` to clip time `.2`.
     KeyMove(usize, usize, f64),
     Select(usize),
-    /// A click on cut `.0` let go without a drag (`App::pick_one`).
-    SelectOne(usize),
+    /// A click on clip `.0` (by id) let go without a drag (`App::pick_one`).
+    SelectOne(crate::project::Id),
     /// Drag cut `.0`'s in (`.1` true) or out point to clip time `.2`.
     Trim(usize, bool, f64),
     /// Move cut `.0` to position `.1`.

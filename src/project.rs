@@ -1303,6 +1303,40 @@ impl Project {
         if all.len() < 2 { Vec::new() } else { all }
     }
 
+    /// Sound clips, text and pictures `things` (by id) moved `by` seconds
+    /// together, as far toward it as all of them fit (the audit, 2026-11-11:
+    /// one at a time, a group broke apart on its own lane): none before the
+    /// edit, none past the film's end it was within (gap 101), none further
+    /// into a clip that isn't moving. How far they went.
+    pub fn shift(&mut self, things: &[Id], by: f64) -> f64 {
+        let d = Music::reach(0.0, by, |d| self.shift_fits(things, d));
+        for which in SoundTrack::ALL {
+            for c in self.track_mut(which).clips.iter_mut().filter(|c| things.contains(&c.id)) {
+                c.at += d;
+            }
+        }
+        for it in self.overlays.iter_mut().chain(&mut self.text).flat_map(|l| &mut l.items).filter(|i| things.contains(&i.id)) {
+            it.at += d;
+        }
+        d
+    }
+
+    /// Whether `things` fit moved by `d` (`shift`'s rule): each span
+    /// `(at, ends)` of a lane, moving or not, checked against the rest.
+    fn shift_fits(&self, things: &[Id], d: f64) -> bool {
+        const E: f64 = 1e-6;
+        let end = self.film_end();
+        let lane_fits = |spans: Vec<(Id, f64, f64)>| {
+            spans.iter().filter(|s| things.contains(&s.0)).all(|&(_, a, b)| {
+                let (s, e) = (a + d, b + d);
+                let held = end.is_some_and(|end| e > end && (b <= end + E || d > 0.0));
+                s >= 0.0 && !held && spans.iter().filter(|o| !things.contains(&o.0)).all(|&(_, oa, ob)| overlap_of(s, e, oa, ob) <= overlap_of(a, b, oa, ob) + E)
+            })
+        };
+        SoundTrack::ALL.iter().all(|&w| lane_fits(self.track(w).clips.iter().map(|c| (c.id, c.at, c.ends())).collect()))
+            && self.overlays.iter().chain(&self.text).all(|l| lane_fits(l.items.iter().map(|i| (i.id, i.at, i.ends())).collect()))
+    }
+
     /// What runs past the film's end (gap 101): each sound clip, text and
     /// picture by id, and how many seconds past; none without pictures.
     pub fn past_end(&self) -> Vec<(Id, f64)> {

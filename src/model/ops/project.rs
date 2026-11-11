@@ -27,6 +27,11 @@ pub enum ProjectOp {
     /// that runs past the film's end trimmed to it, and one that starts
     /// there or later taken away (gap 101).
     TrimToEnd { #[serde(default)] things: Vec<Id> },
+    /// Sound clips, text and pictures (by id; no cuts: a cut's place is its
+    /// order) moved `by` seconds together, as far as all of them fit: none
+    /// before the edit, none past the film's end, none further into a clip
+    /// that isn't moving. How a group's others follow a dragged one.
+    Shift { things: Vec<Id>, by: f64 },
 }
 
 pub(super) fn apply(p: &mut Project, op: &ProjectOp) -> Result<Outcome, OpError> {
@@ -41,6 +46,13 @@ pub(super) fn apply(p: &mut Project, op: &ProjectOp) -> Result<Outcome, OpError>
         }
         ProjectOp::Group { members, name, colour } => group(p, members, name.clone(), *colour),
         ProjectOp::TrimToEnd { things } => trim_to_end(p, things),
+        ProjectOp::Shift { things, by } => {
+            if let Some(id) = things.iter().find(|&&id| p.clip_index(id).is_none() && p.item_index(id).is_none()) {
+                return Err(OpError::NotFound(format!("sound clip or item #{id}")));
+            }
+            let went = p.shift(things, *by);
+            said(format!("{} moved {went:+.2} s{}", things.len(), if (went - by).abs() > 1e-6 { format!(" of {by:+.2}") } else { String::new() }))
+        }
         &ProjectOp::Ungroup { group } => {
             if !p.groups.iter().any(|g| g.id == group) {
                 return Err(OpError::NotFound(format!("group #{group}")));
@@ -176,5 +188,29 @@ mod tests {
         assert!(e.sfx.clips.is_empty() && e.past_end().is_empty() && e.track(SoundTrack::Sfx2).clips.len() == 1);
         check(&e).unwrap();
         assert!(e.undo() && e.sfx.clips.len() == 1);
+    }
+
+    #[test]
+    fn a_set_moves_together_as_far_as_all_of_it_fits() {
+        use super::super::{Op, check};
+        use crate::model::edit::Edit;
+        use crate::project::{Cut, MusicClip};
+        let mut p = Project { cuts: vec![Cut::new("a.mp4".into(), 0.0, 10.0)], ..Default::default() };
+        // Two songs edge to edge and a bell further on the same lane.
+        for (at, len) in [(0.0, 2.0), (2.0, 2.0), (7.0, 1.0)] {
+            p.music.clips.push(MusicClip { input: "s.wav".into(), at, end: len, ..Default::default() });
+        }
+        let mut e = Edit::default();
+        e.replace(p);
+        let ids: Vec<Id> = e.music.clips.iter().map(|c| c.id).collect();
+        let said = e.apply(&Op::Project(ProjectOp::Shift { things: vec![ids[0], ids[1]], by: 5.0 })).unwrap().summary;
+        let ats: Vec<f64> = e.music.clips.iter().map(|c| c.at).collect();
+        assert!((ats[0] - 3.0).abs() < 1e-6 && (ats[1] - 5.0).abs() < 1e-6, "stopped whole at the bell: {ats:?} ({said})");
+        e.apply(&Op::Project(ProjectOp::Shift { things: vec![ids[0], ids[1]], by: -9.0 })).unwrap();
+        assert!(e.music.clips[0].at.abs() < 1e-6 && (e.music.clips[1].at - 2.0).abs() < 1e-6, "not before the edit, still edge to edge");
+        e.apply(&Op::Project(ProjectOp::Shift { things: vec![ids[2]], by: 5.0 })).unwrap();
+        assert!((e.music.clips[2].ends() - 10.0).abs() < 1e-6, "held at the film's end");
+        assert!(e.apply(&Op::Project(ProjectOp::Shift { things: vec![e.cuts[0].id], by: 1.0 })).is_err(), "a cut isn't shifted");
+        check(&e).unwrap();
     }
 }

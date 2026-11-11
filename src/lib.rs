@@ -23,6 +23,7 @@ mod lufs;
 mod mixcheck;
 mod mixmeasure;
 mod exposure;
+mod frame;
 mod grade;
 mod ffmpeg;
 mod hdr;

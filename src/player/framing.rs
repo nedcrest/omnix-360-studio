@@ -98,8 +98,18 @@ impl App {
         follows.into_iter().map(|f| (f.clone(), self.aim(&f, t))).collect()
     }
 
+    /// The playing cut's frame now, if it's framed (gap 107): what it
+    /// shows, whatever the free look.
+    fn playing_frame(&self) -> Option<crate::frame::Frame> {
+        let (_, t) = self.playing_cut()?;
+        self.edit.cuts.get(self.current)?.frame_at(t)
+    }
+
     /// The view on screen, as angles.
     pub(super) fn shown_view(&self) -> View {
+        if let Some(f) = self.playing_frame() {
+            return f.view();
+        }
         match self.playing_cut() {
             Some((_, t)) if self.follow => self.keyframed(t).and_then(|(k, at)| k.view_at(at, &crate::project::held(&|f, t| self.aim(f, t), at == t, t))).unwrap_or_else(|| self.unkeyed_view()),
             _ => self.look,
@@ -120,6 +130,7 @@ impl App {
     /// little planet when following keyframes.
     pub(super) fn camera(&self) -> Camera {
         let camera = match self.playing_cut() {
+            Some(_) if let Some(f) = self.playing_frame() => f.view().camera(),
             Some((_, t)) if self.follow => self.keyframed(t).and_then(|(k, at)| k.camera_at(at, &crate::project::held(&|f, t| self.aim(f, t), at == t, t))).unwrap_or_else(|| self.unkeyed_view().camera()),
             _ => self.look.camera(),
         };

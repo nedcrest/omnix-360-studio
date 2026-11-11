@@ -773,9 +773,20 @@ pub struct Cut {
     /// is offered once when the edit opens, not every time.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sheet_voice: Option<String>,
+    /// An ordinary clip's frame (gap 107): the part of its picture the
+    /// film shows, its base; with one, the cut's view is its frame, not
+    /// view keys.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub frame: Option<crate::frame::Frame>,
 }
 
 impl Cut {
+    /// Its frame at clip time `t` (gap 107), if it's framed: the base for
+    /// now; the Frame lanes animate it next.
+    pub fn frame_at(&self, _t: f64) -> Option<crate::frame::Frame> {
+        self.frame
+    }
+
     /// A cut of `input` from `start` to `end` seconds, nothing else set.
     /// The one place a cut is spelled out field by field, so a new field
     /// means one edit here, not one at every cut made.
@@ -818,6 +829,7 @@ impl Cut {
             origin: None,
             speech: false,
             sheet_voice: None,
+            frame: None,
         }
     }
 
@@ -1876,6 +1888,10 @@ pub fn keyframed(cuts: &[Cut], n: usize, t: f64) -> Option<(&Keyframes, f64)> {
 /// cut's clip at `t`, so a cut that holds an earlier cut's following view
 /// goes on following in its own footage.
 pub fn camera_at(cuts: &[Cut], n: usize, t: f64, aim: Aim) -> Camera {
+    // A framed cut shows its frame (gap 107).
+    if let Some(f) = cuts[n].frame_at(t) {
+        return Camera { grade: cuts[n].grade_at(t), lut: cuts[n].lut_applied, ..f.view().camera() };
+    }
     let camera = keyframed(cuts, n, t).and_then(|(k, at)| k.camera_at(at, &held(aim, at == t, t))).unwrap_or_else(|| View::home(Projection::Perspective).camera());
     Camera { grade: cuts[n].grade_at(t), lut: cuts[n].lut_applied, ..camera }
 }

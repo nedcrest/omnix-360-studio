@@ -264,6 +264,9 @@ fn cut_lines(c: &crate::project::Cut) -> Vec<String> {
     if c.speech {
         lines.push("its own sound is speech".to_owned());
     }
+    if let Some(f) = &c.frame {
+        lines.push(format!("frame: {}", f.said()));
+    }
     if let Some(v) = &c.sheet_voice {
         lines.push(format!("Dailix's voice seen: {v}"));
     }
@@ -389,6 +392,8 @@ pub fn looks(template: Option<&str>) -> Result<String> {
     let effects: Vec<String> = crate::grade::NAMES.iter().zip(crate::grade::RANGES).map(|(n, (lo, hi))| format!("{n} {lo}..{hi}")).collect();
     let only: Vec<&str> = crate::grade::ITEM_ONLY.iter().map(|&k| crate::grade::NAMES[k]).collect();
     out += &format!("effects (op key `effect_value`, auto `add`; {} on text and pictures only): {}\n", only.join(" and "), effects.join(", "));
+    let frame: Vec<String> = crate::frame::NAMES.iter().zip(crate::frame::RANGES).map(|(n, (lo, hi))| format!("{n} {lo}..{hi}")).collect();
+    out += &format!("an ordinary clip's frame (op cut `frame`; x, y, zoom in % of the picture's height, rotation in degrees): {}\n", frame.join(", "));
     let kinds: Vec<String> = crate::dress::Kind::ALL.iter().map(|k| format!("{} ({})", serde_json::to_string(k).expect("a kind is JSON").trim_matches('"'), k.about())).collect();
     out += &format!("kinds of picture (op item `kind`, or none for plain): {}\n", kinds.join("; "));
     let anims: Vec<String> = crate::animate::Anim::ALL.iter().map(|a| serde_json::to_string(a).expect("an animation is JSON").trim_matches('"').to_owned()).collect();

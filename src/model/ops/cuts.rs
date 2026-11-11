@@ -53,6 +53,11 @@ pub enum CutOp {
     /// The voice Dailix's marking chose for its clip, as this cut has now
     /// seen it (taken in or let pass): it isn't offered again (gap 103).
     SheetVoice { cut: Id, #[serde(default)] name: Option<String> },
+    /// An ordinary clip's frame (gap 107): which part of its picture the
+    /// film shows, in % of its height (`frame::Frame`); none: the whole
+    /// picture, or its view keys. Several cuts at once by a batch («for all
+    /// cuts of this clip», «for the whole film»).
+    Frame { cut: Id, #[serde(default)] frame: Option<crate::frame::Frame> },
     /// Its own sound is speech (or not): auto-duck and the mix check count
     /// it as a voice (gap 103).
     Speech { cut: Id, on: bool },
@@ -136,6 +141,7 @@ pub(super) fn apply(p: &mut Project, op: &CutOp) -> Result<Outcome, OpError> {
             p.cuts[i].sheet_voice = name.clone();
             said(format!("cut #{cut}: Dailix's voice {} seen", name.as_deref().unwrap_or("(none)")))
         }
+        &CutOp::Frame { cut, frame } => set_frame(p, cut, frame),
         &CutOp::Speech { cut, on } => {
             let i = find(p, cut)?;
             p.cuts[i].speech = on;
@@ -283,6 +289,16 @@ fn set_voice(p: &mut Project, cut: Id, audio: Option<std::path::PathBuf>, lufs: 
     (c.audio, c.loudness) = (audio, lufs);
     c.gain = if lufs.is_some() { super::sound::normal_gain(lufs) } else { 0.0 };
     said(format!("cut #{cut}: {said_as}"))
+}
+
+/// `Frame`: an ordinary clip's frame, each value within its range.
+fn set_frame(p: &mut Project, cut: Id, frame: Option<crate::frame::Frame>) -> Result<Outcome, OpError> {
+    if let Some(f) = frame {
+        f.check().map_err(OpError::Invalid)?;
+    }
+    let i = find(p, cut)?;
+    p.cuts[i].frame = frame;
+    said(format!("cut #{cut}: {}", frame.map_or("framed whole".to_owned(), |f| format!("frame {}", f.said()))))
 }
 
 /// `JoinPieces`: cut `cut`'s pieces one cut again.
@@ -745,6 +761,21 @@ mod tests {
         assert!(e.cuts[0].speech);
         let sources = crate::duck::sources(&e);
         assert_eq!(sources.iter().map(|s| s.file.clone()).collect::<Vec<_>>(), [std::path::PathBuf::from("a.mp4")], "its own sound counted as speech");
+        check(&e).unwrap();
+    }
+
+    #[test]
+    fn a_cuts_frame_is_set_by_an_op_within_its_ranges_and_is_what_it_shows() {
+        use crate::frame::Frame;
+        let mut e = Edit::default();
+        let a = e.apply(&add("a.mp4", 4.0, Place::End)).unwrap().made.unwrap();
+        let frame = Frame { x: 10.0, y: 0.0, zoom: 150.0, rotation: 0.0 };
+        e.apply(&Op::Cut(CutOp::Frame { cut: a, frame: Some(frame) })).unwrap();
+        let crop = crate::project::camera_at(&e.cuts, 0, 1.0, &|_, _| None).crop;
+        assert!((crop.half - 1.0 / 3.0).abs() < 1e-6 && (crop.centre[0] - 0.1).abs() < 1e-6, "{crop:?}");
+        assert!(e.apply(&Op::Cut(CutOp::Frame { cut: a, frame: Some(Frame { zoom: 20.0, ..frame }) })).is_err(), "less than the whole picture");
+        e.apply(&Op::Cut(CutOp::Frame { cut: a, frame: None })).unwrap();
+        assert_eq!(crate::project::camera_at(&e.cuts, 0, 1.0, &|_, _| None).crop.half, 0.5, "whole again");
         check(&e).unwrap();
     }
 }

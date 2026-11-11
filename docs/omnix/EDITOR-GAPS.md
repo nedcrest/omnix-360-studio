@@ -1440,6 +1440,17 @@ every cut op; «Sync lock» on a sound lane's menu, «· sync» on its name;
 it (a trim dragged there and back puts it back). Beats found to the
 sample on the way (gap 13).
 
+### 102. Copy and paste clips — small (user, 2026-11-11)
+
+The user, sorting stingers from cutaways: «a clip selected, Ctrl+C, the
+playhead where I want it, Ctrl+V» — a funny phrase from the footage used
+as a cutaway in many places is just a piece of video copied and pasted.
+Planned in `PLAN-NEXT.md`: a fragment (the selected cuts, sound clips,
+text and pictures as project JSON, times relative to the first, also on
+the system clipboard) and one op, `ProjectOp::Paste { fragment, at }`,
+so a paste is one undo step and keeps groups with fresh ids. Milestone
+«Зручний таймлайн».
+
 ### 100. Outside material in Dailix: by link and dragged in — medium (recorded 2026-11-04, «Далі» 2026-11-11)
 
 From footage-agent's `grab.py`, recorded in Dailix's CONTEXT: yt-dlp

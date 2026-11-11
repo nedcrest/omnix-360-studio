@@ -1452,6 +1452,15 @@ sound is speech» switch for a clean recording that needs no cleaning,
 which `duck::sources` then counts. Milestone «Ефекти, колір і розумний
 звук».
 
+
+**Built 2026-11-11, waits for a check.** Right-click a cut's sound → «Voice»:
+its own sound, each cleaned voice Dailix made for the clip (the marking's
+choice named, the one playing ticked), «Its own sound is speech»
+(`from_sheet::voices`, `CutOp::Voice` with the voice's loudness over the
+cut → its level, `CutOp::Speech`; `duck::sources` and the mix check count
+it). Opening an edit offers the voices chosen in Dailix since it was
+made, once (`Cut::sheet_voice`, `newer_voices`, `CutOp::SheetVoice`):
+«Use them» (one undo step) or «Keep as it is»; Esc asks again next time.
 ### 107. Framing a flat video: crop a little, zoom in and out — medium (user, 2026-11-11)
 
 For ordinary (flat) video, not 360: trim the frame a little (crop in,

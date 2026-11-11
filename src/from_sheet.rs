@@ -88,6 +88,34 @@ pub fn build(root: &Path, day: Option<&str>) -> Result<Project> {
     Ok(project)
 }
 
+/// The cleaned voices Dailix made for clip `clip` of the trip at `root`,
+/// by name with their files, and the one its marking chose (gap 103):
+/// what a cut's «Voice» offers. Nothing for a clip outside the trip.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Voices {
+    pub made: Vec<(String, PathBuf)>,
+    pub chosen: Option<String>,
+}
+
+pub fn voices(root: &Path, clip: &Path) -> Voices {
+    let layout = Layout::new(root);
+    let Ok(rel) = clip.strip_prefix(layout.footage()) else { return Voices::default() };
+    let key = rel.components().map(|c| c.as_os_str().to_string_lossy()).collect::<Vec<_>>().join("/");
+    let Some(dir) = dailix_sheet::voice::dir(&layout, &key) else { return Voices::default() };
+    let made = dailix_sheet::voice::variants(&dir).into_iter().map(|n| (n.clone(), dailix_sheet::voice::track(&dir, &n))).collect();
+    let sheet = std::fs::read_to_string(layout.sheet()).ok().and_then(|t| Doc::parse(&t).ok()?.sheet().ok());
+    let chosen = sheet.and_then(|s| s.clips.get(&key)?.audio.clone());
+    Voices { made, chosen }
+}
+
+/// A voice's loudness over a cut's `span`, LUFS (`stretch_loudness`),
+/// with the whole file's as Dailix measured it when it can't be read:
+/// what `CutOp::Voice` sets the level from.
+pub fn voice_loudness(voice: &Path, span: (f64, f64)) -> Option<f64> {
+    let whole = voice.parent().and_then(|dir| dailix_sheet::voice::made(dir).get(voice.file_stem()?.to_str()?)?.lufs);
+    stretch_loudness(voice, span, whole)
+}
+
 /// What a cut playing `voice` over `span` (the voice is timed like its
 /// clip) plays, LUFS, as Normalize measures it; none where it's silent.
 /// A voice that can't be read here gets `whole`, the file's own loudness
@@ -210,6 +238,11 @@ mod tests {
         assert_eq!(p.cuts[1].marks.iter().map(|m| (m.t, m.note.as_str())).collect::<Vec<_>>(), [(15.0, "cut · a meme here")]);
         assert_eq!(p.cuts[2].marks.len(), 1, "a whole clip keeps its flags as markers too");
         assert_eq!(build(&root, None).unwrap().cuts.len(), 4, "all days: D whole too");
+        // What a cut's «Voice» offers: the voices made and the marking's choice.
+        let v = voices(&root, &layout.clip("2030-05-01/A.MP4"));
+        assert_eq!((v.made, v.chosen.as_deref()), (vec![("dnn6".to_owned(), layout.voice().join("2030-05-01/A/dnn6.flac"))], Some("dnn6")));
+        assert_eq!(voices(&root, &layout.clip("2030-05-01/B.MP4")), Voices::default(), "none made");
+        assert_eq!(voices(&root, Path::new("/elsewhere/A.MP4")), Voices::default());
 
         // Written beside the others, never over one.
         let a = write(&root, Some("2030-05-01")).unwrap();

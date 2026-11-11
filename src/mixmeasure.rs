@@ -90,7 +90,7 @@ pub fn measure(project: &Project, progress: &mut dyn FnMut(usize, usize)) -> Res
         let mix = Mix { sound_db: project.sound.volume, tracks: beyond.iter().collect(), length, fades: project.fades };
         run(&cuts, &mix, &mut ws.iter_mut().chain(sp.iter_mut()).collect::<Vec<_>>())?;
         for ((n, c), w) in project.cuts.iter().enumerate().zip(ws) {
-            items.push(Item { lane: Lane::ClipSound, own: Own::Cut(n), at: w.from, len: c.len(), lufs: w.loudness.integrated(), loudest: w.loudness.loudest(), speech: c.audio.is_some() && !c.mute });
+            items.push(Item { lane: Lane::ClipSound, own: Own::Cut(n), at: w.from, len: c.len(), lufs: w.loudness.integrated(), loudest: w.loudness.loudest(), speech: (c.audio.is_some() || c.speech) && !c.mute });
         }
         for (k, w) in sp.into_iter().enumerate() {
             spans[k].push((Lane::ClipSound, w));

@@ -764,6 +764,10 @@ pub struct Cut {
     /// clip share it, and can be joined back («This was one clip»).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub origin: Option<Id>,
+    /// Its own sound is speech, clean enough to need no cleaned voice
+    /// (gap 103): auto-duck and the mix check count it as a voice.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub speech: bool,
 }
 
 impl Cut {
@@ -807,6 +811,7 @@ impl Cut {
             lut_applied: None,
             group: None,
             origin: None,
+            speech: false,
         }
     }
 

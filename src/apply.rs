@@ -261,6 +261,9 @@ fn cut_lines(c: &crate::project::Cut) -> Vec<String> {
     if let Some(audio) = &c.audio {
         lines.push(format!("sound from: {}", audio.display()));
     }
+    if c.speech {
+        lines.push("its own sound is speech".to_owned());
+    }
     let sound = Sounding { even: c.even, low_cut: c.low_cut, clean: c.clean, fades: (c.sound_fade_in, c.sound_fade_out), beyond: (c.sound_before, c.sound_after), loudness: c.loudness };
     lines.extend(sound_lines(&sound, &c.volume));
     lines

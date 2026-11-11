@@ -45,6 +45,14 @@ pub enum CutOp {
     /// Several cuts moved together (a group's, gap 8): side by side, in the
     /// order they were, just before cut `before` (not one of them), or last.
     MoveTogether { cuts: Vec<Id>, before: Option<Id> },
+    /// The sound it plays: a cleaned voice's file (one Dailix made for its
+    /// clip, timed like it), or none for the clip's own; with the voice's
+    /// loudness over the cut, LUFS, measured by the caller, its level is
+    /// set from it as Normalize would (gap 103).
+    Voice { cut: Id, #[serde(default)] audio: Option<std::path::PathBuf>, #[serde(default)] lufs: Option<f64> },
+    /// Its own sound is speech (or not): auto-duck and the mix check count
+    /// it as a voice (gap 103).
+    Speech { cut: Id, on: bool },
     /// Split at `t` (clip time); the second half is a new cut.
     Split { cut: Id, t: f64 },
     /// Cut `cut`'s pieces (what one clip was split into) joined back into
@@ -119,6 +127,18 @@ pub(super) fn apply(p: &mut Project, op: &CutOp) -> Result<Outcome, OpError> {
         CutOp::MoveTogether { cuts, before } => move_together(p, cuts, before),
         &CutOp::Split { cut, t } => split(p, cut, t),
         &CutOp::JoinPieces { cut } => join_pieces(p, cut),
+        CutOp::Voice { cut, audio, lufs } => {
+            let i = find(p, *cut)?;
+            let c = &mut p.cuts[i];
+            (c.audio, c.loudness) = (audio.clone(), *lufs);
+            c.gain = if lufs.is_some() { super::sound::normal_gain(*lufs) } else { 0.0 };
+            said(format!("cut #{cut}: {}", audio.as_ref().map_or("its own sound".to_owned(), |a| format!("voice {}", a.display()))))
+        }
+        &CutOp::Speech { cut, on } => {
+            let i = find(p, cut)?;
+            p.cuts[i].speech = on;
+            said(format!("cut #{cut}: its own sound {} speech", if on { "is" } else { "isn't" }))
+        }
         &CutOp::Transition { cut, look } => transition(p, cut, look),
         CutOp::TransitionKnob { cut, key, value } => {
             let i = find(p, *cut)?;
@@ -697,6 +717,21 @@ mod tests {
         let c = &e.cuts[0];
         assert_eq!((c.marks.len(), c.marks[0].t), (1, 7.0), "{:?}", c.marks);
         assert!(c.volume.iter().any(|k| k.t == 6.0), "{:?}", c.volume);
+        check(&e).unwrap();
+    }
+
+    #[test]
+    fn a_cuts_voice_and_its_own_speech_are_set_by_ops() {
+        let mut e = Edit::default();
+        let a = e.apply(&add("a.mp4", 4.0, Place::End)).unwrap().made.unwrap();
+        e.apply(&Op::Cut(CutOp::Voice { cut: a, audio: Some("voice/a/dnn6.flac".into()), lufs: Some(-26.0) })).unwrap();
+        assert_eq!((e.cuts[0].audio.is_some(), e.cuts[0].loudness, e.cuts[0].gain), (true, Some(-26.0), super::super::sound::normal_gain(Some(-26.0))), "its level from the voice");
+        e.apply(&Op::Cut(CutOp::Voice { cut: a, audio: None, lufs: None })).unwrap();
+        assert_eq!((e.cuts[0].audio.as_ref(), e.cuts[0].gain), (None, 0.0), "back to its own sound");
+        e.apply(&Op::Cut(CutOp::Speech { cut: a, on: true })).unwrap();
+        assert!(e.cuts[0].speech);
+        let sources = crate::duck::sources(&e);
+        assert_eq!(sources.iter().map(|s| s.file.clone()).collect::<Vec<_>>(), [std::path::PathBuf::from("a.mp4")], "its own sound counted as speech");
         check(&e).unwrap();
     }
 }

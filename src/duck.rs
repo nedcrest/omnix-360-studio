@@ -42,7 +42,8 @@ pub struct Source {
 /// Voice lane's takes, muted ones left out.
 pub fn sources(project: &Project) -> Vec<Source> {
     let offsets = crate::project::offsets(&project.cuts);
-    let cuts = project.cuts.iter().zip(offsets).filter(|(c, _)| !c.mute).filter_map(|(c, at)| Some(Source { file: c.audio.clone()?, start: c.start, end: c.end, at }));
+    // A cleaned voice, or its own sound when it's marked as speech (gap 103).
+    let cuts = project.cuts.iter().zip(offsets).filter(|(c, _)| !c.mute).filter_map(|(c, at)| Some(Source { file: c.audio.clone().or_else(|| c.speech.then(|| c.input.clone()))?, start: c.start, end: c.end, at }));
     let takes = project.voice.clips.iter().filter(|c| !c.mute).map(|c| Source { file: c.input.clone(), start: c.start, end: c.end, at: c.at });
     cuts.chain(takes).collect()
 }

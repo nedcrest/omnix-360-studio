@@ -317,8 +317,8 @@ impl App {
         ]
         .spacing(4);
         let spread = row![
-            small("All of this clip", EffectMsg::FrameSpread(false), "This frame on every cut of the same clip"),
-            small("Whole film", EffectMsg::FrameSpread(true), "This frame on every ordinary cut of the film"),
+            small("All of this clip", EffectMsg::FrameSpread(false), "This frame and its motion on every cut cut from the same file, the motion stretched to each cut's length"),
+            small("Whole film", EffectMsg::FrameSpread(true), "This frame and its motion on every ordinary cut of the film, the motion stretched to each cut's length"),
         ]
         .spacing(4);
         column(rows).push(zoom).push(spread).spacing(6).into()

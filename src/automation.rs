@@ -182,6 +182,17 @@ pub fn graded(grade: Grade, clips: &[AutoClip], t: f64) -> Grade {
     Grade { black: grade.black, ..Grade::from_values(values) }
 }
 
+impl AutoClip {
+    /// The clip moved from an owner spanning `was` (own time) onto one
+    /// spanning `now`, stretched to it: what a cut's Frame lanes become on
+    /// another cut (gap 107, the user: a zoom in slower on a longer cut).
+    pub fn remapped(&self, was: (f64, f64), now: (f64, f64)) -> AutoClip {
+        let scale = if was.1 > was.0 { (now.1 - now.0) / (was.1 - was.0) } else { 1.0 };
+        let at = |t: f64| now.0 + (t - was.0) * scale;
+        AutoClip { from: at(self.from), to: at(self.to), points: self.points.iter().map(|p| AutoPoint { t: at(p.t), ..*p }).collect(), ..self.clone() }
+    }
+}
+
 /// `frame` with what `clips` move at `t` (gap 107: the Frame lanes).
 pub fn framed(frame: crate::frame::Frame, clips: &[AutoClip], t: f64) -> crate::frame::Frame {
     let mut values = frame.values();
@@ -303,5 +314,12 @@ mod tests {
             assert!((graded(keys[0].grade, &clips, t).exposure - before).abs() < 1e-12, "at {t}");
         }
         assert!(from_keys(&mut vec![key(1.0, 0.0, Ease::Linear)], 0.0, 10.0).is_empty());
+    }
+
+    #[test]
+    fn a_clip_remapped_onto_a_longer_owner_stretches_with_it() {
+        let c = AutoClip { param: "frame.zoom".into(), from: 1.0, to: 3.0, points: vec![AutoPoint { t: 1.0, v: 100.0, ease: Ease::Linear }, AutoPoint { t: 3.0, v: 120.0, ease: Default::default() }], follows: None, animation: None };
+        let r = c.remapped((1.0, 3.0), (10.0, 14.0));
+        assert_eq!((r.from, r.to, r.points[1].t, r.points[0].ease, r.points[1].v), (10.0, 14.0, 14.0, Ease::Linear, 120.0));
     }
 }

@@ -213,6 +213,25 @@ fn focus(t: f64, selected: Option<Selected>, playing: Option<(usize, f64)>) -> F
 /// How much closer «Zoom in» goes over a cut (gap 107): a fifth.
 const ZOOM_STEP: f64 = 1.2;
 
+/// The ops that give cut `to` the frame of cut `from`: its base, its
+/// Frame lanes (the others' cleared) stretched from `from`'s span to `to`'s.
+fn frame_copy(from: &crate::project::Cut, to: &crate::project::Cut) -> Vec<Op> {
+    use crate::model::ops::auto::AutoOp;
+    let on = crate::model::ops::keys::Graded::Cut(to.id);
+    let params = crate::frame::PARAMS.map(str::to_owned).to_vec();
+    let mut ops = vec![Op::Cut(crate::model::ops::cuts::CutOp::Frame { cut: to.id, frame: from.frame }), Op::Auto(AutoOp::Clear { on, params: params.clone() })];
+    for clip in from.automation.iter().filter(|c| params.contains(&c.param)) {
+        let c = clip.remapped((from.start, from.end), (to.start, to.end));
+        let param = c.param.clone();
+        ops.push(Op::Auto(AutoOp::Add { on, param: param.clone(), from: c.from, to: c.to }));
+        for p in &c.points {
+            ops.push(Op::Auto(AutoOp::Point { on, param: param.clone(), t: p.t, v: p.v, from: None, tolerance: 1e-6 }));
+            ops.push(Op::Auto(AutoOp::PointEase { on, param: param.clone(), t: p.t, ease: p.ease, tolerance: 1e-6 }));
+        }
+    }
+    ops
+}
+
 impl App {
     /// What the panel works on (`Focus`).
     pub(super) fn effect_focus(&self) -> Focus {
@@ -354,12 +373,14 @@ impl App {
         self.ops(&ops);
     }
 
-    /// The selected cut's base frame on every ordinary cut of its clip, or
-    /// of the whole `film` (the user, 2026-11-11: both); one undo step.
+    /// The selected cut's frame on every ordinary cut of its clip, or of
+    /// the whole `film` (the user, 2026-11-11: both): its base, and its
+    /// Frame lanes stretched to each cut's length (a zoom in slower on a
+    /// longer one); one undo step.
     fn frame_spread(&mut self, film: bool) {
         let Some((Target::Cut(i), _)) = self.effect_target() else { return };
-        let (input, frame) = (self.edit.cuts[i].input.clone(), self.edit.cuts[i].frame);
-        let ops: Vec<Op> = self.edit.cuts.iter().filter(|c| c.flat && (film || c.input == input)).map(|c| Op::Cut(crate::model::ops::cuts::CutOp::Frame { cut: c.id, frame })).collect();
+        let from = &self.edit.cuts[i];
+        let ops: Vec<Op> = self.edit.cuts.iter().filter(|c| c.flat && c.id != from.id && (film || c.input == from.input)).flat_map(|c| frame_copy(from, c)).collect();
         self.ops(&ops);
     }
 
@@ -1013,6 +1034,8 @@ mod tests {
         let _ = app.effect_message(EffectMsg::FrameSpread(false));
         let zooms = |app: &App| app.edit.cuts.iter().map(|c| c.frame.map(|f| f.zoom)).collect::<Vec<_>>();
         assert_eq!(zooms(&app), [Some(150.0), None, Some(150.0)], "the clip's other cut, not b.mp4");
+        let z2 = |t| app.edit.cuts[2].frame_at(t).unwrap().zoom;
+        assert!((z2(2.0) - 150.0).abs() < 1e-6 && (z2(4.0) - 180.0).abs() < 1e-6, "its zoom in too, stretched to it");
         let _ = app.effect_message(EffectMsg::FrameSpread(true));
         assert_eq!(zooms(&app), [Some(150.0); 3], "the whole film");
         assert!(app.edit.undo() && zooms(&app)[1].is_none(), "one step");

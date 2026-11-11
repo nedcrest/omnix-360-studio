@@ -473,6 +473,13 @@ Steps:
   sound, its sound on the SFX lane and linked to it; from the project's
   own clips. The over mode needs video on the overlay lane (gap 4, the
   B-roll milestone).
+  Moved to «Далі» beside gap 100 (user, 2026-11-11): downloaded footage
+  becomes stinger templates — e.g. a YouTube video of several light leak
+  transitions in a row (https://youtu.be/b-jt77qrRoA) cut into one
+  template each, ready to drop on a join; its licence checked and noted
+  in `LICENSES.md` first, the files never committed. Also a «white noise»
+  transition of our own: noise on the picture and hiss in the sound,
+  generated, no file needed.
 - **25e. 360 looks:** a whip round the sphere, little-planet zoom,
   sphere roll; wait for 360 footage (the camera not before ~2027-02).
 - **25f. The transitions lane** (checked 2026-11-09; user, 2026-11-01:
@@ -1501,6 +1508,8 @@ the licence, the date). In the window: paste a link, pick the kind;
 The user moved it to «Далі» and grew it (2026-11-11): pictures too, dragged
 into the window or by link, converted to what the project keeps (JPEG,
 WebP and the like → PNG); a milestone of its own, «Додаткові матеріали».
+Joined by gap 25d (2026-11-11): what's downloaded can be cut into the
+project's own templates (stingers first).
 
 ## Format rule for all of these
 

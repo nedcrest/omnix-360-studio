@@ -1473,6 +1473,13 @@ migration; (b) the Frame row and lanes; (c) the box in the viewer;
 «all cuts of one clip»; Framing as a mode for 360 only, a flat clip
 framed by the box (for now). No old projects to carry over: no
 migration of flat cuts' view keys — a flat cut's view is its frame.
+«The whole film» and «all cuts of a clip» are a batch of `CutOp::Frame`,
+no film-wide field. **Core API for tracking** (the user, 2026-11-11): the
+Frame lanes are ordinary `AutoClip`s, which already can follow an
+object's track (`AutoClip::follows`): object tracking (37, 53b) fills a
+cut's `frame.x`/`frame.y` lanes from a track by an op, no second
+mechanism. **Step a built** (`frame::Frame`, `Cut::frame`, `frame_at`,
+`CutOp::Frame`, `describe`, `omnix looks`).
 ### 106. Cinematic processing for the user's Canon R50 — idea (user, 2026-11-11)
 
 Later, maybe a small program of its own: footage from the user's Canon

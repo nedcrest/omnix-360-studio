@@ -1511,7 +1511,14 @@ the folded Frame row, which already draws every lane's points on one
 line, becomes a key bar — a mark a frame key (all four values at that
 time), a click on it moves the playhead there, a drag retimes the key on
 all four lanes together, Del deletes it; the four lanes stay for fine
-work on one value.
+work on one value. **Step e built 2026-11-11** (`d836e48`, `7e3f89b`,
+`aa0e1dd`): `AutoOp::FrameKey`/`FrameKeyMove`/`FrameKeyDelete` (a key
+holds before the first and after the last, as Kdenlive's); Auto keyframe
+(now in the Frame group too) makes every frame change a key; K keys an
+ordinary cut while editing; a click on the picture aims the frame there
+(`Message::Aim`); the folded Frame row is a key bar (click picks and
+moves the playhead, drag retimes, Del deletes the key). Waits for the
+user's check with steps a–d.
 ### 106. Cinematic processing for the user's Canon R50 — idea (user, 2026-11-11)
 
 Later, maybe a small program of its own: footage from the user's Canon

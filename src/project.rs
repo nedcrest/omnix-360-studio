@@ -1889,8 +1889,8 @@ pub fn keyframed(cuts: &[Cut], n: usize, t: f64) -> Option<(&Keyframes, f64)> {
 /// cut's clip at `t`, so a cut that holds an earlier cut's following view
 /// goes on following in its own footage.
 pub fn camera_at(cuts: &[Cut], n: usize, t: f64, aim: Aim) -> Camera {
-    // A framed cut shows its frame (gap 107).
-    if let Some(f) = cuts[n].frame_at(t) {
+    // A framed ordinary cut shows its frame (gap 107); a 360 cut its view.
+    if let Some(f) = cuts[n].frame_at(t).filter(|_| cuts[n].flat) {
         return Camera { grade: cuts[n].grade_at(t), lut: cuts[n].lut_applied, ..f.view().camera() };
     }
     let camera = keyframed(cuts, n, t).and_then(|(k, at)| k.camera_at(at, &held(aim, at == t, t))).unwrap_or_else(|| View::home(Projection::Perspective).camera());

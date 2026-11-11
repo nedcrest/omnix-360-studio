@@ -102,7 +102,7 @@ impl App {
     /// shows, whatever the free look.
     fn playing_frame(&self) -> Option<crate::frame::Frame> {
         let (_, t) = self.playing_cut()?;
-        self.edit.cuts.get(self.current)?.frame_at(t)
+        self.edit.cuts.get(self.current).filter(|c| c.flat)?.frame_at(t)
     }
 
     /// The view on screen, as angles.

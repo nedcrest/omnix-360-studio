@@ -771,11 +771,14 @@ mod tests {
         let a = e.apply(&add("a.mp4", 4.0, Place::End)).unwrap().made.unwrap();
         let frame = Frame { x: 10.0, y: 0.0, zoom: 150.0, rotation: 0.0 };
         e.apply(&Op::Cut(CutOp::Frame { cut: a, frame: Some(frame) })).unwrap();
-        let crop = crate::project::camera_at(&e.cuts, 0, 1.0, &|_, _| None).crop;
+        let mut cuts = e.cuts.clone();
+        cuts[0].flat = true;
+        let crop = crate::project::camera_at(&cuts, 0, 1.0, &|_, _| None).crop;
         assert!((crop.half - 1.0 / 3.0).abs() < 1e-6 && (crop.centre[0] - 0.1).abs() < 1e-6, "{crop:?}");
         assert!(e.apply(&Op::Cut(CutOp::Frame { cut: a, frame: Some(Frame { zoom: 20.0, ..frame }) })).is_err(), "less than the whole picture");
+        cuts[0].flat = false;
+        assert_eq!(crate::project::camera_at(&cuts, 0, 1.0, &|_, _| None).crop.half, 0.5, "a 360 cut: its view, not a frame");
         e.apply(&Op::Cut(CutOp::Frame { cut: a, frame: None })).unwrap();
-        assert_eq!(crate::project::camera_at(&e.cuts, 0, 1.0, &|_, _| None).crop.half, 0.5, "whole again");
         check(&e).unwrap();
     }
 }

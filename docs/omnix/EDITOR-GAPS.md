@@ -1506,7 +1506,12 @@ all four Frame lanes at the playhead, the lanes made over the cut if
 missing; written on every change while «Auto keyframe» is on (the
 toggle 360 framing has), else by K on an ordinary cut while editing;
 (2) aim by a click: a click on the picture puts the frame's centre there
-at the zoom chosen, and keys it.
+at the zoom chosen, and keys it. (3) No new timeline rows (the user asked):
+the folded Frame row, which already draws every lane's points on one
+line, becomes a key bar — a mark a frame key (all four values at that
+time), a click on it moves the playhead there, a drag retimes the key on
+all four lanes together, Del deletes it; the four lanes stay for fine
+work on one value.
 ### 106. Cinematic processing for the user's Canon R50 — idea (user, 2026-11-11)
 
 Later, maybe a small program of its own: footage from the user's Canon

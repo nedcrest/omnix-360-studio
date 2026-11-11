@@ -1469,9 +1469,10 @@ which already are «a base value + automation clips per value»):
 
 **Order**: (a) the frame and its base, the hook, ops, describe,
 migration; (b) the Frame row and lanes; (c) the box in the viewer;
-(d) the shortcuts. Open questions for the user: «the whole video» as
-the whole film, or all cuts of one clip, or both; whether Framing as a
-mode stays only for 360.
+(d) the shortcuts. The user's answers (2026-11-11): both «whole film» and
+«all cuts of one clip»; Framing as a mode for 360 only, a flat clip
+framed by the box (for now). No old projects to carry over: no
+migration of flat cuts' view keys — a flat cut's view is its frame.
 ### 106. Cinematic processing for the user's Canon R50 — idea (user, 2026-11-11)
 
 Later, maybe a small program of its own: footage from the user's Canon

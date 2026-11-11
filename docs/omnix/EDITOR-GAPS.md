@@ -1452,6 +1452,19 @@ sound is speech» switch for a clean recording that needs no cleaning,
 which `duck::sources` then counts. Milestone «Ефекти, колір і розумний
 звук».
 
+### 107. Framing a flat video: crop a little, zoom in and out — medium (user, 2026-11-11)
+
+For ordinary (flat) video, not 360: trim the frame a little (crop in,
+re-centre), and a zoom in or out over a cut as automation — the plain
+things. The core can already: a flat cut's view keys crop it (`View`
+fov/yaw/pitch as a crop, `flat_views_crop_the_picture`), the Framing
+mode keys them. What's missing is the plain way: a crop in % and a
+position by dragging the frame in the viewer, «Zoom in» / «Zoom out»
+over the cut (or between two points) with an ease, the keys on the View
+row (39's lanes later), no degrees shown for a flat clip; ops and
+`describe` in % for an agent. Ties to 53 (framing grown up) and 39
+(View lanes); 360 keeps its own way.
+
 ### 106. Cinematic processing for the user's Canon R50 — idea (user, 2026-11-11)
 
 Later, maybe a small program of its own: footage from the user's Canon

@@ -116,8 +116,14 @@ impl App {
         self.edit.begin();
         if self.op(Op::Cut(CutOp::MoveTogether { cuts, before })).is_some() {
             self.current = playing.and_then(|id| self.edit.cut_index(id)).unwrap_or(0);
-            // The group's sound clips, text and pictures go with its cuts.
-            self.shift_picked(at(&self.edit) - was);
+            // Its groups' sound clips, text and pictures went with their
+            // cuts (`Project::follow_groups`); others picked beside them go
+            // as far as the first cut did.
+            let loose: Vec<Id> = self.picked_ids().into_iter().filter(|&p| self.edit.cut_index(p).is_none() && self.edit.group_of(p).is_none()).collect();
+            let by = at(&self.edit) - was;
+            if !loose.is_empty() && by != 0.0 {
+                self.op(Op::Project(ProjectOp::Shift { things: loose, by }));
+            }
         }
         self.edit.commit();
         true
@@ -520,5 +526,33 @@ mod tests {
         assert_eq!(order(&app), [ids[0], ids[3], ids[1], ids[2]], "right, past the cut after the run");
         let _ = app.key(iced::keyboard::Key::Named(iced::keyboard::key::Named::ArrowLeft), iced::keyboard::Modifiers::ALT);
         assert_eq!(order(&app), [ids[0], ids[1], ids[2], ids[3]], "and back");
+    }
+
+    #[test]
+    fn two_groups_swapped_take_their_music_and_text_along() {
+        // Blue: a 2 s cut and its song 0-2 s; yellow: two 2 s cuts, its
+        // song 2-6 s and a title over them.
+        let mut app = app();
+        app.edit.cuts.push(crate::project::Cut::new("nowhere/c.mp4".into(), 0.0, 2.0));
+        for (at, len) in [(0.0, 2.0), (2.0, 4.0)] {
+            app.edit.music.clips.push(crate::project::MusicClip { input: "s.wav".into(), at, end: len, ..Default::default() });
+        }
+        let item = crate::overlay::Item { id: 0, input: "".into(), text: Some(Default::default()), at: 3.0, start: 0.0, end: 1.0, motion: Vec::new(), effects: Vec::new(), bars: None, automation: Vec::new(), kind: None, style: None, group: None };
+        app.edit.text.push(crate::overlay::Lane { items: vec![item], ..Default::default() });
+        app.edit.settle_ids();
+        let cuts: Vec<Id> = app.edit.cuts.iter().map(|c| c.id).collect();
+        let (blue_song, yellow_song, title) = (app.edit.music.clips[0].id, app.edit.music.clips[1].id, app.edit.text[0].items[0].id);
+        app.op(Op::Project(ProjectOp::Group { members: vec![cuts[0], blue_song], name: None, colour: None }));
+        app.op(Op::Project(ProjectOp::Group { members: vec![cuts[1], cuts[2], yellow_song, title], name: None, colour: None }));
+        // Alt+click yellow, a press on it and a drag to the start.
+        app.modifiers = iced::keyboard::Modifiers::ALT;
+        let _ = app.update(Message::Select(1));
+        app.modifiers = iced::keyboard::Modifiers::empty();
+        let _ = app.update(Message::Select(1));
+        let _ = app.update(Message::MoveCut(1, 0));
+        let at = |e: &crate::model::edit::Edit, id| e.clip_index(id).map(|(w, i)| e.track(w).clips[i].at).unwrap();
+        assert_eq!(app.edit.cuts.iter().map(|c| c.id).collect::<Vec<_>>(), [cuts[1], cuts[2], cuts[0]]);
+        assert_eq!((at(&app.edit, yellow_song), at(&app.edit, blue_song), app.edit.text[0].items[0].at), (0.0, 4.0, 1.0), "each group's music and title with its cuts");
+        assert!(app.edit.undo() && at(&app.edit, yellow_song) == 2.0 && at(&app.edit, blue_song) == 0.0, "one undo step");
     }
 }

@@ -146,6 +146,7 @@ fn apply(p: &mut Project, op: &Op) -> Result<Outcome, OpError> {
             let before = p.cuts.clone();
             let outcome = cuts::apply(p, op)?;
             p.follow_locked(&before);
+            p.follow_groups(&before);
             Ok(outcome)
         }
         Op::Clip(op) => clips::apply(p, op),

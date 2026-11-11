@@ -502,6 +502,24 @@ pub struct Ducked {
 }
 
 /// How long the spans `a0..a1` and `b0..b1` share.
+/// The groups among `moves` (group, its moved ids, by) whose clips, now
+/// at `now`, start before the edit or overlap another clip more than they
+/// did `was` (lanes as `Project::lane_spans` gives them).
+fn group_clashes(was: &[Vec<(Id, f64, f64)>], now: &[Vec<(Id, f64, f64)>], moves: &[(Id, Vec<Id>, f64)]) -> Vec<Id> {
+    let group = |id: Id| moves.iter().find(|m| m.1.contains(&id)).map(|m| m.0);
+    let mut bad = Vec::new();
+    for (w, n) in was.iter().zip(now) {
+        for (a, &(ia, s, e)) in n.iter().enumerate() {
+            let Some(g) = group(ia) else { continue };
+            let clash = s < -1e-9 || n.iter().enumerate().any(|(b, &(_, s2, e2))| b != a && overlap_of(s, e, s2, e2) > overlap_of(w[a].1, w[a].2, w[b].1, w[b].2) + 1e-6);
+            if clash && !bad.contains(&g) {
+                bad.push(g);
+            }
+        }
+    }
+    bad
+}
+
 fn overlap_of(a0: f64, a1: f64, b0: f64, b1: f64) -> f64 {
     (a1.min(b1) - a0.max(b0)).max(0.0)
 }
@@ -1403,6 +1421,65 @@ impl Project {
         let clips = SoundTrack::ALL.iter().flat_map(|&w| self.track(w).clips.iter().map(|c| (c.id, c.ends())));
         let items = self.overlays.iter().chain(&self.text).flat_map(|l| &l.items).map(|i| (i.id, i.ends()));
         clips.chain(items).map(|(id, e)| (id, e - end)).filter(|&(_, by)| by > PAST).collect()
+    }
+
+    /// Every lane's (id, start, end), sound tracks first, then the overlay
+    /// and text lanes: for rules over all of them at once.
+    fn lane_spans(&self) -> Vec<Vec<(Id, f64, f64)>> {
+        let sound = SoundTrack::ALL.iter().map(|&w| self.track(w).clips.iter().map(|c| (c.id, c.at, c.ends())).collect());
+        let items = self.overlays.iter().chain(&self.text).map(|l| l.items.iter().map(|i| (i.id, i.at, i.ends())).collect());
+        sound.chain(items).collect()
+    }
+
+    /// Clip or item `id` moved `by` seconds on its lane, as is.
+    fn nudge(&mut self, id: Id, by: f64) {
+        if let Some((w, i)) = self.clip_index(id) {
+            self.track_mut(w).clips[i].at += by;
+        } else if let Some((t, l, i)) = self.item_index(id) {
+            self.track_lanes_mut(t)[l].items[i].at += by;
+        }
+    }
+
+    /// A group's sound clips, text and pictures after its cuts moved from
+    /// `before` (the user, 2026-11-11: two groups swapped, their videos
+    /// moved and their music stayed): each group's others move as far as
+    /// its first cut did, every group at once, so two can trade places.
+    /// A group whose others would then run into a clip, or before the
+    /// edit, stays. Those on a sync-locked track already followed the
+    /// picture when the edit's length changed (`follow_locked`).
+    pub fn follow_groups(&mut self, before: &[Cut]) {
+        let (old, new) = (offsets(before), offsets(&self.cuts));
+        let resized = (edit_length(before) - self.duration()).abs() > 1e-9;
+        let locked: Vec<Id> = SoundTrack::ALL.iter().filter(|&&w| self.track(w).sync).flat_map(|&w| self.track(w).clips.iter().map(|c| c.id)).collect();
+        let mut moves: Vec<(Id, Vec<Id>, f64)> = Vec::new();
+        for g in self.groups.iter().map(|g| g.id) {
+            let Some(k) = before.iter().position(|c| c.group == Some(g)) else { continue };
+            let Some(j) = self.cut_index(before[k].id) else { continue };
+            let by = new[j] - old[k];
+            let others: Vec<Id> = self.members(g).into_iter().filter(|&m| self.cut_index(m).is_none() && !(resized && locked.contains(&m))).collect();
+            if by.abs() > 1e-9 && !others.is_empty() {
+                moves.push((g, others, by));
+            }
+        }
+        let was = self.lane_spans();
+        for (_, ids, by) in &moves {
+            for &id in ids {
+                self.nudge(id, *by);
+            }
+        }
+        // A group that now runs into something goes back, until none does.
+        loop {
+            let bad = group_clashes(&was, &self.lane_spans(), &moves);
+            if bad.is_empty() {
+                break;
+            }
+            for (_, ids, by) in moves.iter().filter(|m| bad.contains(&m.0)) {
+                for &id in ids {
+                    self.nudge(id, -*by);
+                }
+            }
+            moves.retain(|m| !bad.contains(&m.0));
+        }
     }
 
     /// The sync-locked tracks follow the picture from `before` (gap 99,

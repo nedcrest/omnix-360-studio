@@ -275,50 +275,11 @@ User: would split into video tracks and sound tracks.
   model as step B (a link between items), so it is designed with it and
   with 8 (multi-select), as one format change.
 
-### 8. Select several cuts, act on them together — medium (user, 2026-10-22)
+### 8b. Effects on a whole group at once — small (left from gap 8, 2026-11-11)
 
-Today one cut is selected (`App::selected: Option<usize>`). Wanted:
-Shift/Ctrl+click to select several, then act on all — delete, move, set
-effects, and **join** them (e.g. merge cuts of one clip back into one, or
-group them so they move together). Needs a selection set instead of one
-index, and a choice of what "join" means: merging neighbours from the same
-clip is clear; a group of different clips is a format change (a group id).
-
-**Groups with colours** (user, 2026-11-11, after cutting to beats):
-a group is any clips — cuts, sound clips, text, pictures — each group
-with a colour of its own: its clips framed in it and/or a band of it
-behind them on the timeline. A click on one selects the group; delete,
-effects, a move where the magnetic edit allows. With sync lock (99) a
-group can later mean «these cuts and this song move together». The
-format: a group id on cuts, sound clips and items, and the project's
-groups (name, colour); after 99.
-
-**Decided with the user (2026-11-11):** a group shows as a frame in its
-colour round each of its clips and a faint band of it behind them; it
-selects and moves together — a click selects the whole group (Alt+click
-one clip), Delete removes it all, its sound clips, text and pictures move
-together when one is dragged; its cuts stay where the magnetic edit puts
-them. Made as Premiere does: Shift+click adds a clip to the selection
-(Ctrl+click already puts a volume point on a sound), Ctrl+G groups,
-Ctrl+Shift+G ungroups. Steps: (1) the core — group ids,
-the project's groups, ops, `describe`; (2) Shift+click selecting several;
-(3) the frame and band; (4) together — select, delete, move.
-
-**Built 2026-11-11, waits for the user's check:** `Cut`/`MusicClip`/`Item`
-`group`, `Project::groups`, `ProjectOp::Group`/`Ungroup`/`GroupLook`,
-`describe`; `player/groups.rs` (Shift+click, Ctrl+G, Ctrl+Shift+G; a
-click selects one clip, Alt+click the group — swapped on the user's
-word); a 3 px frame and a band on the timeline; the groups as tabs
-under the timeline (a click selects, a double-click renames, a
-right-click recolours or ungroups); a dragged sound clip or item moves
-the group's others, a grouped cut dragged gathers the group's cuts
-after it (`CutOp::MoveTogether`); Del takes all.
-«This was one clip»: `Cut::origin` set on split, `Project::pieces`; a
-thin line of one colour under a clip's pieces; right-click a piece →
-«Join the pieces back (n)» (`CutOp::JoinPieces`: where the first piece
-is, earliest start to latest end, the first's join and effects, the
-last's out end; undo splits again). Not yet: effects set on all of a
-group at once.
+With a group selected (Alt+click), a style, LUT, sound level or effect
+set once lands on every clip of it that can take it, one undo step (a
+batch of the per-clip ops). Gap 8 itself is done (`EDITOR-GAPS-DONE.md`).
 
 ### 9. Timeline ease and accessibility — research done (user, 2026-10-23)
 
@@ -1478,24 +1439,6 @@ every cut op; «Sync lock» on a sound lane's menu, «· sync» on its name;
 `describe` says it. A clip starting right at the point counts as across
 it (a trim dragged there and back puts it back). Beats found to the
 sample on the way (gap 13).
-
-### 101. Nothing longer than the film — medium (user, 2026-11-11)
-
-The user, grouping clips: music, text, an overlay — anything beside the
-pictures — must never run past the film's end (its length at most the
-film's), so no pieces of music, effects or overlays are left hanging
-over other videos. Planned (step 4 of the plan in CONTEXT): they stop
-at the film's end when dragged or trimmed (red, a hint), the ops hold
-them there, `apply` and the mix check warn of what's past it, «Trim to
-the film's end» on a lane's menu. Milestone «Зручний таймлайн».
-
-**Built 2026-11-11, waits for a check.** Decided on the way: a project
-with no pictures has no end (a song laid down first runs free); a
-thing already past the end (longer than the film, or the film cut
-shorter) may move earlier or get shorter, never later or longer — else
-a long song would jump to 0 on any drag; a dragged group stops whole.
-Adding a clip doesn't trim it: the warning, the red mark and the trim
-say it instead. `TrimToEnd` takes away what starts at the end or later.
 
 ### 100. Outside material in Dailix: by link and dragged in — medium (recorded 2026-11-04, «Далі» 2026-11-11)
 

@@ -103,7 +103,9 @@ pub enum SoundMsg {
 }
 
 impl App {
-    pub(super) fn sound_ui(&mut self, msg: SoundMsg) -> Task<Message> {
+    /// The Normalize dialog's messages: opened, set up, run, measured,
+    /// stopped, closed.
+    fn on_normalize(&mut self, msg: SoundMsg) -> Task<Message> {
         match msg {
             SoundMsg::Open(scope) => {
                 self.sound_menu = None;
@@ -163,7 +165,22 @@ impl App {
                 _ => self.normalize = None,
             },
             SoundMsg::Close => self.normalize = None,
-            SoundMsg::Menu(at) => self.sound_menu = at,
+            _ => {}
+        }
+        Task::none()
+    }
+
+    pub(super) fn sound_ui(&mut self, msg: SoundMsg) -> Task<Message> {
+        match msg {
+            m @ (SoundMsg::Open(_) | SoundMsg::Scope(_) | SoundMsg::Even(_) | SoundMsg::Start | SoundMsg::Measured(..) | SoundMsg::Cancel | SoundMsg::Close) => return self.on_normalize(m),
+            SoundMsg::Menu(at) => {
+                // A cut's sound: the voices Dailix made for its clip, read now.
+                self.menu_voices = match at {
+                    Some((Menu::Own(Own::Cut(i)), _)) => self.cut_voices(i),
+                    _ => Default::default(),
+                };
+                self.sound_menu = at;
+            }
             // From its normal level, not from where it is: pressed again it
             // stays put (user, 2026-11-02: operations start from the
             // original; further down is the level knob's job).
@@ -322,16 +339,15 @@ impl App {
             Menu::Own(own) => {
                 let Some(groups) = own_entries(&self.edit, own, self.duck_db) else { return below };
                 for (heading, group) in groups {
-                    if !items.is_empty() {
-                        items.push(rule::horizontal(1).into());
-                        rows.1 += 1;
-                    }
-                    if !heading.is_empty() {
-                        items.push(container(text(heading).size(11).style(text::secondary)).width(Length::Fill).padding([4, 10]).into());
-                        rows.2 += 1;
-                    }
-                    rows.0 += group.len();
-                    items.extend(group.into_iter().map(|(label, msg)| item(label, msg)));
+                    push_group(&mut items, &mut rows, heading, group.into_iter().map(|(label, msg)| item(label, msg)).collect(), 0);
+                }
+                // A cut's sound: its own or a cleaned voice, and whether its
+                // own is speech (gap 103).
+                if let Own::Cut(i) = own
+                    && let Some(c) = self.edit.cuts.get(i)
+                {
+                    let voices = voice_entries(c, &self.menu_voices).into_iter().map(|(label, msg)| item(label, msg)).collect();
+                    push_group(&mut items, &mut rows, "Voice", voices, 0);
                 }
                 // A song's beats, under their heading (gap 13): per song, not
                 // per track (the user, 2026-11-11).
@@ -342,10 +358,8 @@ impl App {
                     if let Some(shift) = self.beat_pull(i) {
                         beats.push(item(format!("Pull the nearest beat to the playhead ({:+.0} ms)", shift * 1000.0), Message::PullBeat(i)));
                     }
-                    items.push(rule::horizontal(1).into());
-                    items.push(container(text("Beats").size(11).style(text::secondary)).width(Length::Fill).padding([4, 10]).into());
-                    (rows.0, rows.1, rows.2) = (rows.0 + beats.len() + 1, rows.1 + 1, rows.2 + 1);
-                    items.extend(beats);
+                    // Its slider is about two rows tall.
+                    push_group(&mut items, &mut rows, "Beats", beats, 1);
                 }
             }
             Menu::Track(which) => {
@@ -395,6 +409,76 @@ impl App {
         stack![below, close, pin(opaque(menu)).position(Point::new(at.x, top))].into()
     }
 
+}
+
+/// A menu group put in: a rule before it (not at the top), its heading if
+/// it has one, its entries; `rows` counts them for the menu's height
+/// (items, rules, headings), `taller` the rows its entries take beyond one
+/// each (a slider).
+fn push_group<'a>(items: &mut Vec<Element<'a, Message>>, rows: &mut (usize, usize, usize), heading: &'static str, group: Vec<Element<'a, Message>>, taller: usize) {
+    if !items.is_empty() {
+        items.push(rule::horizontal(1).into());
+        rows.1 += 1;
+    }
+    if !heading.is_empty() {
+        items.push(container(text(heading).size(11).style(text::secondary)).width(Length::Fill).padding([4, 10]).into());
+        rows.2 += 1;
+    }
+    rows.0 += group.len() + taller;
+    items.extend(group);
+}
+
+/// A cut's «Voice» entries (gap 103): its own sound, each voice Dailix
+/// made for its clip (the marking's choice named), the one it plays
+/// ticked; and «Its own sound is speech».
+fn voice_entries(c: &crate::project::Cut, voices: &crate::from_sheet::Voices) -> Vec<(String, Message)> {
+    let tick = |on: bool, label: &str| format!("{}{label}", if on { "✓ " } else { "" });
+    let mut entries = vec![(tick(c.audio.is_none(), "Its own sound"), Message::CutVoice(c.id, None))];
+    for (name, file) in &voices.made {
+        let chosen = if voices.chosen.as_deref() == Some(name.as_str()) { " · chosen in Dailix" } else { "" };
+        entries.push((tick(c.audio.as_deref() == Some(file.as_path()), &format!("Cleaned voice {name}{chosen}")), Message::CutVoice(c.id, Some(file.clone()))));
+    }
+    entries.push((tick(c.speech, "Its own sound is speech"), Message::CutSpeech(c.id, !c.speech)));
+    entries
+}
+
+impl App {
+    /// The voices Dailix made for cut `i`'s clip, if this edit is a trip's.
+    fn cut_voices(&self, i: usize) -> crate::from_sheet::Voices {
+        let root = self.project.as_deref().and_then(dailix_sheet::project::of_edit);
+        match (root, self.edit.cuts.get(i)) {
+            (Some(root), Some(c)) => crate::from_sheet::voices(&root, &c.input),
+            _ => Default::default(),
+        }
+    }
+
+    /// A cut's voice chosen (measured over the cut first, then set) or its
+    /// own sound marked as speech; the menu closes (gap 103).
+    pub(super) fn on_cut_voice(&mut self, message: Message) -> Task<Message> {
+        use crate::model::ops::cuts::CutOp;
+        self.sound_menu = None;
+        match message {
+            Message::CutVoice(cut, Some(file)) => {
+                let Some(c) = self.edit.cut_index(cut).map(|i| &self.edit.cuts[i]) else { return Task::none() };
+                let span = (c.start, c.end);
+                let measured = file.clone();
+                return Task::perform(blocking(move || crate::from_sheet::voice_loudness(&measured, span)), move |lufs| Message::CutVoiceMeasured(cut, Some(file.clone()), lufs));
+            }
+            Message::CutVoice(cut, None) => return self.on_cut_voice(Message::CutVoiceMeasured(cut, None, None)),
+            Message::CutVoiceMeasured(cut, audio, lufs) => {
+                let at = self.position();
+                if self.op(Op::Cut(CutOp::Voice { cut, audio, lufs })).is_some() {
+                    // The player heard the old sound: opened again.
+                    self.after_edit(at);
+                }
+            }
+            Message::CutSpeech(cut, on) => {
+                self.op(Op::Cut(CutOp::Speech { cut, on }));
+            }
+            _ => {}
+        }
+        Task::none()
+    }
 }
 
 /// A group of a menu: its heading (none: empty) and each entry's words
@@ -663,5 +747,20 @@ mod tests {
         app.sound_menu = Some((Menu::Pieces(1), iced::Point::ORIGIN));
         let _ = app.update(Message::JoinPieces(1));
         assert_eq!((app.edit.cuts.len(), app.edit.cuts[0].end, app.sound_menu), (2, 2.0, None));
+    }
+
+    #[test]
+    fn a_cuts_voice_menu_offers_its_voices_and_sets_one() {
+        use super::super::Message;
+        let mut app = app();
+        let cut = app.edit.cuts[0].id;
+        let voices = crate::from_sheet::Voices { made: vec![("dnn6".into(), "v/dnn6.flac".into()), ("eq".into(), "v/eq.flac".into())], chosen: Some("eq".into()) };
+        let labels: Vec<String> = voice_entries(&app.edit.cuts[0], &voices).into_iter().map(|(l, _)| l).collect();
+        assert_eq!(labels, ["✓ Its own sound", "Cleaned voice dnn6", "Cleaned voice eq · chosen in Dailix", "Its own sound is speech"]);
+        let _ = app.update(Message::CutVoiceMeasured(cut, Some("v/eq.flac".into()), Some(-26.0)));
+        let _ = app.update(Message::CutSpeech(cut, true));
+        let c = &app.edit.cuts[0];
+        assert_eq!((c.audio.as_deref(), c.loudness, c.speech), (Some(std::path::Path::new("v/eq.flac")), Some(-26.0), true));
+        assert!(voice_entries(c, &voices)[2].0.starts_with("✓ "), "the one it plays ticked");
     }
 }

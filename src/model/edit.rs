@@ -43,6 +43,18 @@ pub struct Edit {
     /// Counts projects put in by `replace`: what was begun for one isn't
     /// finished on another (ids repeat from project to project).
     opened: u64,
+    /// Within a change under way, the cuts and sync-locked tracks the
+    /// picture's changes are followed from, and what that gave last: a
+    /// trim dragged in and back out puts a locked song back as it was
+    /// (gap 99; the audit, 2026-11-11).
+    follow_base: Option<FollowBase>,
+}
+
+#[derive(Clone, Debug, Default)]
+struct FollowBase {
+    cuts: Vec<crate::project::Cut>,
+    locked: Vec<Vec<crate::project::MusicClip>>,
+    gave: Vec<Vec<crate::project::MusicClip>>,
 }
 
 impl std::ops::Deref for Edit {
@@ -165,6 +177,29 @@ impl Edit {
         }
     }
 
+    /// A cut op inside a change under way, `after` it: its sync-locked
+    /// tracks taken from where the change's picture started, not step by
+    /// step, so nothing a trim took away is lost when it's dragged back.
+    /// Anything else having moved those tracks meanwhile starts afresh.
+    pub(in crate::model) fn follow_from_base(&mut self, after: &mut Project) {
+        if self.open.is_none() {
+            return;
+        }
+        let locked = |p: &Project| crate::project::SoundTrack::ALL.iter().filter(|&&w| p.track(w).sync).map(|&w| p.track(w).clips.clone()).collect::<Vec<_>>();
+        let now = locked(&self.project);
+        if self.follow_base.as_ref().is_none_or(|b| b.gave != now) {
+            self.follow_base = Some(FollowBase { cuts: self.project.cuts.clone(), locked: now.clone(), gave: now });
+        }
+        let base = self.follow_base.as_mut().expect("set above");
+        let same_length = (crate::project::edit_length(&base.cuts) - after.duration()).abs() < 1e-9;
+        let tracks: Vec<_> = crate::project::SoundTrack::ALL.into_iter().filter(|&w| after.track(w).sync).collect();
+        for (w, clips) in tracks.into_iter().zip(&base.locked) {
+            after.track_mut(w).clips = if same_length { clips.clone() } else { crate::project::follow_picture(clips, &base.cuts, &after.cuts) };
+        }
+        after.settle_ids();
+        base.gave = locked(after);
+    }
+
     /// Whether a change begun is still under way.
     pub fn changing(&self) -> bool {
         self.open.is_some()
@@ -173,6 +208,7 @@ impl Edit {
     /// Ends the change begun: one undo step, or none if it changed nothing
     /// (a press without a move used to leave an empty one).
     pub fn commit(&mut self) {
+        self.follow_base = None;
         let Some((before, version)) = self.open.take() else { return };
         if before == self.project {
             self.version = version;
@@ -186,6 +222,7 @@ impl Edit {
     /// Drops the change under way (Esc during a drag): the edit as it was
     /// before it began, saved or not as it was then.
     pub fn cancel(&mut self) {
+        self.follow_base = None;
         if let Some((before, version)) = self.open.take() {
             self.project = before;
             self.version = version;

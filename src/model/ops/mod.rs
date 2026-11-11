@@ -145,9 +145,7 @@ fn apply(p: &mut Project, op: &Op) -> Result<Outcome, OpError> {
         Op::Cut(op) => {
             let before = p.cuts.clone();
             let outcome = cuts::apply(p, op)?;
-            if let Some(ripple) = crate::project::ripple_of(&before, &p.cuts) {
-                p.ripple_locked(ripple);
-            }
+            p.follow_locked(&before);
             Ok(outcome)
         }
         Op::Clip(op) => clips::apply(p, op),
@@ -167,6 +165,9 @@ impl Edit {
         let mut after = Project::clone(self);
         let outcome = apply(&mut after, op)?;
         after.settle_ids();
+        if matches!(op, Op::Cut(_)) {
+            self.follow_from_base(&mut after);
+        }
         if after != **self {
             if self.changing() {
                 self.put(after);

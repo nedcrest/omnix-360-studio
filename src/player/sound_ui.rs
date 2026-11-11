@@ -352,7 +352,7 @@ impl App {
                 let track = self.edit.track(which);
                 items.push(lane_level(which.name(), track.volume, move |db| Message::TrackLevel(which, db)));
                 let lock = button(text(format!("{}Sync lock", if track.sync { "✓ " } else { "" })).size(13)).style(button::text).width(Length::Fill).padding([5, 10]).on_press(Message::TrackSync(which, !track.sync));
-                items.push(tip(lock, text("Trimming or deleting a cut moves this lane's clips after it with the picture, so they stay under the same cuts"), tooltip::Position::Right));
+                items.push(tip(lock, text("Trimming, deleting or adding a cut keeps what plays under each picture with it: this lane's clips are cut where the picture is and move with it"), tooltip::Position::Right));
                 if !track.clips.is_empty() {
                     items.push(sound(format!("Normalize every clip on {}…", which.name()), SoundMsg::Open(Scope::Track(which))));
                 }

@@ -197,8 +197,8 @@ pub struct Music {
     #[serde(default, rename = "beats", skip_serializing)]
     old_beats: Option<Beats>,
     /// Sync lock (gap 99): when the picture's edit gets shorter or longer
-    /// at some point, this track's clips after it move with it
-    /// (`Project::ripple_locked`), so what's under the cuts stays there.
+    /// at some point, this track's clips follow the picture they lay under
+    /// (`Project::follow_locked`), cut where it was cut.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub sync: bool,
     /// The track's own volume line of older projects (edit times), read
@@ -931,25 +931,76 @@ pub fn offsets(cuts: &[Cut]) -> Vec<f64> {
         .collect()
 }
 
-/// Where a change of the cuts from `before` to `after` made the picture
-/// shorter or longer, and by how much (gap 99): the edit time after which
-/// the picture moved, and the shift; none if the edit's length is as it
-/// was (a split, a move). The point is the first cut that changed: its
-/// start when its in point, its crossfade or the cut itself changed
-/// (deleted, added); its end when only its out point did.
-pub fn ripple_of(before: &[Cut], after: &[Cut]) -> Option<(f64, f64)> {
-    let by = edit_length(after) - edit_length(before);
-    if by.abs() < 1e-9 {
-        return None;
+/// The parts of the picture `before` that are still in `after`, in edit
+/// time: (old start, new start, length) for each stretch of a cut's clip
+/// that stayed (gap 99). A cut's stretch is the edit time it alone holds
+/// (to the next cut's start); it is found again in the cut of the same
+/// lineage — itself, a piece split from it, the cut its piece was joined
+/// into — that still shows that clip time.
+pub fn kept_picture(before: &[Cut], after: &[Cut]) -> Vec<(f64, f64, f64)> {
+    let (old, new) = (offsets(before), offsets(after));
+    let kin = |b: &Cut, a: &Cut| b.input == a.input && (a.id == b.id || a.origin.is_some_and(|o| o == b.id || Some(o) == b.origin) || b.origin == Some(a.id));
+    let mut kept = Vec::new();
+    for (k, b) in before.iter().enumerate() {
+        let owned_to = old.get(k + 1).copied().unwrap_or_else(|| edit_length(before));
+        let (s0, s1) = (b.start, b.start + (owned_to - old[k]));
+        for (j, a) in after.iter().enumerate().filter(|(_, a)| kin(b, a)) {
+            let (x0, x1) = (s0.max(a.start), s1.min(a.end));
+            if x1 - x0 > 1e-6 {
+                kept.push((old[k] + (x0 - b.start), new[j] + (x0 - a.start), x1 - x0));
+            }
+        }
     }
-    let same = |b: &Cut, a: &Cut| b.id == a.id && b.start == a.start && b.end == a.end && b.crossfade == a.crossfade;
-    let k = (0..before.len().max(after.len())).find(|&k| !matches!((before.get(k), after.get(k)), (Some(b), Some(a)) if same(b, a)))?;
-    let at = match (before.get(k), after.get(k)) {
-        (Some(b), Some(a)) if b.id == a.id && b.start == a.start && b.crossfade == a.crossfade => offsets(before)[k] + b.len(),
-        (Some(_), _) => offsets(before)[k],
-        (None, _) => edit_length(before),
-    };
-    Some((at, by))
+    kept
+}
+
+/// Sync-locked `clips` after the picture went from `before` to `after`
+/// (gap 99; the user, 2026-11-11: what plays under a picture stays under
+/// it): each stretch of a clip follows the picture it lay under, so a clip
+/// across an edit is cut there, a stretch under picture taken away goes
+/// with it, and one past the film's end moves with the end. The first
+/// piece keeps the clip's id; its fade in stays on the first piece, its
+/// fade out on the last.
+pub fn follow_picture(clips: &[MusicClip], before: &[Cut], after: &[Cut]) -> Vec<MusicClip> {
+    let kept = kept_picture(before, after);
+    let (old_end, new_end) = (edit_length(before), edit_length(after));
+    let mut out = Vec::new();
+    for c in clips {
+        // (new start, file start, length) of each stretch that stays.
+        let mut parts: Vec<(f64, f64, f64)> = kept
+            .iter()
+            .filter_map(|&(o, n, len)| {
+                let (x0, x1) = (c.at.max(o), c.ends().min(o + len));
+                (x1 - x0 > 1e-6).then(|| (n + (x0 - o), c.local(x0), x1 - x0))
+            })
+            .collect();
+        let tail = c.at.max(old_end);
+        if c.ends() - tail > 1e-6 {
+            parts.push((tail + new_end - old_end, c.local(tail), c.ends() - tail));
+        }
+        parts.sort_by(|a, b| a.1.total_cmp(&b.1));
+        // Stretches that still run on, in the edit and in the file, are one.
+        let mut joined: Vec<(f64, f64, f64)> = Vec::new();
+        for p in parts {
+            match joined.last_mut() {
+                Some(l) if (l.0 + l.2 - p.0).abs() < 1e-6 && (l.1 + l.2 - p.1).abs() < 1e-6 => l.2 += p.2,
+                _ => joined.push(p),
+            }
+        }
+        let n = joined.len();
+        for (k, (at, start, len)) in joined.into_iter().enumerate() {
+            let mut piece = MusicClip { at, start, end: start + len, id: if k == 0 { c.id } else { 0 }, ..c.clone() };
+            if k > 0 {
+                piece.fade_in = 0.0;
+            }
+            if k + 1 < n {
+                piece.fade_out = 0.0;
+            }
+            out.push(piece);
+        }
+    }
+    out.sort_by(|a, b| a.at.total_cmp(&b.at));
+    out
 }
 
 /// The latest a thing `len` seconds long may start so it ends by `end`
@@ -1354,38 +1405,18 @@ impl Project {
         clips.chain(items).map(|(id, e)| (id, e - end)).filter(|&(_, by)| by > PAST).collect()
     }
 
-    /// The sync-locked tracks' clips after edit time `at` moved by `by`
-    /// seconds, as the picture there was (gap 99). A clip across `at`
-    /// stays and its song moves under it — `by` taken from (or given
-    /// back to) its head — so what plays after `at` stays under the same
-    /// pictures; none starts before the edit or before its file.
-    pub fn ripple_locked(&mut self, (at, by): (f64, f64)) {
+    /// The sync-locked tracks follow the picture from `before` (gap 99,
+    /// `follow_picture`), when the edit got shorter or longer: a move or a
+    /// split changes nothing under it.
+    pub fn follow_locked(&mut self, before: &[Cut]) {
+        if (edit_length(before) - self.duration()).abs() < 1e-9 {
+            return;
+        }
+        let after = self.cuts.clone();
         for which in SoundTrack::ALL {
             let track = self.track_mut(which);
-            if !track.sync {
-                continue;
-            }
-            for c in &mut track.clips {
-                if c.ends() <= at {
-                    continue;
-                }
-                // One starting at the point counts as across it: its song
-                // moves under it, so a trim dragged there and back puts
-                // it back as it was.
-                if c.at > at {
-                    c.at += by;
-                } else {
-                    c.start -= by;
-                }
-                // Not before the edit's start (its head goes) nor its file's
-                // (it starts later), and never shorter than a clip can be.
-                if c.at < 0.0 {
-                    (c.start, c.at) = (c.start - c.at, 0.0);
-                }
-                if c.start < 0.0 {
-                    (c.at, c.start) = (c.at - c.start, 0.0);
-                }
-                c.start = c.start.min(c.end - crate::model::edit::MIN_CUT);
+            if track.sync {
+                track.clips = follow_picture(&track.clips, before, &after);
             }
         }
     }
@@ -1727,45 +1758,95 @@ mod tests {
         assert_eq!(c.sound_fades(), (0.0, 0.5), "a fade to white leaves it");
     }
 
+    /// Three 4 s cuts of one clip each (A, B, C: 0-4 s of their files),
+    /// a song under all of them from 0 to 12 s, the Music track `sync`.
+    fn locked(sync: bool) -> crate::model::edit::Edit {
+        let mut p = Project { cuts: ["a", "b", "c"].iter().map(|n| Cut::new(format!("{n}.mp4").into(), 0.0, 4.0)).collect(), ..Default::default() };
+        p.music.clips.push(MusicClip { input: "song.wav".into(), at: 0.0, start: 0.0, end: 12.0, fade_in: 1.0, fade_out: 2.0, ..Default::default() });
+        p.music.sync = sync;
+        p.settle_ids();
+        crate::model::edit::Edit::new(p)
+    }
+
+    /// The song's time heard at edit time `t`, if any.
+    fn heard(e: &crate::model::edit::Edit, t: f64) -> Option<f64> {
+        e.music.clips.iter().find(|c| t >= c.at - 1e-9 && t < c.ends() - 1e-9).map(|c| c.local(t))
+    }
+
     #[test]
-    fn a_locked_song_keeps_its_beats_under_the_cuts_after_a_trim() {
+    fn a_locked_song_is_cut_where_the_picture_is_and_stays_under_it() {
         use crate::model::ops::{End, Op, cuts::CutOp};
-        // Three 4 s cuts; a song under all of them, a beat at its 6 s:
-        // 2 s into the second cut.
-        let make = |sync| {
-            let mut p = Project { cuts: (0..3).map(|_| Cut::new("a.mp4".into(), 0.0, 4.0)).collect(), ..Default::default() };
-            p.music.clips.push(MusicClip { input: "song.wav".into(), at: 0.0, start: 0.0, end: 20.0, ..Default::default() });
-            p.music.sync = sync;
-            p.settle_ids();
-            crate::model::edit::Edit::new(p)
-        };
-        let song_under_second = |e: &crate::model::edit::Edit| e.music.clips[0].local(e.offset(1) + 2.0);
-        for (end, t) in [(End::In, 1.0), (End::Out, 3.0)] {
-            let mut e = make(true);
-            let first = e.cuts[0].id;
-            e.apply(&Op::Cut(CutOp::Trim { cut: first, end, t, most: 10.0 })).unwrap();
-            assert!((song_under_second(&e) - 6.0).abs() < 1e-9, "{end:?}: the beat still 2 s into the second cut");
-            assert_eq!(e.music.clips[0].at, 0.0, "the song still starts the film");
-        }
-        // A trim dragged in and back out leaves the song as it was.
-        let mut e = make(true);
-        let first = e.cuts[0].id;
-        for t in [0.5, 1.5, 0.7, 0.0] {
-            e.apply(&Op::Cut(CutOp::Trim { cut: first, end: End::In, t, most: 10.0 })).unwrap();
-        }
-        assert_eq!((e.music.clips[0].at, e.music.clips[0].start), (0.0, 0.0));
+        // Cut B's out trimmed from 4 to 3: the first two cuts hear what they
+        // heard; C hears its own 8-12 s of the song, 1 s earlier on the edit.
+        let mut e = locked(true);
+        let b = e.cuts[1].id;
+        e.apply(&Op::Cut(CutOp::Trim { cut: b, end: End::Out, t: 3.0, most: 10.0 })).unwrap();
+        assert_eq!((heard(&e, 1.0), heard(&e, 5.0), heard(&e, 7.5)), (Some(1.0), Some(5.0), Some(8.5)), "{:?}", e.music.clips);
+        assert_eq!(e.music.clips.len(), 2, "cut where the picture was");
+        assert_eq!((e.music.clips[0].fade_in, e.music.clips[0].fade_out, e.music.clips[1].fade_out), (1.0, 0.0, 2.0), "fades on the outer ends");
+        crate::model::ops::check(&e).unwrap();
         // Unlocked, the song stays put and the cuts slide over it.
-        let mut e = make(false);
-        let first = e.cuts[0].id;
-        e.apply(&Op::Cut(CutOp::Trim { cut: first, end: End::In, t: 1.0, most: 10.0 })).unwrap();
-        assert!((song_under_second(&e) - 5.0).abs() < 1e-9);
-        // Deleting the first cut: the song gives up its first 4 s.
-        let mut e = make(true);
-        let first = e.cuts[0].id;
-        e.apply(&Op::Cut(CutOp::Delete { cut: first })).unwrap();
-        assert_eq!((e.music.clips[0].at, e.music.clips[0].start), (0.0, 4.0));
-        // A split doesn't move it.
-        assert_eq!(ripple_of(&e.cuts.clone(), &e.cuts), None);
+        let mut e = locked(false);
+        let b = e.cuts[1].id;
+        e.apply(&Op::Cut(CutOp::Trim { cut: b, end: End::Out, t: 3.0, most: 10.0 })).unwrap();
+        assert_eq!((heard(&e, 7.5), e.music.clips.len()), (Some(7.5), 1));
+    }
+
+    #[test]
+    fn a_locked_song_follows_an_insert_a_delete_and_a_join() {
+        use crate::model::ops::{Op, cuts::{CutOp, Place}};
+        // A cut put in at 6 s, inside B: the song after it moves on by 2 s,
+        // nothing plays under the new cut (the audit's case a).
+        let mut e = locked(true);
+        e.apply(&Op::Cut(CutOp::Add { input: "x.mp4".into(), start: 0.0, end: 2.0, place: Place::At(6.0), stabilize: None, lut: None })).unwrap();
+        assert_eq!((heard(&e, 5.0), heard(&e, 7.0), heard(&e, 8.5)), (Some(5.0), None, Some(6.5)), "{:?}", e.music.clips);
+        // B deleted: its 4 s of song go with it; C still hears its own.
+        let mut e = locked(true);
+        let b = e.cuts[1].id;
+        e.apply(&Op::Cut(CutOp::Delete { cut: b })).unwrap();
+        assert_eq!((heard(&e, 1.0), heard(&e, 5.0), e.music.clips.len()), (Some(1.0), Some(9.0), 2));
+        // Two pieces of A around B joined: B and what was under it move on.
+        let mut e = locked(true);
+        let a = e.cuts[0].id;
+        e.apply(&Op::Cut(CutOp::Split { cut: a, t: 2.0 })).unwrap();
+        let second = e.cuts[1].id;
+        e.apply(&Op::Cut(CutOp::Move { cut: second, before: Some(e.cuts[3].id) })).unwrap();
+        e.apply(&Op::Cut(CutOp::Trim { cut: second, end: crate::model::ops::End::In, t: 3.0, most: 4.0 })).unwrap();
+        let b_heard = heard(&e, e.offset(1) + 1.0);
+        e.apply(&Op::Cut(CutOp::JoinPieces { cut: a })).unwrap();
+        assert_eq!(heard(&e, e.offset(1) + 1.0), b_heard, "B hears what it heard, wherever it went: {:?}", e.music.clips);
+        crate::model::ops::check(&e).unwrap();
+    }
+
+    #[test]
+    fn a_trim_dragged_in_and_back_puts_a_locked_song_back() {
+        use crate::model::ops::{End, Op, cuts::CutOp};
+        let mut e = locked(true);
+        let was = e.music.clips.clone();
+        let b = e.cuts[1].id;
+        e.begin();
+        for t in [1.0, 3.5, 2.0, 0.0] {
+            e.apply(&Op::Cut(CutOp::Trim { cut: b, end: End::In, t, most: 10.0 })).unwrap();
+        }
+        e.commit();
+        assert_eq!(e.music.clips.iter().map(|c| (c.at, c.start, c.end)).collect::<Vec<_>>(), was.iter().map(|c| (c.at, c.start, c.end)).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn a_locked_clip_under_deleted_picture_goes_with_it_not_onto_another() {
+        use crate::model::ops::{Op, cuts::CutOp};
+        // SFX: P 0-3.5 s, Q 4.5-5.5 s (under B); B deleted.
+        let mut p = Project { cuts: ["a", "b", "c"].iter().map(|n| Cut::new(format!("{n}.mp4").into(), 0.0, 4.0)).collect(), ..Default::default() };
+        for (at, len) in [(0.0, 3.5), (4.5, 1.0)] {
+            p.sfx.clips.push(MusicClip { input: "s.wav".into(), at, end: len, ..Default::default() });
+        }
+        p.sfx.sync = true;
+        p.settle_ids();
+        let mut e = crate::model::edit::Edit::new(p);
+        let b = e.cuts[1].id;
+        e.apply(&Op::Cut(CutOp::Delete { cut: b })).unwrap();
+        assert_eq!(e.sfx.clips.len(), 1, "Q went with B: {:?}", e.sfx.clips);
+        crate::model::ops::check(&e).unwrap();
     }
 
     #[test]

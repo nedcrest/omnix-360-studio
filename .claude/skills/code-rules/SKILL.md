@@ -133,9 +133,14 @@ they're next touched, not in a package.
 
 ## Audits: small and often
 
-- Every two or three days of features, a small audit: one or two review
-  agents over what changed since the last (`git log`), not five over
-  everything. An hour, not half a day.
+- A small audit when the hook says so, not by feel: `../.claude/
+  hooks/audit-due.sh` (a UserPromptSubmit hook) counts the code added in
+  Omnix and Dailix since `../.claude/last-audit` and speaks past
+  about 2000 lines or 40 commits — a day of work, not «two or three
+  days» (the user, 2026-11-11: the last one came after one day). One or
+  two review agents over what changed since the marker, not five over
+  everything. An hour, not half a day. When it's done, write both repos'
+  HEADs into `last-audit` («omnix-360-studio <hash>», «dailix <hash>»).
 - Its findings sorted, not all worked off at once: bugs now; a gap in
   the core API when a feature needs it; a refactor when its file is
   next touched. Two or three hours at most; the rest stays in

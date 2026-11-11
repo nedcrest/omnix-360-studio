@@ -53,8 +53,8 @@ pub struct Edit {
 #[derive(Clone, Debug, Default)]
 struct FollowBase {
     cuts: Vec<crate::project::Cut>,
-    locked: Vec<Vec<crate::project::MusicClip>>,
-    gave: Vec<Vec<crate::project::MusicClip>>,
+    locked: crate::project::Locked,
+    gave: crate::project::Locked,
 }
 
 impl std::ops::Deref for Edit {
@@ -185,19 +185,14 @@ impl Edit {
         if self.open.is_none() {
             return;
         }
-        let locked = |p: &Project| crate::project::SoundTrack::ALL.iter().filter(|&&w| p.track(w).sync).map(|&w| p.track(w).clips.clone()).collect::<Vec<_>>();
-        let now = locked(&self.project);
+        let now = self.project.locked();
         if self.follow_base.as_ref().is_none_or(|b| b.gave != now) {
             self.follow_base = Some(FollowBase { cuts: self.project.cuts.clone(), locked: now.clone(), gave: now });
         }
         let base = self.follow_base.as_mut().expect("set above");
-        let same_length = (crate::project::edit_length(&base.cuts) - after.duration()).abs() < 1e-9;
-        let tracks: Vec<_> = crate::project::SoundTrack::ALL.into_iter().filter(|&w| after.track(w).sync).collect();
-        for (w, clips) in tracks.into_iter().zip(&base.locked) {
-            after.track_mut(w).clips = if same_length { clips.clone() } else { crate::project::follow_picture(clips, &base.cuts, &after.cuts) };
-        }
+        after.follow_from(&base.locked, &base.cuts);
         after.settle_ids();
-        base.gave = locked(after);
+        base.gave = after.locked();
     }
 
     /// Whether a change begun is still under way.

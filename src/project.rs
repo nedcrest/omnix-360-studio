@@ -960,6 +960,14 @@ pub fn offsets(cuts: &[Cut]) -> Vec<f64> {
         .collect()
 }
 
+/// What sits on the sync-locked lanes (gap 99, 99b): each locked sound
+/// track's clips and each locked text or picture lane's items, in order.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Locked {
+    sounds: Vec<Vec<MusicClip>>,
+    lanes: Vec<Vec<crate::overlay::Item>>,
+}
+
 /// The parts of the picture `before` that are still in `after`, in edit
 /// time: (old start, new start, length) for each stretch of a cut's clip
 /// that stayed (gap 99). A cut's stretch is the edit time it alone holds
@@ -990,24 +998,58 @@ pub fn kept_picture(before: &[Cut], after: &[Cut]) -> Vec<(f64, f64, f64)> {
 /// with it, and one past the film's end moves with the end. The first
 /// piece keeps the clip's id; its fade in stays on the first piece, its
 /// fade out on the last.
+/// The stretches of a thing from `at` to `ends` on the edit that stay
+/// when the picture goes from `before` to `after` (`kept_picture`, its
+/// lengths): (new start, its own time there by `local`, length) each, in
+/// its own time's order; past the film's end it moves with the end.
+fn kept_parts(kept: &[(f64, f64, f64)], (old_end, new_end): (f64, f64), (at, ends): (f64, f64), local: impl Fn(f64) -> f64) -> Vec<(f64, f64, f64)> {
+    let mut parts: Vec<(f64, f64, f64)> = kept
+        .iter()
+        .filter_map(|&(o, n, len)| {
+            let (x0, x1) = (at.max(o), ends.min(o + len));
+            (x1 - x0 > 1e-6).then(|| (n + (x0 - o), local(x0), x1 - x0))
+        })
+        .collect();
+    let tail = at.max(old_end);
+    if ends - tail > 1e-6 {
+        parts.push((tail + new_end - old_end, local(tail), ends - tail));
+    }
+    parts.sort_by(|a, b| a.1.total_cmp(&b.1));
+    parts
+}
+
+/// Text and pictures on a sync-locked lane after the picture went from
+/// `before` to `after` (gap 99b; the user, 2026-11-11: shortened, not
+/// cut in two): each stays one item, starts where its first stretch
+/// still shown went, and is as long as what's left under it; one with
+/// nothing left under it goes.
+pub fn follow_picture_items(items: &[crate::overlay::Item], before: &[Cut], after: &[Cut]) -> Vec<crate::overlay::Item> {
+    let kept = kept_picture(before, after);
+    let ends = (edit_length(before), edit_length(after));
+    let mut out: Vec<crate::overlay::Item> = items
+        .iter()
+        .filter_map(|it| {
+            let parts = kept_parts(&kept, ends, (it.at, it.ends()), |t| it.local(t));
+            let first = parts.first()?;
+            let mut it = it.clone();
+            let was = (it.start, it.end);
+            it.at = first.0;
+            it.end = it.start + parts.iter().map(|p| p.2).sum::<f64>();
+            crate::animate::keep_on_edges(&mut it.automation, was, (it.start, it.end));
+            Some(it)
+        })
+        .collect();
+    out.sort_by(|a, b| a.at.total_cmp(&b.at));
+    out
+}
+
 pub fn follow_picture(clips: &[MusicClip], before: &[Cut], after: &[Cut]) -> Vec<MusicClip> {
     let kept = kept_picture(before, after);
-    let (old_end, new_end) = (edit_length(before), edit_length(after));
+    let ends = (edit_length(before), edit_length(after));
     let mut out = Vec::new();
     for c in clips {
         // (new start, file start, length) of each stretch that stays.
-        let mut parts: Vec<(f64, f64, f64)> = kept
-            .iter()
-            .filter_map(|&(o, n, len)| {
-                let (x0, x1) = (c.at.max(o), c.ends().min(o + len));
-                (x1 - x0 > 1e-6).then(|| (n + (x0 - o), c.local(x0), x1 - x0))
-            })
-            .collect();
-        let tail = c.at.max(old_end);
-        if c.ends() - tail > 1e-6 {
-            parts.push((tail + new_end - old_end, c.local(tail), c.ends() - tail));
-        }
-        parts.sort_by(|a, b| a.1.total_cmp(&b.1));
+        let parts = kept_parts(&kept, ends, (c.at, c.ends()), |t| c.local(t));
         // Stretches that still run on, in the edit and in the file, are one.
         let mut joined: Vec<(f64, f64, f64)> = Vec::new();
         for p in parts {
@@ -1500,12 +1542,29 @@ impl Project {
         if (edit_length(before) - self.duration()).abs() < 1e-9 {
             return;
         }
+        let base = self.locked();
+        self.follow_from(&base, before);
+    }
+
+    /// What's on the sync-locked lanes now.
+    pub fn locked(&self) -> Locked {
+        let sounds = SoundTrack::ALL.iter().filter(|&&w| self.track(w).sync).map(|&w| self.track(w).clips.clone()).collect();
+        let lanes = self.overlays.iter().chain(&self.text).filter(|l| l.sync).map(|l| l.items.clone()).collect();
+        Locked { sounds, lanes }
+    }
+
+    /// The sync-locked lanes set from `base` as it followed the picture
+    /// from `before` to the cuts now: `base` itself when the edit is as
+    /// long as it was.
+    pub fn follow_from(&mut self, base: &Locked, before: &[Cut]) {
+        let same = (edit_length(before) - self.duration()).abs() < 1e-9;
         let after = self.cuts.clone();
-        for which in SoundTrack::ALL {
-            let track = self.track_mut(which);
-            if track.sync {
-                track.clips = follow_picture(&track.clips, before, &after);
-            }
+        let tracks: Vec<SoundTrack> = SoundTrack::ALL.into_iter().filter(|&w| self.track(w).sync).collect();
+        for (w, clips) in tracks.into_iter().zip(&base.sounds) {
+            self.track_mut(w).clips = if same { clips.clone() } else { follow_picture(clips, before, &after) };
+        }
+        for (lane, items) in self.overlays.iter_mut().chain(self.text.iter_mut()).filter(|l| l.sync).zip(&base.lanes) {
+            lane.items = if same { items.clone() } else { follow_picture_items(items, before, &after) };
         }
     }
 
@@ -1903,6 +1962,30 @@ mod tests {
         let b_heard = heard(&e, e.offset(1) + 1.0);
         e.apply(&Op::Cut(CutOp::JoinPieces { cut: a })).unwrap();
         assert_eq!(heard(&e, e.offset(1) + 1.0), b_heard, "B hears what it heard, wherever it went: {:?}", e.music.clips);
+        crate::model::ops::check(&e).unwrap();
+    }
+
+    #[test]
+    fn a_title_on_a_locked_lane_is_shortened_with_the_picture_or_goes_with_it() {
+        use crate::model::ops::{End, Op, cuts::CutOp, items::ItemOp};
+        let mut e = locked(false);
+        let title = crate::overlay::Item { id: 0, input: "".into(), text: Some(Default::default()), at: 3.0, start: 0.0, end: 4.0, motion: Vec::new(), effects: Vec::new(), bars: None, automation: Vec::new(), kind: None, style: None, group: None };
+        let mut p = Project::clone(&e);
+        p.text.push(crate::overlay::Lane { items: vec![title], ..Default::default() });
+        p.settle_ids();
+        e = crate::model::edit::Edit::new(p);
+        e.apply(&Op::Item(ItemOp::LaneSync { track: crate::overlay::Track::Text, lane: 0, on: true })).unwrap();
+        // B (4-8 s) trimmed by 2 s at its start: the title over 3-7 s
+        // loses the 4-6 s that went from under it.
+        let b = e.cuts[1].id;
+        e.apply(&Op::Cut(CutOp::Trim { cut: b, end: End::In, t: 2.0, most: 10.0 })).unwrap();
+        let t = &e.text[0].items[0];
+        assert_eq!((t.at, t.ends()), (3.0, 5.0), "one piece, shortened by what went under it: {t:?}");
+        // B deleted: what's left of the title over it goes, A's second stays.
+        e.apply(&Op::Cut(CutOp::Delete { cut: b })).unwrap();
+        assert_eq!((e.text[0].items[0].at, e.text[0].items[0].ends()), (3.0, 4.0));
+        e.apply(&Op::Cut(CutOp::Delete { cut: e.cuts[0].id })).unwrap();
+        assert!(e.text[0].items.is_empty(), "nothing under it: gone");
         crate::model::ops::check(&e).unwrap();
     }
 

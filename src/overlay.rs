@@ -64,6 +64,11 @@ pub struct Lane {
     /// muted sound lane is of the mix.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub hidden: bool,
+    /// Sync lock (gap 99b): its text and pictures follow the picture they
+    /// lie over when the edit gets shorter or longer, shortened where it's
+    /// taken away (`Project::follow_locked`).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub sync: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

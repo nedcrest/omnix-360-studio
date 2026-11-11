@@ -51,6 +51,9 @@ pub enum ItemOp {
     LaneName { track: Track, lane: usize, name: Option<String> },
     /// A lane left out of the picture, or shown again.
     LaneHidden { track: Track, lane: usize, hidden: bool },
+    /// A lane's sync lock (gap 99b): its items follow the picture under
+    /// them when the edit gets shorter or longer.
+    LaneSync { track: Track, lane: usize, on: bool },
     /// A bars item's ratio, slide and colour, all of it.
     SetBars { item: Id, bars: crate::overlay::Bars },
     /// A picture dressed as a sticker, a polaroid or a picture in
@@ -166,6 +169,11 @@ pub(super) fn apply(p: &mut Project, op: &ItemOp) -> Result<Outcome, OpError> {
             let l = shown(p, *track).get_mut(*lane).ok_or_else(|| OpError::NotFound(format!("lane {lane} of the {track:?} track")))?;
             l.name = name.as_ref().map(|n| n.trim().to_owned()).filter(|n| !n.is_empty());
             said(format!("{track:?} lane {lane}: {}", l.name.as_deref().unwrap_or("no name")))
+        }
+        &ItemOp::LaneSync { track, lane, on } => {
+            let l = shown(p, track).get_mut(lane).ok_or_else(|| OpError::NotFound(format!("lane {lane} of the {track:?} track")))?;
+            l.sync = on;
+            said(format!("{track:?} lane {lane}: sync lock {}", if on { "on" } else { "off" }))
         }
         &ItemOp::LaneHidden { track, lane, hidden } => {
             let l = shown(p, track).get_mut(lane).ok_or_else(|| OpError::NotFound(format!("lane {lane} of the {track:?} track")))?;

@@ -211,7 +211,10 @@ must be as before.
    scrub and trim maths in the core (`67d577a`); the site checklist
    (`TIME-SEAM-SITES.md`). `check` and `preview` read media and are
    tested before they move (step 5).
-1. `Speed` + the `Cut` functions + `clip_len` rename, tested at 0.5×/2×.
+1. `Speed` + the `Cut` functions, tested at 0.5×/2× — **done 2026-11-12**
+   (`9c30129`): `len()` stays until step 2 moves its callers one by
+   one onto `edit_len` or `clip_len`, then goes; the core's offsets,
+   locate, edit time and crossfade partner already use the seam.
 2. Core: `offsets`, `edit_length`, `locate`, `edit_time`, `crossfade_from`,
    `max_crossfade`, `black_at`, `edge_at`, `sound_fades`, `sound_beyond`
    placement, `kept_picture` / `follow_picture`, `drawn_zone`, `MIN_CUT`

@@ -61,6 +61,8 @@ mod animate;
 mod fsutil;
 mod pipeline;
 mod preview;
+#[cfg(test)]
+mod time_snapshot;
 
 // What the modules reach for at the crate's root, as when it was all main.rs.
 pub(crate) use analyse::track_to;

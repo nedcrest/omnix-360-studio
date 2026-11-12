@@ -203,8 +203,14 @@ must be as before.
 
 ## Steps (one local commit each)
 
-0. The safety net: the snapshot, the pure player functions, the site
-   checklist (three commits, no behaviour change).
+0. The safety net — **done 2026-11-12**: snapshots of the core and nine
+   ops, the timeline (every pixel's hit, lanes folded and open),
+   `describe`, the speech sources, the measured sound and the export's
+   plan and mix graph (`tests/golden/time-*.txt`, `src/time_snapshot.rs`;
+   commits `095b73a`, `e5a2593`, `fee5fcf`); the player's crossfade,
+   scrub and trim maths in the core (`67d577a`); the site checklist
+   (`TIME-SEAM-SITES.md`). `check` and `preview` read media and are
+   tested before they move (step 5).
 1. `Speed` + the `Cut` functions + `clip_len` rename, tested at 0.5×/2×.
 2. Core: `offsets`, `edit_length`, `locate`, `edit_time`, `crossfade_from`,
    `max_crossfade`, `black_at`, `edge_at`, `sound_fades`, `sound_beyond`

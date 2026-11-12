@@ -41,6 +41,8 @@ apart: 25d → «стінгери» (stingers), «перебивка» stays Dai
    length on the edit, clip time from edit time and back) first, with
    speed 1 so nothing visible changes and the tests prove it. Whatever is
    built after (paste, stingers) uses the seam from day one.
+   The full analysis (about 195 sites, the clocks, the steps):
+   `TIME-SEAM.md`.
 2. **A fragment.** Selected cuts, sound clips, text and pictures as
    project JSON, times relative to the first. Copy writes one (also to the
    system clipboard, `iced::clipboard`), paste is one op

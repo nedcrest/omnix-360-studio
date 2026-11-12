@@ -215,7 +215,8 @@ pub fn mono(input: &Path, rate: u32, filter: Option<&str>) -> Result<Vec<f32>> {
         cmd.args(["-af", f]);
     }
     let out = cmd.args(["-ac", "1", "-ar", &rate.to_string(), "-f", "f32le", "-"]).stdin(Stdio::null()).stderr(Stdio::null()).output().context("running ffmpeg")?;
-    Ok(out.stdout.chunks_exact(4).map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]])).collect())
+    let (samples, _) = out.stdout.as_chunks::<4>();
+    Ok(samples.iter().map(|&b| f32::from_le_bytes(b)).collect())
 }
 
 /// RMS and peak level in dBFS of the first audio stream, per `window`

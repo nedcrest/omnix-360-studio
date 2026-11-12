@@ -778,6 +778,11 @@ pub struct Cut {
     /// view keys.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub frame: Option<crate::frame::Frame>,
+    /// How fast it reads its clip (gap 31); normal unless set. Not yet
+    /// set by any op: a project with a speed is refused until the media
+    /// play at speed.
+    #[serde(default, skip_serializing_if = "crate::speed::Speed::is_normal")]
+    pub speed: crate::speed::Speed,
 }
 
 impl Cut {
@@ -831,7 +836,36 @@ impl Cut {
             speech: false,
             sheet_voice: None,
             frame: None,
+            speed: Default::default(),
         }
+    }
+
+    /// The span of its clip it shows, clip seconds.
+    pub fn clip_len(&self) -> f64 {
+        self.end - self.start
+    }
+
+    /// How long it lasts on the edit (the time seam: `TIME-SEAM.md`).
+    pub fn edit_len(&self) -> f64 {
+        self.speed.edit_secs(self.start, self.end)
+    }
+
+    /// Edit seconds from its in point to its clip time `t`; less than none
+    /// before it.
+    pub fn edit_at(&self, t: f64) -> f64 {
+        self.speed.edit_secs(self.start, t)
+    }
+
+    /// Its clip time `dt` edit seconds after its in point (before it, `dt`
+    /// less than none).
+    pub fn clip_at(&self, dt: f64) -> f64 {
+        self.speed.clip_after(self.start, dt)
+    }
+
+    /// Its clip time `dt` edit seconds before its out point: where a
+    /// crossfade out or an edge look that long starts.
+    pub fn clip_before_end(&self, dt: f64) -> f64 {
+        self.speed.clip_after(self.end, -dt)
     }
 
     /// Its sound's own level, dB: `gain`, or silence when muted.
@@ -967,7 +1001,7 @@ pub fn offsets(cuts: &[Cut]) -> Vec<f64> {
         .map(|c| {
             from -= c.crossfade;
             let at = from;
-            from += c.len();
+            from += c.edit_len();
             at
         })
         .collect()
@@ -1111,7 +1145,7 @@ pub fn latest_out(end: Option<f64>, at: f64, start: f64) -> f64 {
 
 /// The edit's length: the cuts' less their crossfades.
 pub fn edit_length(cuts: &[Cut]) -> f64 {
-    cuts.iter().map(|c| c.len() - c.crossfade).sum()
+    cuts.iter().map(|c| c.edit_len() - c.crossfade).sum()
 }
 
 /// The longest crossfade into cut `i`: none into the first, and leaving
@@ -1776,6 +1810,9 @@ impl Project {
 fn cut_from_file(cut: &mut Cut, n: usize, dir: &Path) -> Result<()> {
     if cut.end <= cut.start {
         bail!("cut {} ends ({} s) before it starts ({} s)", n + 1, cut.end, cut.start);
+    }
+    if !cut.speed.is_normal() {
+        bail!("cut {} has a speed set: Omnix can't play a cut at speed yet", n + 1);
     }
     cut.input = dir.join(&cut.input);
     if let Some(audio) = cut.audio.as_mut() {
@@ -2579,6 +2616,20 @@ mod tests {
     /// Old project files, one per shape the format has had, in
     /// `tests/fixtures/`: `deny_unknown_fields` makes a renamed field break
     /// them loudly, so a format change that would shows here first.
+    #[test]
+    fn a_project_with_a_speed_is_refused_until_cuts_can_play_at_speed() {
+        let dir = std::env::temp_dir().join(format!("omnix-speed-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("fast.json");
+        std::fs::write(&path, r#"{"cuts": [{"input": "a.mp4", "in": 0, "out": 4, "speed": {"keys": [{"t": 0, "rate": 2}]}}]}"#).unwrap();
+        let err = Project::read(&path).unwrap_err();
+        assert!(format!("{err:#}").contains("speed"), "{err:#}");
+        // Normal speed written out is left out of the file.
+        let json = serde_json::to_string(&Cut { speed: crate::speed::Speed::constant(1.0), ..Cut::new("a.mp4".into(), 0.0, 4.0) }).unwrap();
+        assert!(!json.contains("speed"), "{json}");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
     #[test]
     fn old_project_files_still_load() {
         let dir = std::env::temp_dir().join(format!("omnix-fixtures-{}", std::process::id()));

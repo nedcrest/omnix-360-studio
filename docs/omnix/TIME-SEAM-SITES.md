@@ -19,8 +19,9 @@ Already through a core function after guard 2 (`67d577a`): transport's
 | | Site | Kind |
 |---|---|---|
 | [ ] | `project.rs` `Cut::len` (the definition) | A |
-| [ ] | `project.rs` `offsets` | A D |
-| [ ] | `project.rs` `edit_length`, `max_crossfade`, `settle_crossfades` | A D |
+| [x] step 1 | `project.rs` `offsets` | A D |
+| [x] step 1 | `project.rs` `edit_length` | A |
+| [ ] | `project.rs` `max_crossfade`, `settle_crossfades` | A D |
 | [ ] | `project.rs` `Cut::sound_fade`, `sound_fades` (fade vs edge seconds) | D |
 | [ ] | `project.rs` `Cut::edge_at` (`Edge.seconds` in clip time) | D |
 | [ ] | `project.rs` `Cut::sound_span` | D |
@@ -31,8 +32,8 @@ Already through a core function after guard 2 (`67d577a`): transport's
 | [ ] | `project.rs` `Project::black_at` | B |
 | [ ] | `project.rs` `OwnSound::set_fade` (clamped to the clip span) | D |
 | [ ] | `project.rs` `duration`, `film_end`, `follow_groups`, `follow_locked`, `follow_from` (through helpers) | A |
-| [ ] | `model/edit.rs` `offset`, `locate`, `edit_time`, `clip_time`, `on_cut` | A B C |
-| [ ] | `model/edit.rs` `crossfade_from`, `crossfade_partner`, `crossfade_share` | D |
+| [x] step 1 | `model/edit.rs` `offset`, `locate`, `edit_time`, `clip_time`, `on_cut` | A B C |
+| [x] step 1 | `model/edit.rs` `crossfade_from`, `crossfade_partner`, `crossfade_share` (each side at its own speed) | D |
 | [ ] | `model/edit.rs` `split`, `trim` (`MIN_CUT` on clip spans) | F |
 | [ ] | `model/edit.rs` `set_crossfade` | D |
 | [ ] | `model/edit.rs` `drawn_zone` (edit span → crossfade or edge seconds) | A D |

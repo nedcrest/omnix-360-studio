@@ -24,6 +24,7 @@ mod mixcheck;
 mod mixmeasure;
 mod exposure;
 mod frame;
+mod speed;
 mod grade;
 mod ffmpeg;
 mod hdr;

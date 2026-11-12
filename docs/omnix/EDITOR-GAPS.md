@@ -1431,6 +1431,19 @@ layout is ops, so an agent can use it. Milestone «Мультикамерніс�
 Ties into `PLAN-NEXT.md`: card 4's decoding must take any number of
 video layers, not one.
 
+### 108. An automation clip's height fitted to its values («Snap to scale») — small (user, 2026-11-12)
+
+A lane's height is its value's whole range (zoom 100–800 %, exposure
+−5..5), so a move of a few per cent is a flat line. The user: right-click
+an automation clip → «Snap to scale»: the lane's height shows that clip's
+own range (its lowest to highest point, a little margin), so its curve
+fills it; a faint label on the clip says the range after the fit («zoom
+138–146 %», in the value's unit: %, °, dB…), so it isn't read as the full
+range. A way back («Full range»). Only how it's drawn and dragged, no
+change to the values; kept per lane while the edit is open (or saved
+with the view's settings). Milestone «Ефекти, колір і розумний звук»
+(automation lanes, gap 39).
+
 ### 107b. Framing left over — small (left from 107, 2026-11-12)
 
 The box over the whole picture while framing (the viewer shows the crop

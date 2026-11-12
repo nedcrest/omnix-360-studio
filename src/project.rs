@@ -1516,11 +1516,16 @@ impl Project {
     pub fn follow_groups(&mut self, before: &[Cut]) {
         let (old, new) = (offsets(before), offsets(&self.cuts));
         let resized = (edit_length(before) - self.duration()).abs() > 1e-9;
-        let locked: Vec<Id> = SoundTrack::ALL.iter().filter(|&&w| self.track(w).sync).flat_map(|&w| self.track(w).clips.iter().map(|c| c.id)).collect();
+        // What a sync lock moves already (sound clips and items alike; the
+        // audit, 2026-11-12: a locked title moved twice).
+        let locked: Vec<Id> = {
+            let l = self.locked();
+            l.sounds.iter().flatten().map(|c| c.id).chain(l.lanes.iter().flatten().map(|i| i.id)).collect()
+        };
         let mut moves: Vec<(Id, Vec<Id>, f64)> = Vec::new();
         for g in self.groups.iter().map(|g| g.id) {
-            let Some(k) = before.iter().position(|c| c.group == Some(g)) else { continue };
-            let Some(j) = self.cut_index(before[k].id) else { continue };
+            // From its first cut that's still there (its first may be gone).
+            let Some((k, j)) = before.iter().enumerate().filter(|(_, c)| c.group == Some(g)).find_map(|(k, c)| Some((k, self.cut_index(c.id)?))) else { continue };
             let by = new[j] - old[k];
             let others: Vec<Id> = self.members(g).into_iter().filter(|&m| self.cut_index(m).is_none() && !(resized && locked.contains(&m))).collect();
             if by.abs() > 1e-9 && !others.is_empty() {
@@ -1570,14 +1575,20 @@ impl Project {
     /// from `before` to the cuts now: `base` itself when the edit is as
     /// long as it was.
     pub fn follow_from(&mut self, base: &Locked, before: &[Cut]) {
-        let same = (edit_length(before) - self.duration()).abs() < 1e-9;
         let after = self.cuts.clone();
+        // The picture as it was: `base` itself (a trim dragged back). As
+        // long but changed (a move): what the ops left (a group's others
+        // moved with it; the audit, 2026-11-12).
+        let (back, same) = (before == after.as_slice(), (edit_length(before) - self.duration()).abs() < 1e-9);
+        if same && !back {
+            return;
+        }
         let tracks: Vec<SoundTrack> = SoundTrack::ALL.into_iter().filter(|&w| self.track(w).sync).collect();
         for (w, clips) in tracks.into_iter().zip(&base.sounds) {
-            self.track_mut(w).clips = if same { clips.clone() } else { follow_picture(clips, before, &after) };
+            self.track_mut(w).clips = if back { clips.clone() } else { follow_picture(clips, before, &after) };
         }
         for (lane, items) in self.overlays.iter_mut().chain(self.text.iter_mut()).filter(|l| l.sync).zip(&base.lanes) {
-            lane.items = if same { items.clone() } else { follow_picture_items(items, before, &after) };
+            lane.items = if back { items.clone() } else { follow_picture_items(items, before, &after) };
         }
     }
 
@@ -1922,6 +1933,13 @@ mod tests {
         assert_eq!(c.sound_fades(), (0.0, 0.5), "a fade to white leaves it");
     }
 
+    /// Three 4 s cuts (A, B, C), nothing else.
+    fn locked_edit() -> Project {
+        let mut p = Project { cuts: ["a", "b", "c"].iter().map(|n| Cut::new(format!("{n}.mp4").into(), 0.0, 4.0)).collect(), ..Default::default() };
+        p.settle_ids();
+        p
+    }
+
     /// Three 4 s cuts of one clip each (A, B, C: 0-4 s of their files),
     /// a song under all of them from 0 to 12 s, the Music track `sync`.
     fn locked(sync: bool) -> crate::model::edit::Edit {
@@ -2004,6 +2022,46 @@ mod tests {
         e.apply(&Op::Cut(CutOp::Delete { cut: e.cuts[0].id })).unwrap();
         assert!(e.text[0].items.is_empty(), "nothing under it: gone");
         crate::model::ops::check(&e).unwrap();
+    }
+
+    #[test]
+    fn a_groups_locked_members_move_once_and_from_a_cut_still_there() {
+        use crate::model::ops::{Op, cuts::CutOp, project::ProjectOp};
+        let title = |at: f64| crate::overlay::Item { id: 0, input: "".into(), text: Some(Default::default()), at, start: 0.0, end: 1.0, motion: Vec::new(), effects: Vec::new(), bars: None, automation: Vec::new(), kind: None, style: None, group: None };
+        let make = |locked: bool| {
+            let mut p = Project::clone(&locked_edit());
+            p.text.push(crate::overlay::Lane { items: vec![title(9.0)], sync: locked, ..Default::default() });
+            p.settle_ids();
+            crate::model::edit::Edit::new(p)
+        };
+        // A title over C (8-12 s) on a locked lane, grouped with C: A deleted.
+        let mut e = make(true);
+        let (a, c, t) = (e.cuts[0].id, e.cuts[2].id, e.text[0].items[0].id);
+        e.apply(&Op::Project(ProjectOp::Group { members: vec![c, t], name: None, colour: None })).unwrap();
+        e.apply(&Op::Cut(CutOp::Delete { cut: a })).unwrap();
+        assert_eq!(e.text[0].items[0].at, 5.0, "once, by the lock");
+        // Grouped with B and C, unlocked: B (its first) deleted, C still moves it.
+        let mut e = make(false);
+        let (b, c, t) = (e.cuts[1].id, e.cuts[2].id, e.text[0].items[0].id);
+        e.apply(&Op::Project(ProjectOp::Group { members: vec![b, c, t], name: None, colour: None })).unwrap();
+        e.apply(&Op::Cut(CutOp::Delete { cut: b })).unwrap();
+        assert_eq!(e.text[0].items[0].at, 5.0, "with C");
+    }
+
+    #[test]
+    fn a_group_moved_inside_a_drag_takes_its_locked_song_along() {
+        use crate::model::ops::{Op, cuts::CutOp, project::ProjectOp};
+        let mut p = Project::clone(&locked_edit());
+        p.music.clips = vec![MusicClip { input: "song.wav".into(), at: 8.5, end: 2.0, ..Default::default() }];
+        p.music.sync = true;
+        p.settle_ids();
+        let mut e = crate::model::edit::Edit::new(p);
+        let (b, c, song) = (e.cuts[1].id, e.cuts[2].id, e.music.clips[0].id);
+        e.apply(&Op::Project(ProjectOp::Group { members: vec![c, song], name: None, colour: None })).unwrap();
+        e.begin();
+        e.apply(&Op::Cut(CutOp::MoveTogether { cuts: vec![c], before: Some(b) })).unwrap();
+        e.commit();
+        assert_eq!(e.music.clips[0].at, 4.5, "with C, now 4-8 s");
     }
 
     #[test]

@@ -171,6 +171,9 @@ pub fn edits(root: &Path) -> Vec<PathBuf> {
     found.into_iter().map(|(_, p)| p).collect()
 }
 
+/// The name of a video of every day of a trip (a day's is the day).
+pub const ALL_DAYS: &str = "all-days";
+
 /// The trip's edits of videos called `name` or `name-<n>` (made from the
 /// same day, or all days), newest first (Omnix gap 104: «→ Omnix» offers
 /// them before making another).
@@ -314,7 +317,7 @@ mod tests {
         let other = new_video(&trip, "2030-05-01-short").unwrap();
         std::fs::write(&other, "{}").unwrap();
         assert_eq!(videos_named(&trip, "2030-05-01"), [new.clone(), old.clone()], "not «-short»: another video");
-        assert!(videos_named(&trip, "all-days").is_empty());
+        assert!(videos_named(&trip, ALL_DAYS).is_empty());
         assert!(edits(&place.join("b_trip")).is_empty());
         assert_eq!(video_of(&new), Some((trip.clone(), "2030-05-01-2".to_owned())));
         assert_eq!(export_dir(&new), Some(trip.join("videos/2030-05-01-2/export")));

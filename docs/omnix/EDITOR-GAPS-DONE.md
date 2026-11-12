@@ -2089,3 +2089,94 @@ menu on a right-click of its name with «Rename…», «· sync» in its name);
 stretch still shown went, is as long as what's left under it, and goes
 when nothing is; `Project::locked`/`follow_from` hold sound and item
 lanes alike, so a drag follows from its start for both.
+
+### 107. Framing a flat video: a base frame, Frame lanes with keys and curves, a box in the viewer — large (user, 2026-11-11)
+
+The user tried today's Framing on an ordinary clip: inconvenient. He
+wants a «Frame» row like the Effects row — keys or curves moving the
+camera, cropping, zooming — and a crop set once for the whole cut or the
+whole film, fixed as the starting point. Analysed 2026-11-11 (the code
+mapped by an agent):
+
+**Why it's awkward now.** Framing is a mode of its own, made for 360. A
+flat clip's crop is stored as a 360 view (yaw/pitch/fov in degrees,
+`FLAT_DEGREES`); keys are whole-view snapshots (`Cut::keyframes`), so
+keying the zoom keys the position too; the timeline's View row shows
+dots only, no values, no curves; a drag in the viewer turns a camera
+(`-dx·k`), it doesn't move a picture; there is no base: a flat cut with
+no keys shows the whole picture, nothing per cut or per film.
+
+**The design proposed** (one model with Effects and the overlays' Motion,
+which already are «a base value + automation clips per value»):
+1. **A frame** `{x, y, zoom, rotation}` in % (x, y the centre from the
+   middle in % of the picture's height; zoom 100 = the whole height),
+   always the film's aspect. A **base** on the cut (`Cut::frame`) and a
+   **film default** (`Project::frame`): cut's, else film's, else whole.
+2. **Frame lanes**: `AutoClip`s on params `frame.x`, `frame.y`,
+   `frame.zoom`, `frame.rotation` (`Param::Frame`), under a «Frame» row
+   beside «Effects», with the same lanes, points, eases and later the
+   bent curves (33h); zoom eased in log space so it feels even.
+3. **One hook**: `project::camera_at` turns the resolved frame into
+   `Camera.crop`; the shader and the CPU path stay as they are.
+4. **In the viewer, no mode for a flat clip**: with a cut picked and the
+   Frame row open, a box shows the frame over the picture — drag inside
+   moves it (the picture follows the hand), corners zoom, keeping the
+   aspect; with a point under the playhead it sets that point, else the
+   base.
+5. **Shortcuts** on a cut's menu: «Zoom in slowly», «Zoom out slowly»
+   (two points over the cut, an ease), «Frame for the whole cut»,
+   «…for all cuts of this clip», «…for the whole film».
+6. **Old projects**: a flat cut's view keys turn into a base (one key)
+   or Frame lanes (several) on load, as overlays' motion keys did
+   (`from_keys`). 360 keeps its View keys (follow, tracking) for now.
+7. **Core API**: `CutOp::Frame`, `ProjectOp::Frame`, frame params in
+   `AutoOp`; `describe` and `omnix looks` in %.
+
+**Order**: (a) the frame and its base, the hook, ops, describe,
+migration; (b) the Frame row and lanes; (c) the box in the viewer;
+(d) the shortcuts. The user's answers (2026-11-11): both «whole film» and
+«all cuts of one clip»; Framing as a mode for 360 only, a flat clip
+framed by the box (for now). No old projects to carry over: no
+migration of flat cuts' view keys — a flat cut's view is its frame.
+«The whole film» and «all cuts of a clip» are a batch of `CutOp::Frame`,
+no film-wide field. **Core API for tracking** (the user, 2026-11-11): the
+Frame lanes are ordinary `AutoClip`s, which already can follow an
+object's track (`AutoClip::follows`): object tracking (37, 53b) fills a
+cut's `frame.x`/`frame.y` lanes from a track by an op, no second
+mechanism. **Step a built** (`frame::Frame`, `Cut::frame`, `frame_at`,
+`CutOp::Frame`, `describe`, `omnix looks`).
+
+**Built 2026-11-11, waits for a check** (`bc541e0`, `d0cef0a`, `9cdb309`,
+`66c821e`, `10eb67e` and step d): a, b as designed; c without the box over
+the whole picture — the viewer itself frames an ordinary cut while
+editing (a drag moves the picture with the hand at any zoom, a right-drag
+turns it, the wheel zooms; a point on a lane moving that value at the
+playhead, else the base), and the Effects panel's Frame group (sliders,
+↺); d as buttons in that group. Left: the box over the whole picture, a
+zoom lane eased in log space (linear now), `AutoOp::Follow` for a cut's
+Frame lanes (object tracking).
+
+**Step e (the user, 2026-11-11), keyframing the frame by time, as in
+Kdenlive:** stand at 5 s, zoom onto the scooter → a key; at 12 s move
+onto the two of us → a key, the motion 5→12 s made; at 15 s zoom all the
+way out → a key. Today a slider or the mouse sets a point only where a
+lane already runs, else the base. To build: (1) a frame key — points on
+all four Frame lanes at the playhead, the lanes made over the cut if
+missing; written on every change while «Auto keyframe» is on (the
+toggle 360 framing has), else by K on an ordinary cut while editing;
+(2) aim by a click: a click on the picture puts the frame's centre there
+at the zoom chosen, and keys it. (3) No new timeline rows (the user asked):
+the folded Frame row, which already draws every lane's points on one
+line, becomes a key bar — a mark a frame key (all four values at that
+time), a click on it moves the playhead there, a drag retimes the key on
+all four lanes together, Del deletes it; the four lanes stay for fine
+work on one value. **Step e built 2026-11-11** (`d836e48`, `7e3f89b`,
+`aa0e1dd`): `AutoOp::FrameKey`/`FrameKeyMove`/`FrameKeyDelete` (a key
+holds before the first and after the last, as Kdenlive's); Auto keyframe
+(now in the Frame group too) makes every frame change a key; K keys an
+ordinary cut while editing; a click on the picture aims the frame there
+(`Message::Aim`); the folded Frame row is a key bar (click picks and
+moves the playhead, drag retimes, Del deletes the key). Waits for the
+user's check with steps a–d.
+
+**Checked by the user 2026-11-12:** playing, the frame follows the keys from the timeline; the mouse moves it, the sliders and the lanes' points change with it. What's left is gap 107b.

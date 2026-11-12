@@ -497,7 +497,8 @@ impl App {
                 return Task::perform(blocking(measure), Message::SheetVoicesMeasured);
             }
             Message::SheetVoicesMeasured(found) => {
-                let ops: Vec<Op> = found.into_iter().flat_map(|(cut, file, name, lufs)| [Op::Cut(CutOp::Voice { cut, audio: Some(file), lufs }), Op::Cut(CutOp::SheetVoice { cut, name: Some(name) })]).collect();
+                // A cut gone meanwhile left out, not the whole batch refused.
+                let ops: Vec<Op> = found.into_iter().filter(|f| self.edit.cut_index(f.0).is_some()).flat_map(|(cut, file, name, lufs)| [Op::Cut(CutOp::Voice { cut, audio: Some(file), lufs }), Op::Cut(CutOp::SheetVoice { cut, name: Some(name) })]).collect();
                 let at = self.position();
                 match self.edit.batch(&ops) {
                     Ok(_) => self.after_edit(at),
@@ -516,13 +517,19 @@ impl App {
         self.sound_menu = None;
         match message {
             Message::CutVoice(cut, Some(file)) => {
+                self.voice_wanted = Some((cut, Some(file.clone())));
                 let Some(c) = self.edit.cut_index(cut).map(|i| &self.edit.cuts[i]) else { return Task::none() };
                 let span = (c.start, c.end);
                 let measured = file.clone();
                 return Task::perform(blocking(move || crate::from_sheet::voice_loudness(&measured, span)), move |lufs| Message::CutVoiceMeasured(cut, Some(file.clone()), lufs));
             }
-            Message::CutVoice(cut, None) => return self.on_cut_voice(Message::CutVoiceMeasured(cut, None, None)),
+            Message::CutVoice(cut, None) => {
+                self.voice_wanted = Some((cut, None));
+                return self.on_cut_voice(Message::CutVoiceMeasured(cut, None, None));
+            }
+            Message::CutVoiceMeasured(cut, audio, _) if self.voice_wanted.as_ref() != Some(&(cut, audio.clone())) => {}
             Message::CutVoiceMeasured(cut, audio, lufs) => {
+                self.voice_wanted = None;
                 let at = self.position();
                 if self.op(Op::Cut(CutOp::Voice { cut, audio, lufs })).is_some() {
                     // The player heard the old sound: opened again.
@@ -815,6 +822,11 @@ mod tests {
         let voices = crate::from_sheet::Voices { made: vec![("dnn6".into(), "v/dnn6.flac".into()), ("eq".into(), "v/eq.flac".into())], chosen: Some("eq".into()) };
         let labels: Vec<String> = voice_entries(&app.edit.cuts[0], &voices).into_iter().map(|(l, _)| l).collect();
         assert_eq!(labels, ["✓ Its own sound", "Cleaned voice dnn6", "Cleaned voice eq · chosen in Dailix", "Its own sound is speech"]);
+        // Chosen, then measured; an older choice measured later is dropped.
+        let _ = app.update(Message::CutVoice(cut, Some("v/dnn6.flac".into())));
+        let _ = app.update(Message::CutVoice(cut, Some("v/eq.flac".into())));
+        let _ = app.update(Message::CutVoiceMeasured(cut, Some("v/dnn6.flac".into()), Some(-20.0)));
+        assert!(app.edit.cuts[0].audio.is_none(), "dnn6 was chosen before eq");
         let _ = app.update(Message::CutVoiceMeasured(cut, Some("v/eq.flac".into()), Some(-26.0)));
         let _ = app.update(Message::CutSpeech(cut, true));
         let c = &app.edit.cuts[0];

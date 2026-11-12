@@ -286,8 +286,15 @@ fn set_voice(p: &mut Project, cut: Id, audio: Option<std::path::PathBuf>, lufs: 
     let i = find(p, cut)?;
     let c = &mut p.cuts[i];
     let said_as = audio.as_ref().map_or("its own sound".to_owned(), |a| format!("voice {}", a.display()));
-    (c.audio, c.loudness) = (audio, lufs);
-    c.gain = if lufs.is_some() { super::sound::normal_gain(lufs) } else { 0.0 };
+    // Its own sound: from the original (no level, as the file is). A voice
+    // with its loudness: the level from it; without: the level kept (the
+    // audit, 2026-11-12).
+    match (&audio, lufs) {
+        (None, _) => (c.gain, c.loudness) = (0.0, None),
+        (Some(_), Some(_)) => (c.gain, c.loudness) = (super::sound::normal_gain(lufs), lufs),
+        (Some(_), None) => {}
+    }
+    c.audio = audio;
     said(format!("cut #{cut}: {said_as}"))
 }
 
@@ -755,6 +762,8 @@ mod tests {
         let a = e.apply(&add("a.mp4", 4.0, Place::End)).unwrap().made.unwrap();
         e.apply(&Op::Cut(CutOp::Voice { cut: a, audio: Some("voice/a/dnn6.flac".into()), lufs: Some(-26.0) })).unwrap();
         assert_eq!((e.cuts[0].audio.is_some(), e.cuts[0].loudness, e.cuts[0].gain), (true, Some(-26.0), super::super::sound::normal_gain(Some(-26.0))), "its level from the voice");
+        e.apply(&Op::Cut(CutOp::Voice { cut: a, audio: Some("voice/a/eq.flac".into()), lufs: None })).unwrap();
+        assert_eq!(e.cuts[0].loudness, Some(-26.0), "no loudness: the level kept");
         e.apply(&Op::Cut(CutOp::Voice { cut: a, audio: None, lufs: None })).unwrap();
         assert_eq!((e.cuts[0].audio.as_ref(), e.cuts[0].gain), (None, 0.0), "back to its own sound");
         e.apply(&Op::Cut(CutOp::Speech { cut: a, on: true })).unwrap();

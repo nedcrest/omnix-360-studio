@@ -151,7 +151,8 @@ impl App {
                 }
             }
             Message::Undo | Message::Redo => {
-                self.toast = None;
+                // A menu or a picked key of what's undone acts no more (the audit).
+                (self.toast, self.sound_menu, self.frame_key) = (None, None, None);
                 let at = self.position();
                 let changed = if matches!(message, Message::Undo) { self.edit.undo() } else { self.edit.redo() };
                 if changed {

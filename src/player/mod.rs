@@ -721,6 +721,9 @@ struct App {
     /// The voices offered in the menu open on a cut's sound, read once as
     /// it opens (gap 103).
     menu_voices: crate::from_sheet::Voices,
+    /// The voice last chosen for a cut, waiting for its measuring: an
+    /// older choice measured later is dropped (the audit, 2026-11-12).
+    voice_wanted: Option<(crate::project::Id, Option<PathBuf>)>,
     /// Each sound track's streams, in `SoundTrack::ALL`'s order.
     music: [music::Player; SoundTrack::ALL.len()],
     /// The cuts' sound past their pictures (J- and L-cuts), a stream each,
@@ -974,6 +977,7 @@ impl App {
             sound_menu: None,
             frame_key: None,
             menu_voices: Default::default(),
+            voice_wanted: None,
             cut_waves_asked: Default::default(),
             even_waves: Default::default(),
             cut_waves_reading: 0,

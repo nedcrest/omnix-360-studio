@@ -100,11 +100,21 @@ pub struct Voices {
 
 pub fn voices(root: &Path, clip: &Path) -> Voices {
     let layout = Layout::new(root);
+    voices_in(&layout, read_sheet(&layout).as_ref(), clip)
+}
+
+/// The trip's marking, if it can be read.
+fn read_sheet(layout: &Layout) -> Option<dailix_sheet::Sheet> {
+    std::fs::read_to_string(layout.sheet()).ok().and_then(|t| Doc::parse(&t).ok()?.sheet().ok())
+}
+
+/// `voices` with the marking read already (`newer_voices` reads it once
+/// for every clip; the audit, 2026-11-12).
+fn voices_in(layout: &Layout, sheet: Option<&dailix_sheet::Sheet>, clip: &Path) -> Voices {
     let Ok(rel) = clip.strip_prefix(layout.footage()) else { return Voices::default() };
     let key = rel.components().map(|c| c.as_os_str().to_string_lossy()).collect::<Vec<_>>().join("/");
-    let Some(dir) = dailix_sheet::voice::dir(&layout, &key) else { return Voices::default() };
+    let Some(dir) = dailix_sheet::voice::dir(layout, &key) else { return Voices::default() };
     let made = dailix_sheet::voice::variants(&dir).into_iter().map(|n| (n.clone(), dailix_sheet::voice::track(&dir, &n))).collect();
-    let sheet = std::fs::read_to_string(layout.sheet()).ok().and_then(|t| Doc::parse(&t).ok()?.sheet().ok());
     let chosen = sheet.and_then(|s| s.clips.get(&key)?.audio.clone());
     Voices { made, chosen }
 }
@@ -114,12 +124,16 @@ pub fn voices(root: &Path, clip: &Path) -> Voices {
 /// (`Cut::sheet_voice`): (cut, the voice's name, its file), to offer
 /// when the edit opens (gap 103).
 pub fn newer_voices(root: &Path, project: &Project) -> Vec<(crate::project::Id, String, PathBuf)> {
+    let layout = Layout::new(root);
+    let sheet = read_sheet(&layout);
     let mut known: std::collections::HashMap<&Path, Voices> = std::collections::HashMap::new();
     let mut newer = Vec::new();
     for c in &project.cuts {
-        let v = known.entry(&c.input).or_insert_with(|| voices(root, &c.input));
+        let v = known.entry(&c.input).or_insert_with(|| voices_in(&layout, sheet.as_ref(), &c.input));
         let Some(name) = v.chosen.clone().filter(|n| Some(n) != c.sheet_voice.as_ref()) else { continue };
-        if let Some((_, file)) = v.made.iter().find(|(n, _)| *n == name) {
+        // A cut that plays it already isn't offered it (an edit made from
+        // the marking before `sheet_voice` was kept; the audit).
+        if let Some((_, file)) = v.made.iter().find(|(n, _)| *n == name).filter(|(_, f)| c.audio.as_deref() != Some(f.as_path())) {
             newer.push((c.id, name, file.clone()));
         }
     }
@@ -265,6 +279,8 @@ mod tests {
         assert!(newer_voices(&root, &p).is_empty());
         let mut seen_none = p.clone();
         seen_none.cuts[1].sheet_voice = None;
+        assert!(newer_voices(&root, &seen_none).is_empty(), "it plays it already");
+        seen_none.cuts[1].audio = None;
         assert_eq!(newer_voices(&root, &seen_none).iter().map(|(id, n, _)| (*id, n.as_str())).collect::<Vec<_>>(), [(p.cuts[1].id, "dnn6")]);
 
         // Written beside the others, never over one.

@@ -126,24 +126,13 @@ impl App {
             }
         }
         let want = (|| {
-            let (cut, t) = self.clip_now()?;
+            let (_, t) = self.clip_now()?;
             let playing = self.clip.as_ref()?.playback.playing;
             // The outgoing cut playing or paused in its crossfade: the next
-            // cut alongside.
-            if let Some(from) = self.edit.crossfade_from(self.current)
-                && t >= from
-                && t < cut.end
-            {
-                let next = &self.edit.cuts[self.current + 1];
-                return Some((self.current + 1, next.input.clone(), next.start + (t - from), playing));
-            }
-            // The incoming cut paused in it (taken over to edit): the one
-            // before alongside, shown when it's not selected.
-            if !playing && self.current > 0 && t < cut.start + cut.crossfade {
-                let before = &self.edit.cuts[self.current - 1];
-                return Some((self.current - 1, before.input.clone(), before.end - cut.crossfade + (t - cut.start), false));
-            }
-            None
+            // cut alongside; the incoming cut paused in it (taken over to
+            // edit): the one before, shown when it's not selected.
+            let (i, t) = self.edit.crossfade_partner(self.current, t, playing)?;
+            Some((i, self.edit.cuts[i].input.clone(), t, playing && i > self.current))
         })();
         let Some((i, input, t, playing)) = want else {
             self.partner = None;
@@ -407,14 +396,9 @@ impl App {
     /// partner's (linear, adding to 1): the outgoing cut's falls as the
     /// incoming one's rises.
     pub(super) fn crossfade_shares(&self) -> Option<(f64, f64)> {
-        let (cut, t) = self.clip_now()?;
+        let (_, t) = self.clip_now()?;
         let (j, _) = self.partner.as_ref()?;
-        let incoming = if *j == self.current + 1 {
-            let from = self.edit.crossfade_from(self.current)?;
-            (t >= from && t < cut.end).then(|| (t - from) / (cut.end - from))?
-        } else {
-            (*j + 1 == self.current && t < cut.start + cut.crossfade).then(|| (t - cut.start) / cut.crossfade)?
-        };
+        let incoming = self.edit.crossfade_share(self.current, *j, t)?;
         Some(if *j == self.current + 1 { (1.0 - incoming, incoming) } else { (incoming, 1.0 - incoming) })
     }
 
@@ -603,10 +587,7 @@ impl App {
             Message::Scrub(t) => {
                 self.follow = true;
                 // In an overlap, the selected cut's time, if it's one of the two.
-                let selected = self.selection.cut(&self.edit).filter(|&i| i < self.edit.cuts.len()).and_then(|i| {
-                    let (from, c) = (self.edit.offset(i), &self.edit.cuts[i]);
-                    (t >= from && t < from + c.len()).then_some((i, c.start + t - from))
-                });
+                let selected = self.selection.cut(&self.edit).and_then(|i| Some((i, self.edit.on_cut(i, t)?)));
                 if let Some((i, t)) = selected.or_else(|| self.edit.locate(t)) {
                     self.scrub_to(i, t);
                 }

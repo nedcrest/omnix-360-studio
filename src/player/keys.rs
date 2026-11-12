@@ -326,7 +326,7 @@ impl App {
             // The playhead in that sound's file time: the selected
             // cut's, not the playing one's (K used to key that).
             let at = match own {
-                Some(own @ Own::Cut(n)) => self.edit.cuts.get(n).map(|c| (own, c.start + self.position() - self.edit.offset(n))),
+                Some(own @ Own::Cut(n)) => (n < self.edit.cuts.len()).then(|| (own, self.edit.clip_time(n, self.position()))),
                 Some(own @ Own::Clip(which, c)) => self.edit.track(which).clips.get(c).map(|m| (own, m.start + self.position() - m.at)),
                 None => None,
             };

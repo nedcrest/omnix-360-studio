@@ -45,7 +45,7 @@ impl App {
     pub(super) fn trim_to(&mut self, start: bool, at: f64) -> Option<usize> {
         let i = self.selection.cut(&self.edit).unwrap_or(self.current);
         let c = self.edit.cuts.get(i)?;
-        let t = c.start + at - self.edit.offset(i);
+        let t = self.edit.clip_time(i, at);
         if t <= c.start || t >= c.end {
             return None;
         }

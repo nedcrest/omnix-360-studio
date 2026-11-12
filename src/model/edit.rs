@@ -121,6 +121,50 @@ impl Project {
         self.offset(i) + (clip_t - self.cuts[i].start)
     }
 
+    /// Cut `i`'s clip time at edit time `t`, wherever `t` is: `edit_time`
+    /// undone (a playhead's place in a cut that isn't playing).
+    pub fn clip_time(&self, i: usize, t: f64) -> f64 {
+        self.cuts[i].start + (t - self.offset(i))
+    }
+
+    /// Cut `i`'s clip time at edit time `t` if it's on the edit there, its
+    /// crossfade in counting (in an overlap, either cut's time).
+    pub fn on_cut(&self, i: usize, t: f64) -> Option<f64> {
+        let (from, c) = (self.offset(i), self.cuts.get(i)?);
+        (t >= from && t < from + c.len()).then_some(c.start + (t - from))
+    }
+
+    /// The cut alongside cut `i` at its clip time `t` in a crossfade, and
+    /// the clip time in it: the next cut once `i` reaches its crossfade
+    /// out; the one before while `i` is in its crossfade in, only when
+    /// it's not `playing` (taken over to edit).
+    pub fn crossfade_partner(&self, i: usize, t: f64, playing: bool) -> Option<(usize, f64)> {
+        let cut = self.cuts.get(i)?;
+        if let Some(from) = self.crossfade_from(i)
+            && t >= from
+            && t < cut.end
+        {
+            return Some((i + 1, self.cuts[i + 1].start + (t - from)));
+        }
+        if !playing && i > 0 && t < cut.start + cut.crossfade {
+            return Some((i - 1, self.cuts[i - 1].end - cut.crossfade + (t - cut.start)));
+        }
+        None
+    }
+
+    /// How far into the crossfade between cut `i` (at its clip time `t`)
+    /// and its partner `j` the incoming one is, 0..1: linear, over the
+    /// outgoing cut's crossfade out or the incoming's crossfade in.
+    pub fn crossfade_share(&self, i: usize, j: usize, t: f64) -> Option<f64> {
+        let cut = self.cuts.get(i)?;
+        if j == i + 1 {
+            let from = self.crossfade_from(i)?;
+            (t >= from && t < cut.end).then(|| (t - from) / (cut.end - from))
+        } else {
+            (j + 1 == i && t < cut.start + cut.crossfade).then(|| (t - cut.start) / cut.crossfade)
+        }
+    }
+
 }
 
 impl Edit {
@@ -500,6 +544,24 @@ impl Project {
 mod tests {
     use super::*;
     use std::path::PathBuf;
+
+    /// The crossfade's maths the player follows, at speed 1 (the time
+    /// seam's guard 2): A 0-4 s, B 10-14 s crossfading 1 s into it.
+    #[test]
+    fn a_crossfade_has_both_cuts_at_their_own_clip_times() {
+        let mut p = Project { cuts: vec![Cut::new("a.mp4".into(), 0.0, 4.0), Cut::new("b.mp4".into(), 10.0, 14.0)], ..Default::default() };
+        p.cuts[1].crossfade = 1.0;
+        // B starts at 3 s on the edit: the overlap is 3..4, either cut's.
+        assert_eq!((p.on_cut(0, 3.5), p.on_cut(1, 3.5), p.on_cut(0, 4.0), p.on_cut(1, 2.9)), (Some(3.5), Some(10.5), None, None));
+        assert_eq!((p.clip_time(1, 2.0), p.clip_time(1, 5.0)), (9.0, 12.0), "anywhere, before it too");
+        assert_eq!(p.edit_time(1, p.clip_time(1, 5.0)), 5.0, "the two undo each other");
+        // A playing into its crossfade out has B alongside; B paused in its
+        // crossfade in has A, B playing has none.
+        assert_eq!((p.crossfade_partner(0, 3.25, true), p.crossfade_partner(0, 2.9, true)), (Some((1, 10.25)), None));
+        assert_eq!((p.crossfade_partner(1, 10.25, false), p.crossfade_partner(1, 10.25, true)), (Some((0, 3.25)), None));
+        // A quarter in, from either side.
+        assert_eq!((p.crossfade_share(0, 1, 3.25), p.crossfade_share(1, 0, 10.25), p.crossfade_share(0, 1, 2.0)), (Some(0.25), Some(0.25), None));
+    }
 
     fn cut(name: &str, start: f64, end: f64) -> Cut {
         Cut::new(PathBuf::from(name), start, end)

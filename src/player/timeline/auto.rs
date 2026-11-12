@@ -452,7 +452,6 @@ impl Lanes<'_> {
 }
 
 impl Timeline {
-    /// The cuts' automation lanes, under their Effects row.
     /// The cuts' Effects row's lanes (false) or their Frame row's (true).
     pub(super) fn cut_group(&self, frame: bool) -> Lanes<'_> {
         if frame { self.frame_lanes() } else { self.cut_lanes() }
@@ -467,6 +466,7 @@ impl Timeline {
         Lanes { t: self, params, name: "Frame", row_top: self.rows.frame_top, row_h: EFFECTS, top: self.rows.frame_auto_top, folded: self.folds.frame, owners, fixed: Vec::new() }
     }
 
+    /// The cuts' automation lanes, under their Effects row.
     pub(super) fn cut_lanes(&self) -> Lanes<'_> {
         let owners: Vec<Owner> = self.blocks.iter().enumerate().map(|(i, c)| Owner { on: AutoOn::Cut(i), from: c.from, start: c.cut.start, len: c.len(), clips: &c.cut.automation, fixed: super::super::automation_ui::fixed_of_cut(&c.cut) }).collect();
         let fixed = super::super::automation_ui::fixed_rows(owners.iter().map(|o| &o.fixed[..]));

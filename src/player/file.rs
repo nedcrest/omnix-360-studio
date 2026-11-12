@@ -189,107 +189,106 @@ impl App {
 }
 
 impl App {
-    /// The project file and loading clips: this area's messages, as `handle` passes them on.
     /// «Add clips»: the file dialog, from the playing clip's folder.
     fn pick_clips(&mut self) -> Task<Message> {
-            let dir = self.clip.as_ref().and_then(|c| c.playback.media.input.parent().map(Path::to_owned));
-            Task::perform(
-                async move {
-                    let mut dialog = rfd::AsyncFileDialog::new()
-                        .set_title("Add clips")
-                        .add_filter("Videos and pictures", &super::bin::exts([super::bin::CLIP_EXT, super::bin::PICTURE_EXT].concat().as_slice()))
-                        .add_filter("Osmo 360 video", &["OSV", "osv"]);
-                    if let Some(dir) = dir {
-                        dialog = dialog.set_directory(dir);
-                    }
-                    dialog.pick_files().await.unwrap_or_default().iter().map(|f| f.path().to_owned()).collect()
-                },
-                Message::Picked,
-            )
+        let dir = self.clip.as_ref().and_then(|c| c.playback.media.input.parent().map(Path::to_owned));
+        Task::perform(
+            async move {
+                let mut dialog = rfd::AsyncFileDialog::new()
+                    .set_title("Add clips")
+                    .add_filter("Videos and pictures", &super::bin::exts([super::bin::CLIP_EXT, super::bin::PICTURE_EXT].concat().as_slice()))
+                    .add_filter("Osmo 360 video", &["OSV", "osv"]);
+                if let Some(dir) = dir {
+                    dialog = dialog.set_directory(dir);
+                }
+                dialog.pick_files().await.unwrap_or_default().iter().map(|f| f.path().to_owned()).collect()
+            },
+            Message::Picked,
+        )
     }
 
     /// A clip opened (or not): taken in, added if asked, the next one opened.
     fn loaded(&mut self, result: Arc<Result<Media, String>>) -> Task<Message> {
-            self.loading = None;
-            self.loaded += 1;
-            match Arc::into_inner(result).expect("loaded clip is not shared") {
-                Ok(media) => {
-                    let (input, duration) = (media.input.clone(), media.duration);
-                    let thumbs = self.take_in(media);
-                    if self.loading_adds {
-                        self.add_cut(input, duration);
-                    }
-                    return Task::batch([self.open_next(), thumbs]);
+        self.loading = None;
+        self.loaded += 1;
+        match Arc::into_inner(result).expect("loaded clip is not shared") {
+            Ok(media) => {
+                let (input, duration) = (media.input.clone(), media.duration);
+                let thumbs = self.take_in(media);
+                if self.loading_adds {
+                    self.add_cut(input, duration);
                 }
-                Err(e) => self.error = Some(e),
+                return Task::batch([self.open_next(), thumbs]);
             }
-            self.open_next()
+            Err(e) => self.error = Some(e),
+        }
+        self.open_next()
     }
 
     /// A project chosen: read, what's gone left out and said, opened.
     fn project_picked(&mut self, path: PathBuf) -> Task<Message> {
-            let mut project = match Project::read(&path) {
-                Ok(p) => p,
-                Err(e) => {
-                    self.error = Some(format!("{e:#}"));
-                    return Task::none();
-                }
-            };
-            // What's gone can't play: left out, and said. A cut's sound
-            // file gone plays its clip's own, its name kept.
-            let missing = project.drop_missing(Path::exists);
-            self.error = missing.said();
-            // Each cut gets a mode of its own, so changing one leaves the rest.
-            for c in &mut project.cuts {
-                c.stabilize.get_or_insert(self.opts.stabilize);
+        let mut project = match Project::read(&path) {
+            Ok(p) => p,
+            Err(e) => {
+                self.error = Some(format!("{e:#}"));
+                return Task::none();
             }
-            self.forget_edit_state();
-            let waves: Vec<_> = project.sound_clips().map(|c| self.load_waveform(&c.input)).collect();
-            self.queue.extend(project.cuts.iter().map(|c| (c.input.clone(), false)));
-            let complete = missing.is_complete();
-            self.edit.replace(project);
-            self.mark_flat();
-            self.saved_version = if complete { self.edit.version } else { 0 };
-            settings::remember(&mut self.recent, &path);
-            self.project = Some(path);
-            // An empty one is built from its bin: open it.
-            if !self.has_edit() {
-                self.bin.open = true;
-            }
-            let next = if self.loading.is_none() { self.open_next() } else { Task::none() };
-            // Voices chosen in Dailix since this edit was made (gap 103).
-            let voices = self.offer_sheet_voices();
-            Task::batch(waves.into_iter().chain([next, voices]))
+        };
+        // What's gone can't play: left out, and said. A cut's sound
+        // file gone plays its clip's own, its name kept.
+        let missing = project.drop_missing(Path::exists);
+        self.error = missing.said();
+        // Each cut gets a mode of its own, so changing one leaves the rest.
+        for c in &mut project.cuts {
+            c.stabilize.get_or_insert(self.opts.stabilize);
+        }
+        self.forget_edit_state();
+        let waves: Vec<_> = project.sound_clips().map(|c| self.load_waveform(&c.input)).collect();
+        self.queue.extend(project.cuts.iter().map(|c| (c.input.clone(), false)));
+        let complete = missing.is_complete();
+        self.edit.replace(project);
+        self.mark_flat();
+        self.saved_version = if complete { self.edit.version } else { 0 };
+        settings::remember(&mut self.recent, &path);
+        self.project = Some(path);
+        // An empty one is built from its bin: open it.
+        if !self.has_edit() {
+            self.bin.open = true;
+        }
+        let next = if self.loading.is_none() { self.open_next() } else { Task::none() };
+        // Voices chosen in Dailix since this edit was made (gap 103).
+        let voices = self.offer_sheet_voices();
+        Task::batch(waves.into_iter().chain([next, voices]))
     }
 
     /// «Save» (to its file) or «Save as» (`as_new`: a new name asked).
     fn save_project(&mut self, as_new: bool) -> Task<Message> {
-            if !self.has_edit() {
-                return Task::none();
-            }
-            if let (Some(path), false) = (&self.project, as_new) {
-                return self.update(Message::SaveProjectTo(Some(path.clone())));
-            }
-            // Named after the first clip, or the song (or sound effect) a
-            // project starts from: `has_edit` holds one of them.
-            let Some(first) = self.edit.cuts.first().map(|c| &c.input).or(self.edit.sound_clips().next().map(|c| &c.input)) else {
-                return Task::none();
-            };
-            let dir = self.project.as_ref().unwrap_or(first).parent().map(Path::to_owned);
-            let name = self.project.as_ref().and_then(|p| p.file_name()).map_or_else(
-                || format!("{}_edit.json", first.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default()),
-                |n| n.to_string_lossy().into_owned(),
-            );
-            Task::perform(
-                async move {
-                    let mut dialog = rfd::AsyncFileDialog::new().set_title("Save project").add_filter("Omnix project", &["json"]).set_file_name(name);
-                    if let Some(dir) = dir {
-                        dialog = dialog.set_directory(dir);
-                    }
-                    dialog.save_file().await.map(|f| f.path().to_owned())
-                },
-                Message::SaveProjectTo,
-            )
+        if !self.has_edit() {
+            return Task::none();
+        }
+        if let (Some(path), false) = (&self.project, as_new) {
+            return self.update(Message::SaveProjectTo(Some(path.clone())));
+        }
+        // Named after the first clip, or the song (or sound effect) a
+        // project starts from: `has_edit` holds one of them.
+        let Some(first) = self.edit.cuts.first().map(|c| &c.input).or(self.edit.sound_clips().next().map(|c| &c.input)) else {
+            return Task::none();
+        };
+        let dir = self.project.as_ref().unwrap_or(first).parent().map(Path::to_owned);
+        let name = self.project.as_ref().and_then(|p| p.file_name()).map_or_else(
+            || format!("{}_edit.json", first.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default()),
+            |n| n.to_string_lossy().into_owned(),
+        );
+        Task::perform(
+            async move {
+                let mut dialog = rfd::AsyncFileDialog::new().set_title("Save project").add_filter("Omnix project", &["json"]).set_file_name(name);
+                if let Some(dir) = dir {
+                    dialog = dialog.set_directory(dir);
+                }
+                dialog.save_file().await.map(|f| f.path().to_owned())
+            },
+            Message::SaveProjectTo,
+        )
     }
 
     /// Back to the start screen with an empty edit. Loaded clips stay in
@@ -318,6 +317,7 @@ impl App {
         Task::none()
     }
 
+    /// The project file and loading clips: this area's messages, as `handle` passes them on.
     pub(super) fn on_file(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::Open => return self.pick_clips(),

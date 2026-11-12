@@ -501,7 +501,6 @@ pub struct Ducked {
     pub speech: Vec<(f64, f64)>,
 }
 
-/// How long the spans `a0..a1` and `b0..b1` share.
 /// The groups among `moves` (group, its moved ids, by) whose clips, now
 /// at `now`, start before the edit or overlap another clip more than they
 /// did `was` (lanes as `Project::lane_spans` gives them).
@@ -520,6 +519,7 @@ fn group_clashes(was: &[Vec<(Id, f64, f64)>], now: &[Vec<(Id, f64, f64)>], moves
     bad
 }
 
+/// How long the spans `a0..a1` and `b0..b1` share.
 fn overlap_of(a0: f64, a1: f64, b0: f64, b1: f64) -> f64 {
     (a1.min(b1) - a0.max(b0)).max(0.0)
 }
@@ -1004,13 +1004,6 @@ pub fn kept_picture(before: &[Cut], after: &[Cut]) -> Vec<(f64, f64, f64)> {
     kept
 }
 
-/// Sync-locked `clips` after the picture went from `before` to `after`
-/// (gap 99; the user, 2026-11-11: what plays under a picture stays under
-/// it): each stretch of a clip follows the picture it lay under, so a clip
-/// across an edit is cut there, a stretch under picture taken away goes
-/// with it, and one past the film's end moves with the end. The first
-/// piece keeps the clip's id; its fade in stays on the first piece, its
-/// fade out on the last.
 /// The stretches of a thing from `at` to `ends` on the edit that stay
 /// when the picture goes from `before` to `after` (`kept_picture`, its
 /// lengths): (new start, its own time there by `local`, length) each, in
@@ -1056,6 +1049,13 @@ pub fn follow_picture_items(items: &[crate::overlay::Item], before: &[Cut], afte
     out
 }
 
+/// Sync-locked `clips` after the picture went from `before` to `after`
+/// (gap 99; the user, 2026-11-11: what plays under a picture stays under
+/// it): each stretch of a clip follows the picture it lay under, so a clip
+/// across an edit is cut there, a stretch under picture taken away goes
+/// with it, and one past the film's end moves with the end. The first
+/// piece keeps the clip's id; its fade in stays on the first piece, its
+/// fade out on the last.
 pub fn follow_picture(clips: &[MusicClip], before: &[Cut], after: &[Cut]) -> Vec<MusicClip> {
     let kept = kept_picture(before, after);
     let ends = (edit_length(before), edit_length(after));

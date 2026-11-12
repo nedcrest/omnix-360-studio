@@ -1,8 +1,10 @@
 //! An ordinary (flat) clip's frame (gap 107): which part of its picture
 //! the film shows, in plain numbers — its centre across and down from the
 //! picture's middle and its zoom, in % of the picture's height, and its
-//! rotation in degrees. Always the film's shape, so no black bars at 100 %
-//! and more. A cut's frame is its base (`Cut::frame`); the Frame lanes
+//! rotation in degrees. Always the film's shape; centred and unturned at
+//! 100 % it fills the picture, while a frame moved off the middle at that
+//! zoom, or turned, shows black past the picture's edge (zoom in to cover
+//! it). A cut's frame is its base (`Cut::frame`); the Frame lanes
 //! animate it (step b). The same crop the 360 view gives a flat clip
 //! (`View::camera`), so the player, the export and the shader need nothing
 //! new.

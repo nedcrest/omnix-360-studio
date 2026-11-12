@@ -92,6 +92,15 @@ impl Frame {
         View { yaw: self.x / 100.0 * d, pitch: -self.y / 100.0 * d, roll: self.rotation, fov: d * 100.0 / self.zoom, ..View::home(Projection::Perspective) }
     }
 
+    /// The frame moved by `screen` (% of the picture's height, across and
+    /// down the screen: turned with the frame onto the picture) and turned
+    /// `turn` degrees more: what a drag over the view does (the audit,
+    /// 2026-11-12: a turned frame moved the wrong way).
+    pub fn moved(&self, [dx, dy]: [f64; 2], turn: f64) -> Frame {
+        let (s, c) = self.rotation.to_radians().sin_cos();
+        Frame { x: self.x + c * dx - s * dy, y: self.y + s * dx + c * dy, rotation: self.rotation + turn, ..*self }
+    }
+
     /// The frame in words, for `describe`.
     pub fn said(&self) -> String {
         format!("x {:.1} %, y {:.1} %, zoom {:.1} %, rotation {:.1}°", self.x, self.y, self.zoom, self.rotation)
@@ -111,5 +120,10 @@ mod tests {
         assert!((zoomed.half - 0.25).abs() < 1e-6, "twice as big: half the height");
         assert!((zoomed.centre[0] - 0.1).abs() < 1e-6 && (zoomed.centre[1] + 0.2).abs() < 1e-6, "right 10 %, up 20 %: {:?}", zoomed.centre);
         assert!(Frame { zoom: 50.0, ..Frame::default() }.check().is_err() && Frame::default().check().is_ok());
+        // Dragged across the screen: across the picture, or down it when turned a quarter.
+        let f = Frame::default().moved([10.0, 0.0], 0.0);
+        assert_eq!((f.x, f.y), (10.0, 0.0));
+        let turned = Frame { rotation: 90.0, ..Frame::default() }.moved([10.0, 0.0], 5.0);
+        assert!(turned.x.abs() < 1e-9 && (turned.y - 10.0).abs() < 1e-9 && turned.rotation == 95.0, "{turned:?}");
     }
 }

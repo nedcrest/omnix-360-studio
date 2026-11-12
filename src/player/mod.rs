@@ -1325,7 +1325,7 @@ impl App {
                 self.on_frame_key(m);
                 Task::none()
             }
-            m @ (Message::Look { .. } | Message::Zoom(_) | Message::LookDone | Message::KeyAdd | Message::Aim(_)) if self.frames_by_hand() => {
+            m @ (Message::Look { .. } | Message::Zoom(_) | Message::LookDone | Message::KeyAdd | Message::Aim(_)) if self.frames_by_hand() || matches!(m, Message::LookDone) => {
                 self.frame_by_hand(m);
                 Task::none()
             }

@@ -233,8 +233,9 @@ impl App {
         Key::Named(Named::Delete | Named::Backspace) if mods.shift() || !matches!(self.selection, Selection::None | Selection::Cut(_)) => {
             return self.update(Message::DeleteCut);
         }
-        // Editing: Del takes the selected cut (framing, the keyframe).
-        Key::Named(Named::Delete | Named::Backspace) if !self.framing => return self.update(Message::DeleteCut),
+        // Editing: Del takes the selected cut (framing, the keyframe); a
+        // frame key picked on the Frame row first (gap 107).
+        Key::Named(Named::Delete | Named::Backspace) if !self.framing || self.frame_key.is_some() => return self.update(Message::DeleteCut),
         Key::Named(Named::Delete | Named::Backspace) => return self.update(Message::KeyDelete),
             _ => {}
         }

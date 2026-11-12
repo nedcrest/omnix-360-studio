@@ -461,7 +461,8 @@ impl Timeline {
     /// The cuts' Frame row (gap 107): a lane for each of the frame's
     /// values, all four once it's open, each showing the cuts' clips for it.
     pub(super) fn frame_lanes(&self) -> Lanes<'_> {
-        let owners: Vec<Owner> = self.blocks.iter().enumerate().map(|(i, c)| Owner { on: AutoOn::Cut(i), from: c.from, start: c.cut.start, len: c.len(), clips: &c.cut.automation, fixed: Vec::new() }).collect();
+        // Ordinary cuts only: a 360 cut's frame is its view (the audit).
+        let owners: Vec<Owner> = self.blocks.iter().enumerate().filter(|(_, c)| c.cut.flat).map(|(i, c)| Owner { on: AutoOn::Cut(i), from: c.from, start: c.cut.start, len: c.len(), clips: &c.cut.automation, fixed: Vec::new() }).collect();
         let params = (0..crate::frame::PARAMS.len()).map(Param::Frame).collect();
         Lanes { t: self, params, name: "Frame", row_top: self.rows.frame_top, row_h: EFFECTS, top: self.rows.frame_auto_top, folded: self.folds.frame, owners, fixed: Vec::new() }
     }

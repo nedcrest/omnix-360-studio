@@ -109,6 +109,10 @@ impl App {
     /// right-dragged (it turns) or scrolled (it zooms) on an ordinary cut:
     /// its frame there, one undo step a drag or a notch (gap 107).
     pub(super) fn frame_by_hand(&mut self, message: Message) {
+        // A drag let go ends its step wherever the playhead went (the audit).
+        if matches!(message, Message::LookDone) {
+            return self.edit.commit();
+        }
         let Some((_, t)) = self.playing_cut() else { return };
         let i = self.current;
         let now = self.edit.cuts[i].frame_at(t).unwrap_or_default();
@@ -116,13 +120,13 @@ impl App {
         let notch = matches!(message, Message::Zoom(_));
         match message {
             Message::Look { yaw, pitch, roll } => {
-                let per = 100.0 / self.look.fov * 100.0 / now.zoom;
-                v[0] += yaw.to_degrees() * per;
-                v[1] -= pitch.to_degrees() * per;
-                v[3] += roll.to_degrees();
+                // The view's own field already shrinks with the zoom: a
+                // pixel of drag is a pixel of picture at FLAT_DEGREES a
+                // height; turned with the frame (the audit, 2026-11-12).
+                let per = 100.0 / crate::view::FLAT_DEGREES;
+                v = now.moved([yaw.to_degrees() * per, -pitch.to_degrees() * per], roll.to_degrees() * now.zoom / 100.0).values();
             }
             Message::Zoom(steps) => v[2] *= 1.1f64.powf(-steps),
-            Message::LookDone => return self.edit.commit(),
             Message::Aim(at) => return self.aim_frame(at),
             Message::KeyAdd => return self.frame_key_here(),
             _ => return,
@@ -143,10 +147,11 @@ impl App {
         if !self.frames_by_hand() {
             return;
         }
-        let (Some((_, t)), Some(c)) = (self.playing_cut(), self.clip.as_ref()) else { return };
+        // A click that wobbled has a step open: it ends with the aim, or alone.
+        let (Some((_, t)), Some(c)) = (self.playing_cut(), self.clip.as_ref()) else { return self.edit.commit() };
         let picture = super::viewer::aspect(&c.playback) as f64;
         let view = (self.view_size.width / self.view_size.height.max(1.0)) as f64;
-        let Some([u, v]) = self.camera().flat_uv(view, picture, ndc) else { return };
+        let Some([u, v]) = self.camera().flat_uv(view, picture, ndc) else { return self.edit.commit() };
         let i = self.current;
         let mut values = self.edit.cuts[i].frame_at(t).unwrap_or_default().values();
         (values[0], values[1]) = ((u - 0.5) * picture * 100.0, (v - 0.5) * 100.0);
@@ -165,8 +170,10 @@ impl App {
             Message::FrameKeyPick(i, t) => (i, t),
             Message::FrameKeyMove(i, from, t) => {
                 let Some(cut) = self.edit.cuts.get(i).map(|c| c.id) else { return };
-                self.op(crate::model::ops::Op::Auto(crate::model::ops::auto::AutoOp::FrameKeyMove { cut, from, t, tolerance: 1e-6 }));
-                (i, t)
+                // Where it landed (clamped to its lanes), or where it was if refused.
+                let landed = self.op(crate::model::ops::Op::Auto(crate::model::ops::auto::AutoOp::FrameKeyMove { cut, from, t, tolerance: 1e-6 })).is_some();
+                let shown = self.edit.cuts[i].automation.iter().filter(|c| crate::frame::PARAMS.contains(&c.param.as_str())).flat_map(|c| c.points.iter().map(|q| q.t)).find(|&q| (q - t).abs() < 1e-6 || (landed && (q - t).abs() < (q - from).abs()));
+                (i, if landed { shown.unwrap_or(t) } else { from })
             }
             _ => return,
         };
@@ -181,6 +188,10 @@ impl App {
     pub(super) fn frame_key_here(&mut self) {
         let Some((_, t)) = self.playing_cut() else { return };
         let c = &self.edit.cuts[self.current];
+        // Only the cut itself or nothing selected: not a text's K (the audit).
+        if !matches!(self.selection, Selection::None) && self.selection != Selection::Cut(c.id) {
+            return;
+        }
         let op = crate::model::ops::auto::AutoOp::FrameKey { cut: c.id, t, frame: c.frame_at(t).unwrap_or_default(), tolerance: self.tolerance() };
         self.op(crate::model::ops::Op::Auto(op));
     }

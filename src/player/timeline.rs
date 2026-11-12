@@ -852,8 +852,9 @@ impl Timeline {
     /// of each time a Frame lane has a point, once.
     fn frame_keys(&self) -> Vec<(usize, f64)> {
         let mut keys = Vec::new();
-        for (i, c) in self.blocks.iter().enumerate() {
-            let mut ts: Vec<f64> = c.cut.automation.iter().filter(|a| crate::frame::PARAMS.contains(&a.param.as_str())).flat_map(|a| a.points.iter().map(|q| q.t)).collect();
+        // An ordinary cut's, within its in and out (a trim leaves points past them).
+        for (i, c) in self.blocks.iter().enumerate().filter(|(_, c)| c.cut.flat) {
+            let mut ts: Vec<f64> = c.cut.automation.iter().filter(|a| crate::frame::PARAMS.contains(&a.param.as_str())).flat_map(|a| a.points.iter().map(|q| q.t)).filter(|&t| t >= c.cut.start && t <= c.cut.end).collect();
             ts.sort_by(f64::total_cmp);
             ts.dedup_by(|a, b| (*a - *b).abs() < 1e-6);
             keys.extend(ts.into_iter().map(|t| (i, t)));
@@ -3409,6 +3410,7 @@ mod tests {
         t.folds.frame = false;
         t.rows = Rows::new(1.0, false, t.folds, 0);
         t.blocks[0].cut.automation = vec![AutoClip { param: "frame.zoom".into(), from: 1.0, to: 3.0, points: vec![AutoPoint { t: 2.0, v: 150.0, ease: Default::default() }], follows: None, animation: None }];
+        t.blocks[0].cut.flat = true;
         let lanes = t.frame_lanes();
         assert_eq!((lanes.params.len(), lanes.tag()), (4, "▾ Frame".to_owned()));
         assert!(t.rows.frame_top >= t.rows.auto_top && t.rows.keys_top > t.rows.frame_auto_top, "under the Effects row, over the View row");
@@ -3428,8 +3430,10 @@ mod tests {
         use crate::automation::{AutoClip, AutoPoint};
         let (mut t, b) = timeline();
         let lane = |param: &str, ts: &[f64]| AutoClip { param: param.into(), from: 0.0, to: 4.0, points: ts.iter().map(|&t| AutoPoint { t, v: 100.0, ease: Default::default() }).collect(), follows: None, animation: None };
-        t.blocks[0].cut.automation = vec![lane("frame.zoom", &[1.0, 3.0]), lane("frame.x", &[1.0]), lane("exposure", &[2.0])];
-        assert_eq!(t.frame_keys(), [(0, 1.0), (0, 3.0)], "once a time, the Frame lanes' only");
+        t.blocks[0].cut.automation = vec![lane("frame.zoom", &[1.0, 3.0, 5.0]), lane("frame.x", &[1.0]), lane("exposure", &[2.0])];
+        assert!(t.frame_keys().is_empty(), "a 360 cut has none");
+        t.blocks[0].cut.flat = true;
+        assert_eq!(t.frame_keys(), [(0, 1.0), (0, 3.0)], "once a time, the Frame lanes' only, within the cut (0-4 s)");
         let mid = t.rows.frame_top + EFFECTS / 2.0;
         assert!(matches!(t.hit(Point::new(t.x(3.0, b), mid), b, false, false), Hit::FrameKey(0, k) if k == 3.0));
         t.folds.frame = false;

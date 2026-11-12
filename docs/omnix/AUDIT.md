@@ -1,5 +1,37 @@
 # Audits — the lists to work off
 
+## Small audit of 2026-11-12 (since `7a2ebb4`: voices 103, Dailix 104, 99b, framing 107)
+
+Two read-only reviews (core; window and Dailix), 23 findings. Fixed the
+same night, each with tests:
+- groups and sync locks together: a locked title moved twice, a group's
+  others stayed when its first cut went, a drag left a locked song behind
+  its group — `cb41c76`;
+- frame keys: moved as one within their lanes, never onto another, held
+  past their lanes; `AutoOp::Put` lays a lane down as it is, so «All of
+  this clip» / «Whole film» no longer add flat ends — `66f4f0a`;
+- voices: the level kept without a loudness, no offer of the voice a cut
+  plays, the marking read once, the last choice wins, a gone cut left out
+  of the batch, undo closes the sound menu and the picked key — `94532e1`;
+- framing by hand: the drag at any zoom and turn (`Frame::moved`), steps
+  closed, ordinary cuts only, keys within the cut, K and Del as meant —
+  `ab2eed5`;
+- Dailix: Esc closes the day's videos, `ALL_DAYS` in one place, times
+  read once — Dailix `d51f62f`, Omnix `7387d5c`;
+- doc comments back on their items, indentation — `dcb19da`.
+
+Left, with when:
+- **With 107b:** a frame off the middle at 100 %, or turned, shows black
+  past the picture (the doc says so now); keep the panel's ranges to what
+  covers the picture, or zoom to cover, when the box over the picture
+  comes.
+- **Next time framing by hand is touched:** a wheel notch in the middle
+  of a drag closes the drag's step early (two steps).
+- «Keep as it is» on the voices offer is an undo step of its own
+  (it changes the project); fine unless the user minds.
+- Dailix's `Ops::change` (sheet) is 105 lines, old: split when next
+  touched.
+
 ## Small audit of 2026-11-11 (since `ef776a3`: beats, sync lock, groups, the film's end, pieces)
 
 Two read-only reviews, the core and the window, the day after the big

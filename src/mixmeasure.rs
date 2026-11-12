@@ -198,6 +198,18 @@ pub fn run_cli(path: &std::path::Path, target: f64, every: Option<f64>) -> Resul
 
 #[cfg(test)]
 mod tests {
+    /// The cuts' sound as measured, for the time seam's film (guard 1).
+    #[test]
+    fn the_cuts_sound_is_measured_where_it_was() {
+        use crate::time_snapshot::{film, golden, n};
+        let p = film();
+        let lines: String = super::cut_sounds(&p)
+            .iter()
+            .map(|s| format!("{} from {} for {:?} crossfade {} fades {} {} head {} tail {}\n", s.input.display(), n(s.start), s.duration.map(n), n(s.crossfade), n(s.fade_in), n(s.fade_out), n(s.head), n(s.tail)))
+            .collect();
+        golden("time-measure", &lines);
+    }
+
     #[test]
     fn the_film_is_cut_into_stretches_the_last_shorter() {
         assert_eq!(super::spans(2.5, 1.0), [(0.0, 1.0), (1.0, 2.0), (2.0, 2.5)]);

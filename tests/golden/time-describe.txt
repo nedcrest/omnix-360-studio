@@ -1,0 +1,38 @@
+edit: aspect free  clips' sound +0.0 dB  fades in 0.50 s, out 1.00 s
+cuts:
+  cut #1      0.00-   6.00 s  a.mp4 10.00-16.00  level +0.0 dB
+    sound: fade in 0.50 s, after its picture 1.00 s
+    points: 12.00 s +0.0 dB, 14.00 s -6.0 dB
+    in: edge_fade 1.00 s
+    effects at 13.00 s (clip): {}
+    automation exposure 11.00-15.00 s: 11.50 s 0, 14.50 s 1
+    marker 11.00 s (clip) at 1.00 s  «wave»
+    marker 15.00 s (clip) at 5.00 s
+  cut #2      5.00-  10.00 s  b.mp4 2.00-7.00  level +0.0 dB
+    sound: before its picture 0.50 s
+    join before: dissolve over 1.00 s
+    out: edge_blur 0.80 s
+    automation frame.x 2.00-7.00 s: 3.00 s -10, 6.00 s 20
+    automation frame.y 2.00-7.00 s: 3.00 s 0, 6.00 s 0
+    automation frame.zoom 2.00-7.00 s: 3.00 s 150, 6.00 s 150
+    automation frame.rotation 2.00-7.00 s: 3.00 s 0, 6.00 s 0
+  cut #3      9.50-  13.50 s  c.mp4 0.00-4.00  level +0.0 dB
+    sound: fade out 0.30 s, after its picture -0.50 s
+    join before: dissolve over 0.50 s
+  cut #4     13.50-  16.50 s  d.mp4 20.00-23.00  level +0.0 dB
+    sound: before its picture 0.70 s
+    out: edge_fade 1.50 s
+Music: level +0.0 dB  sync lock
+  clip #5     0.00-  20.00 s  song.wav 0.00-20.00  level +0.0 dB
+    sound: fade in 1.00 s, fade out 2.00 s
+    points: 8.00 s -3.0 dB
+Voice: level +0.0 dB
+  clip #6     4.00-   6.00 s  take.wav 1.00-3.00  level +0.0 dB
+overlays:
+  lane 0 sync lock:
+  item #7     3.00-   9.00 s  logo.png
+    own time 0.00-6.00 s (of its file)
+text:
+  item #8     1.00-   5.00 s  title.png
+    own time 0.00-4.00 s (of its file)
+past the film's end at 16.50 s: #5 by 3.50 s

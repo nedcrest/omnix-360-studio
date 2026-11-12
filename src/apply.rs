@@ -410,6 +410,14 @@ pub fn looks(template: Option<&str>) -> Result<String> {
 
 #[cfg(test)]
 mod tests {
+    /// What `describe` says of the time seam's film, line by line: an
+    /// agent reads its times (`TIME-SEAM.md`, guard 1).
+    #[test]
+    fn describe_says_the_films_times_as_it_did() {
+        let p = crate::time_snapshot::film();
+        crate::time_snapshot::golden("time-describe", &(super::describe_lines(&p).join("\n") + "\n"));
+    }
+
     #[test]
     fn a_texts_look_is_said_and_one_field_changed() {
         use crate::model::ops::{Op, items::ItemOp};

@@ -203,6 +203,16 @@ fn at(bends: &[(f64, f64)], t: f64) -> f64 {
 mod tests {
     use super::*;
 
+    /// The speech's sources on the edit, for the time seam's film (guard 1).
+    #[test]
+    fn the_speech_comes_from_where_it_did() {
+        use crate::time_snapshot::{film, golden, n};
+        let mut p = film();
+        p.cuts[0].speech = true;
+        let lines: String = sources(&p).iter().map(|s| format!("{} {}..{} at {}\n", s.file.display(), n(s.start), n(s.end), n(s.at))).collect();
+        golden("time-speech", &lines);
+    }
+
     fn source(at: f64) -> Source {
         Source { file: "voice.flac".into(), start: 1.0, end: 9.0, at }
     }

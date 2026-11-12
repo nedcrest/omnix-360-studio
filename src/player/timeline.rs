@@ -3172,6 +3172,74 @@ mod tests {
         (t, Rectangle::new(Point::ORIGIN, Size::new(1000.0 + 2.0 * PICK, 300.0)))
     }
 
+    /// The time seam's film (`TIME-SEAM.md`, guard 1) on the timeline:
+    /// its cuts where `offsets` puts them, its song on the Music lane, the
+    /// window showing 0..17 s; `open`, the effects' lanes (with exposure,
+    /// the film's automation) and the Frame lanes unfolded, else the key
+    /// bars they fold into.
+    fn film_timeline(open: bool) -> (Timeline, Rectangle) {
+        let p = crate::time_snapshot::film();
+        let (mut t, _) = timeline();
+        t.blocks = p.cuts.iter().zip(crate::project::offsets(&p.cuts)).map(|(c, from)| Block { cut: c.clone(), from, ..block(0.0, 1.0, 0.0) }).collect();
+        let li = t.sounds.iter().position(|l| l.which == SoundTrack::Music).unwrap();
+        t.sounds[li].blocks = p.music.clips.iter().map(|clip| MusicBlock { clip: clip.clone(), label: "song".into(), most: f64::INFINITY, wave: None, even_wave: None, hits: None, level: "0 dB".into() }).collect();
+        t.sounds[li].track = p.music.clone();
+        (t.video, t.duration, t.span) = (p.duration(), p.duration(), 17.0);
+        let exposure = crate::grade::NAMES.iter().position(|&n| n == "exposure").unwrap();
+        t.auto_lanes = vec![crate::player::automation_ui::Param::Grade(exposure)];
+        t.folds = Folds { effects: !open, frame: !open, ..Folds::default() };
+        t.rows = Rows::new(1.0, false, t.folds, t.auto_lanes.len());
+        let b = Rectangle::new(Point::ORIGIN, Size::new(1000.0 + 2.0 * PICK, t.rows.height));
+        (t, b)
+    }
+
+    /// What's under the pointer at every pixel, each row as runs of the
+    /// same hit, written where it differs from the row above.
+    fn hit_map(t: &Timeline, b: Rectangle) -> String {
+        let mut s = String::new();
+        let mut last = String::new();
+        for y in 0..t.rows.height as i32 {
+            let mut runs: Vec<(i32, String)> = Vec::new();
+            for x in 0..b.width as i32 {
+                let hit = format!("{:?}", t.hit(Point::new(x as f32 + 0.5, y as f32 + 0.5), b, false, false));
+                if runs.last().is_none_or(|r| r.1 != hit) {
+                    runs.push((x, hit));
+                }
+            }
+            let row: String = runs.iter().map(|(x, h)| format!(" {x}:{h}")).collect();
+            if row != last {
+                s += &format!("y {y}{row}\n");
+                last = row;
+            }
+        }
+        s
+    }
+
+    /// The film's timeline as it was, its lanes folded and open: where
+    /// each block and its sound are, what snaps, its marks and zones, and
+    /// what's under the pointer everywhere. The seam moves none of it at
+    /// speed 1.
+    #[test]
+    fn the_films_timeline_is_where_it_was() {
+        use crate::time_snapshot::{golden, n};
+        use std::fmt::Write;
+        let mut s = String::new();
+        for open in [false, true] {
+            let (t, b) = film_timeline(open);
+            writeln!(s, "lanes open: {open}").unwrap();
+            for c in &t.blocks {
+                let ((l, r), (sl, sr)) = (t.block_x(c, b), t.sound_x(c, b));
+                writeln!(s, "block {l} {r} sound {sl} {sr}").unwrap();
+            }
+            writeln!(s, "snap {}", t.snap_targets().iter().map(|(at, of)| format!("{}:{of:?}", n(*at))).collect::<Vec<_>>().join(" ")).unwrap();
+            writeln!(s, "frame keys {:?}", t.frame_keys()).unwrap();
+            writeln!(s, "flags {:?}", t.flags(b).iter().map(|f| (f.0, n(f.1), f.2)).collect::<Vec<_>>()).unwrap();
+            writeln!(s, "zones {:?}", t.zones(b)).unwrap();
+            s += &hit_map(&t, b);
+        }
+        golden("time-timeline", &s);
+    }
+
     #[test]
     fn a_cut_snaps_to_the_beats_of_a_track_that_snaps_and_a_song_not_to_its_own() {
         use crate::beats::Beat;

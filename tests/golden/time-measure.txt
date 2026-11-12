@@ -1,0 +1,4 @@
+a.mp4 from 10.000000 for Some("6.000000") crossfade 0.000000 fades 1.000000 0.000000 head 0.000000 tail 0.000000
+b.mp4 from 2.000000 for Some("5.000000") crossfade 1.000000 fades 0.000000 0.000000 head 0.000000 tail 0.000000
+c.mp4 from 0.000000 for Some("4.000000") crossfade 0.500000 fades 0.000000 0.300000 head 0.000000 tail 0.500000
+d.mp4 from 20.000000 for Some("3.000000") crossfade 0.000000 fades 0.000000 1.500000 head 0.000000 tail 0.000000

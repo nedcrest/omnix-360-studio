@@ -197,11 +197,21 @@ impl AutoClip {
 pub fn framed(frame: crate::frame::Frame, clips: &[AutoClip], t: f64) -> crate::frame::Frame {
     let mut values = frame.values();
     for (k, name) in crate::frame::PARAMS.iter().enumerate() {
-        if let Some(v) = value(clips, name, t) {
+        if let Some(v) = value(clips, name, t).or_else(|| held(clips, name, t)) {
             values[k] = v;
         }
     }
     crate::frame::Frame::from_values(values)
+}
+
+/// What `param`'s clip nearest `t` holds at its edge there, where none
+/// covers `t`: a frame key holds past its lane, as it did when the lane
+/// was made over the whole cut and the cut grew since (the audit,
+/// 2026-11-12).
+fn held(clips: &[AutoClip], param: &str, t: f64) -> Option<f64> {
+    let gap = |c: &AutoClip| if t < c.from { c.from - t } else { t - c.to };
+    let c = clips.iter().filter(|c| c.param == param).min_by(|a, b| gap(a).total_cmp(&gap(b)))?;
+    Some(c.value_at(t.clamp(c.from, c.to)))
 }
 
 /// `place` with what `clips` move at `t`.

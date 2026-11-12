@@ -52,6 +52,10 @@ pub enum AutoOp {
     /// Every clip moving `params` taken away (a reset: ins and outs among
     /// them).
     Clear { on: Graded, params: Vec<String> },
+    /// `clip` put on `on` as it is — its stretch, points and eases — over
+    /// none of its value's others (the audit, 2026-11-12: Add's flat ends
+    /// made motion a copied lane never had).
+    Put { on: Graded, clip: AutoClip },
     /// An ordinary cut's frame keyed at clip time `t` (gap 107, step e):
     /// a point on each of its four Frame lanes, a lane made where none
     /// runs at `t` (over the stretch free of others, its one point holding
@@ -128,6 +132,25 @@ fn clear(clips: &[AutoClip], param: &str, from: f64, to: f64, but: Option<usize>
     if hit { Err(OpError::Invalid(format!("another {param} clip is there"))) } else { Ok(()) }
 }
 
+/// `Put`: `clip` on `on` as it is, within its owner, a point at least,
+/// its points in order inside it and their values in range.
+fn put_clip(p: &mut Project, on: Graded, clip: &AutoClip) -> Result<Outcome, OpError> {
+    let o = owner(p, on)?;
+    check_param(&o, &clip.param)?;
+    let ordered = clip.points.windows(2).all(|w| w[0].t <= w[1].t);
+    let inside = clip.points.iter().all(|q| q.t >= clip.from - 1e-9 && q.t <= clip.to + 1e-9);
+    if clip.points.is_empty() || !ordered || !inside || clip.to - clip.from < SHORTEST || clip.from < o.range.0 - 1e-9 || clip.to > o.range.1 + 1e-9 {
+        return Err(OpError::Invalid(format!("a {} clip needs a point, its points in order inside it, {SHORTEST} s at least within its own", clip.param)));
+    }
+    for q in &clip.points {
+        in_range(&clip.param, q.v)?;
+    }
+    clear(o.clips, &clip.param, clip.from, clip.to, None)?;
+    let i = o.clips.partition_point(|c| c.from <= clip.from);
+    o.clips.insert(i, clip.clone());
+    said(format!("{}: {} clip put {:.2}-{:.2} s", name(on), clip.param, clip.from, clip.to))
+}
+
 /// A cut's automation clips, by its id.
 fn cut_clips(p: &mut Project, cut: Id) -> Result<(&mut Vec<AutoClip>, (f64, f64)), OpError> {
     let i = p.cut_index(cut).ok_or_else(|| OpError::NotFound(format!("cut #{cut}")))?;
@@ -170,18 +193,24 @@ fn frame_key(p: &mut Project, cut: Id, t: f64, frame: crate::frame::Frame, toler
 /// `FrameKeyMove`: each Frame lane's point at `from` to `t`, within its lane.
 fn frame_key_move(p: &mut Project, cut: Id, from: f64, t: f64, tolerance: f64) -> Result<Outcome, OpError> {
     let (clips, _) = cut_clips(p, cut)?;
-    let mut moved = 0;
-    for c in clips.iter_mut().filter(|c| crate::frame::PARAMS.contains(&c.param.as_str())) {
-        let Some(i) = c.points.iter().position(|q| (q.t - from).abs() <= tolerance) else { continue };
+    let holding = |c: &AutoClip| crate::frame::PARAMS.contains(&c.param.as_str()) && c.points.iter().any(|q| (q.t - from).abs() <= tolerance);
+    // One time for all its lanes: within every lane that holds it (the
+    // audit, 2026-11-12: lanes of other lengths split it).
+    let (lo, hi) = clips.iter().filter(|c| holding(c)).fold((f64::NEG_INFINITY, f64::INFINITY), |(lo, hi), c| (lo.max(c.from), hi.min(c.to)));
+    if lo > hi {
+        return Err(OpError::NotFound(format!("a frame key at {from:.2} s")));
+    }
+    let t = t.clamp(lo, hi);
+    // Onto another key: refused, not silently merged.
+    if (t - from).abs() > tolerance && clips.iter().filter(|c| holding(c)).any(|c| c.points.iter().any(|q| (q.t - t).abs() <= tolerance)) {
+        return Err(OpError::Invalid(format!("another frame key is at {t:.2} s")));
+    }
+    for c in clips.iter_mut().filter(|c| holding(c)) {
+        let i = c.points.iter().position(|q| (q.t - from).abs() <= tolerance).expect("holding");
         let mut q = c.points.remove(i);
-        q.t = t.clamp(c.from, c.to);
-        c.points.retain(|o| (o.t - q.t).abs() > tolerance);
+        q.t = t;
         let at = c.points.partition_point(|o| o.t < q.t);
         c.points.insert(at, q);
-        moved += 1;
-    }
-    if moved == 0 {
-        return Err(OpError::NotFound(format!("a frame key at {from:.2} s")));
     }
     said(format!("cut #{cut}: frame key {from:.2} → {t:.2} s"))
 }
@@ -280,6 +309,7 @@ pub(super) fn apply(p: &mut Project, op: &AutoOp) -> Result<Outcome, OpError> {
         }
         AutoOp::Follow { item, cut, track, params, offsets } => follow(p, *item, *cut, track, params, offsets),
         &AutoOp::Animate { item, edge, anim, seconds } => animate(p, item, edge, anim, seconds),
+        AutoOp::Put { on, clip } => put_clip(p, *on, clip),
         &AutoOp::FrameKey { cut, t, frame, tolerance } => frame_key(p, cut, t, frame, tolerance),
         &AutoOp::FrameKeyMove { cut, from, t, tolerance } => frame_key_move(p, cut, from, t, tolerance),
         &AutoOp::FrameKeyDelete { cut, t, tolerance } => frame_key_delete(p, cut, t, tolerance),
@@ -499,6 +529,35 @@ mod tests {
         assert_eq!(f(&e, 10.0).x, -20.0, "moved on all four");
         e.apply(&Op::Auto(AutoOp::FrameKeyDelete { cut, t: 10.0, tolerance: 0.01 })).unwrap();
         assert!(f(&e, 10.0).x > -20.0 && e.cuts[0].automation.iter().all(|c| c.points.len() == 2));
+        check(&e).unwrap();
+    }
+
+    #[test]
+    fn a_frame_key_moves_as_one_never_onto_another_and_holds_past_its_lanes() {
+        use crate::frame::Frame;
+        let mut e = Edit::default();
+        let cut = e.apply(&Op::Cut(crate::model::ops::cuts::CutOp::Add { input: "a.mp4".into(), start: 0.0, end: 20.0, place: crate::model::ops::cuts::Place::End, stabilize: None, lut: None })).unwrap().made.unwrap();
+        let on = Graded::Cut(cut);
+        // A zoom lane by hand over 4-20 s, then keys at 5 and 10 s.
+        e.apply(&Op::Auto(AutoOp::Add { on, param: "frame.zoom".into(), from: 4.0, to: 20.0 })).unwrap();
+        for (t, x) in [(5.0, 30.0), (10.0, -20.0)] {
+            e.apply(&Op::Auto(AutoOp::FrameKey { cut, t, frame: Frame { x, zoom: 150.0, ..Frame::default() }, tolerance: 0.01 })).unwrap();
+        }
+        assert!(e.apply(&Op::Auto(AutoOp::FrameKeyMove { cut, from: 10.0, t: 5.0, tolerance: 0.01 })).is_err(), "not onto the other");
+        // The lane's own edge point at 4 s (from Add) out of the way.
+        e.apply(&Op::Auto(AutoOp::PointDelete { on, param: "frame.zoom".into(), t: 4.0, tolerance: 0.01 })).unwrap();
+        let said = e.apply(&Op::Auto(AutoOp::FrameKeyMove { cut, from: 10.0, t: 2.0, tolerance: 0.01 })).unwrap().summary;
+        assert!(said.contains("4.00"), "within every lane holding it: {said}");
+        assert!(e.cuts[0].automation.iter().all(|c| c.points.iter().any(|q| (q.t - 4.0).abs() < 1e-9) || c.points.iter().all(|q| q.t != 10.0)));
+        // Past the lanes (the cut grown): the nearest edge held.
+        let mut cuts = e.cuts.clone();
+        cuts[0].end = 30.0;
+        assert_eq!(cuts[0].frame_at(25.0).unwrap().zoom, cuts[0].frame_at(20.0).unwrap().zoom);
+        // Put: a clip exactly as it is.
+        let clip = e.cuts[0].automation[0].clone();
+        e.apply(&Op::Auto(AutoOp::Clear { on, params: vec![clip.param.clone()] })).unwrap();
+        e.apply(&Op::Auto(AutoOp::Put { on, clip: clip.clone() })).unwrap();
+        assert_eq!(e.cuts[0].automation.iter().find(|c| c.param == clip.param), Some(&clip));
         check(&e).unwrap();
     }
 }

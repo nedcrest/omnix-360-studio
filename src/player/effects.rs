@@ -220,13 +220,11 @@ fn frame_copy(from: &crate::project::Cut, to: &crate::project::Cut) -> Vec<Op> {
     let on = crate::model::ops::keys::Graded::Cut(to.id);
     let params = crate::frame::PARAMS.map(str::to_owned).to_vec();
     let mut ops = vec![Op::Cut(crate::model::ops::cuts::CutOp::Frame { cut: to.id, frame: from.frame }), Op::Auto(AutoOp::Clear { on, params: params.clone() })];
+    // Each lane as it is, stretched (one too short on a short cut left out).
     for clip in from.automation.iter().filter(|c| params.contains(&c.param)) {
-        let c = clip.remapped((from.start, from.end), (to.start, to.end));
-        let param = c.param.clone();
-        ops.push(Op::Auto(AutoOp::Add { on, param: param.clone(), from: c.from, to: c.to }));
-        for p in &c.points {
-            ops.push(Op::Auto(AutoOp::Point { on, param: param.clone(), t: p.t, v: p.v, from: None, tolerance: 1e-6 }));
-            ops.push(Op::Auto(AutoOp::PointEase { on, param: param.clone(), t: p.t, ease: p.ease, tolerance: 1e-6 }));
+        let clip = clip.remapped((from.start, from.end), (to.start, to.end));
+        if clip.to - clip.from >= crate::model::ops::auto::SHORTEST {
+            ops.push(Op::Auto(AutoOp::Put { on, clip }));
         }
     }
     ops

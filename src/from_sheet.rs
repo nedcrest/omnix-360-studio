@@ -185,7 +185,7 @@ pub fn write_named(root: &Path, name: &str) -> Result<PathBuf> {
 }
 
 fn save(root: &Path, name: Option<&str>, project: &Project) -> Result<PathBuf> {
-    let path = dailix_sheet::project::new_video(root, name.unwrap_or("all-days"))?;
+    let path = dailix_sheet::project::new_video(root, name.unwrap_or(dailix_sheet::project::ALL_DAYS))?;
     project.save(&path)?;
     Ok(path)
 }
@@ -295,7 +295,7 @@ mod tests {
         assert!(Project::read(&empty).unwrap().cuts.is_empty() && Project::load(&empty).is_err());
         // Of every day: named for none, so the bin filters none out.
         let all = write_empty(&root, None).unwrap();
-        assert_eq!((all.clone(), day_of(&all)), (layout.video_edit("all-days"), None));
+        assert_eq!((all.clone(), day_of(&all)), (layout.video_edit(dailix_sheet::project::ALL_DAYS), None));
         let back = Project::load(&a).unwrap();
         assert_eq!(back.cuts.len(), 3);
         // The trip's own clips, kept whole, as Omnix saves them.

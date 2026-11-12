@@ -1,0 +1,32 @@
+with handles: cut 0 from 9.500000 frames 210
+with handles: cut 1 from 1.500000 frames 180
+with handles: cut 2 from 0.000000 frames 135
+with handles: cut 3 from 19.500000 frames 120
+frames [180, 150, 120, 90] overlap [0, 30, 15, 0] length 16.500000
+sound a.mp4 from 10.000000 for Some("6.000000") crossfade 0.000000 fades 1.000000 0.000000 head 0.000000 tail 0.000000
+sound b.mp4 from 2.000000 for Some("5.000000") crossfade 1.000000 fades 0.000000 0.000000 head 0.000000 tail 0.000000
+sound c.mp4 from 0.000000 for Some("4.000000") crossfade 0.500000 fades 0.000000 0.300000 head 0.000000 tail 0.500000
+sound d.mp4 from 20.000000 for Some("3.000000") crossfade 0.000000 fades 0.000000 1.500000 head 0.000000 tail 0.000000
+music inputs -ss 0 -t 16.5 -i song.wav -ss 1 -t 2 -i take.wav -ss 16 -t 1 -i a.mp4 -ss 1.5 -t 0.5 -i b.mp4 -ss 19.3 -t 0.6999999999999993 -i d.mp4
+graph [1:a:0]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,apad=whole_dur=6,volume=eval=frame:volume='if(lte(0+if(lt((t+10),12),0,if(lt((t+10),14),0+(-6)*((t+10)-12)/2,-6)),-40),0,pow(10,(0+if(lt((t+10),12),0,if(lt((t+10),14),0+(-6)*((t+10)-12)/2,-6)))/20))',afade=t=in:st=0:d=1[c1]
+graph [2:a:0]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,apad=whole_dur=5[c2]
+graph [3:a:0]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,apad=whole_dur=4,afade=t=out:st=3.2:d=0.3,volume=0:enable='gt(t,3.5)'[c3]
+graph [4:a:0]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,apad=whole_dur=3,afade=t=out:st=1.5:d=1.5[c4]
+graph [c1][c2]acrossfade=d=1:c1=qsin:c2=qsin[j2]
+graph [j2][c3]acrossfade=d=0.5:c1=qsin:c2=qsin[j3]
+graph [j3][c4]concat=n=2:v=0:a=1[j4]
+graph [j4]volume=1[s]
+graph [5:a:0]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,volume=eval=frame:volume='if(lte(0+if(lt((t+0),8),-3,-3),-40),0,pow(10,(0+if(lt((t+0),8),-3,-3))/20))',afade=t=in:st=0:d=1,volume=eval=frame:volume='clip((16.5-t)/3,0,1)',adelay=delays=0:all=1,volume=1[m5]
+graph [6:a:0]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,adelay=delays=4000:all=1,volume=1[m6]
+graph [7:a:0]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,volume=eval=frame:volume='if(lte(0+if(lt((t+16),12),0,if(lt((t+16),14),0+(-6)*((t+16)-12)/2,-6)),-40),0,pow(10,(0+if(lt((t+16),12),0,if(lt((t+16),14),0+(-6)*((t+16)-12)/2,-6)))/20))',adelay=delays=6000:all=1,volume=1[m7]
+graph [8:a:0]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,adelay=delays=4500:all=1,volume=1[m8]
+graph [9:a:0]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,adelay=delays=12800:all=1,volume=1[m9]
+graph [s][m5][m6][m7][m8][m9]amix=inputs=6:duration=first:normalize=0,afade=t=in:st=0:d=0.5,afade=t=out:st=15.5:d=1,alimiter=limit=0.87:attack=5:release=50:level=0:latency=1[a]
+cut 0 edges Some(EdgeFade):1.0000 Some(EdgeFade):0.9667 Some(EdgeFade):0.9333 Some(EdgeFade):0.9000 Some(EdgeFade):0.8667 Some(EdgeFade):0.8333 Some(EdgeFade):0.8000 Some(EdgeFade):0.7667 Some(EdgeFade):0.7333 Some(EdgeFade):0.7000 Some(EdgeFade):0.6667 Some(EdgeFade):0.6333 Some(EdgeFade):0.6000 Some(EdgeFade):0.5667 Some(EdgeFade):0.5333 Some(EdgeFade):0.5000 Some(EdgeFade):0.4667 Some(EdgeFade):0.4333 Some(EdgeFade):0.4000 Some(EdgeFade):0.3667 Some(EdgeFade):0.3333 Some(EdgeFade):0.3000 Some(EdgeFade):0.2667 Some(EdgeFade):0.2333 Some(EdgeFade):0.2000 Some(EdgeFade):0.1667 Some(EdgeFade):0.1333 Some(EdgeFade):0.1000 Some(EdgeFade):0.0667 Some(EdgeFade):0.0333 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+cut 0 frame 
+cut 1 edges - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - Some(EdgeBlur):0.0417 Some(EdgeBlur):0.0833 Some(EdgeBlur):0.1250 Some(EdgeBlur):0.1667 Some(EdgeBlur):0.2083 Some(EdgeBlur):0.2500 Some(EdgeBlur):0.2917 Some(EdgeBlur):0.3333 Some(EdgeBlur):0.3750 Some(EdgeBlur):0.4167 Some(EdgeBlur):0.4583 Some(EdgeBlur):0.5000 Some(EdgeBlur):0.5417 Some(EdgeBlur):0.5833 Some(EdgeBlur):0.6250 Some(EdgeBlur):0.6667 Some(EdgeBlur):0.7083 Some(EdgeBlur):0.7500 Some(EdgeBlur):0.7917 Some(EdgeBlur):0.8333 Some(EdgeBlur):0.8750 Some(EdgeBlur):0.9167 Some(EdgeBlur):0.9583
+cut 1 frame -10.000000 0.000000 150.000000 0.000000 | -10.000000 0.000000 150.000000 0.000000 | -10.000000 0.000000 150.000000 0.000000 | -7.777778 0.000000 150.000000 0.000000 | -2.222222 0.000000 150.000000 0.000000 | 5.000000 0.000000 150.000000 0.000000 | 12.222222 0.000000 150.000000 0.000000 | 17.777778 0.000000 150.000000 0.000000 | 20.000000 0.000000 150.000000 0.000000 | 20.000000 0.000000 150.000000 0.000000
+cut 2 edges - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+cut 2 frame 
+cut 3 edges - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - Some(EdgeFade):0.0222 Some(EdgeFade):0.0444 Some(EdgeFade):0.0667 Some(EdgeFade):0.0889 Some(EdgeFade):0.1111 Some(EdgeFade):0.1333 Some(EdgeFade):0.1556 Some(EdgeFade):0.1778 Some(EdgeFade):0.2000 Some(EdgeFade):0.2222 Some(EdgeFade):0.2444 Some(EdgeFade):0.2667 Some(EdgeFade):0.2889 Some(EdgeFade):0.3111 Some(EdgeFade):0.3333 Some(EdgeFade):0.3556 Some(EdgeFade):0.3778 Some(EdgeFade):0.4000 Some(EdgeFade):0.4222 Some(EdgeFade):0.4444 Some(EdgeFade):0.4667 Some(EdgeFade):0.4889 Some(EdgeFade):0.5111 Some(EdgeFade):0.5333 Some(EdgeFade):0.5556 Some(EdgeFade):0.5778 Some(EdgeFade):0.6000 Some(EdgeFade):0.6222 Some(EdgeFade):0.6444 Some(EdgeFade):0.6667 Some(EdgeFade):0.6889 Some(EdgeFade):0.7111 Some(EdgeFade):0.7333 Some(EdgeFade):0.7556 Some(EdgeFade):0.7778 Some(EdgeFade):0.8000 Some(EdgeFade):0.8222 Some(EdgeFade):0.8444 Some(EdgeFade):0.8667 Some(EdgeFade):0.8889 Some(EdgeFade):0.9111 Some(EdgeFade):0.9333 Some(EdgeFade):0.9556 Some(EdgeFade):0.9778
+cut 3 frame 

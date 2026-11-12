@@ -104,6 +104,18 @@ pub(crate) enum Target {
     Clips { dir: PathBuf, name: String, handles: f64, graded: bool },
 }
 
+impl Target {
+    /// Whether it's the whole edit, and whether its cuts are graded: the
+    /// whole edit is framed, graded and faded to black at its ends; a file
+    /// per cut is graded only if asked.
+    fn whole_and_graded(&self) -> (bool, bool) {
+        match self {
+            Target::One(_) => (true, true),
+            Target::Clips { graded, .. } => (false, *graded),
+        }
+    }
+}
+
 /// Per cut: its clip's pipeline, its start (on a frame, `handles` early)
 /// and how many frames.
 fn frame_plan(project: &project::Project, pipelines: &[Pipeline], of_cut: &[usize], handles: f64) -> Result<Vec<(usize, f64, usize)>> {
@@ -112,16 +124,45 @@ fn frame_plan(project: &project::Project, pipelines: &[Pipeline], of_cut: &[usiz
         .iter()
         .zip(of_cut)
         .map(|(cut, &i)| {
-            let p = &pipelines[i];
-            let from = (cut.start - handles).max(0.0);
-            let end = (cut.end + handles).min(ffmpeg::duration(&cut.input)?);
-            if end <= from {
-                bail!("the cut from {} s starts after {} ends", cut.start, cut.input.display());
-            }
-            // Count frames over the span asked for, not from the frame the
-            // start snaps to: snapping 14 s forward to 14.014 left `-d 5` at
-            // 149 frames.
-            Ok((i, p.snap(from), ((end - from) * p.fps).round().max(1.0) as usize))
+            let (start, frames) = cut_frames(cut, ffmpeg::duration(&cut.input)?, pipelines[i].fps, handles)?;
+            Ok((i, start, frames))
+        })
+        .collect()
+}
+
+/// Cut `cut`'s first frame (on its clip's frame grid, `handles` early)
+/// and how many frames, its clip `length` seconds long at `fps`.
+fn cut_frames(cut: &project::Cut, length: f64, fps: f64, handles: f64) -> Result<(f64, usize)> {
+    let from = (cut.start - handles).max(0.0);
+    let end = (cut.end + handles).min(length);
+    if end <= from {
+        bail!("the cut from {} s starts after {} ends", cut.start, cut.input.display());
+    }
+    // Count frames over the span asked for, not from the frame the start
+    // snaps to: snapping 14 s forward to 14.014 left `-d 5` at 149 frames.
+    Ok(((from * fps).round() / fps, ((end - from) * fps).round().max(1.0) as usize))
+}
+
+/// The sound under cuts `cuts`, each from `inputs` (its own audio or its
+/// clip) over its planned frames, crossfading the frames it shares with
+/// the one before within the range.
+fn stretches<'a>(project: &'a project::Project, plan: &[(usize, f64, usize)], overlap: &[usize], inputs: &[&'a Path], cuts: std::ops::Range<usize>, fps: f64) -> Vec<ffmpeg::Sound<'a>> {
+    cuts.clone()
+        .zip(&plan[cuts.clone()])
+        .map(|(n, &(_, start, frames))| {
+            let crossfade = if n > cuts.start { overlap[n] as f64 / fps } else { 0.0 };
+            ffmpeg::Sound::of_cut(&project.cuts[n], inputs[n], start, Some(frames as f64 / fps), crossfade)
+        })
+        .collect()
+}
+
+/// What's laid over each of a cut's `frames` from clip time `start`: its
+/// style where it's `graded`, its edge looks in the `whole` edit only.
+fn overs(cut: &project::Cut, start: f64, frames: usize, fps: f64, graded: bool, whole: bool) -> Vec<dissolve::Over> {
+    (0..frames)
+        .map(|k| {
+            let t = start + k as f64 / fps;
+            dissolve::Over { style: cut.style.as_ref().filter(|_| graded).map(|s| (s.spec(), t as f32)), edge: cut.edge_at(t).filter(|_| whole) }
         })
         .collect()
 }
@@ -138,6 +179,53 @@ fn files(target: &Target, format: ffmpeg::Format, cuts: usize) -> Result<Vec<(Pa
     })
 }
 
+/// The GPU to stitch on, if it can: the shader always draws both lenses,
+/// so `--only` needs the CPU; the Resolve format is 10-bit, so 16-bit
+/// frames from it.
+fn stitcher(opts: &StitchOpts, out: &ExportOpts) -> Option<player::render::Gpu> {
+    if out.cpu || opts.only.is_some() {
+        return None;
+    }
+    match player::render::Gpu::new(out.format == ffmpeg::Format::Resolve) {
+        Ok(gpu) => {
+            eprintln!("stitching on {}", gpu.name);
+            Some(gpu)
+        }
+        Err(e) => {
+            eprintln!("stitching on the CPU: {e:#}");
+            None
+        }
+    }
+}
+
+/// Each cut's own audio file, which plays in place of its clip's sound (in
+/// a file per cut too: it's the sound chosen for it); one that's gone
+/// leaves the clip's, as the player does, and is said.
+fn heard(project: &project::Project) -> Vec<Option<&Path>> {
+    let heard: Vec<Option<&Path>> = project.cuts.iter().map(|c| c.audio.as_deref().filter(|a| a.exists())).collect();
+    for (c, h) in project.cuts.iter().zip(&heard) {
+        if let (Some(audio), None) = (&c.audio, h) {
+            eprintln!("{} is missing: its cut gets its clip's own sound", audio.display());
+        }
+    }
+    heard
+}
+
+/// Cut `n`'s view at clip time `t`, its clip stitched by `p`: framed by
+/// its keyframes and, `graded`, by its effects, faded to black at the
+/// `whole` edit's ends. Ungraded clips are for grading elsewhere: as
+/// filmed, so D-Log M stays log for the editor's own LUT.
+fn camera(project: &project::Project, p: &Pipeline, n: usize, t: f64, (whole, graded): (bool, bool)) -> crate::view::Camera {
+    let mut c = project::camera_at(&project.cuts, n, t, &|f, t| p.aim(f, t));
+    if !graded {
+        c.grade = Default::default();
+        c.lut = None;
+    } else if whole {
+        c.grade.black = project.black_at(n, t);
+    }
+    c
+}
+
 /// Renders `project` as `out` says, with sound, and returns the files
 /// written. Each clip is set up once however many cuts use it.
 /// `progress(done, total)` hears of every frame; an error from it (a
@@ -149,22 +237,7 @@ pub(crate) fn export(project: &project::Project, opts: &StitchOpts, out: &Export
     let mut project = project.clone();
     let (pipelines, of_cut) = cut_pipelines(&mut project, opts, out.draft)?;
     let project = &project;
-    // The shader always draws both lenses, so `--only` needs the CPU.
-    let mut gpu = if out.cpu || opts.only.is_some() {
-        None
-    } else {
-        // The Resolve format is 10-bit, so 16-bit frames from the GPU.
-        match player::render::Gpu::new(out.format == ffmpeg::Format::Resolve) {
-            Ok(gpu) => {
-                eprintln!("stitching on {}", gpu.name);
-                Some(gpu)
-            }
-            Err(e) => {
-                eprintln!("stitching on the CPU: {e:#}");
-                None
-            }
-        }
-    };
+    let mut gpu = stitcher(opts, out);
     let clips: Vec<_> = if gpu.is_some() { pipelines.iter().map(player::render::Clip::new).collect::<Result<_>>()? } else { Vec::new() };
     let handles = match out.target {
         Target::One(_) => 0.0,
@@ -184,25 +257,10 @@ pub(crate) fn export(project: &project::Project, opts: &StitchOpts, out: &Export
     let total = plan.iter().map(|p| p.2).sum();
     let mut done = 0;
     let mut written = Vec::with_capacity(files.len());
-    // A cut's own audio file plays in place of its clip's sound (in a file
-    // per cut too: it's the sound chosen for it); one that's gone leaves the
-    // clip's, as the player does.
-    let heard: Vec<Option<&Path>> = project.cuts.iter().map(|c| c.audio.as_deref().filter(|a| a.exists())).collect();
-    for (c, h) in project.cuts.iter().zip(&heard) {
-        if let (Some(audio), None) = (&c.audio, h) {
-            eprintln!("{} is missing: its cut gets its clip's own sound", audio.display());
-        }
-    }
+    let heard = heard(project);
     for (path, cuts) in files {
-        let sound: Vec<_> = cuts
-            .clone()
-            .zip(&plan[cuts.clone()])
-            .map(|(n, &(i, start, frames))| {
-                let crossfade = if n > cuts.start { overlap[n] as f64 / fps } else { 0.0 };
-                let input = heard[n].unwrap_or(&pipelines[i].input);
-                ffmpeg::Sound::of_cut(&project.cuts[n], input, start, Some(frames as f64 / fps), crossfade)
-            })
-            .collect();
+        let inputs: Vec<&Path> = plan.iter().zip(&heard).map(|(&(i, _, _), h)| h.unwrap_or(&pipelines[i].input)).collect();
+        let sound = stretches(project, &plan, &overlap, &inputs, cuts.clone(), fps);
         // The whole edit gets its mix; a file per cut is for another editor,
         // so its sound is left as recorded and the music goes beside it.
         let length = edit_seconds(&frames, &overlap, cuts.clone(), fps);
@@ -221,34 +279,12 @@ pub(crate) fn export(project: &project::Project, opts: &StitchOpts, out: &Export
             let head = if n > cuts.start { overlap[n] } else { 0 };
             let size = out.size;
             let mut tick = |n: usize| progress(done + n, total);
-            // Framed by its keyframes and graded by its effects (in the whole
-            // edit, faded to black at its ends; clips graded only if asked).
-            let (whole, graded) = match out.target {
-                Target::One(_) => (true, true),
-                Target::Clips { graded, .. } => (false, graded),
-            };
+            let (whole, graded) = out.target.whole_and_graded();
             // Its style where it's graded, its edge looks in the whole edit
             // only, as its fades (a file per cut is for another editor).
             let cut = &project.cuts[n];
-            let over = (0..frames)
-                .map(|k| {
-                    let t = start + k as f64 / fps;
-                    dissolve::Over { style: cut.style.as_ref().filter(|_| graded).map(|s| (s.spec(), t as f32)), edge: cut.edge_at(t).filter(|_| whole) }
-                })
-                .collect();
-            sink.cut(frames, head, tail, cut.transition_spec(), over)?;
-            let camera = |t: f64| {
-                let mut c = project::camera_at(&project.cuts, n, t, &|f, t| pipelines[i].aim(f, t));
-                if !graded {
-                    // Ungraded clips are for grading elsewhere: as filmed,
-                    // so D-Log M stays log for the editor's own LUT.
-                    c.grade = Default::default();
-                    c.lut = None;
-                } else if whole {
-                    c.grade.black = project.black_at(n, t);
-                }
-                c
-            };
+            sink.cut(frames, head, tail, cut.transition_spec(), overs(cut, start, frames, fps, graded, whole))?;
+            let camera = |t: f64| camera(project, &pipelines[i], n, t, (whole, graded));
             // On an error the encoder, dropped unfinished, removes the file.
             match &mut gpu {
                 Some(gpu) => player::render::encode(gpu, &pipelines[i], &clips[i], start, frames, &mut sink, camera, size, &mut tick)?,
@@ -308,6 +344,46 @@ fn edit_seconds(frames: &[usize], overlap: &[usize], cuts: std::ops::Range<usize
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The time seam's film as the export plans it at 30 fps (guard 1):
+    /// each cut's frames, with and without handles, the frames shared at
+    /// crossfades, the sound stretches and the mix's graph, the edge look
+    /// on every frame and the frame every half second.
+    #[test]
+    fn the_films_export_is_planned_as_it_was() {
+        use crate::time_snapshot::{film, golden, n, ns};
+        use std::fmt::Write;
+        let (p, fps) = (film(), 30.0);
+        let mut s = String::new();
+        let plan = |handles| -> Vec<(usize, f64, usize)> { p.cuts.iter().enumerate().map(|(k, c)| (k, cut_frames(c, 60.0, fps, handles).unwrap())).map(|(k, (start, frames))| (k, start, frames)).collect() };
+        for (k, start, frames) in plan(0.5) {
+            writeln!(s, "with handles: cut {k} from {} frames {frames}", n(start)).unwrap();
+        }
+        let plan = plan(0.0);
+        let frames: Vec<usize> = plan.iter().map(|p| p.2).collect();
+        let overlap = overlaps(&frames, &p.cuts.iter().map(|c| c.crossfade).collect::<Vec<_>>(), fps);
+        let length = edit_seconds(&frames, &overlap, 0..plan.len(), fps);
+        writeln!(s, "frames {frames:?} overlap {overlap:?} length {}", n(length)).unwrap();
+        let inputs: Vec<&Path> = p.cuts.iter().map(|c| c.input.as_path()).collect();
+        let sound = stretches(&p, &plan, &overlap, &inputs, 0..plan.len(), fps);
+        for x in &sound {
+            writeln!(s, "sound {} from {} for {:?} crossfade {} fades {} {} head {} tail {}", x.input.display(), n(x.start), x.duration.map(n), n(x.crossfade), n(x.fade_in), n(x.fade_out), n(x.head), n(x.tail)).unwrap();
+        }
+        let beyond = p.sound_beyond();
+        let (args, graph) = ffmpeg::mix_args(&sound, &ffmpeg::Mix::whole(&p, &beyond, length));
+        writeln!(s, "music inputs {}", args.join(" ")).unwrap();
+        for part in graph.split(';') {
+            writeln!(s, "graph {part}").unwrap();
+        }
+        for (k, &(_, start, frames)) in plan.iter().enumerate() {
+            let cut = &p.cuts[k];
+            let edges: Vec<String> = overs(cut, start, frames, fps, true, true).iter().map(|o| o.edge.map_or_else(|| "-".to_owned(), |(e, q)| format!("{:?}:{q:.4}", e.look))).collect();
+            writeln!(s, "cut {k} edges {}", edges.join(" ")).unwrap();
+            let framed: Vec<String> = (0..frames).step_by(15).filter_map(|f| cut.frame_at(start + f as f64 / fps).map(|fr| ns(fr.values()))).collect();
+            writeln!(s, "cut {k} frame {}", framed.join(" | ")).unwrap();
+        }
+        golden("time-export", &s);
+    }
 
     #[test]
     fn crossfades_share_frames_within_what_each_cut_has() {

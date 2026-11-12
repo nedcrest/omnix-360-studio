@@ -895,6 +895,15 @@ pub fn sound_stream(audio: &[Sound<'_>], mix: &Mix<'_>) -> Result<Child> {
     cmd.stdout(Stdio::piped()).stderr(Stdio::null()).spawn().context("running ffmpeg")
 }
 
+/// The inputs and the sound graph an export of `audio` with `mix` runs,
+/// for the time seam's snapshots (`time_snapshot`).
+#[cfg(test)]
+pub(crate) fn mix_args(audio: &[Sound<'_>], mix: &Mix<'_>) -> (Vec<String>, String) {
+    let mut cmd = tool("ffmpeg");
+    let graph = mixed(&mut cmd, audio, mix).unwrap();
+    (cmd.get_args().map(|a| a.to_string_lossy().into_owned()).collect(), graph)
+}
+
 impl Encoder {
     /// The sound is `audio`'s stretches back to back. Each stretch should
     /// last exactly as long as the frames written for it, so later cuts stay

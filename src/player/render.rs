@@ -329,6 +329,27 @@ mod tests {
         }
     }
 
+    /// What the prepared stitcher draws into the test target, `w`×`h`,
+    /// read back as the export would get it.
+    fn draw_and_read(gpu: &mut Gpu, (w, h): (usize, usize)) -> stitch::Frame {
+        let target = &gpu.targets[0];
+        let mut encoder = gpu.device.create_command_encoder(&Default::default());
+        gpu.stitcher.draw(&mut encoder, &target.view, &Rectangle { x: 0, y: 0, width: w as u32, height: h as u32 });
+        encoder.copy_texture_to_buffer(
+            wgpu::TexelCopyTextureInfo { texture: &target.texture, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
+            wgpu::TexelCopyBufferInfo { buffer: &target.readback, layout: wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(target.row as u32), rows_per_image: Some(h as u32) } },
+            wgpu::Extent3d { width: w as u32, height: h as u32, depth_or_array_layers: 1 },
+        );
+        gpu.queue.submit([encoder.finish()]);
+        let (tx, rx) = channel();
+        target.readback.slice(..).map_async(wgpu::MapMode::Read, move |r| {
+            let _ = tx.send(r);
+        });
+        gpu.pending.push_back((0, rx));
+        gpu.size = (w, h);
+        gpu.finish().unwrap().unwrap()
+    }
+
     /// `w` × `h` 10-bit pictures of one Y′ code a column (`y(x)`) and
     /// these Cb, Cr codes, as P010.
     fn p010(w: usize, h: usize, y: impl Fn(usize) -> u16, cb: u16, cr: u16) -> Frame {
@@ -359,22 +380,7 @@ mod tests {
         gpu.targets = vec![gpu.make_target(w, h)];
         gpu.stitcher.prepare_frame(&gpu.device, &gpu.queue, &rig, &shown, &camera, &[stitch::IDENTITY], [w as f32, h as f32], [0.0, 0.0]);
         gpu.stitcher.prepare_overlays(&gpu.device, &gpu.queue, &[], [w as f32, h as f32], [0.0, 0.0], [w as f32, h as f32]);
-        let target = &gpu.targets[0];
-        let mut encoder = gpu.device.create_command_encoder(&Default::default());
-        gpu.stitcher.draw(&mut encoder, &target.view, &Rectangle { x: 0, y: 0, width: w as u32, height: h as u32 });
-        encoder.copy_texture_to_buffer(
-            wgpu::TexelCopyTextureInfo { texture: &target.texture, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
-            wgpu::TexelCopyBufferInfo { buffer: &target.readback, layout: wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(target.row as u32), rows_per_image: Some(h as u32) } },
-            wgpu::Extent3d { width: w as u32, height: h as u32, depth_or_array_layers: 1 },
-        );
-        gpu.queue.submit([encoder.finish()]);
-        let (tx, rx) = channel();
-        target.readback.slice(..).map_async(wgpu::MapMode::Read, move |r| {
-            let _ = tx.send(r);
-        });
-        gpu.pending.push_back((0, rx));
-        gpu.size = (w, h);
-        gpu.finish().unwrap().unwrap()
+        draw_and_read(gpu, (w, h))
     }
 
 /// Two ordinary videos' frames drawn as a join: `a` going, `b` coming,
@@ -395,22 +401,7 @@ mod tests {
             gpu.stitcher.prepare_style(&gpu.queue, layer, style, *t);
         }
         gpu.stitcher.prepare_overlays(&gpu.device, &gpu.queue, &[], size, [0.0, 0.0], size);
-        let target = &gpu.targets[0];
-        let mut encoder = gpu.device.create_command_encoder(&Default::default());
-        gpu.stitcher.draw(&mut encoder, &target.view, &Rectangle { x: 0, y: 0, width: w as u32, height: h as u32 });
-        encoder.copy_texture_to_buffer(
-            wgpu::TexelCopyTextureInfo { texture: &target.texture, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
-            wgpu::TexelCopyBufferInfo { buffer: &target.readback, layout: wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(target.row as u32), rows_per_image: Some(h as u32) } },
-            wgpu::Extent3d { width: w as u32, height: h as u32, depth_or_array_layers: 1 },
-        );
-        gpu.queue.submit([encoder.finish()]);
-        let (tx, rx) = channel();
-        target.readback.slice(..).map_async(wgpu::MapMode::Read, move |r| {
-            let _ = tx.send(r);
-        });
-        gpu.pending.push_back((0, rx));
-        gpu.size = (w, h);
-        gpu.finish().unwrap().unwrap()
+        draw_and_read(gpu, (w, h))
     }
 
     /// A join drawn by the player's transition pass is what the export's
@@ -741,22 +732,7 @@ mod tests {
             gpu.targets = vec![gpu.make_target(w, h)];
             gpu.stitcher.prepare_frame(&gpu.device, &gpu.queue, &rig, &shown, &camera, &[stitch::IDENTITY], [w as f32, h as f32], [0.0, 0.0]);
             gpu.stitcher.prepare_overlays(&gpu.device, &gpu.queue, overlays, [w as f32, h as f32], [0.0, 0.0], [w as f32, h as f32]);
-            let target = &gpu.targets[0];
-            let mut encoder = gpu.device.create_command_encoder(&Default::default());
-            gpu.stitcher.draw(&mut encoder, &target.view, &Rectangle { x: 0, y: 0, width: w as u32, height: h as u32 });
-            encoder.copy_texture_to_buffer(
-                wgpu::TexelCopyTextureInfo { texture: &target.texture, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
-                wgpu::TexelCopyBufferInfo { buffer: &target.readback, layout: wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(target.row as u32), rows_per_image: Some(h as u32) } },
-                wgpu::Extent3d { width: w as u32, height: h as u32, depth_or_array_layers: 1 },
-            );
-            gpu.queue.submit([encoder.finish()]);
-            let (tx, rx) = channel();
-            target.readback.slice(..).map_async(wgpu::MapMode::Read, move |r| {
-                let _ = tx.send(r);
-            });
-            gpu.pending.push_back((0, rx));
-            gpu.size = (w, h);
-            gpu.finish().unwrap().unwrap()
+            draw_and_read(&mut gpu, (w, h))
         };
         let mut want = render(&[]);
         let got = render(&[draw]);

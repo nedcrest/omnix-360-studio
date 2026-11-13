@@ -317,6 +317,18 @@ mod tests {
     use super::*;
     use crate::overlay::{self, Place, Quad};
 
+    /// The GPU for a test, or none where there's no GPU (the test then
+    /// passes without drawing). With `OMNIX_REQUIRE_GPU` set, as CI has it
+    /// (lavapipe), none is a failure: a test that quietly skips proves
+    /// nothing.
+    fn test_gpu(deep: bool) -> Option<Gpu> {
+        match Gpu::new(deep) {
+            Ok(gpu) => Some(gpu),
+            Err(e) if std::env::var_os("OMNIX_REQUIRE_GPU").is_some() => panic!("no GPU, and OMNIX_REQUIRE_GPU is set: {e:#}"),
+            Err(_) => None,
+        }
+    }
+
     /// `w` × `h` 10-bit pictures of one Y′ code a column (`y(x)`) and
     /// these Cb, Cr codes, as P010.
     fn p010(w: usize, h: usize, y: impl Fn(usize) -> u16, cb: u16, cr: u16) -> Frame {
@@ -407,7 +419,7 @@ mod tests {
     #[test]
     fn gpu_transitions_match_the_cpu() {
         use crate::transition::{self, Look};
-        let Ok(mut gpu) = Gpu::new(false) else { return };
+        let Some(mut gpu) = test_gpu(false) else { return };
         let (w, h) = (64, 32);
         // Stripes: a blur shows on them, as on footage.
         let a = || p010(w, h, |x| if (x / 4) % 2 == 0 { 250 } else { 800 }, 512, 512);
@@ -457,7 +469,7 @@ mod tests {
     #[test]
     fn gpu_styles_match_the_cpu() {
         use crate::transition::{Spec, Look, blend};
-        let Ok(mut gpu) = Gpu::new(false) else { return };
+        let Some(mut gpu) = test_gpu(false) else { return };
         let (w, h) = (64, 32);
         let a = || p010(w, h, |x| if (x / 4) % 2 == 0 { 250 } else { 800 }, 512, 512);
         let b = || p010(w, h, |x| if (x / 6) % 2 == 0 { 900 } else { 350 }, 600, 440);
@@ -489,7 +501,7 @@ mod tests {
     /// reach and softness too.
     #[test]
     fn gpu_vignette_shapes_match_the_cpu() {
-        let Ok(mut gpu) = Gpu::new(false) else { return };
+        let Some(mut gpu) = test_gpu(false) else { return };
         let (w, h) = (64, 32);
         let mut camera = crate::view::View::home(crate::view::Projection::Perspective).camera();
         for shape in 0..crate::grade::VIGNETTES.len() {
@@ -517,7 +529,7 @@ mod tests {
     /// and the LUT alone).
     #[test]
     fn gpu_grade_matches_the_cpu_with_every_value() {
-        let Ok(mut gpu) = Gpu::new(false) else { return };
+        let Some(mut gpu) = test_gpu(false) else { return };
         let (w, h) = (64, 32);
         let mut camera = crate::view::View::home(crate::view::Projection::Perspective).camera();
         camera.grade = crate::grade::Grade {
@@ -552,7 +564,7 @@ mod tests {
     /// dark grey, a mid one and a light one, with exposure after them.
     #[test]
     fn gpu_levels_match_the_cpu() {
-        let Ok(mut gpu) = Gpu::new(false) else { return };
+        let Some(mut gpu) = test_gpu(false) else { return };
         let (w, h) = (64, 32);
         let mut camera = crate::view::View::home(crate::view::Projection::Perspective).camera();
         camera.grade = crate::grade::Grade { black_in: 0.06, white_in: 0.9, exposure: 0.3, ..Default::default() };
@@ -570,7 +582,7 @@ mod tests {
     #[test]
     fn gpu_hdr_matches_the_cpu() {
         use crate::hdr::{self, Hdr};
-        let Ok(mut gpu) = Gpu::new(false) else { return };
+        let Some(mut gpu) = test_gpu(false) else { return };
         let (w, h) = (64, 32);
         // Y′CbCr as 10-bit limited-range codes: grey, sky blue, green, near
         // peak white.
@@ -589,7 +601,7 @@ mod tests {
     /// `Lut::blend` gives, at part strength too.
     #[test]
     fn gpu_lut_matches_the_cpu() {
-        let Ok(mut gpu) = Gpu::new(false) else { return };
+        let Some(mut gpu) = test_gpu(false) else { return };
         // Bent, and mixing the channels, so the interpolation is tested.
         let mut cube = String::from("LUT_3D_SIZE 17\n");
         for b in 0..17 {
@@ -624,7 +636,7 @@ mod tests {
     /// 8-bit export: each column's average follows it rather than stepping.
     #[test]
     fn dither_keeps_a_smooth_ramp() {
-        let Ok(mut gpu) = Gpu::new(false) else { return };
+        let Some(mut gpu) = test_gpu(false) else { return };
         let (w, h) = (256, 64);
         // 20 codes across: steps of a quarter of an 8-bit level.
         let code = |x: usize| 400 + (x * 20 / w) as u16;
@@ -649,7 +661,7 @@ mod tests {
     /// steps, pixel by pixel, where 8 bits round them away.
     #[test]
     fn deep_render_keeps_ten_bits() {
-        let Ok(mut gpu) = Gpu::new(true) else { return };
+        let Some(mut gpu) = test_gpu(true) else { return };
         let (w, h) = (256, 4);
         let code = |x: usize| 400 + (x * 20 / w) as u16;
         let got = draw_flat(&mut gpu, p010(w, h, code, 512, 512), crate::hdr::Hdr::None, (w, h));
@@ -668,7 +680,7 @@ mod tests {
     /// The scopes read the cut's picture back and measure it (gap 69).
     #[test]
     fn the_scopes_measure_the_cuts_picture() {
-        let Ok(mut gpu) = Gpu::new(false) else { return };
+        let Some(mut gpu) = test_gpu(false) else { return };
         let (w, h) = (160usize, 90usize);
         // An even grey video frame (limited-range NV12).
         let mut data = vec![126u8; w * h];
@@ -706,7 +718,7 @@ mod tests {
     /// The player's overlay pass draws what `overlay::composite` does.
     #[test]
     fn gpu_overlays_match_the_cpu() {
-        let Ok(mut gpu) = Gpu::new(false) else { return };
+        let Some(mut gpu) = test_gpu(false) else { return };
         let (w, h) = (320, 180);
         // A mid-grey ordinary video frame (limited-range NV12).
         let mut data = vec![126u8; w * h];

@@ -67,6 +67,24 @@ To fix:
 6. **Later**: the user guide redone around GIFs he records; the working
    docs (cleaned or kept home); release builds.
 
+## Order (the user, 2026-11-14)
+
+Private repos first: put in order there, CI run, then made public. So:
+the email rewrite comes **before the first push**, even to a private
+repo (whatever is in the history goes public with it later). While
+Omnix is private, Dailix's CI can't check it out with its own token: a
+read-only token as a secret, or Omnix made public first.
+
+## At publishing (needs the GitHub account)
+
+- Links that are paths today: the README's `../dailix`, Dailix's back to
+  Omnix; CI badges.
+- `git config user.email` in both repos to the personal address, so new
+  commits match the rewritten history.
+- The pictures: the README says rOsmo360's screenshots (`docs/
+  screenshot.png`, `docs/guide/`) are all rights reserved by their author
+  and to be replaced before Omnix is published: his own, or removed.
+
 ## Rules that stay
 
 Personal footage and paths never go into a published file. Footage is

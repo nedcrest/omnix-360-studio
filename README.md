@@ -6,6 +6,10 @@ A home-video editor with first-class **DJI Osmo 360** footage, written in Rust. 
 
 **New here? Read the [user guide](docs/user-guide.md)**: the whole app, step by step, with screenshots.
 
+Its sibling, **[Dailix](../dailix)**, is the contact sheet before the edit: it looks through a trip's footage, marks what's worth keeping and hands the chosen material to Omnix. The contact sheet's core, which both programs read and write, lives here (`crates/sheet`).
+
+**Built with AI.** Omnix and Dailix were built by one person working with Claude: he decided, designed and tested on his own footage; Claude planned, wrote the code, tests and docs, and audited its own work. How that worked, and the rules that kept the code sound as it grew from 19,000 to 50,000 lines in three weeks: **[docs/AI-DRIVEN.md](docs/AI-DRIVEN.md)**.
+
 Licensed under [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE), at your option.
 
 Omnix has no published releases yet: build it from source; see [Building](#building). The packaging scripts (`packaging/`) make the same archives, AppImage, Flatpak and Windows zip as upstream's, under Omnix's name.
@@ -71,7 +75,7 @@ To edit home video on Linux end to end: footage from a phone, an action camera, 
 - On Linux, ALSA for sound (`alsa-lib`, or `libasound2-dev` on Debian/Ubuntu). PipeWire and PulseAudio work through it.
 - To build: Rust 1.88 or newer.
 
-Developed and tested on Linux (KDE Plasma, NVIDIA RTX 3090) and on an Apple Silicon Mac (M4 Pro, macOS 27). Windows is in beta: tested in a virtual machine without a GPU, not yet on a real Windows PC.
+Omnix is developed and tested on Linux (KDE Plasma, NVIDIA RTX 3060). rOsmo360, which it grew from, was developed on Linux and an Apple Silicon Mac, with Windows in beta; Omnix keeps their build scripts, but hasn't been tested on the Mac or Windows since it forked.
 
 ## Installing
 
@@ -80,10 +84,13 @@ No releases yet: see [Building](#building). Once Omnix is published, `packaging/
 ## Building
 
 ```sh
+# Debian/Ubuntu: ALSA's headers to build, ffmpeg to run (and for the tests)
+sudo apt install pkg-config libasound2-dev ffmpeg
 cargo build --release
+cargo test --workspace     # Omnix and the contact sheet's core
 ```
 
-The program is `target/release/omnix`. `packaging/build-release.sh` builds the release files into `dist/`, inside an Ubuntu 22.04 container (docker), so they run on older distributions too.
+The program is `target/release/omnix`. CI (`.github/workflows/ci.yml`) does the same on Ubuntu 24.04, with Mesa's CPU Vulkan so the GPU tests run there too. `packaging/build-release.sh` builds the release files into `dist/`, inside an Ubuntu 22.04 container (docker), so they run on older distributions too.
 
 On an **Apple Silicon Mac** (with [Rust](https://rustup.rs) and `xcode-select --install`), `sh packaging/macos/build.sh` builds it, fetches a static arm64 ffmpeg (GPL, with VideoToolbox) and makes `target/release/Omnix.app` to open from the Finder. There's no signed download for the Mac yet.
 
@@ -294,8 +301,11 @@ Clips' telemetry and thumbnails, and songs' waveforms, are cached in `~/.cache/o
 
 ## Roadmap
 
+The full roadmap, card by card, is [`docs/omnix/ROADMAP.md`](docs/omnix/ROADMAP.md) (in Ukrainian; every idea's details in English in [`EDITOR-GAPS.md`](docs/omnix/EDITOR-GAPS.md)). Next:
+
+- Playback speed, constant or as a curve (the time seam it needs is under way: [`TIME-SEAM.md`](docs/omnix/TIME-SEAM.md)).
+- Copy and paste of clips; transitions from video files (stingers) with their own sound; video on the overlay lane.
 - Osmo 360 photos as cuts, looked around in like a frozen clip.
-- Picture-in-picture video on the overlay track.
 - 360° metadata on equirectangular exports, so YouTube and VR players show them as 360° video.
 - Smooth full-resolution playback on modest hardware, and faster 10-bit exports (zero-copy decoding).
 - Windows out of beta, once it's been tested on real PCs with a GPU; a signed Windows exe and a signed macOS download.

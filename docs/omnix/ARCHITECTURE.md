@@ -8,10 +8,12 @@ the code changes; the history is in git (the first refactor, gap 35,
 ## The shape today
 
 ~41 000 lines of Rust in one crate, `omnix`: a library and a
-six-line binary. Dailix (`../dailix`) links the library (its player,
-`viewer`; its sound tools, `sound`: ffmpeg, the loudness meter, the
-speech finder); the library links Dailix's sheet core (the marking, the
-folder layout, the cleaned voices' places).
+six-line binary, in a workspace with `crates/sheet`, the contact
+sheet's core (the marking, the folder layout, the cleaned voices'
+places; `docs/SHEET-CORE.md`), which the library links. Dailix (its own
+repo, `../dailix`) links both: the library for its player (`viewer`)
+and sound tools (`sound`: ffmpeg, the loudness meter, the speech
+finder), the sheet core for the marking.
 
 | Layer | Where | What it is |
 |---|---|---|

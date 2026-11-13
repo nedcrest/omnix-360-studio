@@ -17,7 +17,8 @@ places, drifting apart, and rules living in UI handlers without tests.
   list or a formula: `grep` for it in this repo and in `../dailix`. One
   place for each fact (a clock, a role's colour, file types, a cut's media,
   the app's folders, a JPEG frame). Shared by both programs: in
-  `dailix_sheet` (sheet facts) or in this library (media, folders).
+  `dailix_sheet` (`crates/sheet`: sheet facts) or in this library (media,
+  folders).
 - **A change to a project is an op.** Add it to `src/model/ops/` with its
   range check and a test; the UI builds the op (inside `edit.begin()` /
   `commit()` for a slider or a drag). Never write `self.edit.<field> = …`
@@ -151,7 +152,7 @@ they're next touched, not in a package.
 ```sh
 export PATH=$HOME/.cargo/bin:$PATH PKG_CONFIG_PATH=../omnix-360-studio/.localdeps/root/usr/lib/x86_64-linux-gnu/pkgconfig
 cargo build -q            # no warnings; never commit what doesn't build
-cargo test -q             # all pass (GPU tests need the GPU)
+cargo test -q --workspace # all pass, the sheet core's too (GPU tests need the GPU)
 (cd ../dailix && cargo build -q && cargo test -q)   # it links this library
 ```
 

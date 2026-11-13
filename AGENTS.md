@@ -94,7 +94,7 @@ Useful checks:
 
 ## Layout
 
-One crate, `omnix`: a library (`lib.rs`) and a thin binary (`main.rs`). Dailix (`../dailix`) uses the library, and the library uses Dailix's sheet core (`dailix_sheet`).
+A Cargo workspace: `omnix`, a library (`lib.rs`) and a thin binary (`main.rs`), and `crates/sheet` (`dailix_sheet`), the contact sheet's core both programs share (`docs/SHEET-CORE.md`). Dailix (its own repo, `../dailix` beside this one) uses both.
 
 - **The core** (`src/model/`): the project being edited and every change to it as an operation (`model/ops/`: cuts, clips, items, keys, sound), checked, one undo step each (`model/edit.rs`), what's selected (`selection.rs`). No iced, no ffmpeg. The player, the CLI (`omnix apply`, `describe`, `ops-schema`) and tests all change a project only through it (`docs/omnix/OPS-API.md`, `CORE-API.md`).
 - **The file format**: `project.rs` (cuts, sound tracks, a cut's edge looks, `drop_missing`), `overlay.rs`, `text.rs`, `grade.rs`, `view.rs` (views, keyframes, `Camera`).

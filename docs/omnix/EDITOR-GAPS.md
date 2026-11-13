@@ -1312,7 +1312,7 @@ over from Python and how, the open decisions). Shares data with Omnix
 (`notes.json`, sidecars, the folder tree), later a small common crate.
 Takes in gap 34 (import from devices) and 61 (the sheet standalone).
 Milestone «Матеріал і бін». Built so far: the contact sheet's core
-(2026-11-04, `dailix/docs/SHEET-CORE.md`; Omnix's bin runs on it,
+(2026-11-04, `docs/SHEET-CORE.md`; Omnix's bin runs on it,
 `98f2795`), its window (culling, marking keys, Omnix's player beside),
 Home of trips with their videos and days (gap 82), Settings, a new
 trip; Kos is its first project. Still to do, by its own context: the

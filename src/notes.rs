@@ -5,7 +5,7 @@
 //! both ways).
 //!
 //! Reading and changing go through the sheet's core, Dailix's
-//! `dailix-sheet` (`../dailix`, its `docs/SHEET-CORE.md`): the file is
+//! `dailix-sheet` (`crates/sheet`, `docs/SHEET-CORE.md`): the file is
 //! read afresh for every change, marks are named by their ids, every op
 //! is checked, and the file keeps its form and every field it has. What
 //! stays here is Omnix's side: where a project's sheet is, and which

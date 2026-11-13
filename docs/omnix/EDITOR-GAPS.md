@@ -1431,6 +1431,22 @@ layout is ops, so an agent can use it. Milestone «Мультикамерніс�
 Ties into `PLAN-NEXT.md`: card 4's decoding must take any number of
 video layers, not one.
 
+### 109. Publishing Omnix and Dailix on GitHub — medium (user, 2026-11-14)
+
+The user is putting both programs on GitHub as his AI-driven / AI-assisted
+private project, to show visually and technically; this comes before the
+time seam and the features (user, 2026-11-14: «not only for my own edit,
+but for carrying it on»). Two repos (Omnix keeps rOsmo360's history and
+credits; Dailix gets Omnix as a git dependency so it builds on its own).
+The work: the commits' author email moved off the old work address to a
+personal one (history rewrite, local, with a backup); each README with
+what it is, his own screenshots and GIFs, building; CI (build, tests,
+clippy); an English page on how it was made with AI (the rules, skills,
+hooks, roadmap page, audits, snapshots, the user-tests loop, the
+numbers); later the user guide redone with GIFs he records, and which
+working docs go public (decided later). Nothing is pushed until he says
+so. Plan: `docs/PUBLISH.md`.
+
 ### 108. An automation clip's height fitted to its values («Snap to scale») — small (user, 2026-11-12)
 
 A lane's height is its value's whole range (zoom 100–800 %, exposure
@@ -1509,31 +1525,33 @@ The user throws ideas in as they come; they are sorted here and regrouped
 whenever a better grouping shows. `ROADMAP.md` shows the same as cards (field
 `віха`) with each milestone's progress.
 
-1. **Звук для Косу** (sound): 33 the right-click menu goes with 11 (both
+1. **Публікація** (user, 2026-11-14): 109, both programs on GitHub as
+   an AI-driven project — before the seam and the features.
+2. **Звук для Косу** (sound): 33 the right-click menu goes with 11 (both
    use the per-cut level). 3a cleaned voice (done) → 3 + 4A sound
    lanes, designed together → 11 per-clip −16 LUFS → auto-duck (in 3) →
    12 true-peak limit. First, because the Kos film's worst problem is sound,
    and its TODO puts sound right after the cuts.
-2. **Зручний таймлайн** (timeline ease, runs beside 1 in small packs): 10
+3. **Зручний таймлайн** (timeline ease, runs beside 1 in small packs): 10
    two modes → 9 pack 1 (with 7) → 5 markers → 9 click routes → 9 snapping
    → 9 skimmer on the timeline (needs 10 for S; in the bin 71a replaces it) → 9 action bar → 9 typed time and UI scale
    → 27 overview strip, centred playhead option.
-3. **Матеріал і бін** (material in): trips holding their videos in
+4. **Матеріал і бін** (material in): trips holding their videos in
    Dailix (82), «New project» through Dailix (80 → 82), both done; ratings
    from Dailix, LUTs, E/W in the bin (2); ingest in Dailix (74 with 34;
    one's own videos first); the source viewer beside the edit (71a)
    later (user, 2026-11-09: re-cutting is done in Dailix for now).
-4. **Додаткові матеріали** (user, 2026-11-11: filling a project with
+5. **Додаткові матеріали** (user, 2026-11-11: filling a project with
    outside material): 100 — music, sound effects and video by link
    (yt-dlp), pictures dragged in or by link, converted to the format the
    project keeps (JPEG, WebP → PNG and so on), each with its licence in
    `LICENSES.md`.
-5. **Ритм і переходи**: 25a basic transitions with quick placement →
+6. **Ритм і переходи**: 25a basic transitions with quick placement →
    25g a look's settings → 25b edge transitions → 25c templates → 25f
    the lane (all built 2026-11-08) → 25d stingers → 25e 360 looks (with
    footage); 13 beats later (the user, 2026-11-09: re-cutting can be done
    in Dailix, not the most needed now).
-6. **Ефекти, колір і розумний звук** (user, 2026-11-09: next after
+7. **Ефекти, колір і розумний звук** (user, 2026-11-09: next after
    transitions; "effects, colour, animation, texts, pictures, object
    tracking, understanding speech, better sound through Dailix's analysis
    and suggestions from different models, so text/music auto-ducking
@@ -1549,21 +1567,21 @@ whenever a better grouping shows. `ROADMAP.md` shows the same as cards (field
    text and picture animations and overlay kinds (87, 70) → colour tools
    (69 scopes → 14 levels → 68 curves, 71b) → speech and sound in Dailix
    (83 + 77 → 81 → 29 → 16 subtitles, text-based editing) → tracking (37).
-7. **Розуміння матеріалу**: 30 who is in the frame (names from Immich);
+8. **Розуміння матеріалу**: 30 who is in the frame (names from Immich);
    speech (83, 29) moved into 5.
-8. **B-roll і групи**: video on the overlay lane (cheap cutaway) → 4B
+9. **B-roll і групи**: video on the overlay lane (cheap cutaway) → 4B
    group/ungroup + connected clips + 8 multi-select, one format change,
    designed as one.
-9. **Кадрування** (gap 53, user 2026-11-02): framing grown up from gap
+10. **Кадрування** (gap 53, user 2026-11-02): framing grown up from gap
    10's switch: research the best practices first (Insta360 Studio, DJI
    Studio, GoPro, Auto/Smart Reframe), then faces and people (53a, with
    Dailix's 30), framing aids; object tracking (37) moved into 5, angles
    as a multicam (49, now 73e) a card of its own.
-10. **Мультикамерність** (gap 73, user 2026-11-04): 73a the multicam
+11. **Мультикамерність** (gap 73, user 2026-11-04): 73a the multicam
    clip (a file naming its angles, synced by time, then sound) → 73b in
    the bin → 73c cuts of it → 73d the module → 73e 360 angles the same
    way (gap 49 / 53c).
-11. **Швидкість і автоматизація** (gap 31): constant speed per cut with
+12. **Швидкість і автоматизація** (gap 31): constant speed per cut with
    its sound following (atempo), measured for drift → speed ramps →
    automation lanes per value (the user's FL Studio idea). Large and
    careful; after B-roll and groups, since it touches the same time
@@ -1571,19 +1589,19 @@ whenever a better grouping shows. `ROADMAP.md` shows the same as cards (field
    main timeline, 31c the speed editor window, 31d right-click keyframes,
    and the automation idea that 37 object tracking (in milestone 5) keys
    into.
-12. **Якість 360** (from `OPENOSV.md`, mostly needs 360 footage: one public
+13. **Якість 360** (from `OPENOSV.md`, mostly needs 360 footage: one public
    sample now, the user's camera ~2027-02): 17 easing presets and 18 bundled
    LUT any time (small, useful now) → 24 file facts → 19 lens protectors →
    20 mask release → 21 tilt diagnostic → 22 sky seam field (patents first)
    → 23 DJI presets → Osmo 360 II.
-13. **Експорт** (gaps 51, 52; user, 2026-11-02): what the export makes
+14. **Експорт** (gaps 51, 52; user, 2026-11-02): what the export makes
    (4K and 8K, HEVC and AV1, bitrates, frame rates, sound, presets, HDR
    and 360 out) and how fast (the frames' path through the GPU). Before
    the AI edit, which needs it; reordered freely.
-14. **ШІ-монтаж** (gap 28, `AUTO-EDIT.md`): the user's main wish, but put
+15. **ШІ-монтаж** (gap 28, `AUTO-EDIT.md`): the user's main wish, but put
    last on purpose (user, 2026-10-23: "I wouldn't do AI functions yet:
    Omnix doesn't have its full working functionality"). The design stays
    ready. The pieces it needs arrive with the milestones above.
-15. **Інші платформи** (gap 40, user's question 2026-11-01): Mac and
+16. **Інші платформи** (gap 40, user's question 2026-11-01): Mac and
    Windows realistic (upstream builds both), Android a new UI over the
    same core. Not planned; no new Linux-only code without a stub.

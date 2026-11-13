@@ -1431,6 +1431,18 @@ layout is ops, so an agent can use it. Milestone «Мультикамерніс�
 Ties into `PLAN-NEXT.md`: card 4's decoding must take any number of
 video layers, not one.
 
+### 110. Design before publishing — small, grows (user, 2026-11-14)
+
+What looks unfinished to someone seeing the programs for the first time,
+collected from the user's notes before the screenshots and GIFs are made
+(gap 109):
+
+- Dailix's «→ Omnix» question offering the day's existing edits lists
+  them as names and dates only: no frame from each, so there's nothing
+  to recognise an edit by. A thumbnail per edit (its first cut's frame,
+  or the export's), as the trip cards show theirs.
+- (more as the user names them)
+
 ### 109. Publishing Omnix and Dailix on GitHub — medium (user, 2026-11-14)
 
 The user is putting both programs on GitHub as his AI-driven / AI-assisted

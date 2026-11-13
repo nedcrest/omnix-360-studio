@@ -1439,8 +1439,10 @@ collected from the user's notes before the screenshots and GIFs are made
 
 - Dailix's «→ Omnix» question offering the day's existing edits lists
   them as names and dates only: no frame from each, so there's nothing
-  to recognise an edit by. A thumbnail per edit (its first cut's frame,
-  or the export's), as the trip cards show theirs.
+  to recognise an edit by. Grown (user, 2026-11-14) into project cards
+  that show what's inside on all three start places (Omnix's start,
+  Dailix's Home, the «→ Omnix» question): options and research in
+  `PROJECT-CARDS.md`.
 - (more as the user names them)
 
 ### 109. Publishing Omnix and Dailix on GitHub — medium (user, 2026-11-14)

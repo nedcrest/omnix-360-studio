@@ -65,11 +65,18 @@ impl Gpu {
     /// doesn't count: the CPU stitcher is quicker than that.
     /// `deep`: 16-bit frames, for a 10-bit export.
     pub fn new(deep: bool) -> Result<Gpu> {
+        Gpu::open(deep, false)
+    }
+
+    /// `new`, or with `software`, a software rasteriser too: slow, but it
+    /// draws what a GPU draws, so the tests can compare on a machine
+    /// without one (CI's lavapipe).
+    fn open(deep: bool, software: bool) -> Result<Gpu> {
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor::default());
         let options = wgpu::RequestAdapterOptions { power_preference: wgpu::PowerPreference::HighPerformance, ..Default::default() };
         let adapter = block_on(instance.request_adapter(&options)).context("no GPU adapter")?;
         let info = adapter.get_info();
-        if info.device_type == wgpu::DeviceType::Cpu {
+        if info.device_type == wgpu::DeviceType::Cpu && !software {
             bail!("only a software renderer ({})", info.name);
         }
         let (device, queue) = block_on(adapter.request_device(&wgpu::DeviceDescriptor { label: Some("export"), ..Default::default() }))?;
@@ -317,12 +324,12 @@ mod tests {
     use super::*;
     use crate::overlay::{self, Place, Quad};
 
-    /// The GPU for a test, or none where there's no GPU (the test then
-    /// passes without drawing). With `OMNIX_REQUIRE_GPU` set, as CI has it
-    /// (lavapipe), none is a failure: a test that quietly skips proves
-    /// nothing.
+    /// The GPU for a test, a software one too, or none where there's none
+    /// (the test then passes without drawing). With `OMNIX_REQUIRE_GPU`
+    /// set, as CI has it (lavapipe), none is a failure: a test that quietly
+    /// skips proves nothing.
     fn test_gpu(deep: bool) -> Option<Gpu> {
-        match Gpu::new(deep) {
+        match Gpu::open(deep, true) {
             Ok(gpu) => Some(gpu),
             Err(e) if std::env::var_os("OMNIX_REQUIRE_GPU").is_some() => panic!("no GPU, and OMNIX_REQUIRE_GPU is set: {e:#}"),
             Err(_) => None,

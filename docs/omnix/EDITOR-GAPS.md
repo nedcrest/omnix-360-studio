@@ -129,7 +129,7 @@ done in part stays here until its last card is done.
 
 User: wants a bin, maybe with better UI, with "our extra sound tracks" in it.
 
-**Now (`src/player/bin.rs`, v1 `241f28d`, v2 `e33f65e`):**
+**Now (`src/player/bin.rs`, v1 `489cf4e`, v2 `a8014b9`):**
 - A panel of its own at the far left, beside whichever left panel (Info,
   Settings, Text) is open; folds to a narrow strip (B toggles).
 - Pin (🔒) keeps it open, and open at the next start (`Settings.bin_pinned`).
@@ -234,8 +234,8 @@ User: would split into video tracks and sound tracks.
   fades already do, «Sound to picture» in the sound menu to reset, the
   edge stopping (red) at the clip's end. Later maybe a rolling split
   (one drag lengthens one sound and shortens the next).
-- **Done 2026-11-03** (`71f1ef3` model and ops, `6ff67b4` export,
-  `4931abe` player), confirmed by the user with the snapping:
+- **Done 2026-11-03** (`e547906` model and ops, `9832d38` export,
+  `9aa5d1c` player), confirmed by the user with the snapping:
   - `Cut::sound_before` / `sound_after` (seconds past the picture's edge,
     negative = short of it), `CutOp::SoundEdge { cut, end, t, most }` and
     `CutOp::SoundToPicture`. Trims carry them with the picture's edges
@@ -302,8 +302,8 @@ its pack 1, and the bin's skimmer is shared with the timeline's. Keys that
 clash with the 360 view (J/K/L, ↑/↓, E/Q, S) wait for the user's choice.
 
 
-**Pack 1 built 2026-11-02** (`33fe0d0`, `b5c95f8`, `2094684`, and
-`0eb941c` after the user's check: fade knobs kept 8 px inside so two at
+**Pack 1 built 2026-11-02** (`2fcc74c`, `d2dba5a`, `5a20ee6`, and
+`2638ae0` after the user's check: fade knobs kept 8 px inside so two at
 a join don't stack), confirmed by the user the same day (the yellow /
 red handles: «геніально»): edges a 24 px target (`EDGE` 12 px inside, a
 cut's as far outside; one `edge_of` for cuts, sound clips and items; a
@@ -314,7 +314,7 @@ readout by the pointer while trimming, moving, crossfading or fading.
 Defaults: a press on another clip's edge selects and moves it; pictures
 and text show yellow at their out edge (they have no end).
 
-**Pack 2 built 2026-11-02** (`994f949`, `afb5ac2`, `906cab3`, and the
+**Pack 2 built 2026-11-02** (`464d648`, `000f09c`, `a1db5e5`, and the
 toast's commit), confirmed by the user the same day: the crossfade
 readout says «← onto the cut before» while it's 0 (the user dragged it
 inwards, as a sound's fade in); Alt+[ / Alt+] trim the selected (else
@@ -323,7 +323,7 @@ place; Esc cancels a drag on the timeline (`Edit::cancel`,
 `drag_epoch`; not the effects sliders, iced's own); «… deleted · Undo»
 in the top bar for 6 s after a delete. From the check: gap 55.
 
-**Pack 3 done 2026-11-03** (`62540fe`), confirmed by the user 2026-11-04:
+**Pack 3 done 2026-11-03** (`278bf1c`), confirmed by the user 2026-11-04:
 snapping across the timeline, one rule for every drag
 (`Timeline::snap`): within 12 px (raised from 8 at the user's word) of
 the edit's ends, the playhead, the pictures' joins, cuts' sounds split
@@ -735,7 +735,7 @@ effects per track».)
 
 **Decided 2026-11-09 (user).** An edit in the Effects panel no longer
 keys: a slider sets its effect for the whole cut or item
-(`KeyOp::EffectValue`, `d8ee4ec`); no writing values on the fly.
+(`KeyOp::EffectValue`, `c659e55`); no writing values on the fly.
 Automation moves onto the Effects row, folding open into lanes, with
 **automation clips as in FL Studio**: a block on a parameter's lane over
 a stretch, holding a curve; outside it the slider's value holds. A clip
@@ -745,9 +745,9 @@ effect rows of their own: the same there. Old keys are read into clips.
 In the milestone «Ефекти, колір і розумний звук», after the Effects
 panel's layout is sorted (the user's next ask).
 
-**Built and checked 2026-11-10** (`60d1189` core, `9491af2`
-cut lanes, `4203205` values on points and in the sliders, marks on the
-folded row, `29ce7cd` text and overlay lanes, `9557bd6` an item's place
+**Built and checked 2026-11-10** (`ffb47ec` core, `5b59e5a`
+cut lanes, `51d3757` values on points and in the sliders, marks on the
+folded row, `69b6ac8` text and overlay lanes, `566ec18` an item's place
 under its own Motion row, folding): `automation.rs`
 (`AutoClip`: the value's name, from..to in clip or own time, eased
 points, `follows` if made from a track); `graded`/`placed` over the set
@@ -854,7 +854,7 @@ make further building simpler for us and divide the architecture
 nicely." The second pass after gap 35's refactor, now that sound clips,
 recording and the shared sound model (`project::Own`) are in. The result
 goes to `CORE-API.md`; the steps it proposes become commits here. Analysis
-done 2026-11-01 (`95a6be7`): ten steps, tests first; it also found the
+done 2026-11-01 (`8d5e450`): ten steps, tests first; it also found the
 contact sheet leaving a sound clip's own level out.
 
 ### 43. Editing-software best practices, colours, a switchable UI palette — research (user, 2026-11-01)
@@ -1173,12 +1173,12 @@ fresh GPU decoder starts in ~0.45 s, so the scrub copy in software (0.05
 s) stays. Order: measure the main thread's canvases, cache the timeline's
 still layers, scale on the GPU, then the Settings choice.
 
-**Measured and the first fix done 2026-11-04** (`8a2177d`), confirmed
+**Measured and the first fix done 2026-11-04** (`73279e4`), confirmed
 by the user ("fire, mega smooth"; a short stutter, ~20 fps, only while a
 sound lane's level changes and its waveform is drawn anew): the lanes' canvas took 40 ms a frame (79 fullscreen),
 nearly all the waveforms; the sound lanes are now drawn once and kept
 (`canvas::Cache`, keyed by a hash of what they show). The main thread
-went from 100 % to 10-30 % while playing and dragging. Then (`b81a37b`, `a41e81e`,
+went from 100 % to 10-30 % while playing and dragging. Then (`194951e`, `646408c`,
 confirmed by the user on the Kos clips): with CUDA the frame is
 scaled on the GPU before it comes down (`scale_cuda`), 63-73 % of a core
 -> 14-15 % for 4K and 2.7K in the bench. Left: the Settings choice. Not now (user, 2026-11-04,
@@ -1313,7 +1313,7 @@ over from Python and how, the open decisions). Shares data with Omnix
 Takes in gap 34 (import from devices) and 61 (the sheet standalone).
 Milestone «Матеріал і бін». Built so far: the contact sheet's core
 (2026-11-04, `docs/SHEET-CORE.md`; Omnix's bin runs on it,
-`98f2795`), its window (culling, marking keys, Omnix's player beside),
+`f05bd8e`), its window (culling, marking keys, Omnix's player beside),
 Home of trips with their videos and days (gap 82), Settings, a new
 trip; Kos is its first project. Still to do, by its own context: the
 parity steps (voice clean-up 77 among them) before the web sheet

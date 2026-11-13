@@ -4,7 +4,7 @@ Gap 41 (user, 2026-11-01): "a check, written into a separate file, of
 the possibilities to unify and separate out the core / functionality /
 API, which makes further building simpler and divides the architecture
 nicely". The second pass after `ARCHITECTURE.md`'s refactor (gap 35),
-read at `d34a6b9` (84 tests). This page was the plan; each step below
+read at `200d8df` (84 tests). This page was the plan; each step below
 became a commit. Worked off by 2026-11-07 but step 7's last moves (gap
 41's card); what's kept as it is: `ARCHITECTURE.md`.
 
@@ -164,14 +164,14 @@ One commit each, behaviour unchanged unless the step says so. Tests
 
 | # | Step | Size | Risk |
 |---|---|---|---|
-| 1 | **Done 2026-11-01** (`03e1d5b`; fixes `528a622` timeline crossfades, `55d2755` contact sheet): `src/mixdown.rs` (`equal_power`, `own_level`, `cut_gain`, `envelope`, `clip_gain`), every level site calls it | S | low |
-| 2 | **Done 2026-11-01** (`787aa8a`): one line per sound (since folded into `Own`/`OwnSound`, `own_sound`) | S | low |
-| 3 | **Done 2026-11-01** (`2c49a99`): `OwnSound::set_fade`, one `Message::Fade`, one `Drag::Fade` | S | low |
-| 4 | **Done 2026-11-01** (`61b6a5a`), checked by the user (2026-11-01); then the track's line removed altogether at their ask (gap 33i, `c34ae65`): points are only ever on an own line, `PointAdd/Select/Move(Own, …)`, `Drag::Point`, one `selected_point`, one Del, one K | M | medium: drags, Ctrl+click, K |
-| 5 | **Done 2026-11-02** (`7fc2c31`), now `model/selection.rs`: `Selection`, `still_valid`, `Edit::delete`; four `App` fields became one. No `after_move`: a moved cut is selected outright | M | medium: ten files; removes a known source of bugs |
+| 1 | **Done 2026-11-01** (`ad730cc`; fixes `6e29143` timeline crossfades, `14e3cdd` contact sheet): `src/mixdown.rs` (`equal_power`, `own_level`, `cut_gain`, `envelope`, `clip_gain`), every level site calls it | S | low |
+| 2 | **Done 2026-11-01** (`15dd19b`): one line per sound (since folded into `Own`/`OwnSound`, `own_sound`) | S | low |
+| 3 | **Done 2026-11-01** (`4dd1e61`): `OwnSound::set_fade`, one `Message::Fade`, one `Drag::Fade` | S | low |
+| 4 | **Done 2026-11-01** (`1ad24f9`), checked by the user (2026-11-01); then the track's line removed altogether at their ask (gap 33i, `633611b`): points are only ever on an own line, `PointAdd/Select/Move(Own, …)`, `Drag::Point`, one `selected_point`, one Del, one K | M | medium: drags, Ctrl+click, K |
+| 5 | **Done 2026-11-02** (`bc766e3`), now `model/selection.rs`: `Selection`, `still_valid`, `Edit::delete`; four `App` fields became one. No `after_move`: a moved cut is selected outright | M | medium: ten files; removes a known source of bugs |
 | 6 | **Done 2026-11-02** (as OPS-API step 2c): normalize measured then applied by `SoundOp::Normalized`; lower and restore are ops; the CLI gains `--track` | S | low |
-| 7 | Moves: `edit.rs` → `model/` (**done**, `23aff2d`), `config_dir` → `fsutil` (**done** 2026-11-05, `fsutil::app_dir`), `Waveform` → media, `Cut::sound_file` → media (open); `gpu`/`render`/shaders → `src/gpu/` looked at and kept (`ARCHITECTURE.md`) | M | low logic risk |
-| 8 | **Done 2026-11-02** (`36c216f`, as OPS-API step 5): `model::curve` (`Key`, `key_at`, `find`) for effect and motion keys; volume points stay `project::volume_key_at` (no ease, dB lines) until the automation lanes | M | low |
+| 7 | Moves: `edit.rs` → `model/` (**done**, `4009d30`), `config_dir` → `fsutil` (**done** 2026-11-05, `fsutil::app_dir`), `Waveform` → media, `Cut::sound_file` → media (open); `gpu`/`render`/shaders → `src/gpu/` looked at and kept (`ARCHITECTURE.md`) | M | low logic risk |
+| 8 | **Done 2026-11-02** (`1859eb9`, as OPS-API step 5): `model::curve` (`Key`, `key_at`, `find`) for effect and motion keys; volume points stay `project::volume_key_at` (no ease, dB lines) until the automation lanes | M | low |
 | 9 | **Done 2026-11-02**: `OPS-API.md`, all its steps | M | medium |
 | 10 | **Done 2026-11-07** as the timeline package (the audit's last item): one `Hit` per canvas, shared drawing helpers, one `Picked`, blocks holding the cut, clip or item they show, `Marks::update` split | L | high: drawing and the mouse everywhere; last, after 4 and 5 |
 

@@ -71,7 +71,7 @@ three layers on every lane, tessellated anew on every frame, twice the
 work at twice the width; the frame rate halves in fullscreen, as the
 user saw. Nothing else is worth touching first.
 
-### After keeping the sound lanes (`8a2177d`)
+### After keeping the sound lanes (`73279e4`)
 
 The sound lanes and the clip sound lane drawn once into a `canvas::Cache`
 and kept while what they show holds. The same sampling, the player run
@@ -147,13 +147,13 @@ place of it.
 
 1. ~~Measure the main thread~~: done, above: the waveforms.
 2. ~~Cache the timeline's still layers~~: done for the sound lanes
-   (`8a2177d`), above; the rest of the timeline costs under 1 ms. Was:
+   (`73279e4`), above; the rest of the timeline costs under 1 ms. Was:
    (`canvas::Cache`): waveforms,
    blocks, thumbnails and headers redrawn only when the edit, the zoom or
    the window change; the playhead, the snap line and readouts in a thin
    layer of their own redrawn every frame. Expected to take the main
    thread from 100 % to a fraction while playing.
-3. ~~Scale on the GPU~~: done (`b81a37b`): with CUDA, `scale_cuda` at the
+3. ~~Scale on the GPU~~: done (`194951e`): with CUDA, `scale_cuda` at the
    stored frame's size before `hwdownload`, the turn after on the small
    frame; checked against the software decode (within 3 levels of luma,
    turned and not).
@@ -161,7 +161,7 @@ Checked with the user on the test project with two Kos clips (2.7K
 HEVC) added: playing them, the main thread at 12-22 %, ffmpeg 0-57 %.
 Opening it, ffmpeg ran at 570-790 % for ~20 s: making the two clips'
 copies for the playhead (gap 63) in software. Made on CUDA since
-(`a41e81e`): 2.5 s and 3 s of CPU against 17.6 s and 54 s for the 37 s
+(`646408c`): 2.5 s and 3 s of CPU against 17.6 s and 54 s for the 37 s
 clip, the same picture.
 
 What the user saw dragging fast against slowly: fast, the picture is

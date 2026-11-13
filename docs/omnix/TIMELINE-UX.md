@@ -177,7 +177,7 @@ clashing keys (skimmer's S, J/K/L, ↑/↓).
    line; N toggles it.
 4. **Skimmer** on the timeline and in the bin (one shared piece).
 5. **Action bar** that follows the selection.
-6. **Time you can type into**. (The UI scale setting is done: 115% by default, A−/A+ in the top bar, `59b0b9b`.)
+6. **Time you can type into**. (The UI scale setting is done: 115% by default, A−/A+ in the top bar, `a5dbe0e`.)
 7. ~~With sound lanes (gap 3)~~ Done: fade corners, auto-duck, lanes by role.
 8. Later: overview strip, attached clips (4B), beat markers, text-based
    editing, centred playhead as an option.

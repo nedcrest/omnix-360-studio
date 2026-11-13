@@ -207,12 +207,12 @@ must be as before.
    ops, the timeline (every pixel's hit, lanes folded and open),
    `describe`, the speech sources, the measured sound and the export's
    plan and mix graph (`tests/golden/time-*.txt`, `src/time_snapshot.rs`;
-   commits `095b73a`, `e5a2593`, `fee5fcf`); the player's crossfade,
-   scrub and trim maths in the core (`67d577a`); the site checklist
+   commits `3abe5dd`, `d82204f`, `6ac3541`); the player's crossfade,
+   scrub and trim maths in the core (`2c579a9`); the site checklist
    (`TIME-SEAM-SITES.md`). `check` and `preview` read media and are
    tested before they move (step 5).
 1. `Speed` + the `Cut` functions, tested at 0.5×/2× — **done 2026-11-12**
-   (`9c30129`): `len()` stays until step 2 moves its callers one by
+   (`bb1fb8d`): `len()` stays until step 2 moves its callers one by
    one onto `edit_len` or `clip_len`, then goes; the core's offsets,
    locate, edit time and crossfade partner already use the seam.
 2. Core: `offsets`, `edit_length`, `locate`, `edit_time`, `crossfade_from`,

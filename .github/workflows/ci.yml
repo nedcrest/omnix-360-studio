@@ -1,0 +1,32 @@
+# Every push and pull request: the workspace (Omnix and the sheet core)
+# builds, its tests pass and clippy reads it. The GPU tests run on
+# lavapipe, Mesa's Vulkan on the CPU, so the CPU and GPU paths are compared
+# here too; the CLI tests export real files through ffmpeg.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: System libraries, ffmpeg and a CPU Vulkan
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends pkg-config libasound2-dev ffmpeg mesa-vulkan-drivers
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Build
+        run: cargo build --workspace --all-targets
+      - name: Test
+        run: cargo test --workspace
+        env:
+          # A GPU test without a GPU fails here instead of passing unseen.
+          OMNIX_REQUIRE_GPU: "1"
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets

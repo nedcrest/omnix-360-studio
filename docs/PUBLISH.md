@@ -92,6 +92,9 @@ release, from the cards there are. Done already: authorship, the build
 from one clone, CI rehearsed, the AI page (a draft he reads), the
 project cards (the «outside» closed for now).
 
+The user approved it all (2026-11-14): «should» is a must too; the
+working docs cleaned and published; version 0.8.0.
+
 **Must, before the repos go public:**
 1. **The small audit** the hook asks for (~4,000 lines since
    2026-11-12: the time seam's guards, the sheet's move, the cards),

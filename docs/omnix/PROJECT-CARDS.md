@@ -59,3 +59,49 @@ framing (depth, pseudo-3D panels).
 
 The user chooses; the frames' source and cache are the same for all
 three (a strip per edit and per trip, made when it's saved).
+
+## Chosen: C, the hybrid (the user, 2026-11-14)
+
+### Where the frames come from
+
+- **An edit**: 16 frames spread over the film, as it plays (stitched,
+  framed, graded, titles in: `preview::frame_at`), at the middle of each
+  sixteenth, so no frame falls on a fade from black at either end. At
+  rest its card shows the 2nd, 6th, 10th and 14th (one from each
+  quarter). Made off the window's thread when an edit is saved and its
+  frames are older than it; `omnix card EDIT` makes them from the
+  command line (Dailix calls the same function).
+- **A trip**: the clips' posters Dailix already keeps
+  (`dailix/thumbs/<day>/<clip>.jpg`): at rest one from each of four days
+  spread over the trip, on hover up to 16 spread over all its days.
+  Nothing new to extract.
+- **Kept**: an edit's frames as one JPEG strip beside the trip's other
+  data (`dailix/cards/<edit>.jpg`, the sheet core's layout says where);
+  an edit outside a trip, in Omnix's cache folder.
+
+### The card (one widget, in Omnix's library, Dailix uses it too)
+
+- 2×2 tiles, 2 px apart, 16:9; a lighter surface than the page, a 1 px
+  inner highlight, a large soft shadow; 10 px corners. A trip's card
+  has one or two sheets behind it (a collection); an edit's is flat.
+- **Hovered**: lifts 3 px with a stronger shadow (150 ms). Its tiles
+  change one at a time to the next frames: a 700 ms crossfade, about
+  1.5 s apart (quicker than the research's 5 s at rest: only the card
+  under the pointer moves, and it should show its 16 frames while
+  looked at). Moving along the card scrubs: the frame under the pointer
+  shows in the tile it's over, a thin line marking where.
+- **At rest nothing moves.** A setting turns the hover motion off.
+- Under it: the name, dates, and what it holds (days, clips, videos; an
+  edit's length and cuts).
+
+### Steps (each a local commit, tests first where it's a rule)
+
+1. The frames: which times (a pure function, tested), rendering and the
+   strip (written whole or not at all), when it's stale; `omnix card`.
+2. The card widget: the tile schedule (which frame each tile shows when,
+   a pure function of time and pointer, tested), crossfade, scrub, lift,
+   the sheets; the motion setting.
+3. Omnix's start: recent edits as a grid of cards; the strips made in the
+   background when missing.
+4. Dailix's Home: trips as cards from their posters.
+5. Dailix's «→ Omnix» question: the day's edits as small cards.

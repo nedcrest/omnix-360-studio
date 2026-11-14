@@ -1,4 +1,4 @@
-# 2. Edit in Omnix
+# Edit in Omnix
 
 In this part you turn the edit Dailix made into a short film: shorten a
 clip, change the order, put a song under it and cut on its beats, add a

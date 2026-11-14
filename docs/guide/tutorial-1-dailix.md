@@ -1,4 +1,4 @@
-# 1. Choose in Dailix
+# Choose in Dailix
 
 In this part you look through a trip's clips, rate them, mark the
 stretch of one clip you want, and send what you chose to Omnix as a

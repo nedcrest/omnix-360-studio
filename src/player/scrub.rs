@@ -87,6 +87,11 @@ fn make_now(input: PathBuf, flat: Flat, hw: crate::ffmpeg::Hwaccel) {
 /// as the file's), no sound, H.264 at its fastest.
 fn write(input: &Path, flat: &Flat, entry: &Path, gpu: bool) -> anyhow::Result<()> {
     let part = entry.with_extension("scrub-part");
+    // A first run has no cache folder yet: ffmpeg won't make one (found
+    // shooting the guide on a fresh home, 2026-11-14).
+    if let Some(dir) = part.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
     let (w, h) = size(flat);
     let mut cmd = crate::ffmpeg::tool("ffmpeg");
     cmd.args(["-v", "error", "-nostdin", "-y"]);

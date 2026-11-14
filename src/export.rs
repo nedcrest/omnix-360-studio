@@ -140,7 +140,7 @@ fn cut_frames(cut: &project::Cut, length: f64, fps: f64, handles: f64) -> Result
     }
     // Count frames over the span asked for, not from the frame the start
     // snaps to: snapping 14 s forward to 14.014 left `-d 5` at 149 frames.
-    Ok(((from * fps).round() / fps, ((end - from) * fps).round().max(1.0) as usize))
+    Ok((crate::pipeline::snap(from, fps), ((end - from) * fps).round().max(1.0) as usize))
 }
 
 /// The sound under cuts `cuts`, each from `inputs` (its own audio or its
@@ -288,11 +288,11 @@ pub(crate) fn export(project: &project::Project, opts: &StitchOpts, out: &Export
             // only, as its fades (a file per cut is for another editor).
             let cut = &project.cuts[n];
             sink.cut(frames, head, tail, cut.transition_spec(), overs(cut, start, frames, fps, graded, whole))?;
-            let camera = |t: f64| camera(project, &pipelines[i], n, t, (whole, graded));
+            let view_at = |t: f64| camera(project, &pipelines[i], n, t, (whole, graded));
             // On an error the encoder, dropped unfinished, removes the file.
             match &mut gpu {
-                Some(gpu) => player::render::encode(gpu, &pipelines[i], &clips[i], start, frames, &mut sink, camera, size, &mut tick)?,
-                None => encode(&pipelines[i], start, Some(frames), &mut sink, |t| Shot::View { camera: Box::new(camera(t)), size }, &mut tick)?,
+                Some(gpu) => player::render::encode(gpu, &pipelines[i], &clips[i], start, frames, &mut sink, view_at, size, &mut tick)?,
+                None => encode(&pipelines[i], start, Some(frames), &mut sink, |t| Shot::View { camera: Box::new(view_at(t)), size }, &mut tick)?,
             }
             done += frames;
         }

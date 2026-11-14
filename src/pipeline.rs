@@ -113,6 +113,11 @@ pub(crate) struct Carry {
     pub(crate) field: Option<align::Field>,
 }
 
+/// `t` rounded to the nearest frame at `fps`.
+pub(crate) fn snap(t: f64, fps: f64) -> f64 {
+    (t * fps).round() / fps
+}
+
 impl Pipeline {
     /// `stabilize` is the mode when the options don't name one.
     pub(crate) fn new(input: &Path, opts: &StitchOpts, stabilize: stab::Mode) -> Result<Self> {
@@ -234,7 +239,7 @@ impl Pipeline {
 
     /// Rounds to the nearest frame so attitude lookups match decoded pictures.
     pub(crate) fn snap(&self, t: f64) -> f64 {
-        (t * self.fps).round() / self.fps
+        snap(t, self.fps)
     }
 
     /// Stitches one frame, measuring the seam afresh and easing towards it.

@@ -1,0 +1,2 @@
+# The golden snapshots compare byte for byte: no line-end conversion.
+tests/golden/*.txt -text

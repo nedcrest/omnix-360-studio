@@ -2613,9 +2613,6 @@ mod tests {
         assert_eq!((p.cuts[0].sound_fade_in, p.cuts[0].sound_fade_out), (2.0, 0.0), "nothing left after the fade in");
     }
 
-    /// Old project files, one per shape the format has had, in
-    /// `tests/fixtures/`: `deny_unknown_fields` makes a renamed field break
-    /// them loudly, so a format change that would shows here first.
     #[test]
     fn a_project_with_a_speed_is_refused_until_cuts_can_play_at_speed() {
         let dir = std::env::temp_dir().join(format!("omnix-speed-{}", std::process::id()));
@@ -2630,6 +2627,9 @@ mod tests {
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
+    /// Old project files, one per shape the format has had, in
+    /// `tests/fixtures/`: `deny_unknown_fields` makes a renamed field break
+    /// them loudly, so a format change that would shows here first.
     #[test]
     fn old_project_files_still_load() {
         let dir = std::env::temp_dir().join(format!("omnix-fixtures-{}", std::process::id()));

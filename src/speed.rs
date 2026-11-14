@@ -72,7 +72,7 @@ impl Speed {
     /// The edit seconds reading the clip from `a` to `b` takes; less than
     /// none when `b` is before `a`.
     pub fn edit_secs(&self, a: f64, b: f64) -> f64 {
-        if self.keys.is_empty() {
+        if self.is_normal() {
             return b - a;
         }
         if b < a {
@@ -90,7 +90,7 @@ impl Speed {
     /// The clip time reached from clip time `a` after `dt` edit seconds
     /// (back, `dt` less than none): `edit_secs` undone.
     pub fn clip_after(&self, a: f64, dt: f64) -> f64 {
-        if self.keys.is_empty() {
+        if self.is_normal() {
             return a + dt;
         }
         let (mut t, mut left) = (a, dt.abs());
@@ -132,6 +132,9 @@ mod tests {
             // Not near: equal, so the seam changes no number at 1×.
             assert_eq!((s.edit_secs(10.3, 14.7), s.clip_after(10.3, 4.4), s.clip_after(14.7, -4.4)), (14.7 - 10.3, 10.3 + 4.4, 14.7 - 4.4));
         }
+        // Several keys all at 1×: as exact, not a sum of pieces.
+        let ones = Speed { keys: vec![SpeedKey { t: 0.0, rate: 1.0 }, SpeedKey { t: 11.1, rate: 1.0 }, SpeedKey { t: 12.9, rate: 1.0 }] };
+        assert_eq!((ones.edit_secs(10.3, 14.7), ones.clip_after(10.3, 4.4)), (14.7 - 10.3, 10.3 + 4.4));
         assert!(!Speed::constant(2.0).is_normal());
     }
 

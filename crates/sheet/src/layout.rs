@@ -1,7 +1,8 @@
 //! A Dailix project folder: the numbered folders are the user's, made for
 //! people to browse in a file manager; everything a program keeps (the
 //! marking, the analysis, thumbnails, cleaned voices) lives in one folder
-//! beside them, `dailix/` (user, 2026-11-04: footage-agent's projects
+//! beside them, `dailix/` (user, 2026-11-04: the projects of his earlier
+//! pipeline, footage-agent,
 //! scattered `report/`, `analysis/`, `voice/` among the numbered ones).
 //!
 //! ```text
@@ -31,7 +32,8 @@ use std::path::{Path, PathBuf};
 pub const PICTURES: &str = "08_pictures";
 pub const OLD_PICTURES: &str = "08_graphics";
 
-/// The numbered folders (footage-agent's `layout.py`, the same tree).
+/// The numbered folders (the same tree as footage-agent's, the user's
+/// earlier pipeline).
 pub const FOLDERS: [&str; 9] = [
     "01_footage",         // the clips, copied in; the originals stay in the sources
     "02_audio/music",     // music

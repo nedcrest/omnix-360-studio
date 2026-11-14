@@ -1,5 +1,5 @@
 //! Omnix's player for another program's window: Dailix's contact sheet
-//! plays clips with it (`../dailix`). A small surface over the
+//! plays clips with it (Dailix, a repo of its own). A small surface over the
 //! player the edit and the bin use: a clip read (`load`, blocking: run it
 //! off the UI thread), played, paused, sought and scrubbed (from the quick
 //! copy, gap 63, made on load), and its newest frame drawn by Omnix's GPU

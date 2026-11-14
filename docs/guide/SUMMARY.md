@@ -15,3 +15,4 @@
 - [Keys: Dailix](keys-dailix.md)
 - [Commands: Omnix](commands-omnix.md)
 - [Commands: Dailix](commands-dailix.md)
+- [Settings and files](settings-and-files.md)

@@ -81,8 +81,21 @@ pub fn write_sidecar(layout: &Layout, day: &str, source: &str, tech: &Technical)
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;
     }
-    std::fs::write(&path, serde_json::to_vec_pretty(&doc).map_err(std::io::Error::other)?)?;
+    // Whole or not at all, as the sheet is (the audit, 2026-11-14).
+    crate::store::replace(&path, &serde_json::to_vec_pretty(&doc).map_err(std::io::Error::other)?)?;
     Ok(path)
+}
+
+/// The clip a sidecar at `path` is for (its `source`), if it says.
+pub fn sidecar_source(path: &Path) -> Option<String> {
+    let doc: serde_json::Value = serde_json::from_slice(&std::fs::read(path).ok()?).ok()?;
+    doc["source"].as_str().map(str::to_owned)
+}
+
+/// Whether `s` is a day as the footage's folders name them: `YYYY-MM-DD`.
+pub fn is_day(s: &str) -> bool {
+    let b = s.as_bytes();
+    b.len() == 10 && b.iter().enumerate().all(|(i, c)| if i == 4 || i == 7 { *c == b'-' } else { c.is_ascii_digit() })
 }
 
 /// The day a clip was filmed: from its name first (cameras and phones
@@ -102,8 +115,8 @@ pub fn day_of(file_name: &str, created_at: Option<&str>) -> Option<String> {
             }
         }
     }
-    let c = created_at?;
-    (c.len() >= 10 && c.as_bytes()[4] == b'-' && c.as_bytes()[7] == b'-').then(|| c[..10].to_owned())
+    // `get`, not an index: a date that isn't ASCII panicked (the audit).
+    created_at?.get(..10).filter(|d| is_day(d)).map(str::to_owned)
 }
 
 /// Reads the footage of the project `layout`. A sidecar that can't be
@@ -149,6 +162,16 @@ mod tests {
         assert_eq!(day_of("DJI_0021.MP4", Some("2026-08-22T09:15:00.000000Z")).as_deref(), Some("2026-08-22"));
         assert_eq!(day_of("dji_mimo_20260821_094704_1_1787309763736_video.MP4", None).as_deref(), Some("2026-08-21"), "not the long number");
         assert_eq!(day_of("clip.mp4", None), None);
+        // Odd dates said in the file: none, not a panic or a folder of junk.
+        assert_eq!((day_of("clip.mp4", Some("2026-08-1é")), day_of("clip.mp4", Some("2026-ab-cdT0")), day_of("clip.mp4", Some("2026"))), (None, None, None));
+    }
+
+    #[test]
+    fn a_day_is_a_dated_folder_name_and_nothing_else() {
+        assert!(is_day("2026-08-19"));
+        for not in ["../x", "2026/08/19", "2026-08-1", "2026-08-19x", "20260819", ""] {
+            assert!(!is_day(not), "{not}");
+        }
     }
 
     #[test]
@@ -157,7 +180,8 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
         let layout = Layout::new(&root);
         let tech = Technical { duration_s: 12.5, fps: 29.97, resolution: "1920x1080".into(), codec: "hevc".into(), size_bytes: 9, has_audio: true, created_at: None };
-        write_sidecar(&layout, "2030-05-01", "A.MP4", &tech).unwrap();
+        let side = write_sidecar(&layout, "2030-05-01", "A.MP4", &tech).unwrap();
+        assert_eq!(sidecar_source(&side).as_deref(), Some("A.MP4"));
         let (footage, skipped) = read(&layout).unwrap();
         assert!(skipped.is_empty(), "{skipped:?}");
         assert_eq!((footage.days[0].day.as_str(), footage.days[0].clips[0].key.as_str(), footage.days[0].clips[0].duration), ("2030-05-01", "2030-05-01/A.MP4", 12.5));

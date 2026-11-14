@@ -1443,6 +1443,18 @@ was filmed (its name's date, else the file's), with a sidecar; the
 originals only read. The rest of ingest (cards, phones, analysis,
 proxies) stays gap 74.
 
+### 113. Roles named in English — small (user, 2026-11-14)
+
+The built-in roles of a segment read «фон / B-roll», «розмова / sync»
+… (`crates/sheet/src/lib.rs` `BUILT_IN_ROLES`, `Role::name`), and «—
+без ролі» in Dailix's list: Ukrainian first, in an interface otherwise
+English, and so in the guide's pictures (seen on the tutorial's first
+part). English names (B-roll, Sync, Establishing, Insert, Cutaway,
+Action, Reveal, Reaction; «No role»); the keys stay, so every sheet
+and edit reads as before. Whether the Ukrainian words stay anywhere (a
+language setting later) is the user's call. The guide's segment GIF is
+shot again after.
+
 ### 112. Dailix's interface, looked at again — medium (user, 2026-11-14)
 
 Dailix wasn't friendly enough: buttons in many sizes and accents by

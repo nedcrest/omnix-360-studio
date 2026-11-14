@@ -118,6 +118,16 @@ the session of 2026-11-14):
    voice is; sync lock and groups; the clip cache.
 7. **Troubleshooting**, then the changelog.
 
+## Footage (the user, 2026-11-14)
+
+A tutorial trip of his own clips without faces (`.analysis/TUTORIAL-
+CLIPS.md`): camera clips of Kos and phone videos, flat only. No free,
+openly licensed Osmo 360 or 360 II footage exists (DJI publishes none;
+the one raw `.OSV` online, a review's, is all rights reserved), so the
+**360 shots wait for his own camera**: `framing-360`, `projections`,
+`stabilisation`, `follow-colour`, and the 360 look in `omnix-hero`. The
+guide's 360 pages are written meanwhile, their pictures marked «later».
+
 ## The shot list
 
 S: a still is enough; G: a GIF. **Bold**: the first round, the ones the

@@ -1443,6 +1443,16 @@ was filmed (its name's date, else the file's), with a sidecar; the
 originals only read. The rest of ingest (cards, phones, analysis,
 proxies) stays gap 74.
 
+### 111. Trips and edits to the trash; «edits», not «videos» — small (user, 2026-11-14)
+
+Dailix had no way to delete a trip or one of its edits, and called the
+edits «videos» (easily taken for clips of footage). Built: «Delete
+trip…» and «Move to trash…» under each edit's card, each asking first
+with what goes (files and size) and that the originals in the sources
+stay; the folder goes to the system's trash. Omnix stops showing an
+edit or a trip gone (recent and browsed), keeping a recent one listed
+in case its disk is only unplugged. «Edits» in both programs' words.
+
 ### 110. Design before publishing — small, grows (user, 2026-11-14)
 
 What looks unfinished to someone seeing the programs for the first time,

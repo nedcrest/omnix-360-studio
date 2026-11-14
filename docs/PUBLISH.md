@@ -85,6 +85,52 @@ read-only token as a secret, or Omnix made public first.
   screenshot.png`, `docs/guide/`) are all rights reserved by their author
   and to be replaced before Omnix is published: his own, or removed.
 
+## The release review (2026-11-14)
+
+The user asked what to close, technically, before the first public
+release, from the cards there are. Done already: authorship, the build
+from one clone, CI rehearsed, the AI page (a draft he reads), the
+project cards (the «outside» closed for now).
+
+**Must, before the repos go public:**
+1. **The small audit** the hook asks for (~4,000 lines since
+   2026-11-12: the time seam's guards, the sheet's move, the cards),
+   its bugs fixed. Public code is read by strangers first.
+2. **No rOsmo360 pictures**: the README's screenshot and the user
+   guide's 22 pictures are «all rights reserved» by their author. The
+   guide's text is Omnix's already; its pictures are his to replace (or
+   the guide ships without them until the GIF guide).
+3. **The working docs**: the AI page points at the roadmap, gaps and
+   audits; `CONTEXT.md` (both) and the code rules hold personal paths
+   and private notes (a passwords file's place in Dailix's). Cleaned and
+   published, or kept out — his decision, before the first push.
+4. **`CLAUDE.md` at Omnix's root is rOsmo360's** 125 KB maintainer notes
+   («paths and footage you won't have»): replaced by Omnix's own short
+   one (it points at `AGENTS.md` and the skills), rOsmo360's kept in
+   its history.
+5. **CI green on GitHub** (the first push, to private repos), and the
+   links that are paths today (`../dailix`) made GitHub links.
+
+**Should:**
+6. **A version and a tag.** `Cargo.toml` says 0.7.1, rOsmo360's last;
+   Omnix's first is its own (0.8.0, or 1.0 if he wants a statement), a
+   short changelog of what Omnix added, a GitHub release.
+7. **Release builds checked**: `packaging/build-release.sh` (AppImage,
+   Flatpak, Windows zip) last ran before the sheet moved in; it should
+   build now (no sibling path any more), but untried.
+8. **A stranger's first run**: Dailix needs its three places set
+   (`dailix places …`); with none it should say so on Home, not just in
+   the command line. Omnix starts empty fine.
+9. **Dailix's own switch** for the cards' motion (Omnix has one).
+
+**Could:** a tiny demo project made from generated test media, so
+someone without a DJI camera sees the editor work in a minute.
+
+**After the release (the «Далі» cards, none needed for it):** the time
+seam (paused, consistent: a speed set is refused), copy and paste (102),
+outside material (100), video on the overlay lane (4), stingers (25d),
+speed (31, 31c). The README's roadmap names them as what's next.
+
 ## Rules that stay
 
 Personal footage and paths never go into a published file. Footage is

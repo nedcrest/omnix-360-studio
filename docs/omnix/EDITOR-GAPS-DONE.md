@@ -51,7 +51,7 @@ just put it there. Used by the bin (item 2) and by Ctrl+O. No format change.
 
 ### 3a. Cleaned voice in place of a clip's sound — done, user-tested 2026-10-23
 
-User's ask (2026-10-22). **Done** (`e62d327` here, footage-agent `export/omnix.py`):
+User's ask (2026-10-22). **Done** (`20a7f44` here, footage-agent `export/omnix.py`):
 optional `Cut.audio`, a file timed like the clip, heard instead of its sound
 in the player and the export; label "♪ <name>", Info row "Sound"; a missing
 file falls back to the clip's sound with a warning. footage-agent writes it
@@ -86,25 +86,25 @@ handier, easy to automate (each lane has a stable name in the project),
 and easy to work in. A free-form mode can come later if ever needed.
 
 **Built:**
-- **Data and export** (`5d6d2a0`): `Project.sfx: Music`, `SoundTrack
+- **Data and export** (`363e5db`): `Project.sfx: Music`, `SoundTrack
   {Music, Sfx}`; the export mixes every track; Clips export writes
   `- sfx 001.wav`. Measured: SFX beeps land at 2.0002 s and 4.2502 s, at
   −11.97 dB against −12 expected.
-- **Lanes** (`661cee0`): top to bottom Text, Overlay, cuts, Clip sound, key
+- **Lanes** (`3cf77a3`): top to bottom Text, Overlay, cuts, Clip sound, key
   rows, seek bar, Music, SFX. Every lane has a name tag pinned at the left
   edge with a dot of its colour. SFX clips are purple, the music green. All
   music interactions work on SFX: move, trim, Shift crossfade, Ctrl+click
   and K volume points, C split, Del, right-click Info. Edges snap across
   sound lanes. The Audio panel has an SFX level. Bin «Sound effects» goes to
   SFX; «Music» and «Voice-over» go to Music.
-- **Clip sound lane** (`8500356`), which is 4A: each cut's waveform (its
+- **Clip sound lane** (`9df87dd`), which is 4A: each cut's waveform (its
   cleaned voice, else the clip's sound from the `.LRF`) and its volume line,
   moved off the thumbnails. Read two files at a time, cached.
 
-**Built 2026-10-29:** the Voice lane (`dba3366`) and fade handles on sound
-clips' top corners (`45daf3e`).
+**Built 2026-10-29:** the Voice lane (`016fd8a`) and fade handles on sound
+clips' top corners (`9c0ee94`).
 
-**Auto-duck, built 2026-11-01** (`3f04373`, `5b1d4d8`), waiting for the
+**Auto-duck, built 2026-11-01** (`4cdec41`, `3c45909`), waiting for the
 check. The user's design: one action and a depth; speech from the cleaned
 voice; ordinary volume points. Defaults taken:
 - speech is looked for in cuts with a cleaned voice and in Voice takes
@@ -132,7 +132,7 @@ on the seek bar; M adds one at the playhead, click jumps. footage-agent then
 exports its flags («що знайти») and point marks into them
 (`footage_agent/export/omnix.py`).
 
-**Built 2026-11-03** (`26e61bf`, `23db6f0`, `f65290e`, `d13d9f8`), waiting for
+**Built 2026-11-03** (`a1c745b`, `ad82839`, `182986c`, `17f9995`), waiting for
 the user's check: `Cut::marks` ({t, note}, clip time) and `CutOp::Mark /
 MoveMark / Unmark`; M marks at the playhead (mute moved to Shift+M,
 FCP / Premiere / Resolve's key); flags on the time ruler (gap 50a)
@@ -146,10 +146,10 @@ row of their own over the ruler (the playhead's head covered them on
 it), folding to a strip, shown only with markers; the ruler keeps their
 poles. A click on a flag selects the marker (`Selection::Mark`), so Del
 takes it rather than the cut under the playhead; flags and notes 15 %
-bigger, outlined (`c0432a6`). Found with it: shortcuts with letters did
+bigger, outlined (`39d30ea`). Found with it: shortcuts with letters did
 nothing in the Ukrainian layout (Ctrl+Z among them; fixed by the
 physical key, `keys::latin`), and ↑ / ↓ were lost in editing while the
-angles strip was on in Settings (`156e116`). ↑ / ↓ then stood still at a stop off
+angles strip was on in Settings (`f627fe0`). ↑ / ↓ then stood still at a stop off
 the frame grid (a sound clip's end, a marker): a stop counts only more
 than half a frame away now, and the playhead says what it stopped at
 («← marker», «← cut»), with a test walking every stop both ways; then,
@@ -162,11 +162,11 @@ when it moves included.
 The selected cut's frame on the timeline is hard to see. Make it thicker
 and in the accent colour (`timeline.rs`, where the cut blocks are drawn).
 
-**Built 2026-11-02 with timeline pack 1** (`d2dba5a`), confirmed by the
+**Built 2026-11-02 with timeline pack 1** (`ad950a1`), confirmed by the
 user the same day: 3 px in the accent colour over a dark 5 px line, on cuts,
 sound clips and overlay items (`selection_frame`).
 
-### 10. Two modes: Edit and Framing — built 2026-10-24 (`e50d399`); the base that gap 53 grows (user, 2026-11-02)
+### 10. Two modes: Edit and Framing — built 2026-10-24 (`2152325`); the base that gap 53 grows (user, 2026-11-02)
 
 The user's answer to the key clashes in `TIMELINE-UX.md`: Omnix is a video
 editor first. By default it is in **Edit** mode, where keys and the mouse
@@ -312,7 +312,7 @@ How to build it so the player and the export sound the same:
   voice-over» and «Back to normal level» work both ways (on a scooter
   clip). Mute and «Show volume line» with points work too (2026-10-29).
   Card done. Left: the user's ear on the leveler (samples A–D).
-- **Step 1 built** (`6b30797`): `Cut.gain/mute/loudness`, `loudness.rs`,
+- **Step 1 built** (`e88828d`): `Cut.gain/mute/loudness`, `loudness.rs`,
   `omnix normalize`, the export limiter (0.87 = −1.2 dBFS, `level=0`,
   `latency=1`), the player's limiter. Measured on Kos 22.08 cuts 1–6:
   −32.5 → −16.1 LUFS, true peak −1.0 dBTP, sync 0.0 ms.
@@ -331,7 +331,7 @@ How to build it so the player and the export sound the same:
   - Measured moment to moment, the gentle B lifted quiet words only 2.5 dB.
   - Worse, dynaudnorm's default boundary ramp made **every cut start 13–15
     dB quiet** for 1–2 s in the export.
-  - Fixed in `17381f4`: `b=1`, and the default is now the medium
+  - Fixed in `778c4f8`: `b=1`, and the default is now the medium
     `dynaudnorm=f=150:g=7:p=0.9:m=12:b=1`. Quiet words go up +5.5 dB and
     the cut starts match the plain export.
 
@@ -368,7 +368,7 @@ a setting later.
 
 **Done** (noted 2026-11-04): the export's mix ends in `ffmpeg::mix::LIMITER`, peaks held under −1.2 dBFS (−1 measured 0.2 dB over between samples).
 
-### 32. A blank stretch on the main lane — done 2026-11-03 (`8f6236f`), confirmed by the user
+### 32. A blank stretch on the main lane — done 2026-11-03 (`dd316bb`), confirmed by the user
 
 Asked by the user 2026-10-23, again as a «spacer» 2026-11-03: a black
 stretch on the main lane, room for an overlay, a title or a sound with a
@@ -468,7 +468,7 @@ out at its end. Optional `Cut.sound_fade_in/out` (seconds, absent = 0);
 the player's clip volume and the export's mix both apply it (CPU = export
 rule), and a crossfade's own sound blend stays as it is.
 
-**Built 2026-11-01** (`77aa9c3`), confirmed by the user 2026-11-01. Straight fades, as
+**Built 2026-11-01** (`3159b35`), confirmed by the user 2026-11-01. Straight fades, as
 the sound clips'; handles shown only where the cut has sound; a split
 keeps each fade at its half's outer end; the waveform shows the fade.
 Export checked: 2 s fades on the talk cut measured −50 dB at its start,
@@ -512,8 +512,8 @@ clip, the track's line over the whole edit):
 - Player and export apply clip line × track line × track level (CPU =
   export rule, tested on the mix graph strings).
 
-**Built 2026-11-01 with 33f, confirmed by the user the same day** (`0840682`, `2598e14`, `0444772`, `7f9d994`,
-`a4347e3`, `6422821`). As designed, with
+**Built 2026-11-01 with 33f, confirmed by the user the same day** (`6373238`, `1ad2cc5`, `46e10b1`, `cc6d217`,
+`6d57c6a`, `a808151`). As designed, with
 these defaults: the clip's line is cyan like a cut's (both «own» lines),
 the track's line stays shown when it has points but dimmer (no separate
 «Show track volume» switch: hiding it would hide existing points); the
@@ -570,7 +570,7 @@ take recorded without manual gain):
   the pointer whatever its height. Fix: its bottom at the pointer, by its
   own height (items × row height), kept inside the window.
 
-Built 2026-11-01 (`3d2975c`), confirmed by the user the same day. A right-click near a cut's or
+Built 2026-11-01 (`d1b415a`), confirmed by the user the same day. A right-click near a cut's or
 clip's drawn line now opens the line's menu; elsewhere on it, its sound
 menu as before.
 
@@ -598,7 +598,7 @@ Decided:
   down.
 - `project::Line` (Own or Track) folds back into `Own`.
 
-**Built 2026-11-01** (`633611b`, `4e149f5`), confirmed by the user with the sound group. On
+**Built 2026-11-01** (`a3c6d72`, `456c853`), confirmed by the user with the sound group. On
 the test project the music's six track points and the Voice point moved
 into the clips' lines; auto-duck writes there. «Lower the music under
 speech» is now also in a song's right-click menu.
@@ -612,7 +612,7 @@ Draw it scaled by the cut's gain and volume points (and its mute), and,
 when evened, from the evened sound (the waveform read through
 `LEVELER`, cached beside the raw one). Then the change is visible.
 
-**Built 2026-11-01** (`85e0c95`), confirmed by the user 2026-11-01. Defaults
+**Built 2026-11-01** (`0d217d6`), confirmed by the user 2026-11-01. Defaults
 taken: the file's own waveform stays faint behind the heard one, so a
 change shows against what was there; bars a gain pushes past full scale
 are orange (the export's limiter holds them); linear height as before
@@ -700,7 +700,7 @@ Shotcut is the warning: no device picker, no meter, and users get lost.
     the mic opens; the warm-up covers it.
   - A USB mic for input and the Bluetooth headset for listening is the
     good pair.
-- **Built 2026-10-29** (`88fb1ad` recorder, `fee8ff3` panel), waiting
+- **Built 2026-10-29** (`4959e3a` recorder, `41f0960` panel), waiting
   for the user's check. `src/capture.rs` lists the inputs and records;
   `src/player/record_ui.rs` is the panel. Defaults taken alone, to change
   if wanted:
@@ -728,7 +728,7 @@ Shotcut is the warning: no device picker, no meter, and users get lost.
   system's sound settings change, so the meter shows it at once and the
   take is recorded with it; a boost above 100 % is digital and raises the
   noise too.
-  **Built 2026-11-01** (`fee0600`), confirmed by the user 2026-11-01. Range 0–200 %
+  **Built 2026-11-01** (`33ff4bd`), confirmed by the user 2026-11-01. Range 0–200 %
   (not 150: the webcam was already at 100 % when it peaked at −12 dB, and
   PipeWire's 200 % is ×8, +18 dB). Read again when the input changes; the
   slider stays usable while recording, like a knob on an interface.
@@ -754,7 +754,7 @@ starts (the playhead then) and kept until the slider is let go
 for the overlay place sliders and the on-picture drag. A test: a drag
 of many steps with the time moving between them leaves one key.
 
-**Built 2026-11-01** (`0add423`): `effects::Pin` keeps the drag's target
+**Built 2026-11-01** (`33e9aac`): `effects::Pin` keeps the drag's target
 and time from its first step; one-shot changes (reset, white balance, key)
 take the playhead as before. Two tests. Confirmed by the user 2026-11-01.
 
@@ -796,7 +796,7 @@ so the ducked shape stays and the whole clip moves; today only «Lower
 One undo step per drag. Several clips selected (gap 8) later move
 together.
 
-**Built 2026-11-01** (`9857d6b`), confirmed by the user with the sound group. Defaults: the tag
+**Built 2026-11-01** (`609992d`), confirmed by the user with the sound group. Defaults: the tag
 is always shown now (it was only when the level wasn't 0), 0.25 dB a
 pixel in 0.5 dB steps (Shift 0.05 / 0.1), capped at +24 dB as normalizing
 is; a volume point wins over the tag where both are. «Level…» to type a
@@ -850,7 +850,7 @@ viewer's place:
 tested, from measured numbers to findings; (2) the measuring: each lane
 rendered alone through the export's own mix graph (so «as heard» is the
 export's), its clips measured, plus `omnix mixcheck`; (3) the view.
-Built 2026-11-01 (`4fdb730` rules, `8318555` measuring and CLI, `d46cca6`
+Built 2026-11-01 (`1a8e1fe` rules, `73b9ff3` measuring and CLI, `9c38e9e`
 view), confirmed by the user 2026-11-02. Defaults: the target is the Export panel's
 loudness, else −14; a speech stretch's voice is the louder of the Voice
 lane and the clips' sound; the music under it the song covering most of
@@ -859,7 +859,7 @@ test project: the film −14.1 LUFS, music 14.2 and 2.8 dB under the voice.
 46f (the duck's depth) was set from it: 18 dB.
 The user tried it (2026-11-02): «Lower the music under speech» and the
 level knob at −3.5 dB cleared the red. Asked: a timeline in the check,
-and its points on the timeline. Added (`8ba606e`): each finding's stretch
+and its points on the timeline. Added (`2656534`): each finding's stretch
 (`Finding::until`), a ruler of seconds over the schematic with the
 findings marked (clickable), and the same marks over the seek bar while
 there are measurements.
@@ -881,26 +881,26 @@ reaches for (the user's question «what else may be missing for sound?»):
 - **Solo and mute per lane** (46d): hear the Voice alone, or everything
   but the music, while mixing.
 - **Built 2026-11-01, confirmed by the user:** 46d solo and mute
-  (`2b26bf4`): «S»/«M» by each sound lane's name, for listening only (not
+  (`dd06da5`): «S»/«M» by each sound lane's name, for listening only (not
   saved, not exported). 46c rumble cut and cleaning: `loudness::LOW_CUT`
   (highpass 120 Hz, 2 poles) and `CLEAN` (afftdn nr 12, nf −40, tn), one
   chain with evening, in playback, export and measuring; on the scooter
   −6.5 dB under 150 Hz, −3.4 LUFS overall; cleaning does nothing for wind.
   The waveform isn't drawn through them (only through the leveler).
-- **46b built 2026-11-01** (`fe1b9dd`), confirmed by the user: BS.1770 in
+- **46b built 2026-11-01** (`159eb88`), confirmed by the user: BS.1770 in
   `player/lufs.rs`, fed every played frame; short-term in the top bar,
   integrated in its tip; within 0.3 LU of ffmpeg on pink noise.
-- **46a built 2026-11-01** (`f74116b`), confirmed by the user (Apple and social exports differ in loudness as they should): Export panel
+- **46a built 2026-11-01** (`f46d2b2`), confirmed by the user (Apple and social exports differ in loudness as they should): Export panel
   «Loudness» and `export --loudness`; measured after the export, the sound
   re-encoded alone with the gain and the limiter (`loudness::bring_to`).
   The limiter's −1.2 dBFS holds sample peaks; true peak may land ~0.2 dB
   higher (as the limiter note says), under −1 dBTP in the tests so far.
 - **Two sound effects at once** (46e): a second SFX lane (gap 3's «not
-  yet»). **Built 2026-11-01** (`1621784`), confirmed by the user:
+  yet»). **Built 2026-11-01** (`057a0e4`), confirmed by the user:
   `SoundTrack::Sfx2`; an SFX added over one already playing goes there by
   itself; «Move to SFX 2 / SFX» in the menu. The lane always shows, empty
   or not (rows are fixed per track).
-- **The duck's depth** (46f): **built 2026-11-02** (`a4f5373`, `f56a6f6`),
+- **The duck's depth** (46f): **built 2026-11-02** (`5c8a34e`, `ec0b8e8`),
   confirmed by the user the same day. The default is now 18 dB (was 12; the guides
   give 15–20, WCAG 20). Measured on the test project with `rosmo360
   mixcheck` (which now prints every speech stretch's gap, not only the
@@ -921,12 +921,12 @@ reaches for (the user's question «what else may be missing for sound?»):
   3 dB. A settings.json that already holds a depth keeps it (the slider
   sets it, 3–30).
   The user's check (2026-11-02): the slider was squeezed beside the
-  button (`8128790`: now across the panel), and 20 then 18 lowered the
+  button (`29bd736`: now across the panel), and 20 then 18 lowered the
   music 38 dB. Their rule, for every operation on sound: **start from
   the original, never from the last result; a fix after it is by hand,
   with the level.** So a clip remembers its duck (`ducked`) and the next
-  takes it out first (`2a14ef3`); «Lower for voice-over» sets the normal
-  level −12 dB instead of −12 from where it is (`b79b33a`). Normalize,
+  takes it out first (`5ca7177`); «Lower for voice-over» sets the normal
+  level −12 dB instead of −12 from where it is (`42fffb9`). Normalize,
   «Back to normal level» and «Continue the level» already started from
   the file or its neighbour.
 
@@ -944,29 +944,29 @@ Premiere, Resolve); lanes fold to a thin strip with a ▸ (Kdenlive,
 Resolve's track height; Shift folds all of a kind in Kdenlive); headers
 stay compact; the video group and the sound group are set apart
 (RailCut's sections).
-- **50a, ruler — done (`da9b751`).** A ruler canvas over every lane:
+- **50a, ruler — done (`86c3a6c`).** A ruler canvas over every lane:
   minor ticks and labelled seconds (`1:05`, `1:05.5` when zoomed in,
   80 px apart at least at any zoom); the playhead head on it drags to
   scrub; mix-check findings marked at its foot. Settings › Timeline
   «Large time ruler» (28 px, the default) or compact (16 px). The old
   seek bar is a thin rule under the keyframe rows.
-- **50b, Text and Overlay fold — done (`7ac08de`).** Each folds to an
+- **50b, Text and Overlay fold — done (`3332eb8`).** Each folds to an
   18 px strip (`FOLDED`) showing its items as bars and how many
   («▸ Text (2)»); a press opens it, its open name «▾ Text» folds it.
   Folded by default, kept in settings.json. Adding text or overlay
   pictures opens the lane, so new work is never hidden.
-- **50c, SFX 2 folds — done (`7ac08de`).** The same strip among the
+- **50c, SFX 2 folds — done (`3332eb8`).** The same strip among the
   sound lanes (`Rows::folded`, `lane_h`); its S/M buttons still work
   folded; a sound overflowing into SFX 2 opens it. Folded lanes take no
   fades, points, level tags or line presses.
-- **50d, groups — done (`92afbc7`).** A gap and a faint heading between the picture group
+- **50d, groups — done (`ad120f3`).** A gap and a faint heading between the picture group
   (Text, Overlay, cuts, clip sound, key rows) and the sound group
   (Voice, Music, SFX, SFX 2), so the eye finds the main lanes at once:
   16 px, a faint SOUND and a thin rule.
 - Later: Shift+press folds every foldable lane (Kdenlive); a lane's
   height dragged by its lower edge.
 
-### 54. A header column for the lanes: what a whole lane does, at a glance — done 2026-11-04 (`0aaf62a`, `5c977aa`), confirmed by the user
+### 54. A header column for the lanes: what a whole lane does, at a glance — done 2026-11-04 (`3f492db`, `77db146`), confirmed by the user
 
 User, after asking why the music's waveform showed a bright wave inside
 a darker, bigger one (the file and the heard sound, gap 33d: the Music
@@ -999,7 +999,7 @@ Its width: 1–2 cm, to try out; not fixed to the user's 43-inch monitor,
 as they won't always edit on it, so it follows the UI scale and may be
 narrowed (or dragged) on a small screen.
 
-**Built 2026-11-04** (`0aaf62a`): `timeline::HEAD`, 128 px (to fit «Clip
+**Built 2026-11-04** (`3f492db`): `timeline::HEAD`, 128 px (to fit «Clip
 sound» with S and M at a readable size; one constant to tune), on every
 canvas of the timeline (lanes, overlay and text lanes, the markers' row,
 the ruler); time starts after it, and each canvas paints the column last
@@ -1010,7 +1010,7 @@ when not 0 dB («lane −6.0 dB»). A click or right-click on a sound lane's
 header opens its menu: the lane's level slider and what acts on the
 whole lane (normalize every clip, the music's duck); the clip sound's
 header: its level and «Normalize every cut». Each lane's cell is
-tinted in its colour with a rule under it (`5c977aa`, the user's ask on
+tinted in its colour with a rule under it (`77db146`, the user's ask on
 seeing it). Left: a level bar from the
 meter per lane, the mix check's verdict per lane, dragging the column's
 width, picture lanes' menus.
@@ -1031,7 +1031,7 @@ Proposed for editing mode (framing keeps its keys), as Premiere and FCP:
 - Home / End the edit's start and end;
 - the step shown by the playhead for a moment («−1 f», «+1 s», «join»),
   as the drag readout is.
-**Built 2026-11-03** (`6186078`), confirmed by the user the same day
+**Built 2026-11-03** (`1e3e610`), confirmed by the user the same day
 (after the fixes under gap 5), with these defaults: the 5 s jump is gone (Alt+← / → move a cut since pack
 2); Shift's step is one second; ↑ / ↓ and Home only in editing (framing
 keeps pitch and the view's reset), End in editing too; a field of the
@@ -1049,14 +1049,14 @@ asked for, so the «no help text in the UI» rule holds. Its list is kept
 in step with `keys.rs` by hand: a key added there is added here.
 
 
-**Done 2026-11-04** (`4329aeb`), confirmed by the user on a wired keyboard: F1
+**Done 2026-11-04** (`9ec104a`), confirmed by the user on a wired keyboard: F1
 opens and closes it; «?» never reached the app, so it was dropped.
 
 ### 58. Select the cut under the playhead by a key — small (user, 2026-11-03)
 
 User: "I wind the playhead down to some cut and want to move it with
 Alt+←, but another cut is selected at the time. Some hotkey?" **Built
-2026-11-03**, confirmed by the user the same day (`df7925c`): D (Premiere's key)
+2026-11-03**, confirmed by the user the same day (`829b2f3`): D (Premiere's key)
 selects the cut under the playhead, the one shown through a crossfade;
 the playhead says «selected». So: ↓ to a cut, D, Alt+← / →.
 
@@ -1066,7 +1066,7 @@ User: the buttons are spread all over the window; group them, the global
 ones at the top, the timeline's at the bottom, where the row has the whole
 width; groups that can be shown collapsed (buttons split by groups) or
 opened (a little wider, the groups' names shown). **Done 2026-11-03**
-(`9b07d76`), confirmed by the user ("fits for now"; they will tune the
+(`2bb8f16`), confirmed by the user ("fits for now"; they will tune the
 layout during real editing):
 - Top bar, global: App (settings, shortcuts) | Project (new, open, save,
   save as) | Export (aspect, export) | 360 view (while framing a 360 cut)
@@ -1112,10 +1112,10 @@ What it would be:
   buttons do it, and most projects come already cut in footage-agent's
   contact sheet.
 
-Built 2026-11-04 (`bin_view.rs`; `fbe2df0`, `e351c2a`, `7c1c967`, `be43289`): the
+Built 2026-11-04 (`bin_view.rs`; `3aa7f6a`, `3d5bd2d`, `e9ed4bb`, `6d4a1ce`): the
 file picked shows at the right with its Info, the edge between dragged
 (user's ask the same day); a tile's click only shows. A clip plays
-there in the bin's own player (`bin_player.rs`, `2bc38e5`): a second
+there in the bin's own player (`bin_player.rs`, `683b38e`): a second
 `Playback`, a strip to scrub, Space; the first part of 71a (in and out
 points still to come). The pictures stop at half the view's height. The Bin
 toggle in the Mode group or Shift+B; every section shown, an empty one
@@ -1130,7 +1130,7 @@ for quick adding while cutting, the view for sorting the material. Joins
 the «Перегляд з біна у вікні Omnix» card: the view where a tile is
 previewed is the same place.
 
-### 63. Quick copies of ordinary videos for the playhead — done 2026-11-04 (`b24addb`), confirmed by the user ("smoother, not perfect": the rest is gap 65)
+### 63. Quick copies of ordinary videos for the playhead — done 2026-11-04 (`f605251`), confirmed by the user ("smoother, not perfect": the rest is gap 65)
 
 User (checking pack 3's snapping): dragging the playhead lagged and a
 core ran at 100 %. Measured: the test clips (phone-like H.264 1080p)
@@ -1150,7 +1150,7 @@ playhead rests. Pictures get none; 360 clips have their LRF.
 Left: a copy is made only while the cache is on; long clips take longer
 (roughly 1/15 of their length on the dev PC); no progress shown.
 
-### 66. The button groups in colours of their own — done 2026-11-04 (`b29b212`), confirmed by the user
+### 66. The button groups in colours of their own — done 2026-11-04 (`46ea449`), confirmed by the user
 
 User: "different colours for the groups of buttons for editing and for
 navigation, so what's needed is easier to find by colour patterns in the
@@ -1162,7 +1162,7 @@ same wherever it appears (the shortcuts window's groups too), and never
 colour alone (icons and the groups' names stay). Milestone «Колір і
 текст» with the palette card.
 
-**Built 2026-11-04** (`b29b212`): `icons::Tint` and `tint_button` (lighter
+**Built 2026-11-04** (`46ea449`): `icons::Tint` and `tint_button` (lighter
 hovered, darker pressed, faint disabled). Global slate `#4A505A` (app,
 project, export, window, the chevron), Move blue `#2F5F9E` (play, zoom,
 snapping), Add green `#3A7A50`, Cut amber `#9A6026`, History grey
@@ -1185,11 +1185,11 @@ cut (user, 2026-11-05: «move a video's flags with it»): moved with the
 cut, kept on its frame through a trim (hidden past the cut's ends, back
 when trimmed out again), carried by both halves of a split. Must stay
 so; `markers_are_set_noted_moved_and_removed_by_time` checks it.
-Built with `omnix from-sheet` (`src/from_sheet.rs`, `fd021de`): a Dailix
+Built with `omnix from-sheet` (`src/from_sheet.rs`, `83cb109`): a Dailix
 project's marking made into an edit by footage-agent's «→ Omnix» rules,
 a clip's flags inside a cut its markers; Dailix's «→ Omnix» by each day
 calls it. The bin also lists a section's subfolders (Dailix's days,
-`c06ba08`). Flags outside every
+`36915f1`). Flags outside every
 segment stay in the sheet. Made when a cut is made from a segment (the
 bin's add buttons, or Dailix's hand-over), kept in step by the mark's
 id (a marker could carry it). Milestone «Матеріал і бін».
@@ -1307,9 +1307,9 @@ Decided (user, 2026-11-07):
 Steps, each checked by the user:
 1. Home: trip cards; a trip's page with its days and its edits (the
    loose `04_project` ones until 2); description and tags shown and
-   edited on the trip's page. Built (Dailix `0e7d285`), checked
+   edited on the trip's page. Built (Dailix `448a1ba`), checked
    (user, 2026-11-07).
-2. Videos: built (Omnix `eaaaf88`, Dailix `dff1381`), checked (user,
+2. Videos: built (Omnix `b3ba6d3`, Dailix `36c7c20`), checked (user,
    2026-11-08). Decided (user, 2026-11-08): a new video is named for its day or
    `all-days` (`-2` when taken); one `edit.json` per video (a variant
    later as «duplicate the video»); exports default to its `export/`;
@@ -1318,8 +1318,8 @@ Steps, each checked by the user:
    `05_export` gone from the layout (`dailix tidy-edits`, run on Kos and
    the test). The two Kdenlive working copies in footage-agent's old Kos
    folder went to the trash too (user's word, 2026-11-08).
-3. «New project» (gap 80 step 4): built (Dailix `3a3ac51`, `6049173`, `19a11fc`;
-   Omnix `cd60e2e`, `1d0870c`, `9f30837`), checked. Decided (user,
+3. «New project» (gap 80 step 4): built (Dailix `ff1a34a`, `046d290`, `d680710`;
+   Omnix `0f199f8`, `afabb79`, `29598f3`), checked. Decided (user,
    2026-11-08): a trip's folder is its month and its name in Latin
    (`2026-11_motopokatushky-lystopad`, editable); Omnix's «New…» offers a
    video in a trip, a new trip in Dailix (opens on its form), or an edit
@@ -1330,7 +1330,7 @@ Milestone «Матеріал і бін».
 
 ### 6. Vignette shapes — idea (user, 2026-10-22)
 
-Built 2026-11-09 (`e8b8f05`), checked by the user 2026-11-09: `Grade::vignette_shape`
+Built 2026-11-09 (`efb07bf`), checked by the user 2026-11-09: `Grade::vignette_shape`
 (0 round, 1 top, 2 bottom, 3 sides; held from key to key), `vignette_reach`
 and `vignette_soft` (their defaults the old vignette); a fourth row of
 grade values in the shaders; the Effects panel's shapes and sliders under
@@ -1351,7 +1351,7 @@ Small-medium; independent of the rest.
 
 ### 15. Cinematic bars — small (Kos TODO, 2026-10-23)
 
-Built 2026-11-09 (`9a5a3af`), checked by the user 2026-11-09, on the user's route:
+Built 2026-11-09 (`d25333d`), checked by the user 2026-11-09, on the user's route:
 an overlay item with `Bars` (ratio, slide, colour), drawn as two bands
 (`overlay::Spot::Band`) by the overlays' pass and the export's burn, so
 over the finished picture (after a transition) and under text; eased in
@@ -1400,7 +1400,7 @@ and `white_in` to the effect key, mirrored in `grade.rs` and `grade.wgsl`
 with a GPU-vs-CPU test. "To all cuts" already applies a look to the whole
 film. The name `black` is taken by the fades, so pick another.
 
-**Built and checked 2026-11-10** (`c4e1e5f`): `black_in` (0..0.5)
+**Built and checked 2026-11-10** (`d010170`): `black_in` (0..0.5)
 and `white_in` (0.5..1), applied first in `Grade::apply` and
 `grade.wgsl` (a fifth uniform row), tested GPU against CPU. The Light
 group's Levels: Black and White as levels of 255 (as Scopes say them)
@@ -1421,7 +1421,7 @@ across them needs the drop worked out at the timeline's level); hiding
 a lane from the picture while editing (not from the export unless
 asked). Milestone «Ефекти, колір і розумний звук».
 
-**Built and checked 2026-11-10** (`515411e`, `a8c5489`):
+**Built and checked 2026-11-10** (`46e09d9`, `6ca9dee`):
 `Lane::name` and `Lane::hidden`, ops `lane_name` and `lane_hidden`. A
 hidden lane is out of the player and the export alike, as a muted sound
 lane is of the mix (decided: one rule, what's seen is what's exported).
@@ -1449,7 +1449,7 @@ this beside our Play."
   its stop-and-return.
 - Milestone «Зручний таймлайн».
 
-**Built and checked 2026-11-10** (`c5c4a8a`): Shift and a
+**Built and checked 2026-11-10** (`670ce55`): Shift and a
 drag on the ruler marks the range (decided: a plain click or drag
 still moves the playhead), a band with its ends; Esc lets it go.
 Shift+Space or the button beside Play plays it once and pauses back at
@@ -1477,8 +1477,8 @@ at the playhead»; a file dropped on the window goes to the bin only.
   and say so).
 - Milestone «Матеріал і бін».
 
-**Built and checked 2026-11-10** (`4bfb931`, `deedb85`;
-Dailix `1dfbad5`, footage-agent `4b4a13c`): the folder is `08_pictures`
+**Built and checked 2026-11-10** (`e5c1440`, `ccda7ef`;
+Dailix `2486a88`, footage-agent `4b4a13c`): the folder is `08_pictures`
 (`dailix_sheet::layout::PICTURES`), the bin's section «Pictures», an old
 `08_graphics` still read; footage-agent's layout line changed with it.
 A picture's tile in the bin (the view and the panel) is taken up when
@@ -1513,7 +1513,7 @@ keys).
 - In the milestone «Ефекти, колір і розумний звук», with the colour
   tools (after 69 scopes).
 
-**Built and checked 2026-11-10** (`a108512`, `1188d00` and
+**Built and checked 2026-11-10** (`635c4fc`, `c262c14` and
 the panel's commit): `autocolour.rs` measures a cut over 12 frames
 (GPU-decoded where it can, through its LUT): its darkest and brightest
 (specks aside), its middle, the mean of the pixels nearly grey for their
@@ -1536,7 +1536,7 @@ wider and lays its groups out as framed blocks in columns side by side;
 off, the column as today. Kept in the settings. Milestone «Ефекти, колір
 і розумний звук».
 
-**Built and checked 2026-11-10** (`c93679e`): the toggle «Extended
+**Built and checked 2026-11-10** (`2c483e0`): the toggle «Extended
 view» at the panel's top (kept in the settings); on, the panel is three
 blocks wide, each group framed, wrapping to rows.
 
@@ -1556,7 +1556,7 @@ Items that toggle show their state (a tick) instead of changing their
 words. The lane's own menu (empty stretch) and the point and line menus
 keep their one or two items.
 
-**Built and checked 2026-11-10** (`7439e80`): Level (lower for
+**Built and checked 2026-11-10** (`61cdda6`): Level (lower for
 voice-over, back to normal, ✓ Mute, Normalize…), Volume line (show,
 continue the one before, back to the original), Clean up (✓ even out,
 ✓ low rumble, ✓ steady noise), Placement (back to the picture's edges,
@@ -1592,8 +1592,8 @@ top. Subtitles (gap 16) get a lane of their own by default. No format
 change: lanes gain an optional `name`. Milestone «Ефекти, колір і розумний звук» (text
 and titles), and the overlay side with «B-roll і групи».
 
-**Built and checked 2026-11-10** (`8495380`, `36ca245`,
-`c3ed1f0`; the user: «not changing what's there, just groups, so
+**Built and checked 2026-11-10** (`7ae7206`, `896c29f`,
+`0c0dcda`; the user: «not changing what's there, just groups, so
 subtitles and titles can have lanes of their own; what's above is on
 top»):
 - Model: `ItemRef` is (track, lane, place), 0 the lowest lane (drawn
@@ -1618,7 +1618,7 @@ small panel of its own, updated while paused and a few times a second
 while playing (measured from the frame already decoded, so cheap).
 Milestone «Ефекти, колір і розумний звук», with gap 14, which it helps set by eye.
 
-**Built and checked 2026-11-10** (the user: it follows the video, and paused it answers the Light and Colour settings) (`1d1c06a`): the Effects
+**Built and checked 2026-11-10** (the user: it follows the video, and paused it answers the Light and Colour settings) (`8fc8d70`): the Effects
 panel's Scopes group (folded at first): a histogram (red, green, blue,
 luma) over a luma waveform, and «Black · White · crushed · blown». Read
 from the cut's finished picture (graded, LUT and style on, overlays
@@ -1664,13 +1664,13 @@ Omnix's own finder (`duck::speech`), no new model, measured on Kos first.
    footage-agent wrote it, plus `lufs`), the app's runner (`voice.rs`:
    deep-filter in and out apart, the FLAC written whole, measured by
    Omnix's meter), `dailix voice list | make | measure | speech`
-   (Dailix `b2d0c0a`; Omnix's `sound` facade `34768d6`).
+   (Dailix `ef0e142`; Omnix's `sound` facade `5a6ffc0`).
 2. The sheet's Voice row under the player: the clip's own sound and each
    voice with its loudness, heard from where the player is at −20 LUFS
-   (`voice::compare_gain`; `Viewer::hear`, Omnix `db1177d`), «Use for the
-   edit», a recipe made off the UI thread (Dailix `d96c923`).
+   (`voice::compare_gain`; `Viewer::hear`, Omnix `fb4d6f1`), «Use for the
+   edit», a recipe made off the UI thread (Dailix `f5e990d`).
 3. «→ Omnix» sets a cut's loudness and gain from its voice's LUFS
-   (Omnix `dd9ec9a`). Kos's seven old variants measured (−35 … −21.5).
+   (Omnix `241f1b2`). Kos's seven old variants measured (−35 … −21.5).
 deep-filter copied to `~/.config/dailix/tools/`.
 
 ### 83. Dailix finds where people talk, even in bad sound — done, checked by the user 2026-11-10 (user, 2026-11-07)
@@ -1683,8 +1683,8 @@ duck under a cut's own talk) and feeds the marking.
 Order (user, 2026-11-09): in milestone «Ефекти, колір і розумний звук», after
 transitions; the source viewer (71a) and beat cuts (13) went later.
 
-**Built and checked 2026-11-10** (the user on Kos: dnn12 chosen, the cut normalized, music lowered under the voice and auto-ducked under the speech found: «непогано і навіть гарно») (Dailix `60b01b8`, Omnix
-`26111c5`): speech found in a cleaned voice with the auto-duck's own
+**Built and checked 2026-11-10** (the user on Kos: dnn12 chosen, the cut normalized, music lowered under the voice and auto-ducked under the speech found: «непогано і навіть гарно») (Dailix `a58b136`, Omnix
+`49a3fcb`): speech found in a cleaned voice with the auto-duck's own
 finder (`omnix::sound::speech`), in the one the edit uses if
 DeepFilterNet made it, else dnn6, else another (`voice::speech_source`;
 `eq` keeps the wind, never it); a green line under the player's strip;
@@ -1758,9 +1758,9 @@ to do at once with gap 93:
 
 Milestone «Ефекти, колір і розумний звук».
 
-**Built and checked 2026-11-10**: gap 93 (`eb64b6f`) and 1–5
-(`b04e4a8` groups, `195b2f9` Text group, `e4a29f4` the film's fades in
-Transitions, `d5a35bd` style settings button and ins/outs as lists).
+**Built and checked 2026-11-10**: gap 93 (`07c8efe`) and 1–5
+(`7873500` groups, `80f8425` Text group, `0d26b5d` the film's fades in
+Transitions, `06bf791` style settings button and ins/outs as lists).
 Items' Light and Colour fold apart from a cut's (`Group::fold_key`).
 
 ### 87. Style looks and animation presets — done, checked by the user 2026-11-10 (user, 2026-11-09)
@@ -1770,8 +1770,8 @@ neo-cyberpunk; rather for certain one-off short videos, but could be
 interesting. Different animations for text. Animations and different
 kinds of overlays for pictures. Just a rough idea."
 
-**Style looks built and checked 2026-11-09** (`951ce68`, `c80d57a`,
-`f3a7e0a`): style looks on a cut (`Cut::style`, `CutOp::Style`/
+**Style looks built and checked 2026-11-09** (`029a12b`, `b2eb8b5`,
+`4e61c59`): style looks on a cut (`Cut::style`, `CutOp::Style`/
 `StyleKnob`, the Effects panel's Style section): old film, VHS,
 cyberpunk, glow and soft focus (the last two are gap 26), one function
 each in `style.rs` and `style.wgsl`, living with the clip's time; the
@@ -1792,13 +1792,13 @@ cutaways, a program of its own) is another thing: it makes new footage.
   more (8 mm, CRT, duotone). Built as the transitions are: one function
   on the CPU and its WGSL twin, a GPU test; their knobs as `Look::knobs`
   have. The glitch's tearing (`transition::tear`) is a start.
-- **Step 2a done and checked 2026-11-10** (`89bbae7`, reset `8207563`):
+- **Step 2a done and checked 2026-11-10** (`ee792dd`, reset `56d59d6`):
   ins and outs (`animate.rs`), made into automation clips on the item's
   edge from its still values, each clip naming its animation, kept on
   its edge by a trim; `AutoOp::Animate`; the Effects panel's Animate
   group; listed by `omnix looks`. A reset removes automation too.
-- **Step 2b done and checked 2026-11-10** (`1f7ee2b`,
-  `1998c0a`): two effects for text and pictures only (`grade::ITEM_ONLY`,
+- **Step 2b done and checked 2026-11-10** (`76a1149`,
+  `4f6506c`): two effects for text and pictures only (`grade::ITEM_ONLY`,
   a cut refuses them): `blur` (48 samples on a sunflower disc, up to 8 %
   of the picture's short side) and `reveal` (a picture wiped in from the
   left with a soft edge; text typed letter by letter, from
@@ -1808,17 +1808,17 @@ cutaways, a program of its own) is another thing: it makes new footage.
   an even pace). `omnix looks` now lists every effect with its range.
   Limit: past 255 letters, neighbours share a step. A trimmed automation
   clip's edge points follow its edges; dragging an edge only draws it,
-  trimmed once let go (`6c83a2c`, `b8d740e`, the user's find and idea).
-- **Step 2c done and checked 2026-11-10** (`c7e486a`,
-  `a7cad28`): `Item::kind` (`dress::Kind`: sticker, polaroid, inset =
+  trimmed once let go (`66158ab`, `e5a5001`, the user's find and idea).
+- **Step 2c done and checked 2026-11-10** (`47f102b`,
+  `d13df94`): `Item::kind` (`dress::Kind`: sticker, polaroid, inset =
   picture in picture), baked into the picture when it loads (`dress.rs`;
   the sticker's edge from an exact distance transform in `mask.rs`, so a
   PNG's outline too), so the player and the export draw the same;
   `ItemOp::Kind` (pictures only); the Effects panel's Kind group;
   `describe` and `looks` say it. Limit: overlays are still pictures, so
   picture in picture holds a picture, not a playing video.
-- **Step 2d done and checked 2026-11-10** (`501e6be`,
-  `6812b7d`, `fe42ff6`): `Item::style` (as a cut's), `ItemOp::Style` and
+- **Step 2d done and checked 2026-11-10** (`671d9a6`,
+  `47eaa91`, `3c364c8`): `Item::style` (as a cut's), `ItemOp::Style` and
   `StyleKnob` sharing the cut's checks; the item's picture styled first
   (CPU `Picture::styled`; the player runs the style pass on it into a
   picture of its own, `StyledSlot`, the see-through kept), then laid on
@@ -1843,9 +1843,9 @@ cutaways, a program of its own) is another thing: it makes new footage.
 ### 90. The Effects panel sorted into groups — done, checked by the user 2026-11-10 (user, 2026-11-09)
 
 Built 2026-11-09: an overlay's place set for the whole item
-(`KeyOp::PlaceValue`, `4506df4`); rolling shutter in Settings → Picture
-(`a3e0b76`); the groups and the side panel (`effects_view.rs`,
-`30f0ffb`): Place or Bars, Light, Colour (the picker in it), Look (LUT,
+(`KeyOp::PlaceValue`, `e942d5f`); rolling shutter in Settings → Picture
+(`2f1e98c`); the groups and the side panel (`effects_view.rs`,
+`ac276d8`): Place or Bars, Light, Colour (the picker in it), Look (LUT,
 Style tiles), Finish (vignette with its shape's button, opacity; opacity
 first for an overlay), Whole edit (folded at first); folded groups kept
 in the settings; Style's knobs and the vignette's shape, reach and
@@ -1883,7 +1883,7 @@ picker far from temperature and tint, opacity last for overlays.
   Picture.
 
 **Also agreed:** an overlay's place (the sliders and dragging it on the
-view) stops making motion keys, as effects did (`c659e55`): it's set
+view) stops making motion keys, as effects did (`2eae3ad`): it's set
 for the whole item; moving it over time comes with the automation clips
 (39).
 
@@ -2063,7 +2063,7 @@ new one; none, as now. A day's edits by name: `<day>` or `<day>-<n>`
 «Videos» list stays as it is.
 
 
-**Built 2026-11-11 (Dailix `3a04abd`), checked by the user the same day** (a lighter ground and frame under the pointer added on his word). When the day (or the trip, for
+**Built 2026-11-11 (Dailix `7160985`), checked by the user the same day** (a lighter ground and frame under the pointer added on his word). When the day (or the trip, for
 «all days») has videos made that way, a dialog lists them newest first
 with when each was changed: a click opens one; «New from the marking»
 («New empty video» for «Empty day») makes another; Cancel or a click
@@ -2146,8 +2146,8 @@ cut's `frame.x`/`frame.y` lanes from a track by an op, no second
 mechanism. **Step a built** (`frame::Frame`, `Cut::frame`, `frame_at`,
 `CutOp::Frame`, `describe`, `omnix looks`).
 
-**Built 2026-11-11, waits for a check** (`d0e86e2`, `5f4df9a`, `ff2b380`,
-`406059d`, `f4c7b2e` and step d): a, b as designed; c without the box over
+**Built 2026-11-11, waits for a check** (`9107641`, `bd8d12f`, `7f57387`,
+`7a41aeb`, `64acecc` and step d): a, b as designed; c without the box over
 the whole picture — the viewer itself frames an ordinary cut while
 editing (a drag moves the picture with the hand at any zoom, a right-drag
 turns it, the wheel zooms; a point on a lane moving that value at the
@@ -2170,8 +2170,8 @@ the folded Frame row, which already draws every lane's points on one
 line, becomes a key bar — a mark a frame key (all four values at that
 time), a click on it moves the playhead there, a drag retimes the key on
 all four lanes together, Del deletes it; the four lanes stay for fine
-work on one value. **Step e built 2026-11-11** (`3adcdce`, `27a8fc4`,
-`c216279`): `AutoOp::FrameKey`/`FrameKeyMove`/`FrameKeyDelete` (a key
+work on one value. **Step e built 2026-11-11** (`79e71d2`, `871289a`,
+`04f4e6e`): `AutoOp::FrameKey`/`FrameKeyMove`/`FrameKeyDelete` (a key
 holds before the first and after the last, as Kdenlive's); Auto keyframe
 (now in the Frame group too) makes every frame change a key; K keys an
 ordinary cut while editing; a click on the picture aims the frame there

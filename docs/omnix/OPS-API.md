@@ -207,16 +207,16 @@ still lacks is listed in the last row and in «Later» below.
 
 | # | Step | State |
 |---|---|---|
-| 1a | Ids on cuts, sound clips, items (`Project::settle_ids`, saved in the file) | **Done** `aa1cdc5` |
-| 1b | `src/model/` with `edit.rs`, `selection.rs`; a test that the core imports no player, ffmpeg or iced | **Done** `4009d30` |
-| 1c | Transactions: `Edit::begin`/`commit`/`changing` replace `begin_drag` and the `dragging` flag; no empty steps | **Done** `85110ac` |
-| 2a | `Op`, `SoundRef`, `Outcome`, `OpError`, `Edit::apply`/`batch`, `check`; sound ops; `omnix apply`/`describe`; first unit and CLI tests | **Done** `40a8412` |
-| 2b | The player's sound menu, level tags, fades and duck on ops | **Done** `9810bcb` |
-| 2c | Normalize as measure + apply, by id (`CORE-API` step 6; Even1; the CLI's `--track`); points as ops (add, K, move, delete, continue; named by time); the duck's speech found again if the edit changed meanwhile | **Done** `c01342b`, `f6d97b3`, `da37457`, and the duck's check |
-| 3 | Cuts (`CutOp`: add, trim, move, split, crossfade, stabilisation, LUT, delete) and sound clips (`ClipOp`: add with the SFX 2 rule, move, trim, split, other SFX lane, delete); the edit's cut rules moved from `Edit` to `Project`; `Outcome::made`; the player's handlers and `Edit::delete` on them; an export test driven by an ops script | **Done** `4b3d09f`, `218c875`, `c8f2f4e`, `e0224cd`, and the test |
-| 4 | Overlays and text (`ItemOp`: add pictures, add text, move, trim, set text whole, delete); the player's handlers and Del on them | **Done**, the two commits after `8993b5f` |
-| 5 | Keyframes: `model::curve` (`Key`, `key_at`; CORE-API step 8), `KeyOp` for effect, motion and view keys (view keys get where the stick and tracks point as data, `Aims`); the effects panel, K, Auto keyframe, diamond and mark drags, colour-track keys on them; `Edit::checkpoint` gone from the code | **Done** `1859eb9`, `6f3093f`, and the two after |
-| 6 | `proptest` on random op sequences (found a trim panic and inexact floats in JSON, both fixed); `omnix ops-schema` (`schemars`, doc comments as descriptions); `apply` without `-o` is the preview; `describe` the query | **Done** `66bdfd8`, `0e785bd`, `8c31b28` |
+| 1a | Ids on cuts, sound clips, items (`Project::settle_ids`, saved in the file) | **Done** `9997d60` |
+| 1b | `src/model/` with `edit.rs`, `selection.rs`; a test that the core imports no player, ffmpeg or iced | **Done** `ae611e5` |
+| 1c | Transactions: `Edit::begin`/`commit`/`changing` replace `begin_drag` and the `dragging` flag; no empty steps | **Done** `bee437f` |
+| 2a | `Op`, `SoundRef`, `Outcome`, `OpError`, `Edit::apply`/`batch`, `check`; sound ops; `omnix apply`/`describe`; first unit and CLI tests | **Done** `6cbe56c` |
+| 2b | The player's sound menu, level tags, fades and duck on ops | **Done** `0973faa` |
+| 2c | Normalize as measure + apply, by id (`CORE-API` step 6; Even1; the CLI's `--track`); points as ops (add, K, move, delete, continue; named by time); the duck's speech found again if the edit changed meanwhile | **Done** `99d4457`, `a264d58`, `e739b0c`, and the duck's check |
+| 3 | Cuts (`CutOp`: add, trim, move, split, crossfade, stabilisation, LUT, delete) and sound clips (`ClipOp`: add with the SFX 2 rule, move, trim, split, other SFX lane, delete); the edit's cut rules moved from `Edit` to `Project`; `Outcome::made`; the player's handlers and `Edit::delete` on them; an export test driven by an ops script | **Done** `2faef4b`, `3e39de7`, `61f98f0`, `daaeaf0`, and the test |
+| 4 | Overlays and text (`ItemOp`: add pictures, add text, move, trim, set text whole, delete); the player's handlers and Del on them | **Done**, the two commits after `3d71f4e` |
+| 5 | Keyframes: `model::curve` (`Key`, `key_at`; CORE-API step 8), `KeyOp` for effect, motion and view keys (view keys get where the stick and tracks point as data, `Aims`); the effects panel, K, Auto keyframe, diamond and mark drags, colour-track keys on them; `Edit::checkpoint` gone from the code | **Done** `187279f`, `b452488`, and the two after |
+| 6 | `proptest` on random op sequences (found a trim panic and inexact floats in JSON, both fixed); `omnix ops-schema` (`schemars`, doc comments as descriptions); `apply` without `-o` is the preview; `describe` the query | **Done** `5a51bb5`, `428de8e`, `5e1dd88` |
 | 7 | Transitions (gap 25, 2026-11-08): `CutOp::Transition` (a join's look, on the cut after it), `TransitionKnob` (its settings), `Edge`/`EdgeKnob` (a look on a cut's start or end), `Template` (a join whole from a saved template, all or nothing); overlap and edge looks refuse each other's op; `describe` says each cut's join, in and out with their settings; `omnix looks` lists every look's key and settings (key, range, default, choices) and the templates' library, `--template NAME` prints one as a `template` op takes it | **Done** |
 | — | The edit's fades and the clip-sound and track levels became ops (`SoundOp::EditFade`, `TrackLevel`). Left as a direct write inside a begin/commit: a project's load clean-up | |
 | 13 | Audit C4–C7: values held to `grade::EFFECTS` and `Place::RANGES`, a new key to its cut's or item's time, a view to its field of view; `apply` warns of missing files and LUTs and cuts past their clip; `ItemOp::TextField` (one field of a text) | **Done** |
@@ -236,8 +236,8 @@ in a file reads `{"area": "sound", "op": "level", "sound": {"clip": 4},
 
 ## Later: a review of the core (2026-11-02, the user asked after pack 2)
 
-Soon (small each) — **all four done 2026-11-03** (`c4e1a56` 4,
-`b01315f` 3, `29f51a5` 2, and the selection's commit 1):
+Soon (small each) — **all four done 2026-11-03** (`07b81e5` 4,
+`f56cb4b` 3, `cdb3f6c` 2, and the selection's commit 1):
 1. **The selection by id.** `Selection::Cut(usize)` names an index while
    ops name ids, so every move, delete and undo remaps it by hand
    (`moved_index`, `still_valid`, `after_edit`). By id that class of «the

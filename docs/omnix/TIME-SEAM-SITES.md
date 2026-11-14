@@ -10,7 +10,7 @@ Kinds: **A** clip span as edit length · **B** clip → edit · **C** edit →
 clip · **D** a duration's clock · **E** media at speed (card 31) · **F**
 other 1:1 (frame grid, `MIN_CUT`, thumbnails, cache keys).
 
-Already through a core function after guard 2 (`2c579a9`): transport's
+Already through a core function after guard 2 (`84ae21c`): transport's
 `follow_crossfade`, `crossfade_shares`, Scrub in an overlap; keys'
 `key_volume_point`; cuts' `trim_to`. They move with the core in step 2.
 

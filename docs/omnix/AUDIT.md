@@ -2,13 +2,13 @@
 
 ## Small audit of 2026-11-14 (before publishing; the time seam's guards, the sheet's move, the project cards)
 
-Two review agents: Omnix's `src/` since `6e58514` (the moved sheet crate
-skipped, its layout read), and Dailix since `55c76ab` with its use of
+Two review agents: Omnix's `src/` since `5e76014` (the moved sheet crate
+skipped, its layout read), and Dailix since `b62c67b` with its use of
 Omnix's cards and both CIs. No wrong result in the seam's maths and the
 export's refactor identical in behaviour; the problems were in the cards.
 
-Fixed (Omnix `0650ab4`, `536ef85`, `5af6117`, `2e857b5`; Dailix
-`f25b76e`, `9433f34`, `37e46c4`):
+Fixed (Omnix `300603f`, `8f32afb`, `275aa89`, `ed9177c`; Dailix
+`68daa77`, `47da4b9`, `c0b971b`):
 - A clicked card stayed hovered (a card gone sends no Exit): lit on
   return and frame-rate ticks through the whole session, in both
   programs. Let go of on leaving; ticks only for a card that moves.
@@ -40,25 +40,25 @@ Left, and where it belongs:
 - A strip's temporary file can stay behind if the program dies in the
   write's last instant: harmless, never read.
 
-## Small audit of 2026-11-12 (since `a4a4142`: voices 103, Dailix 104, 99b, framing 107)
+## Small audit of 2026-11-12 (since `40ac31c`: voices 103, Dailix 104, 99b, framing 107)
 
 Two read-only reviews (core; window and Dailix), 23 findings. Fixed the
 same night, each with tests:
 - groups and sync locks together: a locked title moved twice, a group's
   others stayed when its first cut went, a drag left a locked song behind
-  its group — `e837cbb`;
+  its group — `dcb8e8c`;
 - frame keys: moved as one within their lanes, never onto another, held
   past their lanes; `AutoOp::Put` lays a lane down as it is, so «All of
-  this clip» / «Whole film» no longer add flat ends — `ebe1da8`;
+  this clip» / «Whole film» no longer add flat ends — `5e34565`;
 - voices: the level kept without a loudness, no offer of the voice a cut
   plays, the marking read once, the last choice wins, a gone cut left out
-  of the batch, undo closes the sound menu and the picked key — `15bccff`;
+  of the batch, undo closes the sound menu and the picked key — `fa22908`;
 - framing by hand: the drag at any zoom and turn (`Frame::moved`), steps
   closed, ordinary cuts only, keys within the cut, K and Del as meant —
-  `c00b815`;
+  `b6d05be`;
 - Dailix: Esc closes the day's videos, `ALL_DAYS` in one place, times
-  read once — Dailix `55c76ab`, Omnix `5cb0085`;
-- doc comments back on their items, indentation — `6cf526f`.
+  read once — Dailix `b62c67b`, Omnix `0de2009`;
+- doc comments back on their items, indentation — `4785793`.
 
 Left, with when:
 - **With 107b:** a frame off the middle at 100 %, or turned, shows black
@@ -72,7 +72,7 @@ Left, with when:
 - Dailix's `Ops::change` (sheet) is 105 lines, old: split when next
   touched.
 
-## Small audit of 2026-11-11 (since `c98c5cf`: beats, sync lock, groups, the film's end, pieces)
+## Small audit of 2026-11-11 (since `d25b208`: beats, sync lock, groups, the film's end, pieces)
 
 Two read-only reviews, the core and the window, the day after the big
 one (the tracker hook said so: 2799 lines, 52 commits). Fixed the same
@@ -81,17 +81,17 @@ night, each with tests:
   any but its first clip moved that one twice and left the first; lane
   mates broke apart; a beat pulled moved unrelated clips in several
   steps; a grouped single cut left its song; Alt narrowed a set; a song
-  or text couldn't be clicked out of a set) — `ede9af7`;
+  or text couldn't be clicked out of a set) — `d17d7fb`;
 - joined pieces keep each one's marks, points, automation, effect keys
-  and tracks — `8880dc8`;
+  and tracks — `fb4a825`;
 - the film's end holds when a lane's placement would push past it;
-  trimmed fades stay within; unknown ids said — `2e9cc83`;
+  trimmed fades stay within; unknown ids said — `822daab`;
 - the playing cut found again after deleting a set or joining pieces —
-  `0f0dcdf`; Alt+←/→ steps a group's run — `b077745`;
-- `check()` sees the groups; doc comments back in place — `b176078`;
+  `1b09915`; Alt+←/→ steps a group's run — `4a511ea`;
+- `check()` sees the groups; doc comments back in place — `6608ce2`;
 - sync lock rebuilt on the user's choice (cut the song where the
   picture is): inserts, joins apart, songs across the edit, drags back,
-  clips under deleted picture — `5b76124`.
+  clips under deleted picture — `60e760a`.
 
 Left, each with when it's due:
 - **When beats get their next step:** `beats::pull_to` as an op or an
@@ -120,7 +120,7 @@ Left, each with when it's due:
 Five read-only reviews (dead and stale code; bugs in the week's work;
 design against `code-rules`; the core API's gaps for an agent; Dailix's
 voices and sheet), merged and ranked. Each fix is its own commit, and
-its line leaves this file when it's done (the history is in git). Line numbers as of `9a0218e`.
+its line leaves this file when it's done (the history is in git). Line numbers as of `12ab39c`.
 
 ## A. Bugs
 
@@ -159,6 +159,6 @@ isn't made.
 
 ## D. Stale comments and leftovers
 
-All fixed (Omnix `b5074ed`, Dailix `00b290e`). No large dead code was
+All fixed (Omnix `960deed`, Dailix `998acfa`). No large dead code was
 found; every message variant is built and matched; settings are each
 read and written.

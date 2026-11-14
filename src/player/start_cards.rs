@@ -5,27 +5,18 @@
 //! is newer than them, one edit at a time (each is ~30 s of stitching).
 
 use super::*;
-use crate::cards::view::{Event, Frames};
-use std::collections::{HashMap, HashSet};
-use std::time::{Instant, SystemTime};
+use crate::cards::view::Event;
+use std::time::Instant;
 
 /// A card's width.
 const CARD: f32 = 320.0;
-
-/// A card whose frames aren't made yet.
-const NONE: &Frames = &Frames(Vec::new());
 
 /// Cards in a row.
 const ACROSS: usize = 3;
 
 #[derive(Default)]
 pub(super) struct StartCards {
-    /// Each edit's frames, and its file's time when they were read.
-    frames: HashMap<PathBuf, (Frames, Option<SystemTime>)>,
-    /// The edit whose frames are being made.
-    making: Option<PathBuf>,
-    /// Edits whose frames couldn't be made (said once, not tried again).
-    failed: HashSet<PathBuf>,
+    frames: crate::cards::view::Cache,
     hover: Option<Hover>,
 }
 
@@ -66,26 +57,14 @@ impl App {
         if !self.on_start() {
             return Task::none();
         }
-        let modified = |p: &Path| std::fs::metadata(p).and_then(|m| m.modified()).ok();
         let edits = self.shown_edits();
-        let mut task = Task::none();
-        for edit in edits {
-            let changed = modified(&edit);
-            if self.start_cards.frames.get(&edit).is_some_and(|(_, at)| *at == changed) || self.start_cards.failed.contains(&edit) {
-                continue;
-            }
-            if !crate::cards::needs_making(&edit) {
-                let frames = crate::cards::strip_path(&edit).and_then(|s| Frames::from_strip(&s).ok()).unwrap_or_default();
-                self.start_cards.frames.insert(edit, (frames, changed));
-            } else if self.start_cards.making.is_none() {
-                self.start_cards.making = Some(edit.clone());
-                task = Task::perform(blocking({
-                    let edit = edit.clone();
-                    move || crate::cards::make(&edit).map(|_| ()).map_err(|e| format!("{e:#}"))
-                }), move |done| Message::StartCard(CardMsg::Made(edit.clone(), done)));
-            }
+        match self.start_cards.frames.want(&edits) {
+            Some(edit) => Task::perform(blocking({
+                let edit = edit.clone();
+                move || crate::cards::make(&edit).map(|_| ()).map_err(|e| format!("{e:#}"))
+            }), move |done| Message::StartCard(CardMsg::Made(edit.clone(), done))),
+            None => Task::none(),
         }
-        task
     }
 
     pub(super) fn on_start_card(&mut self, message: CardMsg) -> Task<Message> {
@@ -100,11 +79,7 @@ impl App {
                 }
             }
             CardMsg::Made(edit, done) => {
-                cards.making = None;
-                if let Err(e) = done {
-                    eprintln!("{}: its card's frames: {e}", edit.display());
-                    cards.failed.insert(edit);
-                }
+                cards.frames.made(&edit, done);
                 return self.follow_start_cards();
             }
             CardMsg::Motion(on) => self.card_motion = on,
@@ -121,9 +96,9 @@ impl App {
     /// Edit `edit` as a card: its frames, its name, and `note` under it
     /// (where it is) unless its frames are being made.
     fn edit_card<'a>(&'a self, edit: &'a PathBuf, note: String, now: Instant) -> Element<'a, Message> {
-        let frames = self.start_cards.frames.get(edit).map_or(NONE, |(f, _)| f);
+        let frames = self.start_cards.frames.get(edit);
         let hovered = self.start_cards.hover.as_ref().filter(|h| &h.edit == edit).map(|h| self.card_motion.then(|| now.saturating_duration_since(h.since)));
-        let note = if self.start_cards.making.as_ref() == Some(edit) { "making its frames…".to_owned() } else { note };
+        let note = if self.start_cards.frames.making(edit) { "making its frames…".to_owned() } else { note };
         let info = iced::widget::column![text(dailix_sheet::project::edit_name(edit)).size(15)].push((!note.is_empty()).then(|| text(note).size(12).style(text::secondary))).spacing(2).into();
         let to = {
             let edit = edit.clone();

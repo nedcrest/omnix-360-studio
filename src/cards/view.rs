@@ -85,6 +85,63 @@ pub fn tiles(n: usize, hovered: Option<Duration>) -> [Tile; 4] {
     tiles
 }
 
+/// Edits' frames for a page of cards: read when their strip is current,
+/// else made, one edit at a time (each is ~30 s of stitching). The page
+/// runs the making (`cards::make`) off its thread and says when it's done.
+#[derive(Debug, Default)]
+pub struct Cache {
+    /// Each edit's frames, and its file's time when they were read.
+    frames: std::collections::HashMap<PathBuf, (Frames, Option<std::time::SystemTime>)>,
+    making: Option<PathBuf>,
+    /// Edits whose frames couldn't be made: said once, not tried again.
+    failed: std::collections::HashSet<PathBuf>,
+}
+
+/// A card whose frames aren't made yet.
+const NONE: &Frames = &Frames(Vec::new());
+
+impl Cache {
+    /// `edits`' frames read where they're current; an edit to make them
+    /// for, if none is being made and one needs them.
+    pub fn want<'p>(&mut self, edits: impl IntoIterator<Item = &'p PathBuf>) -> Option<PathBuf> {
+        let modified = |p: &Path| std::fs::metadata(p).and_then(|m| m.modified()).ok();
+        let mut next = None;
+        for edit in edits {
+            let changed = modified(edit);
+            if self.frames.get(edit).is_some_and(|(_, at)| *at == changed) || self.failed.contains(edit) || self.making.as_ref() == Some(edit) {
+                continue;
+            }
+            if !super::needs_making(edit) {
+                let frames = super::strip_path(edit).and_then(|s| Frames::from_strip(&s).ok()).unwrap_or_default();
+                self.frames.insert(edit.clone(), (frames, changed));
+            } else if self.making.is_none() && next.is_none() {
+                next = Some(edit.clone());
+            }
+        }
+        self.making = next.clone().or(self.making.take());
+        next
+    }
+
+    /// `edit`'s frames made, or why not.
+    pub fn made(&mut self, edit: &Path, done: Result<(), String>) {
+        self.making = None;
+        if let Err(e) = done {
+            eprintln!("{}: its card's frames: {e}", edit.display());
+            self.failed.insert(edit.to_owned());
+        }
+    }
+
+    /// `edit`'s frames, none yet if they aren't read.
+    pub fn get(&self, edit: &Path) -> &Frames {
+        self.frames.get(edit).map_or(NONE, |(f, _)| f)
+    }
+
+    /// Whether `edit`'s frames are being made.
+    pub fn making(&self, edit: &Path) -> bool {
+        self.making.as_deref() == Some(edit)
+    }
+}
+
 /// What a card tells its page.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Event {
@@ -162,6 +219,32 @@ mod tests {
 
     fn at(secs: f64) -> Option<Duration> {
         Some(Duration::from_secs_f64(secs))
+    }
+
+    #[test]
+    fn the_cache_reads_current_frames_and_makes_the_rest_one_at_a_time() {
+        let root = std::env::temp_dir().join(format!("omnix-cache-{}", std::process::id()));
+        let l = dailix_sheet::layout::Layout::new(&root);
+        l.create().unwrap();
+        std::fs::write(l.project(), "{}").unwrap();
+        let edits: Vec<PathBuf> = ["a", "b", "c"].map(|v| l.video_edit(v)).to_vec();
+        for e in &edits {
+            std::fs::create_dir_all(e.parent().unwrap()).unwrap();
+            std::fs::write(e, "{}").unwrap();
+        }
+        // a's frames there and newer than it: read, not made.
+        let tiny: Vec<crate::stitch::Frame> = (0..super::super::FRAMES).map(|_| crate::stitch::Frame { width: 2, height: 2, rgb: vec![99; 12], deep: false }).collect();
+        let strip = super::super::strip_path(&edits[0]).unwrap();
+        std::fs::create_dir_all(strip.parent().unwrap()).unwrap();
+        std::fs::write(&strip, super::super::strip(&tiny).unwrap()).unwrap();
+        std::fs::File::options().write(true).open(&edits[0]).unwrap().set_modified(std::time::SystemTime::UNIX_EPOCH).unwrap();
+        let mut cache = Cache::default();
+        assert_eq!(cache.want(&edits), Some(edits[1].clone()), "b made first, one at a time");
+        assert_eq!((cache.get(&edits[0]).0.len(), cache.making(&edits[1])), (super::super::FRAMES, true));
+        assert_eq!(cache.want(&edits), None, "b still being made");
+        cache.made(&edits[1], Err("no footage".into()));
+        assert_eq!(cache.want(&edits), Some(edits[2].clone()), "b not tried again");
+        std::fs::remove_dir_all(&root).unwrap();
     }
 
     #[test]

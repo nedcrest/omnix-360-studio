@@ -244,6 +244,9 @@ pub(crate) enum Cmd {
     /// What a project holds, by id: the cuts, sound clips and overlays that
     /// operations name.
     Describe { project: PathBuf },
+    /// Makes an edit's card frames (the start pages' project cards):
+    /// 16 frames of the film, kept beside its trip's data; prints where.
+    Card { edit: PathBuf },
     /// The JSON Schema of an ops file for `apply`: every operation, its
     /// fields and what they mean (for an agent's tools, or an editor).
     OpsSchema,
@@ -713,6 +716,7 @@ pub(crate) fn run() -> Result<()> {
         Cmd::Duck { project, depth, ops, output } => crate::duck::run(&project, depth, ops, output.as_deref())?,
         Cmd::Apply { project, ops, output } => crate::apply::run(&project, &ops, output.as_deref())?,
         Cmd::Describe { project } => crate::apply::describe(&project)?,
+        Cmd::Card { edit } => println!("{}", crate::cards::make(&edit)?.display()),
         Cmd::OpsSchema => println!("{}", crate::apply::schema()),
         Cmd::Looks { save_template: Some(name), project: Some(project), cut: Some(cut), .. } => crate::apply::save_template(&project, cut, &name)?,
         Cmd::Looks { template, .. } => print!("{}", crate::apply::looks(template.as_deref())?),

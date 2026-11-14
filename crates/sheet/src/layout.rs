@@ -86,6 +86,11 @@ impl Layout {
         let stem = p.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
         self.thumbs().join(p.parent().unwrap_or(Path::new(""))).join(format!("{stem}.jpg"))
     }
+    /// A video's card frames (Omnix's project cards, gap 110): a strip
+    /// of its edit's frames, made by Omnix.
+    pub fn card(&self, video: &str) -> PathBuf {
+        self.data().join("cards").join(format!("{video}.jpg"))
+    }
     pub fn voice(&self) -> PathBuf {
         self.data().join("voice")
     }
@@ -152,6 +157,7 @@ mod tests {
         assert_eq!(l.clip("2030-05-01/A.MP4"), PathBuf::from("/p/01_footage/2030-05-01/A.MP4"));
         assert_eq!(l.sheet(), PathBuf::from("/p/dailix/sheet.json"));
         assert_eq!(l.poster("2030-05-01/A.MP4"), PathBuf::from("/p/dailix/thumbs/2030-05-01/A.jpg"));
+        assert_eq!(l.card("Day one"), PathBuf::from("/p/dailix/cards/Day one.jpg"));
     }
 
     #[test]

@@ -62,6 +62,8 @@ mod animate;
 mod fsutil;
 mod pipeline;
 mod preview;
+/// Project cards (gap 110): an edit's frames, for the start pages.
+pub mod cards;
 #[cfg(test)]
 mod time_snapshot;
 

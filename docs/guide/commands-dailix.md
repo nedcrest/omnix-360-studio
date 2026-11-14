@@ -85,7 +85,7 @@ A line per clip with voices: each one made, its loudness, the one the edit uses 
 
 ## `dailix voice make`
 
-Clip `&lt;day>/&lt;file>`'s voice made by a recipe (dnn6 unless asked), from its original; made again if it's there
+Clip `<day>/<file>`'s voice made by a recipe (dnn6 unless asked), from its original; made again if it's there
 
 | Argument | What it is |
 |---|---|
@@ -103,7 +103,7 @@ The loudness of every voice not measured yet (made by footage-agent)
 
 ## `dailix voice speech`
 
-Where clip `&lt;day>/&lt;file>` holds speech, found in its cleaned voice: a line per stretch, seconds
+Where clip `<day>/<file>` holds speech, found in its cleaned voice: a line per stretch, seconds
 
 | Argument | What it is |
 |---|---|
@@ -112,7 +112,7 @@ Where clip `&lt;day>/&lt;file>` holds speech, found in its cleaned voice: a line
 
 ## `dailix voice use`
 
-Clip `&lt;day>/&lt;file>`'s edit to use its voice made by RECIPE, or its own sound without one (the pane's «Use for the edit»)
+Clip `<day>/<file>`'s edit to use its voice made by RECIPE, or its own sound without one (the pane's «Use for the edit»)
 
 | Argument | What it is |
 |---|---|

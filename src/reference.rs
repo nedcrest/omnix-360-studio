@@ -25,7 +25,7 @@ fn section(out: &mut String, cmd: &Command, parent: &str) {
     let path = format!("{parent} {}", cmd.get_name());
     *out += &format!("\n## `{path}`\n");
     if let Some(about) = cmd.get_long_about().or(cmd.get_about()) {
-        *out += &format!("\n{}\n", about.to_string().trim().replace('<', "&lt;"));
+        *out += &format!("\n{}\n", untagged(about.to_string().trim()));
     }
     let args: Vec<String> = cmd.get_arguments().filter(|a| !matches!(a.get_id().as_str(), "help" | "version") && !a.is_global_set()).map(row).collect();
     if !args.is_empty() {
@@ -63,8 +63,14 @@ fn row(a: &clap::Arg) -> String {
         help += &format!(" (one of: {})", choices.join(", "));
     }
     let cell = |s: &str| s.replace('|', "\\|");
-    // `<DIR>` in a help text would be read as an HTML tag and vanish.
-    format!("| `{}` | {} |\n", cell(&name), cell(help.trim()).replace('<', "&lt;"))
+    format!("| `{}` | {} |\n", cell(&name), untagged(&cell(help.trim())))
+}
+
+/// `<DIR>` in a help text would be read as an HTML tag and vanish: `<`
+/// escaped, but not inside a `code span`, where Markdown shows `&lt;` as
+/// it is (the audit, 2026-11-14).
+fn untagged(text: &str) -> String {
+    text.split('`').enumerate().map(|(i, piece)| if i % 2 == 0 { piece.replace('<', "&lt;") } else { piece.to_owned() }).collect::<Vec<_>>().join("`")
 }
 
 #[cfg(test)]
@@ -92,6 +98,7 @@ mod tests {
         let tagged = Command::new("t").subcommand(Command::new("go").about("Into <DIR>").arg(Arg::new("x").long("x").help("A <FILE>")));
         let page = commands(&tagged, "t", "T", "Made by a test");
         assert!(page.contains("Into &lt;DIR>") && page.contains("| A &lt;FILE> |"), "{page}");
+        assert_eq!(untagged("clip `<day>/<file>` holds <speech>"), "clip `<day>/<file>` holds &lt;speech>");
     }
 
     /// The guide's page is Omnix's command line as it is now:

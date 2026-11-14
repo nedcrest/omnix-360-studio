@@ -12,6 +12,12 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 use crate::view::{Projection, Reframe, View};
 
+/// Omnix's command line as the guide's reference page.
+pub(crate) fn commands_page() -> String {
+    use clap::CommandFactory;
+    crate::reference::commands(&Cli::command(), "omnix", "Commands: Omnix", "Made by `omnix commands`")
+}
+
 #[derive(Parser)]
 #[command(name = player::NAME, version, about = "Omnix: edit home video and DJI Osmo 360 .OSV files (built on rOsmo360)")]
 pub(crate) struct Cli {
@@ -152,7 +158,8 @@ pub(crate) enum Cmd {
         #[command(flatten)]
         opts: CheckOpts,
     },
-    /// Auto colour (gap 89): each cut measured over a dozen frames across
+    // Gap 89.
+    /// Auto colour: each cut measured over a dozen frames across
     /// it (its LUT on), and its levels, exposure and white balance set to
     /// put it right; a line each says what was measured and set.
     Autocolour {
@@ -208,7 +215,8 @@ pub(crate) enum Cmd {
         #[arg(long)]
         every: Option<f64>,
     },
-    /// A song's beats (gap 13): a line per hit, its time in the file and
+    // Gap 13.
+    /// A song's beats: a line per hit, its time in the file and
     /// its strength (0..1 of the song's strongest), those at --threshold
     /// or stronger.
     Beats {
@@ -251,6 +259,9 @@ pub(crate) enum Cmd {
     /// Every key and gesture of the window, as Markdown tables (the
     /// guide's reference page, the F1 window's list).
     Keys,
+    /// Every command and its arguments, as Markdown (the guide's
+    /// reference page; the same text as --help).
+    Commands,
     /// The JSON Schema of an ops file for `apply`: every operation, its
     /// fields and what they mean (for an agent's tools, or an editor).
     OpsSchema,
@@ -723,6 +734,7 @@ pub(crate) fn run() -> Result<()> {
         Cmd::Card { edit } => println!("{}", crate::cards::make(&edit)?.display()),
         Cmd::OpsSchema => println!("{}", crate::apply::schema()),
         Cmd::Keys => print!("{}", crate::keys::omnix_page()),
+        Cmd::Commands => print!("{}", commands_page()),
         Cmd::Looks { save_template: Some(name), project: Some(project), cut: Some(cut), .. } => crate::apply::save_template(&project, cut, &name)?,
         Cmd::Looks { template, .. } => print!("{}", crate::apply::looks(template.as_deref())?),
         Cmd::Install => install()?,

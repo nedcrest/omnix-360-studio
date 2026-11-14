@@ -13,3 +13,5 @@
 
 - [Keys: Omnix](keys-omnix.md)
 - [Keys: Dailix](keys-dailix.md)
+- [Commands: Omnix](commands-omnix.md)
+- [Commands: Dailix](commands-dailix.md)

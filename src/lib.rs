@@ -50,6 +50,7 @@ mod waveform;
 mod beats;
 pub mod cli;
 pub mod keys;
+pub mod reference;
 mod analyse;
 mod export;
 pub mod desktop;

@@ -1,5 +1,36 @@
 # Audits — the lists to work off
 
+## Small audit of 2026-11-14, second (adding videos, delete, the welcome, the UI review's start)
+
+One review agent: Omnix since `b84a3e3`, Dailix since `e0ccb40`. Omnix's
+UI changes clean; the problems were in `dailix add` and the sidecars.
+
+Fixed (Omnix `d9da2fb`; Dailix `c302feb`):
+- A.MOV added beside A.MP4 overwrote its sidecar: A.MP4 vanished from
+  the sheet. Refused now (`sidecar_source`).
+- Span names rounded per part (59.6 s «0m60»), two spans could share a
+  name and the second be skipped: rounded once, tenths kept.
+- `day_of` panicked on a made date that wasn't ASCII and took any ten
+  characters as a day; `--day ../x` wrote outside the trip: `is_day`.
+- A story that couldn't be saved was still dropped by opening another
+  trip or closing the window.
+- One bad file lost the lines of those added before it; `summary` read
+  its own strings back; `@` in a file's name, `nan` as a time; ffmpeg
+  without `-nostdin`; two adds of one file shared a part file; sidecars
+  written in place.
+
+Left, and where it belongs:
+- A trip trashed while its posters are being made: their tasks can make
+  a ghost folder, and an open sheet still points at it. With the
+  feedback for long jobs (UI review step 9).
+- «Close it in Omnix first» before trashing an edit is only words: an
+  open Omnix saving it brings its folder back. When Omnix can say what
+  it has open.
+- The file system asked in `view` (the welcome's `is_dir`, Omnix's
+  start cards per card per frame); `first_run` worked out twice in
+  `home()`: when those functions are next touched.
+- A video without a size in ffprobe gets «nullxnull» as its resolution.
+
 ## Small audit of 2026-11-14 (before publishing; the time seam's guards, the sheet's move, the project cards)
 
 Two review agents: Omnix's `src/` since `5e76014` (the moved sheet crate

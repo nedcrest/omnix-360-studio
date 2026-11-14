@@ -34,17 +34,13 @@ impl App {
         column![iced::widget::scrollable(container(start).center_x(Length::Fill).padding([48, 16])).height(Length::Fill), credit()].into()
     }
 
-    /// Under the start screen's buttons (user, 2026-11-07): the edits
-    /// opened last, a click each to open; and a browser of the projects
-    /// place, each project with its edits. The first run has neither yet.
+    /// Under the start screen's recent edits (user, 2026-11-07): a browser
+    /// of the projects place, each project with its edits as cards (gap
+    /// 110). The first run has none yet.
     fn start_projects(&self) -> Element<'_, Message> {
-        let open = |edit: &PathBuf, label: String, hint: String| -> Element<'_, Message> {
-            let shown = column![text(label).size(15), text(hint).size(12).style(text::secondary)].spacing(2);
-            button(shown).width(Length::Fill).padding([6, 12]).style(button::text).on_press(Message::ProjectPicked(Some(edit.clone()))).into()
-        };
-        let name = |edit: &PathBuf| dailix_sheet::project::edit_name(edit);
-        // The recent edits show above, as cards (`recent_cards`).
-        let mut col = column![].spacing(6).width(560);
+        // The recent edits show above, as cards (`recent_cards`); each
+        // project's below, as cards too, while the projects are browsed.
+        let mut col = column![].spacing(10);
         if self.projects_place().is_some() {
             col = col.push(toggler(self.browse).label("Browse projects").on_toggle(Message::Browse));
             if self.browse {
@@ -52,13 +48,8 @@ impl App {
                     col = col.push(text("No projects there yet.").size(13).style(text::secondary));
                 }
                 for (root, edits) in &self.browsed {
-                    col = col.push(text(dailix_sheet::project::title(root)).size(15));
-                    if edits.is_empty() {
-                        col = col.push(text("no edits yet").size(12).style(text::secondary));
-                    }
-                    for edit in edits {
-                        col = col.push(open(edit, name(edit), String::new()));
-                    }
+                    col = col.push(text(dailix_sheet::project::title(root)).size(16));
+                    col = col.push(if edits.is_empty() { text("no edits yet").size(12).style(text::secondary).into() } else { self.project_cards(edits) });
                 }
             }
         }

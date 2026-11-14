@@ -53,14 +53,23 @@ pub struct Tile {
     pub mix: f32,
 }
 
-/// Tile `q`'s frames among `n`: its quarter of them, or one of them when
-/// there are fewer than four.
-fn quarter(n: usize, q: usize) -> std::ops::Range<usize> {
-    if n < 4 {
-        let k = q % n.max(1);
-        return k..k + 1;
+/// From this many frames each tile has a quarter of them, two or more,
+/// to go round; fewer, the tiles go round all of them together.
+const QUARTERS: usize = 8;
+
+/// The frame tile `q` shows among `n` after it has changed `made` times.
+/// With `QUARTERS` or more, it goes round its quarter of them from the
+/// quarter's middle (the 2nd, 6th, 10th and 14th of 16 at rest). Fewer
+/// (a trip with a few posters), the tiles take every frame in turn,
+/// `q + 4 × made`, so four in a row never show one twice when there are
+/// four or more and every frame comes round (the user, 2026-11-14: a
+/// trip of five posters hardly moved).
+fn frame(n: usize, q: usize, made: usize) -> usize {
+    if n < QUARTERS {
+        return (q + 4 * made) % n.max(1);
     }
-    q * n / 4..(q + 1) * n / 4
+    let (start, len) = (q * n / 4, (q + 1) * n / 4 - q * n / 4);
+    start + ((len - 1) / 2 + made) % len
 }
 
 /// What each of the four tiles shows, for `n` frames: at rest the middle
@@ -70,12 +79,10 @@ fn quarter(n: usize, q: usize) -> std::ops::Range<usize> {
 pub fn tiles(n: usize, hovered: Option<Duration>) -> [Tile; 4] {
     let changes = hovered.map_or(0, |e| (e.as_secs_f64() / STEP.as_secs_f64()) as usize + 1);
     let mut tiles = [0, 1, 2, 3].map(|q| {
-        let r = quarter(n, q);
         // The changes this tile has made: every fourth, from its turn.
         let turn = ORDER.iter().position(|&o| o == q).unwrap_or(0);
         let made = (changes + 3 - turn) / 4;
-        let at = |made: usize| r.start + ((r.len() - 1) / 2 + made) % r.len();
-        Tile { from: at(made.saturating_sub(1)), to: at(made), mix: 1.0 }
+        Tile { from: frame(n, q, made.saturating_sub(1)), to: frame(n, q, made), mix: 1.0 }
     });
     if let Some(e) = hovered {
         let q = ORDER[(changes - 1) % 4];
@@ -171,7 +178,14 @@ pub fn card<'a, M: Clone + 'a>(frames: &'a Frames, hovered: Option<Option<Durati
         let layers: Element<'a, M> = if t.mix >= 1.0 || t.from == t.to { picture(t.to, 1.0) } else { stack![picture(t.from, 1.0), picture(t.to, t.mix)].into() };
         container(layers).width(tile_w).height(tile_h).clip(true).into()
     };
-    let mosaic = column![row![tile(shown[0]), tile(shown[1])].spacing(GAP), row![tile(shown[2]), tile(shown[3])].spacing(GAP)].spacing(GAP);
+    // None yet (a trip with no footage, an edit's being made): said, in
+    // the mosaic's room.
+    let mosaic: Element<'a, M> = if frames.0.is_empty() {
+        let (w, h) = (2.0 * tile_w + GAP, 2.0 * tile_h + GAP);
+        container(iced::widget::text("No pictures yet").size(13).style(iced::widget::text::secondary)).width(w).height(h).center_x(w).center_y(h).into()
+    } else {
+        column![row![tile(shown[0]), tile(shown[1])].spacing(GAP), row![tile(shown[2]), tile(shown[3])].spacing(GAP)].spacing(GAP).into()
+    };
     let body = column![mosaic, container(info).height(info_height).clip(true)].spacing(8).width(width - 2.0 * INSET);
     let face_h = 2.0 * INSET + 2.0 * tile_h + GAP + 8.0 + info_height;
     let face = container(body).padding(INSET).width(width).style(move |t: &Theme| face_style(t, lit));
@@ -256,6 +270,22 @@ mod tests {
         assert_eq!(rest, super::super::AT_REST.map(|k| (k, 1.0)));
         // Fewer frames than tiles: round them.
         assert_eq!(tiles(3, None).map(|t| t.to), [0, 1, 2, 0]);
+    }
+
+    #[test]
+    fn a_few_frames_all_come_round_never_two_alike_at_once() {
+        // Five posters: the tiles take them in turn, every one shows, and
+        // any moment's four are different.
+        let mut seen = std::collections::BTreeSet::new();
+        for k in 0..40 {
+            let shown = tiles(5, at(k as f64 * 0.5)).map(|t| t.to);
+            seen.extend(shown);
+            let mut four = shown.to_vec();
+            four.sort_unstable();
+            four.dedup();
+            assert_eq!(four.len(), 4, "at {} s: {shown:?}", k as f64 * 0.5);
+        }
+        assert_eq!(seen.len(), 5);
     }
 
     #[test]

@@ -31,7 +31,7 @@ pub struct Segment {
 }
 
 /// A role a segment can have: its key in the sheet, its name there
-/// ("перебивка / cutaway") and its colour, as the sheet shows them.
+/// ("Cutaway") and its colour, as the sheet shows them.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Role {
     pub key: String,
@@ -234,7 +234,7 @@ mod tests {
         assert_eq!((m.role.as_deref(), m.note.as_str()), (Some("cut"), "крик"));
         s.describe(m, None, "крик").unwrap();
         assert_eq!(s.segments(&file).unwrap()[0].role, None);
-        assert!(s.roles().iter().any(|r| r.key == "cut" && r.name == "перебивка / cutaway"));
+        assert!(s.roles().iter().any(|r| r.key == "cut" && r.name == "Cutaway"));
 
         // Removed by id: the others stay; removed again, refused.
         let before = s.segments(&file).unwrap();

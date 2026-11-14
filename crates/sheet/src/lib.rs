@@ -294,18 +294,20 @@ pub struct Sheet {
 }
 
 /// The sheet's own roles: the function of a shot in the edit, not what's
-/// in it. Key, name, the trade's English word, and the colour the web sheet
-/// gave it (footage-agent's `report.html`), so a segment reads the same in
-/// every program.
-const BUILT_IN_ROLES: [(&str, &str, &str, &str); 8] = [
-    ("talk", "розмова", "sync", "#c0563a"),
-    ("establish", "загальний", "establishing", "#4f8a6a"),
-    ("broll", "фон", "B-roll", "#6b7f9e"),
-    ("detail", "деталь", "insert", "#c98a5e"),
-    ("cut", "перебивка", "cutaway", "#b07aa8"),
-    ("action", "дія", "action", "#d29a5e"),
-    ("reveal", "ревіл", "reveal", "#7a6bab"),
-    ("reaction", "реакція", "reaction", "#d18fa5"),
+/// in it. Key, name (the trade's English word: the interface is English;
+/// they read «фон / B-roll» till gap 113, 2026-11-14), and the colour the
+/// web sheet gave it (footage-agent's `report.html`), so a segment reads
+/// the same in every program. The keys never change: sheets and edits
+/// keep reading as they were.
+const BUILT_IN_ROLES: [(&str, &str, &str); 8] = [
+    ("talk", "Sync", "#c0563a"),
+    ("establish", "Establishing", "#4f8a6a"),
+    ("broll", "B-roll", "#6b7f9e"),
+    ("detail", "Insert", "#c98a5e"),
+    ("cut", "Cutaway", "#b07aa8"),
+    ("action", "Action", "#d29a5e"),
+    ("reveal", "Reveal", "#7a6bab"),
+    ("reaction", "Reaction", "#d18fa5"),
 ];
 
 /// A mark with no role, or one whose colour is unknown.
@@ -317,7 +319,8 @@ pub fn is_built_in_role(key: &str) -> bool {
 }
 
 impl Role {
-    /// How it reads in a list: "розмова / sync", or as much as it has.
+    /// How it reads in a list: «B-roll»; a role of the user's with a
+    /// second name as «title / en».
     pub fn name(&self) -> String {
         let title = if self.title.is_empty() { &self.key } else { &self.title };
         if self.en.is_empty() { title.clone() } else { format!("{title} / {}", self.en) }
@@ -378,7 +381,7 @@ impl Sheet {
     /// Every role a mark can have: the sheet's own, then the user's added
     /// in it (one with a built-in's key is the built-in).
     pub fn all_roles(&self) -> Vec<Role> {
-        let built_in = BUILT_IN_ROLES.iter().map(|&(key, title, en, color)| Role { key: key.into(), title: title.into(), en: en.into(), color: Some(color.into()) });
+        let built_in = BUILT_IN_ROLES.iter().map(|&(key, title, color)| Role { key: key.into(), title: title.into(), en: String::new(), color: Some(color.into()) });
         built_in.chain(self.roles.iter().filter(|r| !is_built_in_role(&r.key)).cloned()).collect()
     }
 
@@ -421,7 +424,10 @@ mod tests {
         let sheet = Doc::parse(r##"{"roles": [{"key": "meme", "title": "мем", "color": "#8fae7a"}, {"key": "odd", "color": "nope"}]}"##).unwrap().sheet().unwrap();
         let keys: Vec<String> = sheet.all_roles().into_iter().map(|r| r.key).collect();
         assert_eq!((keys.len(), keys[0].as_str(), keys[8].as_str()), (10, "talk", "meme"));
-        assert_eq!(sheet.role("talk").unwrap().name(), "розмова / sync");
+        assert_eq!(sheet.role("talk").unwrap().name(), "Sync");
+        // A user's role with a second name reads as both.
+        let both = Role { key: "x_meme".into(), title: "мем".into(), en: "meme".into(), color: None };
+        assert_eq!(both.name(), "мем / meme");
         assert_eq!(sheet.role("meme").unwrap().name(), "мем");
         assert_eq!([sheet.role_rgb(Some("talk")), sheet.role_rgb(Some("meme")), sheet.role_rgb(Some("odd")), sheet.role_rgb(None)], [[0xc0, 0x56, 0x3a], [0x8f, 0xae, 0x7a], NO_ROLE_RGB, NO_ROLE_RGB]);
     }

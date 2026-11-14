@@ -76,8 +76,7 @@ the flowers.
    press **O**). The segment appears on the strip, and Dailix asks for
    its role.
 4. Choose a role with **↑**, **↓** and **Enter**, or select it: here
-   **фон / B-roll**, footage that shows the place. (The roles are named
-   in Ukrainian and English.)
+   **B-roll**, footage that shows the place.
 5. Type a note, *flowers in the shade*, and press **Enter**.
 6. Press **P**: the clip is a take, so its segment goes into the edit.
 

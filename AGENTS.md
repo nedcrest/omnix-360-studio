@@ -1,6 +1,6 @@
 # Omnix: instructions for coding agents
 
-Read this before changing anything. It's for AI coding agents (and the people driving them) helping build Omnix (grown from rOsmo360, whose `CLAUDE.md` is its maintainer's own working notes, full of paths and footage you don't have: use this file and `docs/omnix/` instead). The rules for changing code: the `code-rules` skill. Human contributors: see `CONTRIBUTING.md` too.
+Read this before changing anything. It's for AI coding agents (and the people driving them) helping build Omnix (grown from rOsmo360, whose maintainer's working notes, full of paths and footage you don't have, are in this repo's history as `CLAUDE.md` before 2026-11-14: use this file and `docs/omnix/` instead). The rules for changing code: the `code-rules` skill. Human contributors: see `CONTRIBUTING.md` too.
 
 ## What it is
 

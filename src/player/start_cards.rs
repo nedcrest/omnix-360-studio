@@ -104,7 +104,7 @@ impl App {
             let edit = edit.clone();
             move |e| Message::StartCard(CardMsg::Event(edit.clone(), e))
         };
-        crate::cards::view::card(frames, hovered, CARD, false, info, to)
+        crate::cards::view::card(frames, hovered, CARD, false, info, 40.0, to)
     }
 
     /// `cards`, `ACROSS` a row.

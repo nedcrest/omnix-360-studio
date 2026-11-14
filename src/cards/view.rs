@@ -7,7 +7,7 @@
 //! of the time hovered; the widget draws what it says.
 
 use iced::widget::{column, container, image, mouse_area, row, space, stack};
-use iced::{Border, Color, Element, Length, Padding, Shadow, Theme, Vector};
+use iced::{Border, Color, Element, Padding, Shadow, Theme, Vector};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -150,11 +150,13 @@ pub enum Event {
     Open,
 }
 
-/// A card `width` wide: `frames` as a 2×2 mosaic over `info`. `hovered`:
-/// the pointer is over it (lit and lifted), and for how long the tiles
-/// have been changing (none: they don't); `stack_of`, sheets behind it (a
+/// A card `width` wide: `frames` as a 2×2 mosaic over `info`, given
+/// `info_height` so every card of a row is as tall and the sheets behind
+/// know their size (a stack takes its first layer's). `hovered`: the
+/// pointer is over it (lit and lifted), and for how long the tiles have
+/// been changing (none: they don't); `stack_of`, sheets behind it (a
 /// collection, such as a trip).
-pub fn card<'a, M: Clone + 'a>(frames: &'a Frames, hovered: Option<Option<Duration>>, width: f32, stack_of: bool, info: Element<'a, M>, on: impl Fn(Event) -> M + Clone + 'a) -> Element<'a, M> {
+pub fn card<'a, M: Clone + 'a>(frames: &'a Frames, hovered: Option<Option<Duration>>, width: f32, stack_of: bool, info: Element<'a, M>, info_height: f32, on: impl Fn(Event) -> M + Clone + 'a) -> Element<'a, M> {
     let lit = hovered.is_some();
     let tile_w = ((width - 2.0 * INSET - GAP) / 2.0).floor();
     let tile_h = (tile_w * 9.0 / 16.0).round();
@@ -170,7 +172,8 @@ pub fn card<'a, M: Clone + 'a>(frames: &'a Frames, hovered: Option<Option<Durati
         container(layers).width(tile_w).height(tile_h).clip(true).into()
     };
     let mosaic = column![row![tile(shown[0]), tile(shown[1])].spacing(GAP), row![tile(shown[2]), tile(shown[3])].spacing(GAP)].spacing(GAP);
-    let body = column![mosaic, info].spacing(8).width(width - 2.0 * INSET);
+    let body = column![mosaic, container(info).height(info_height).clip(true)].spacing(8).width(width - 2.0 * INSET);
+    let face_h = 2.0 * INSET + 2.0 * tile_h + GAP + 8.0 + info_height;
     let face = container(body).padding(INSET).width(width).style(move |t: &Theme| face_style(t, lit));
     let face = mouse_area(face).on_enter(on(Event::Enter)).on_exit(on(Event::Exit)).on_press(on(Event::Open)).interaction(iced::mouse::Interaction::Pointer);
     // Lifted when hovered: the room under it moves above it.
@@ -180,7 +183,7 @@ pub fn card<'a, M: Clone + 'a>(frames: &'a Frames, hovered: Option<Option<Durati
         return face.into();
     }
     // Two sheets behind, down and to the right: a collection.
-    let sheet = |d: f32| container(space().width(width).height(Length::Fill)).padding(Padding { top: 3.0 + d, left: d, ..Padding::ZERO }).style(move |t: &Theme| sheet_style(t, d));
+    let sheet = |d: f32| container(container(space()).width(width).height(face_h).style(move |t: &Theme| sheet_style(t, d))).padding(Padding { top: 3.0 + d, left: d, ..Padding::ZERO });
     let room = container(face).padding(Padding { right: 8.0, bottom: 8.0, ..Padding::ZERO });
     stack![sheet(8.0), sheet(4.0), room].into()
 }

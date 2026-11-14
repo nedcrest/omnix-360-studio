@@ -1,6 +1,6 @@
 # The new user guide: plan (gap 109, 2026-11-14)
 
-The guide in `docs/user-guide.md` is rOsmo360's shape with Omnix's words:
+The old guide (`docs/user-guide.md`, removed 2026-11-14) was rOsmo360's shape with Omnix's words:
 about a third still right (projections, stabilisation, keyframes and
 ease, follow, LUTs, the aspect lock, export, the command line, the cache),
 the window, bars, panels and several keys changed, and nothing on what

@@ -28,6 +28,15 @@ pub fn times(duration: f64) -> Vec<f64> {
     (0..FRAMES).map(|k| duration * (k as f64 + 0.5) / FRAMES as f64).collect()
 }
 
+/// `n` of `all`, spread evenly over them in order (all of them when
+/// there are no more): a trip's posters over its days, for its card.
+pub fn spread<T: Clone>(all: &[T], n: usize) -> Vec<T> {
+    if all.len() <= n {
+        return all.to_vec();
+    }
+    (0..n).map(|k| all[(2 * k + 1) * all.len() / (2 * n)].clone()).collect()
+}
+
 /// Where edit `edit`'s strip is kept: beside its trip's data when it's a
 /// video of a trip; else in Omnix's cache, named after the edit's path.
 pub fn strip_path(edit: &Path) -> Option<PathBuf> {
@@ -96,6 +105,14 @@ mod tests {
         let t = times(16.0);
         assert_eq!((t.len(), t[0], t[15]), (FRAMES, 0.5, 15.5));
         assert!(AT_REST.iter().all(|&k| k < FRAMES) && AT_REST.windows(2).all(|w| w[1] - w[0] == FRAMES / 4), "one from each quarter");
+    }
+
+    #[test]
+    fn a_trips_frames_are_spread_over_all_its_posters() {
+        let all: Vec<usize> = (0..64).collect();
+        let picked = spread(&all, FRAMES);
+        assert_eq!((picked.len(), picked[0], picked[15]), (FRAMES, 2, 62), "{picked:?}");
+        assert_eq!(spread(&all[..5], FRAMES), [0, 1, 2, 3, 4], "fewer: all");
     }
 
     #[test]

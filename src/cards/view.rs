@@ -25,7 +25,7 @@ const GAP: f32 = 2.0;
 const INSET: f32 = 6.0;
 
 /// A project's frames, ready to draw.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct Frames(pub Vec<image::Handle>);
 
 impl Frames {

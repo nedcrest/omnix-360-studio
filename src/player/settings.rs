@@ -47,6 +47,9 @@ pub struct Settings {
     pub timeline_scale: f32,
     /// The view-angles strip shows under the transport row.
     pub view_angles: bool,
+    /// The start screen's hovered project card changes its tiles by
+    /// itself (gap 110); off, only the pointer moves them.
+    pub card_motion: bool,
     /// The whole interface's size: text, buttons, the timeline (`ui_scale`
     /// in the app, iced's scale factor).
     pub ui_scale: f32,
@@ -135,6 +138,7 @@ impl Default for Settings {
             bin_side: super::bin_view::SIDE_DEFAULT,
             timeline_scale: 1.0,
             view_angles: true,
+            card_motion: true,
             ui_scale: UI_DEFAULT,
             record_input: None,
             record_channel: crate::capture::Channel::First,

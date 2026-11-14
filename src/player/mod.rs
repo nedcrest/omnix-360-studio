@@ -9,6 +9,7 @@ mod gpu;
 mod audio_panel;
 mod bin;
 mod bin_view;
+mod start_cards;
 mod bin_player;
 pub mod viewer;
 mod ask;
@@ -110,6 +111,7 @@ pub fn run(inputs: Vec<PathBuf>, launch: Launch) -> Result<()> {
         move || {
             let mut app = App::new(opts.clone(), settings.clone());
             app.read_browsed();
+            let cards = app.follow_start_cards();
             let is_project = |p: &PathBuf| p.extension().is_some_and(|e| e.eq_ignore_ascii_case("json"));
             let task = match inputs.iter().find(|p| is_project(p)) {
                 Some(project) => app.update(Message::ProjectPicked(Some(project.clone()))),
@@ -118,7 +120,7 @@ pub fn run(inputs: Vec<PathBuf>, launch: Launch) -> Result<()> {
                     app.open_next()
                 }
             };
-            (app, task)
+            (app, Task::batch([task, cards]))
         },
         App::update,
         App::view,
@@ -571,6 +573,8 @@ enum Message {
     BinRefresh,
     /// The bin as a view of tiles in the picture's place.
     BinView(bin_view::BinMsg),
+    /// The start screen's project cards (gap 110).
+    StartCard(start_cards::CardMsg),
     /// A question in the window answered (`ask.rs`), its field typed in.
     Answer(Box<Message>),
     AskTyped(String),
@@ -889,6 +893,10 @@ struct App {
     view_size: Size,
     /// The view-angles strip shows under the transport row.
     angles_shown: bool,
+    /// The start screen's cards: their frames, the pointer over one.
+    start_cards: start_cards::StartCards,
+    /// The hovered project card's tiles change by themselves.
+    card_motion: bool,
     /// A field of it as typed so far, until Enter or another message.
     angle_draft: Option<(angles::Angle, String)>,
     /// The keyboard's modifiers, for Shift on a scroll.
@@ -1030,6 +1038,8 @@ impl App {
             split: saved.timeline_scale,
             split_kept: saved.timeline_scale,
             angles_shown: saved.view_angles,
+            start_cards: Default::default(),
+            card_motion: saved.card_motion,
             ui_scale: saved.ui_scale.clamp(*settings::UI_SCALE.start(), *settings::UI_SCALE.end()),
             duck_db: saved.duck_db.clamp(3.0, 30.0),
             ruler_large: saved.ruler_large,
@@ -1112,6 +1122,7 @@ impl App {
             bin_side: self.bin.side,
             timeline_scale: self.split_kept,
             view_angles: self.angles_shown,
+            card_motion: self.card_motion,
             ui_scale: self.ui_scale,
             record_input: self.record.input.clone(),
             record_channel: self.record.channel,
@@ -1190,7 +1201,7 @@ impl App {
         self.follow_music();
         let task = Task::batch([task, self.follow_stretch()]);
         self.follow_playhead_join(at);
-        let task = Task::batch([task, self.follow_bin()]);
+        let task = Task::batch([task, self.follow_bin(), self.follow_start_cards()]);
         // Another panel took the Record panel's place: stop listening.
         let task = if self.side != Some(Side::Record) && self.record.active() { Task::batch([task, self.close_record()]) } else { task };
         let now = self.settings();
@@ -1263,6 +1274,8 @@ impl App {
         // The scopes measure a few times a second, playing or not: the
         // view drawn on, their picture made once per measure.
         let keys = if self.scopes_on() { Subscription::batch([keys, window::frames().map(|_| Message::ScopesTick)]) } else { keys };
+        // A hovered project card's tiles move, a screen frame at a time.
+        let keys = if self.start_cards_ticking() { Subscription::batch([keys, window::frames().map(|_| Message::StartCard(start_cards::CardMsg::Tick))]) } else { keys };
         if busy {
             Subscription::batch([keys, close, window::frames().map(|_| Message::Tick)])
         } else if self.loading.is_some() {
@@ -1296,6 +1309,7 @@ impl App {
             m @ (Message::Resolution { .. } | Message::ExportClips { .. } | Message::ExportGraded { .. } | Message::ExportFormat { .. } | Message::ExportLoudness { .. } | Message::Info { .. } | Message::InfoRead { .. } | Message::InfoClose | Message::Reveal { .. } | Message::CopyPath { .. } | Message::ExportPanel | Message::AudioPanel | Message::SettingsPanel | Message::SettingsGroup(_) | Message::Shortcuts | Message::AutoKey { .. } | Message::SplitDrag { .. } | Message::SplitDone | Message::SplitReset | Message::TenBit { .. } | Message::AddLut | Message::LutPicked { .. } | Message::RemoveLut { .. } | Message::DlogMLut { .. } | Message::UiScale { .. } | Message::ShowAngles { .. } | Message::RulerLarge { .. } | Message::ProjectsChoose | Message::ProjectsPicked { .. } | Message::ProjectsFromDailix | Message::Browse(_) | Message::BarLabels | Message::Snapping | Message::Fold { .. } | Message::Modifiers { .. } | Message::ViewSize { .. } | Message::Aspect { .. } | Message::Theme { .. } | Message::Mute | Message::Volume { .. } | Message::Fullscreen) => self.on_panels(m),
             m @ (Message::BinPanel | Message::BinPin | Message::BinRefresh | Message::BinPreview { .. } | Message::BinStop | Message::BinMeta { .. } | Message::BinFrames { .. } | Message::BinAdd { .. }) => self.on_bin(m),
             Message::BinView(msg) => self.on_bin_view(msg),
+            Message::StartCard(msg) => self.on_start_card(msg),
             Message::BinPlayer(msg) => self.on_source(msg),
             Message::Answer(msg) => self.answer(*msg),
             Message::AskTyped(typed) => {
@@ -1370,15 +1384,22 @@ impl App {
         stack![self.window_view(), self.settings_layer(), self.new_menu_layer(), self.ask_layer()].into()
     }
 
+    /// Whether the start screen shows: no clip, and not an empty project
+    /// (Dailix's empty day opens as any edit, with no clip yet: built from
+    /// its bin; user, 2026-11-05: Omnix itself, not a view of its own).
+    fn on_start(&self) -> bool {
+        let empty = self.project.is_some() && !self.has_edit() && self.loading.is_none();
+        self.clip.is_none() && !empty
+    }
+
     fn window_view(&self) -> Element<'_, Message> {
         // An empty project (Dailix's empty day) opens as any edit, with no
         // clip yet: built from its bin (user, 2026-11-05: Omnix itself, not
         // a view of its own).
-        let empty = self.project.is_some() && !self.has_edit() && self.loading.is_none();
-        let clip = self.clip.as_ref();
-        if clip.is_none() && !empty {
+        if self.on_start() {
             return self.start_screen();
         }
+        let clip = self.clip.as_ref();
         let error = self.error.as_ref().map(|e| text(e.clone()).style(text::danger));
         let timeline = self.timeline_view();
         let timeline = container(timeline).padding([2, 10]);

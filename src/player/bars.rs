@@ -29,7 +29,7 @@ impl App {
             labelled_button(SETTINGS, "Settings…", Some(Message::SettingsPanel)),
         ]
         .spacing(12);
-        let start = column![self.logo(), status, buttons].push(error).push(self.start_projects()).spacing(16).align_x(Alignment::Center);
+        let start = column![self.logo(), status, buttons].push(error).push(self.recent_cards()).push(self.start_projects()).spacing(16).align_x(Alignment::Center);
         // Scrolls once the lists are taller than the window.
         column![iced::widget::scrollable(container(start).center_x(Length::Fill).padding([48, 16])).height(Length::Fill), credit()].into()
     }
@@ -43,15 +43,8 @@ impl App {
             button(shown).width(Length::Fill).padding([6, 12]).style(button::text).on_press(Message::ProjectPicked(Some(edit.clone()))).into()
         };
         let name = |edit: &PathBuf| dailix_sheet::project::edit_name(edit);
+        // The recent edits show above, as cards (`recent_cards`).
         let mut col = column![].spacing(6).width(560);
-        let recent: Vec<&PathBuf> = self.recent.iter().filter(|p| p.is_file()).collect();
-        if !recent.is_empty() {
-            col = col.push(text("Recent").size(16));
-            for edit in recent {
-                let place = dailix_sheet::project::of_edit(edit).map_or_else(|| edit.parent().map(|p| p.display().to_string()).unwrap_or_default(), |root| dailix_sheet::project::title(&root));
-                col = col.push(open(edit, name(edit), place));
-            }
-        }
         if self.projects_place().is_some() {
             col = col.push(toggler(self.browse).label("Browse projects").on_toggle(Message::Browse));
             if self.browse {

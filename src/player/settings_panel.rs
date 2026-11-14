@@ -140,6 +140,7 @@ impl App {
     fn editing_page(&self) -> Element<'_, Message> {
         column![
             section("Timeline", column![toggler(self.ruler_large).label("Large time ruler").on_toggle(Message::RulerLarge), note("Off: a compact ruler, more room for the lanes.")].spacing(6).into()),
+            section("Start screen", column![toggler(self.card_motion).label("Animate project cards").on_toggle(|on| Message::StartCard(super::start_cards::CardMsg::Motion(on))), note("Off: a card's frames move only as the pointer moves over it.")].spacing(6).into()),
             section(
                 "Keyframes",
                 column![

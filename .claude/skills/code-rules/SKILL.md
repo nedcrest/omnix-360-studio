@@ -106,7 +106,7 @@ And two of process:
   or a label fits the block it's in (lane height and block width as
   limits, its own aspect); never "only when wider than three heights".
   Try a new piece at the smallest and the largest lane and window.
-- **Checks on the test project** (where it is: `docs/omnix/LOCAL.md`, this machine's),
+- **Checks on the test project** (where it is: `.analysis/LOCAL.md`, this machine's),
   every lane filled; add to its edit what a new feature needs to be seen.
 
 ## Done means done
@@ -151,7 +151,7 @@ they're next touched, not in a package.
 ## Before each commit
 
 ```sh
-# Where ALSA's headers aren't installed, PKG_CONFIG_PATH as docs/omnix/LOCAL.md says.
+# Where ALSA's headers aren't installed, PKG_CONFIG_PATH as .analysis/LOCAL.md says.
 cargo build -q            # no warnings; never commit what doesn't build
 cargo test -q --workspace # all pass, the sheet core's too (GPU tests need the GPU)
 (cd ../dailix && cargo build -q && cargo test -q)   # it links this library

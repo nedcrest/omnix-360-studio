@@ -245,7 +245,8 @@ pub(crate) enum Cmd {
     /// operations name.
     Describe { project: PathBuf },
     /// Makes an edit's card frames (the start pages' project cards):
-    /// 16 frames of the film, kept beside its trip's data; prints where.
+    /// 16 frames of the film, kept beside its trip's data (or in Omnix's
+    /// cache for an edit outside a trip); prints where.
     Card { edit: PathBuf },
     /// The JSON Schema of an ops file for `apply`: every operation, its
     /// fields and what they mean (for an agent's tools, or an editor).

@@ -100,8 +100,10 @@ pub struct Cache {
     /// Each edit's frames, and its file's time when they were read.
     frames: std::collections::HashMap<PathBuf, (Frames, Option<std::time::SystemTime>)>,
     making: Option<PathBuf>,
-    /// Edits whose frames couldn't be made: said once, not tried again.
-    failed: std::collections::HashSet<PathBuf>,
+    /// Edits whose frames couldn't be made, and their file's time then:
+    /// said once, tried again when the edit changes (an empty edit filled,
+    /// a disk back).
+    failed: std::collections::HashMap<PathBuf, Option<std::time::SystemTime>>,
 }
 
 /// A card whose frames aren't made yet.
@@ -115,14 +117,18 @@ impl Cache {
         let mut next = None;
         for edit in edits {
             let changed = modified(edit);
-            if self.frames.get(edit).is_some_and(|(_, at)| *at == changed) || self.failed.contains(edit) || self.making.as_ref() == Some(edit) {
+            if self.frames.get(edit).is_some_and(|(_, at)| *at == changed) || self.failed.get(edit).is_some_and(|at| *at == changed) || self.making.as_ref() == Some(edit) {
                 continue;
             }
-            if !super::needs_making(edit) {
-                let frames = super::strip_path(edit).and_then(|s| Frames::from_strip(&s).ok()).unwrap_or_default();
-                self.frames.insert(edit.clone(), (frames, changed));
-            } else if self.making.is_none() && next.is_none() {
-                next = Some(edit.clone());
+            // A current strip that won't read (cut short, spoiled) is made
+            // again, as a missing one.
+            let read = (!super::needs_making(edit)).then(|| super::strip_path(edit).and_then(|s| Frames::from_strip(&s).ok())).flatten();
+            match read {
+                Some(frames) => {
+                    self.frames.insert(edit.clone(), (frames, changed));
+                }
+                None if self.making.is_none() && next.is_none() => next = Some(edit.clone()),
+                None => {}
             }
         }
         self.making = next.clone().or(self.making.take());
@@ -134,7 +140,8 @@ impl Cache {
         self.making = None;
         if let Err(e) = done {
             eprintln!("{}: its card's frames: {e}", edit.display());
-            self.failed.insert(edit.to_owned());
+            let changed = std::fs::metadata(edit).and_then(|m| m.modified()).ok();
+            self.failed.insert(edit.to_owned(), changed);
         }
     }
 
@@ -269,6 +276,15 @@ mod tests {
         assert_eq!(cache.want(&edits), None, "b still being made");
         cache.made(&edits[1], Err("no footage".into()));
         assert_eq!(cache.want(&edits), Some(edits[2].clone()), "b not tried again");
+        // b changed (filled, its disk back): tried again once c is done.
+        cache.made(&edits[2], Ok(()));
+        std::fs::File::options().write(true).open(&edits[1]).unwrap().set_modified(std::time::SystemTime::now() + std::time::Duration::from_secs(5)).unwrap();
+        assert_eq!(cache.want(&edits), Some(edits[1].clone()), "b, changed, tried again");
+        // A strip that won't read is made again.
+        cache.made(&edits[1], Ok(()));
+        std::fs::write(&strip, b"not a picture").unwrap();
+        std::fs::File::options().write(true).open(&edits[0]).unwrap().set_modified(std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1)).unwrap();
+        assert_eq!(cache.want(&edits), Some(edits[0].clone()), "a's strip spoiled");
         std::fs::remove_dir_all(&root).unwrap();
     }
 

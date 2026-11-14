@@ -1,6 +1,7 @@
 //! Project cards (gap 110, `docs/omnix/PROJECT-CARDS.md`): what an edit
 //! holds, shown on the start pages as frames. An edit's 16 frames are
-//! rendered as the film plays (stitched, framed, graded, its titles in)
+//! rendered as `omnix frame` draws a moment of the film (its cut stitched,
+//! framed and graded, the titles over it)
 //! and kept as one JPEG strip, side by side: beside its trip's data for a
 //! video of a trip, in Omnix's cache otherwise. Made off the window's
 //! thread, again whenever the edit is newer than its strip. Dailix makes
@@ -44,8 +45,17 @@ pub fn strip_path(edit: &Path) -> Option<PathBuf> {
         return Some(dailix_sheet::layout::Layout::new(root).card(&video));
     }
     let edit = std::fs::canonicalize(edit).unwrap_or_else(|_| edit.to_owned());
-    let name: String = edit.to_string_lossy().chars().map(|c| if c.is_alphanumeric() || c == '-' || c == '.' { c } else { '_' }).collect();
-    Some(fsutil::app_dir(fsutil::AppDir::Cache, "omnix")?.join("cards").join(format!("{name}.jpg")))
+    Some(fsutil::app_dir(fsutil::AppDir::Cache, "omnix")?.join("cards").join(cache_name(&edit)))
+}
+
+/// An edit's strip's name in the cache: its file's name, short, and a hash
+/// of its whole path, so two edits never share one (`b c.json` and
+/// `b_c.json` did) and a deep path stays within a file name's length.
+fn cache_name(edit: &Path) -> String {
+    // FNV-1a: the same on every build, unlike std's hasher.
+    let hash = edit.to_string_lossy().bytes().fold(0xcbf2_9ce4_8422_2325_u64, |h, b| (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3));
+    let stem: String = edit.file_stem().map(|s| s.to_string_lossy().chars().filter(|c| c.is_alphanumeric() || *c == '-').take(40).collect()).unwrap_or_default();
+    format!("{stem}-{hash:016x}.jpg")
 }
 
 /// Whether a strip changed at `strip` (none: there's none) is to be made
@@ -66,9 +76,11 @@ pub fn needs_making(edit: &Path) -> bool {
 
 /// Renders edit `edit`'s frames and writes its strip (whole or not at
 /// all); where it went. Slow (each frame is stitched): off the window's
-/// thread.
+/// thread. The strip is dated as the edit it was made from, so an edit
+/// saved while it was being made is newer, and is made again.
 pub fn make(edit: &Path) -> Result<PathBuf> {
     let path = strip_path(edit).context("no place to keep the card's frames")?;
+    let from = std::fs::metadata(edit).and_then(|m| m.modified()).with_context(|| format!("reading {}", edit.display()))?;
     let p = project::Project::load(edit)?;
     let opts = crate::pipeline::StitchOpts::default();
     let frames: Vec<crate::stitch::Frame> = times(p.duration()).into_iter().map(|t| crate::preview::frame_at(&p, &opts, t, WIDTH, true)).collect::<Result<_>>()?;
@@ -77,6 +89,7 @@ pub fn make(edit: &Path) -> Result<PathBuf> {
         std::fs::create_dir_all(dir).with_context(|| format!("creating {}", dir.display()))?;
     }
     fsutil::replace_file(&path, &jpeg)?;
+    std::fs::File::options().write(true).open(&path).and_then(|f| f.set_modified(from)).with_context(|| format!("dating {}", path.display()))?;
     Ok(path)
 }
 
@@ -113,6 +126,14 @@ mod tests {
         let picked = spread(&all, FRAMES);
         assert_eq!((picked.len(), picked[0], picked[15]), (FRAMES, 2, 62), "{picked:?}");
         assert_eq!(spread(&all[..5], FRAMES), [0, 1, 2, 3, 4], "fewer: all");
+    }
+
+    #[test]
+    fn edits_outside_a_trip_never_share_a_strip_and_deep_ones_fit() {
+        let (a, b) = (cache_name(Path::new("/a/b c.json")), cache_name(Path::new("/a/b_c.json")));
+        assert!(a != b && a.starts_with("bc-") && a.ends_with(".jpg"), "{a} {b}");
+        let deep = format!("/{}/edit.json", "d".repeat(400));
+        assert!(cache_name(Path::new(&deep)).len() < 64);
     }
 
     #[test]

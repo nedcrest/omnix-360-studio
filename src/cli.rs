@@ -248,6 +248,9 @@ pub(crate) enum Cmd {
     /// 16 frames of the film, kept beside its trip's data (or in Omnix's
     /// cache for an edit outside a trip); prints where.
     Card { edit: PathBuf },
+    /// Every key and gesture of the window, as Markdown tables (the
+    /// guide's reference page, the F1 window's list).
+    Keys,
     /// The JSON Schema of an ops file for `apply`: every operation, its
     /// fields and what they mean (for an agent's tools, or an editor).
     OpsSchema,
@@ -719,6 +722,7 @@ pub(crate) fn run() -> Result<()> {
         Cmd::Describe { project } => crate::apply::describe(&project)?,
         Cmd::Card { edit } => println!("{}", crate::cards::make(&edit)?.display()),
         Cmd::OpsSchema => println!("{}", crate::apply::schema()),
+        Cmd::Keys => print!("{}", crate::keys::omnix_page()),
         Cmd::Looks { save_template: Some(name), project: Some(project), cut: Some(cut), .. } => crate::apply::save_template(&project, cut, &name)?,
         Cmd::Looks { template, .. } => print!("{}", crate::apply::looks(template.as_deref())?),
         Cmd::Install => install()?,

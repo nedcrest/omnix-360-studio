@@ -8,3 +8,8 @@
 
 - [Choose in Dailix](tutorial-1-dailix.md)
 - [Edit in Omnix](tutorial-2-omnix.md)
+
+# Reference
+
+- [Keys: Omnix](keys-omnix.md)
+- [Keys: Dailix](keys-dailix.md)

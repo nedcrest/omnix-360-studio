@@ -49,6 +49,7 @@ mod view;
 mod waveform;
 mod beats;
 pub mod cli;
+pub mod keys;
 mod analyse;
 mod export;
 pub mod desktop;

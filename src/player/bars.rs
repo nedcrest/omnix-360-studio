@@ -47,9 +47,11 @@ impl App {
                 if self.browsed.is_empty() {
                     col = col.push(text("No projects there yet.").size(13).style(text::secondary));
                 }
-                for (root, edits) in &self.browsed {
+                // A trip or an edit gone since they were read (moved to the
+                // trash in Dailix) shows no more.
+                for (root, edits) in self.browsed.iter().filter(|(root, _)| root.is_dir()) {
                     col = col.push(text(dailix_sheet::project::title(root)).size(16));
-                    col = col.push(if edits.is_empty() { text("no edits yet").size(12).style(text::secondary).into() } else { self.project_cards(edits) });
+                    col = col.push(if !edits.iter().any(|e| e.is_file()) { text("no edits yet").size(12).style(text::secondary).into() } else { self.project_cards(edits) });
                 }
             }
         }

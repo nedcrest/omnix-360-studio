@@ -37,7 +37,9 @@ pub enum CardMsg {
 }
 
 impl App {
-    /// The start screen's recent edits that are still there.
+    /// The start screen's recent edits that are still there: one gone (moved
+    /// to the trash in Dailix) shows no more, but stays in the list, so an
+    /// edit on a disk unplugged comes back when it's plugged in.
     fn recent_edits(&self) -> impl Iterator<Item = &PathBuf> {
         self.recent.iter().filter(|p| p.is_file())
     }
@@ -45,7 +47,7 @@ impl App {
     /// The edits the start screen shows as cards: the recent ones, and the
     /// browsed projects' while they're browsed.
     fn shown_edits(&self) -> Vec<PathBuf> {
-        let browsed = self.browse.then(|| self.browsed.iter().flat_map(|(_, edits)| edits.iter())).into_iter().flatten();
+        let browsed = self.browse.then(|| self.browsed.iter().flat_map(|(_, edits)| edits.iter().filter(|e| e.is_file()))).into_iter().flatten();
         self.recent_edits().chain(browsed).cloned().collect()
     }
 
@@ -142,7 +144,9 @@ impl App {
     /// A browsed project's edits as cards.
     pub(super) fn project_cards<'a>(&'a self, edits: &'a [PathBuf]) -> Element<'a, Message> {
         let now = Instant::now();
-        Self::card_rows(edits.iter().map(|edit| self.edit_card(edit, String::new(), now)).collect())
+        // An edit gone since the projects were read (moved to the trash in
+        // Dailix) shows no more; one on a disk unplugged comes back with it.
+        Self::card_rows(edits.iter().filter(|e| e.is_file()).map(|edit| self.edit_card(edit, String::new(), now)).collect())
     }
 }
 

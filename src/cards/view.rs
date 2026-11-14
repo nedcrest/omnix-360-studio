@@ -149,6 +149,14 @@ impl Cache {
     }
 }
 
+/// Whether a card of `n` frames changes at all when hovered: not with 1,
+/// 2 or 4 (each tile keeps its one frame, none shown twice), so its page
+/// needn't ask for screen frames.
+pub fn moves(n: usize) -> bool {
+    let frames = |hovered| tiles(n, hovered).map(|t| (t.from, t.to));
+    (1..=4).any(|k| frames(Some(STEP * k)) != frames(None))
+}
+
 /// What a card tells its page.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Event {
@@ -270,6 +278,12 @@ mod tests {
         assert_eq!(rest, super::super::AT_REST.map(|k| (k, 1.0)));
         // Fewer frames than tiles: round them.
         assert_eq!(tiles(3, None).map(|t| t.to), [0, 1, 2, 0]);
+    }
+
+    #[test]
+    fn a_card_of_one_two_or_four_frames_stays_still() {
+        assert_eq!((0..=8).filter(|&n| moves(n)).collect::<Vec<_>>(), [3, 5, 6, 7, 8]);
+        assert!(moves(16));
     }
 
     #[test]

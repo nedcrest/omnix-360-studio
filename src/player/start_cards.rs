@@ -46,15 +46,19 @@ impl App {
     /// browsed projects' while they're browsed.
     fn shown_edits(&self) -> Vec<PathBuf> {
         let browsed = self.browse.then(|| self.browsed.iter().flat_map(|(_, edits)| edits.iter())).into_iter().flatten();
-        let mut edits: Vec<PathBuf> = self.recent_edits().chain(browsed).cloned().collect();
-        edits.dedup();
-        edits
+        self.recent_edits().chain(browsed).cloned().collect()
     }
 
     /// On the start screen: each shown edit's frames read when they're
     /// there and current, else made, one edit at a time.
     pub(super) fn follow_start_cards(&mut self) -> Task<Message> {
         if !self.on_start() {
+            // Its cards are gone, and a card gone sends no Exit.
+            self.start_cards.hover = None;
+            return Task::none();
+        }
+        // Not while something opens: a project's clips come first.
+        if self.loading.is_some() || !self.queue.is_empty() {
             return Task::none();
         }
         let edits = self.shown_edits();
@@ -71,7 +75,11 @@ impl App {
         let now = Instant::now();
         let cards = &mut self.start_cards;
         match message {
-            CardMsg::Event(edit, Event::Open) => return self.update(Message::ProjectPicked(Some(edit))),
+            // Leaving the start screen: a card gone sends no Exit.
+            CardMsg::Event(edit, Event::Open) => {
+                cards.hover = None;
+                return self.update(Message::ProjectPicked(Some(edit)));
+            }
             CardMsg::Event(edit, Event::Enter) => cards.hover = Some(Hover { edit, since: now }),
             CardMsg::Event(edit, Event::Exit) => {
                 if cards.hover.as_ref().is_some_and(|h| h.edit == edit) {
@@ -88,9 +96,10 @@ impl App {
         Task::none()
     }
 
-    /// Screen frames while a card on the start screen is hovered.
+    /// Screen frames while a card on the start screen is hovered, its
+    /// tiles changing by themselves and having frames to change to.
     pub(super) fn start_cards_ticking(&self) -> bool {
-        self.start_cards.hover.is_some() && self.on_start()
+        self.card_motion && self.on_start() && self.start_cards.hover.as_ref().is_some_and(|h| crate::cards::view::moves(self.start_cards.frames.get(&h.edit).0.len()))
     }
 
     /// Edit `edit` as a card: its frames, its name, and `note` under it

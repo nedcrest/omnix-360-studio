@@ -111,7 +111,8 @@ pub fn run(inputs: Vec<PathBuf>, launch: Launch) -> Result<()> {
         move || {
             let mut app = App::new(opts.clone(), settings.clone());
             app.read_browsed();
-            let cards = app.follow_start_cards();
+            // The start screen's cards only when it's what opens.
+            let cards = if inputs.is_empty() { app.follow_start_cards() } else { Task::none() };
             let is_project = |p: &PathBuf| p.extension().is_some_and(|e| e.eq_ignore_ascii_case("json"));
             let task = match inputs.iter().find(|p| is_project(p)) {
                 Some(project) => app.update(Message::ProjectPicked(Some(project.clone()))),

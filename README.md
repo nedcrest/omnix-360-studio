@@ -2,7 +2,7 @@
 
 A home-video editor with first-class **DJI Osmo 360** footage, written in Rust. It grew from [rOsmo360](https://github.com/ravelund/rOsmo360) by Vibing with Ravelund (see [Credits](#credits)). It plays the camera's `.OSV` files directly: it stitches the two fisheye lenses, stabilises with the camera's gyro data and lets you look around freely, without going through DJI Studio. Then you can cut clips together on a timeline, with ordinary videos and photos beside them, keyframe the camera's view, add crossfades, music, colour effects, titles and logos, and export a framed video.
 
-![Omnix with an edit of a short trip open: a sunset over the sea in the picture, and under it four clips on the Video lane with their sound, the transitions, music, effects and voice lanes.](docs/guide/img/omnix-window.png)
+![Omnix with a short trip's edit open, the playhead drawn through it: a title over a sunset, a scooter ride, flowers, a beach; under the picture the lanes with the clips, a transition and a song with its beats.](docs/guide/img/omnix-hero.gif)
 
 **New here? Read [the guide](docs/guide/README.md)**: installing, a tutorial from a trip's clips to a finished film, how it fits together, and every key, command and setting. (`mdbook serve docs/guide` shows it as a book.)
 

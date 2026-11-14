@@ -1443,6 +1443,19 @@ was filmed (its name's date, else the file's), with a sidecar; the
 originals only read. The rest of ingest (cards, phones, analysis,
 proxies) stays gap 74.
 
+### 116. A trip that moves keeps its edits — medium (found shooting the guide, 2026-11-14)
+
+An edit stores its clips and songs by their whole path
+(`/home/<user>/Dailix/trips/<trip>/01_footage/…`). A trip folder moved
+to another disk, or its place renamed, and every edit in it opens with
+«Left out cuts of missing clips»: nothing found, though every file is
+there, beside the edit, in the same trip. (Seen when the guide's studio
+renamed its trips folder.) To weigh: paths inside the trip kept
+relative to the edit's own folder (and absolute only for what lies
+outside it), read either way so old edits keep opening; or, on a
+missing clip, look for it at the same place inside the edit's trip.
+Before publishing, since a user's first move of a trip would hit it.
+
 ### 115. Small things found writing the guide — small (2026-11-14)
 
 - The bin shows its trip's whole path (`/home/<user>/…`), long and

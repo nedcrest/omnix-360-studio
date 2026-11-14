@@ -1443,6 +1443,15 @@ was filmed (its name's date, else the file's), with a sidecar; the
 originals only read. The rest of ingest (cards, phones, analysis,
 proxies) stays gap 74.
 
+### 114. Omnix's toolbar on a 1280-wide window — small (found shooting the guide, 2026-11-14)
+
+At 1280×800 (a common laptop), even with the interface at 100 %, the
+bar under the viewer runs past the window: «Mix check» and «Bin» are
+cut off (at Omnix's own 115 % from «Framing» on). The guide's Omnix
+shots are taken at 1440×900 meanwhile. To fit: the switches as icons
+with their names in tooltips when the room is short, or a second
+row, or the less used into a ⋯; the user's choice when it's built.
+
 ### 113. Roles named in English — small (user, 2026-11-14)
 
 The built-in roles of a segment read «фон / B-roll», «розмова / sync»

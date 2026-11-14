@@ -2,6 +2,8 @@
 
 [The guide](README.md)
 
+- [Install and first run](install.md)
+
 # Tutorial: your first film
 
 - [Choose in Dailix](tutorial-1-dailix.md)

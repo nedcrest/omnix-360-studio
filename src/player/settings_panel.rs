@@ -102,7 +102,8 @@ impl App {
     /// Where projects are, and how the program looks.
     fn general_page(&self) -> Element<'_, Message> {
         column![
-            section("Projects", self.projects_setting()),
+            // Named as Dailix names the same folder.
+            section("Trips", self.projects_setting()),
             section("Look", column![pick_list(Theme::ALL, Some(self.theme.clone()), Message::Theme).width(Length::Fill), note("Kanagawa Dragon unless you choose another.")].spacing(6).into()),
         ]
         .spacing(18)

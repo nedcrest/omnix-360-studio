@@ -89,7 +89,7 @@ Useful checks:
 - Match the surrounding code: `anyhow` errors, short doc comments that say *why*, no dead code, no debug output left in.
 - Prose (docs, UI text, comments) uses British spelling ("colour", "stabilise") and plain words.
 - Commit messages explain the reasoning and the evidence (what was measured, on what), not just the change.
-- When a change is visible to users, update `docs/user-guide.md` and the README in the same PR.
+- When a change is visible to users, update the guide (`docs/guide/`) and the README in the same PR. Its keys and commands pages are made from the code: `OMNIX_BLESS=1 cargo test` writes them afresh.
 - Ask (in an issue) before adding a heavy dependency; never one under the GPL or AGPL in the binary.
 
 ## Layout

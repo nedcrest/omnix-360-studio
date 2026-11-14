@@ -2,9 +2,9 @@
 
 A home-video editor with first-class **DJI Osmo 360** footage, written in Rust. It grew from [rOsmo360](https://github.com/ravelund/rOsmo360) by Vibing with Ravelund (see [Credits](#credits)). It plays the camera's `.OSV` files directly: it stitches the two fisheye lenses, stabilises with the camera's gyro data and lets you look around freely, without going through DJI Studio. Then you can cut clips together on a timeline, with ordinary videos and photos beside them, keyframe the camera's view, add crossfades, music, colour effects, titles and logos, and export a framed video.
 
-![Omnix (then rOsmo360) editing a mountain hike: a rock tower under the title "Kyrkja, July 2026" with a small logo in the corner, and below it the view angles and the timeline: a text lane and an overlay lane, cuts from four clips with crossfades, thumbnails and keyframe rows, and a soundtrack lane with its waveform and volume line](docs/screenshot.png)
+![Omnix with an edit of a short trip open: a sunset over the sea in the picture, and under it four clips on the Video lane with their sound, the transitions, music, effects and voice lanes.](docs/guide/img/omnix-window.png)
 
-**New here? Read the [user guide](docs/user-guide.md)**: the whole app, step by step, with screenshots.
+**New here? Read [the guide](docs/guide/README.md)**: installing, a tutorial from a trip's clips to a finished film, how it fits together, and every key, command and setting. (`mdbook serve docs/guide` shows it as a book.)
 
 Its sibling, **[Dailix](../dailix)**, is the contact sheet before the edit: it looks through a trip's footage, marks what's worth keeping and hands the chosen material to Omnix. The contact sheet's core, which both programs read and write, lives here (`crates/sheet`).
 
@@ -100,7 +100,7 @@ Want to help? See [CONTRIBUTING.md](CONTRIBUTING.md), and [AGENTS.md](AGENTS.md)
 
 ## Usage
 
-The **[user guide](docs/user-guide.md)** walks through the whole app with screenshots: watching, projections, stabilisation, the timeline, keyframes, crossfades, music, effects, titles and overlays, projects and exporting.
+[The guide](docs/guide/README.md) walks through it step by step, with pictures: the tutorial, then the reference ([keys](docs/guide/keys-omnix.md), [commands](docs/guide/commands-omnix.md), [settings and files](docs/guide/settings-and-files.md)). The command line in brief:
 
 ```sh
 omnix play                 # opens the player; use Open clips… or Ctrl+O
@@ -322,7 +322,7 @@ at your option. Unless you state otherwise, any contribution you submit for incl
 
 The built-in fonts in [`fonts/`](fonts/) keep their own licences (the SIL Open Font License 1.1, and Apache 2.0 for Permanent Marker), included beside each font and with every release; see [`fonts/README.md`](fonts/README.md).
 
-The screenshots ([`docs/screenshot.png`](docs/screenshot.png) and those in [`docs/guide/`](docs/guide/)) are rOsmo360's and not covered by these licences; all rights reserved by their author. They are to be replaced by Omnix's own before it is published.
+The guide's pictures ([`docs/guide/img/`](docs/guide/img/)) show the author's own footage and aren't covered by these licences: all rights reserved.
 
 ## Credits
 

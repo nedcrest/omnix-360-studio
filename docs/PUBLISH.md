@@ -86,9 +86,11 @@ read-only token as a secret, or Omnix made public first.
   `org.flatpak.Builder` installed from Flathub, his call).
 - `git config user.email` in both repos to the personal address, so new
   commits match the rewritten history.
-- The pictures: the README says rOsmo360's screenshots (`docs/
-  screenshot.png`, `docs/guide/`) are all rights reserved by their author
-  and to be replaced before Omnix is published: his own, or removed.
+- The pictures: rOsmo360's (all rights reserved) were removed with its
+  old guide on 2026-11-14; the README and the guide show Omnix's own,
+  made from the author's footage (all rights reserved, the README says).
+  The Flatpak metainfo's screenshot can point at one of them once the
+  repo has its address.
 
 ## The release review (2026-11-14)
 

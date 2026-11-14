@@ -16,7 +16,7 @@ Open an [issue](https://github.com/ravelund/Omnix/issues) with:
 2. Read [`AGENTS.md`](AGENTS.md): it covers building, the code layout, and the rules that are easy to break. The most important one: **the GPU and CPU paths must match.** Every drawing change goes in both the shader and the CPU stitcher, and is checked by comparing the two.
 3. Keep a pull request to one change. Say in it what you changed and how you checked it (which footage, what you measured or compared).
 4. `cargo build`, `cargo test` and `cargo clippy` should pass with no new warnings.
-5. If users will see the change, update the [user guide](docs/user-guide.md) and the README in the same pull request.
+5. If users will see the change, update [the guide](docs/guide/README.md) and the README in the same pull request (its keys and commands pages: `OMNIX_BLESS=1 cargo test` writes them).
 6. Don't commit footage, exports or anything showing people.
 
 Using an AI coding agent is fine: `AGENTS.md` is written for it. You're still responsible for what the PR contains, and for having run it.

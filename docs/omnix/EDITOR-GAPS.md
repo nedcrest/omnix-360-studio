@@ -1431,6 +1431,18 @@ layout is ops, so an agent can use it. Milestone «Мультикамерніс�
 Ties into `PLAN-NEXT.md`: card 4's decoding must take any number of
 video layers, not one.
 
+### 74a. Videos added to a trip's days — small (user, 2026-11-14)
+
+The Kos trip's phone videos (2026-08-18, -19) lay in its footage folder
+but showed nowhere: Dailix reads a trip's days from the clips' sidecars
+(`dailix/analysis/<day>/*.footage.json`), which only the old import
+wrote. Built: `dailix add TRIP FILE[@all|@START-END]… [--day D]` and a
+«+ Add videos…» button on a trip's page: each file (or its span, cut
+without re-encoding) copied into `01_footage/<day>/` under the day it
+was filmed (its name's date, else the file's), with a sidecar; the
+originals only read. The rest of ingest (cards, phones, analysis,
+proxies) stays gap 74.
+
 ### 110. Design before publishing — small, grows (user, 2026-11-14)
 
 What looks unfinished to someone seeing the programs for the first time,

@@ -137,7 +137,7 @@ impl App {
             ]),
             separator(),
             group("Project", open, row![
-                tip(tint_button(Tint::Global, NEW_PROJECT, Some(Message::NewMenu)), text("New: a video in a trip, a trip, or an edit without one (Ctrl+N)"), tooltip::Position::Bottom),
+                tip(tint_button(Tint::Global, NEW_PROJECT, Some(Message::NewMenu)), text("New: an edit in a trip, a trip, or an edit without one (Ctrl+N)"), tooltip::Position::Bottom),
                 tip(tint_button(Tint::Global, OPEN_PROJECT, Some(Message::OpenProject)), text("Open a saved edit (Ctrl+Shift+O)"), tooltip::Position::Bottom),
                 tip(
                     tint_button(Tint::Global, SAVE, self.unsaved().then_some(Message::SaveProject(false))),

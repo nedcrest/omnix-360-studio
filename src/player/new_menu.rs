@@ -55,7 +55,7 @@ impl App {
                         self.new_menu = None;
                         return self.update(Message::ProjectPicked(Some(edit)));
                     }
-                    Err(e) => self.error = Some(format!("The video couldn't be made: {e:#}")),
+                    Err(e) => self.error = Some(format!("The edit couldn't be made: {e:#}")),
                 }
             }
             Message::NewTripInDailix => {
@@ -84,12 +84,12 @@ impl App {
         }
         let ready = m.trip.is_some();
         let video = column![
-            text("A video in a trip").size(16),
-            note("Pick the trip, name the video: an empty edit in a folder of its own in the trip, the trip's clips in the bin."),
+            text("An edit in a trip").size(16),
+            note("Pick the trip, name the edit: an empty edit in a folder of its own in the trip, the trip's clips in the bin."),
             scrollable(trips).height(Length::Shrink),
             row![
                 text_input("Its name, e.g. Shorts: peacocks", &m.name).id(NAME).size(14).on_input(Message::NewVideoName).on_submit_maybe(ready.then_some(Message::NewVideoMake)),
-                button(text("Make the video")).style(button::primary).on_press_maybe(ready.then_some(Message::NewVideoMake)),
+                button(text("Make the edit")).style(button::primary).on_press_maybe(ready.then_some(Message::NewVideoMake)),
             ]
             .spacing(8)
             .align_y(Alignment::Center),

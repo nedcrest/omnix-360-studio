@@ -1,5 +1,38 @@
 # Audits — the lists to work off
 
+## Small audit of 2026-11-14, third (the UI review's steps 3–9, the guide's generators)
+
+One review agent: Omnix since `b1c87a6`, Dailix since `c302feb`. The
+story autosave sound (switching trips saves first); no data lost.
+
+Fixed (Omnix `324a7fe`, `2428fe3`; Dailix `95a95ef`, `434c474`,
+`99e0238`, `55cce8e`, `3654473`, `7afe3d8`, `458ad8e`, `4d9f809`):
+- A second «→ Omnix» while the first edit was made off the window's
+  thread made a copy; two edits at once could take one folder.
+- A trip trashed while videos were added to it, or an edit made of it,
+  came back half-made.
+- A day opened under a filter didn't scroll to it.
+- The commands page showed `&lt;` inside code spans.
+- A hovered tile hidden by a filter or a rating, or from another trip,
+  kept its buttons; a filter click opened a clip, or kept a hidden one;
+  a story saved by itself wiped other errors; the toggle on a click
+  untested and its tooltip wrong about the key; videos added to a
+  loaded sheet's trip didn't show till another trip was opened.
+- Dailix's guide tests tie its CI to Omnix's main: the push order is in
+  `docs/PUBLISH.md`.
+
+Left, and where it belongs:
+- The ratings' facts (2/1/0, symbols, words, colours, keys) written in
+  several places: one table per `Rating` with the next change to them.
+- `step_from` with a step past ±1 can say none while clips show (only 0
+  and ±1 are asked today).
+- `menu::on_screen` adds every scrollable met before the button that
+  holds its point, not only those it's inside: right for today's
+  layout; push and pop scrollables if the layout grows one above another.
+- An open menu stays where it was placed if the page reflows under it
+  (a resize, cards read again): close it on those.
+- `make_poster` checks the clip twice.
+
 ## Small audit of 2026-11-14, second (adding videos, delete, the welcome, the UI review's start)
 
 One review agent: Omnix since `b84a3e3`, Dailix since `e0ccb40`. Omnix's

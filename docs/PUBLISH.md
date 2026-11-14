@@ -77,6 +77,14 @@ read-only token as a secret, or Omnix made public first.
 
 ## At publishing (needs the GitHub account)
 
+- **Push Omnix first, then Dailix**, every time Dailix's keys or
+  commands change: Dailix's tests check its guide pages
+  (`docs/guide/keys-dailix.md`, `commands-dailix.md`), which live here,
+  and its CI checks out Omnix's main. So: bless (`OMNIX_BLESS=1 cargo
+  test` in Dailix writes them here), commit and push Omnix, then push
+  Dailix. A change to `keys::markdown` or `reference::commands` here
+  changes Dailix's pages too: bless from Dailix as well.
+
 - Links that are paths today: the README's `../dailix`, Dailix's back to
   Omnix; CI badges.
 - `REPO` in `packaging/install.sh` (it downloads from that repo's

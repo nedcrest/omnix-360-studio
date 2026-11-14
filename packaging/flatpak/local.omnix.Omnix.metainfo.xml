@@ -14,6 +14,8 @@
       <li>Real-time playback with free look, perspective, little planet and equirect views</li>
       <li>Stabilisation: level horizon, fixed heading or world lock, with rolling-shutter correction</li>
       <li>A timeline of cuts with keyframed camera moves, following the selfie stick or a coloured subject</li>
+      <li>Sound lanes for music, effects and voice: volume lines, fades, cleaned voices, ducking under talk, loudness to a target</li>
+      <li>Effects, transitions, titles and pictures, with automation curves; framing ordinary videos too</li>
       <li>Export to MP4 or to DaVinci Resolve, as one video or a file per cut</li>
     </ul>
     <p>Omnix grew from rOsmo360 by Vibing with Ravelund (MIT OR Apache-2.0), whose stitching and player it builds on.</p>
@@ -22,6 +24,7 @@
   <!-- Homepage, bug tracker and screenshot: once Omnix is published (gap 76). -->
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.8.0" date="2026-11-14"/>
     <release version="0.7.1" date="2026-10-21"/>
     <release version="0.7.0" date="2026-10-21"/>
     <release version="0.6.0" date="2026-10-15"/>

@@ -367,7 +367,7 @@ impl App {
         let close = tip(button(text("✕").size(14)).padding([0, 6]).style(button::text).on_press(to(BinMsg::Toggle)), text("Back to the picture (Shift+B)"), tooltip::Position::Bottom);
         let mut head = row![text("Bin").size(20)].spacing(12).align_y(Alignment::Center);
         if let Some((_, root)) = &self.bin.read {
-            head = head.push(text(root.display().to_string()).size(12).style(text::secondary));
+            head = head.push(text(crate::paths::shown(root)).size(12).style(text::secondary));
         }
         if self.bin.copying > 0 {
             head = head.push(text(format!("Copying {} into the project…", if self.bin.copying == 1 { "a file".to_owned() } else { format!("{} files", self.bin.copying) })).size(13));

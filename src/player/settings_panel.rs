@@ -49,7 +49,7 @@ impl App {
     /// Where the projects are: Omnix's own folder, or Dailix's.
     fn projects_setting(&self) -> Element<'_, Message> {
         let note = |s: String| text(s).size(13).style(text::secondary);
-        let shown = |p: &std::path::PathBuf| text(p.display().to_string()).size(14);
+        let shown = |p: &std::path::PathBuf| text(crate::paths::shown(p)).size(14);
         let mut col = column![].spacing(6);
         col = match (&self.projects, &self.dailix_projects) {
             (Some(own), _) => col.push(shown(own)),

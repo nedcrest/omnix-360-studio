@@ -51,6 +51,7 @@ mod beats;
 pub mod cli;
 pub mod keys;
 pub mod reference;
+pub mod paths;
 mod analyse;
 mod export;
 pub mod desktop;

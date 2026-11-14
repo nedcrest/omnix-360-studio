@@ -496,7 +496,7 @@ impl App {
         match &self.bin.read {
             None => body = body.push(text("Save the project to see its folder here.").size(13).style(text::secondary)),
             Some((sections, root)) => {
-                body = body.push(text(root.display().to_string()).size(12).style(text::secondary));
+                body = body.push(text(crate::paths::shown(root)).size(12).style(text::secondary));
                 if let Some(days) = self.days_toggle() {
                     body = body.push(days);
                 }

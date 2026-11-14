@@ -79,6 +79,11 @@ read-only token as a secret, or Omnix made public first.
 
 - Links that are paths today: the README's `../dailix`, Dailix's back to
   Omnix; CI badges.
+- `REPO` in `packaging/install.sh` (it downloads from that repo's
+  latest release), and the Flatpak metainfo's homepage and screenshot.
+- The tag `v0.8.0` and a GitHub release with `dist/`'s archive and
+  AppImage (built and checked 2026-11-14; the Flatpak needs
+  `org.flatpak.Builder` installed from Flathub, his call).
 - `git config user.email` in both repos to the personal address, so new
   commits match the rewritten history.
 - The pictures: the README says rOsmo360's screenshots (`docs/

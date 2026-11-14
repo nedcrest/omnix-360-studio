@@ -65,10 +65,17 @@ Put the flowers before the beach.
 2. Under **Music**, beside the song, select the first button, **Add on
    the Music lane after its last sound**.
 
-![The bin's Music section; the song added to the Music lane from the button beside it.](img/omnix-add-song.gif)
+![The bin's Music section; the song added to the Music lane from the button beside it, the timeline now as long as the song.](img/omnix-add-song.gif)
 
 The song lands on the **Music** lane at the start of the film. It is
-longer than the film; you trim it at the end of this part. Music you
+longer than the film (the timeline grows to show all of it), so:
+
+3. Right-click the **Music** lane's name, at the left, and select
+   **Trim to the film's end**.
+
+![The Music lane's menu: Trim to the film's end; the song now ends with the film.](img/omnix-song-trim.gif)
+
+Music you
 use in a film you share has to allow it; the song here does, credited
 as its author asks: "Groundwork" Kevin MacLeod (incompetech.com),
 Licensed under Creative Commons: By Attribution 4.0 License.
@@ -83,7 +90,7 @@ Omnix finds a song's beats, and a clip's ends snap to them.
 3. Select the scooter clip and drag its right handle a little. It
    lands on the beats, shown by a yellow line.
 
-![The scooter clip's end dragged left; at each beat it snaps and a yellow line shows where.](img/omnix-beats.gif)
+![The song's menu: Show the beats, then Snap to the beats; the scooter clip's end dragged left, snapping to each beat with a yellow line.](img/omnix-beats.gif)
 
 The slider in the same menu sets which beats count: lower, every beat;
 higher, the strong hits only. If nothing snaps, snapping is off: press
@@ -123,16 +130,15 @@ A transition overlaps the two clips, so the film is that much shorter.
 
 ## Fade the song out
 
-The song still runs past the film's end.
+Snapping to a beat and the transition each made the film shorter, so
+the song runs past its end again.
 
-1. Right-click the **Music** lane's name, at the left, and select
-   **Trim to the film's end**.
+1. Right-click the **Music** lane's name and select **Trim to the
+   film's end** once more.
 2. Drag the small circle at the song's top right corner to the left: the
    song now fades out over the last seconds.
 
-![The Music lane's menu: Trim to the film's end; the song ends with the film.](img/omnix-song-end.gif)
-
-![The fade knob at the song's end dragged to the left; a slope shows the fade.](img/omnix-fade.gif)
+![The song trimmed to the film's end again, then the fade knob at its end dragged left; a slope shows the fade.](img/omnix-song-end.gif)
 
 ## Export and save
 

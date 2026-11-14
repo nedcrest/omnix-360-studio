@@ -1,0 +1,11 @@
+/* The page's column wide enough to show the guide's pictures at their
+   own size (cropped to the action, at most about 1000 px): mdBook's 750
+   squeezed them to half (the user, 2026-11-14). Smaller windows scale
+   them down. */
+:root {
+    --content-max-width: 1040px;
+}
+.content img {
+    max-width: 100%;
+    height: auto;
+}

@@ -18,7 +18,10 @@ impl App {
         let status: Element<'_, Message> = match (&self.loading, song) {
             (Some(_), _) => self.loading_bar(280.0),
             (None, Some(song)) => text(song).into(),
-            (None, None) => text("Open DJI Osmo 360 .OSV clips, other videos or pictures, or a saved project, to start. Or start from a song.").into(),
+            // What Omnix is, in a line; the buttons say how to start (the
+            // user, 2026-11-14: it read as a list of file types, the 360
+            // camera's first).
+            (None, None) => text("Make a film of your trip: ordinary and 360 video, music, voice and titles.").size(17).style(text::secondary).into(),
         };
         let idle = self.loading.is_none();
         let buttons = row![

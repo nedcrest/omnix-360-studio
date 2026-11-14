@@ -210,12 +210,24 @@ pub fn export_dir(edit: &Path) -> Option<PathBuf> {
 }
 
 /// A new video's folder, made: `name`, or `name-2`, `name-3`, … when taken.
-/// Its edit's path (not written).
+/// Its edit's path (not written). The folder is claimed by making it: two
+/// edits made at once (Dailix's → Omnix, off its window's thread) could
+/// both find a name free and one write over the other (the audit,
+/// 2026-11-14).
 pub fn new_video(root: &Path, name: &str) -> std::io::Result<PathBuf> {
     let l = Layout::new(root);
-    let free = (1..).map(|n| if n == 1 { name.to_owned() } else { format!("{name}-{n}") }).find(|n| !l.video(n).exists()).expect("a free name");
-    std::fs::create_dir_all(l.video(&free))?;
-    Ok(l.video_edit(&free))
+    if let Some(videos) = l.video(name).parent() {
+        std::fs::create_dir_all(videos)?;
+    }
+    for n in 1.. {
+        let free = if n == 1 { name.to_owned() } else { format!("{name}-{n}") };
+        match std::fs::create_dir(l.video(&free)) {
+            Ok(()) => return Ok(l.video_edit(&free)),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+            Err(e) => return Err(e),
+        }
+    }
+    unreachable!("names run out")
 }
 
 /// What becomes of an edit lying loose in the old `04_project`.
@@ -273,6 +285,19 @@ pub fn tidy_old_edits(root: &Path) -> Vec<Tidy> {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn edits_made_at_once_each_get_a_folder_of_their_own() {
+        let trip = std::env::temp_dir().join(format!("sheet-new-video-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&trip);
+        let made: Vec<PathBuf> = (0..8).map(|_| { let t = trip.clone(); std::thread::spawn(move || new_video(&t, "2030-05-01").unwrap()) }).collect::<Vec<_>>().into_iter().map(|h| h.join().unwrap()).collect();
+        let mut names: Vec<&PathBuf> = made.iter().collect();
+        names.sort();
+        names.dedup();
+        assert_eq!(names.len(), 8, "{made:?}");
+        std::fs::remove_dir_all(&trip).unwrap();
+    }
+
     use super::*;
 
     #[test]

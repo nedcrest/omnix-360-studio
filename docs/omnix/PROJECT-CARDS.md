@@ -79,29 +79,29 @@ three (a strip per edit and per trip, made when it's saved).
   data (`dailix/cards/<edit>.jpg`, the sheet core's layout says where);
   an edit outside a trip, in Omnix's cache folder.
 
-### The card (one widget, in Omnix's library, Dailix uses it too)
+### The card (one widget, `cards::view`, in Omnix's library; Dailix uses it too)
 
 - 2×2 tiles, 2 px apart, 16:9; a lighter surface than the page, a 1 px
   inner highlight, a large soft shadow; 10 px corners. A trip's card
-  has one or two sheets behind it (a collection); an edit's is flat.
-- **Hovered**: lifts 3 px with a stronger shadow (150 ms). Its tiles
-  change one at a time to the next frames: a 700 ms crossfade, about
-  1.5 s apart (quicker than the research's 5 s at rest: only the card
-  under the pointer moves, and it should show its 16 frames while
-  looked at). Moving along the card scrubs: the frame under the pointer
-  shows in the tile it's over, a thin line marking where.
-- **At rest nothing moves.** A setting turns the hover motion off.
-- Under it: the name, dates, and what it holds (days, clips, videos; an
-  edit's length and cuts).
+  has two sheets behind it (a collection); an edit's is flat.
+- **Hovered**: lighter (the user asked: it shows where the pointer is),
+  lifted 3 px, a stronger shadow, the accent round it. Its tiles change
+  1-2-3-4 in reading order, from the first at once, one a second, each
+  crossfading over a second to its frame in the next of four sets: 16
+  frames, none twice, then round again. The user tried scrubbing by the
+  pointer first and chose this instead (2026-11-14): prettier, simpler.
+- **At rest nothing moves.** Omnix's setting «Animate project cards»
+  turns the changes off.
+- Under it: the name and where it is; a trip's dates, days, clips,
+  videos, description and tags.
 
-### Steps (each a local commit, tests first where it's a rule)
+### Where it's used (done 2026-11-14, waiting for the user's check)
 
-1. The frames: which times (a pure function, tested), rendering and the
-   strip (written whole or not at all), when it's stale; `omnix card`.
-2. The card widget: the tile schedule (which frame each tile shows when,
-   a pure function of time and pointer, tested), crossfade, scrub, lift,
-   the sheets; the motion setting.
-3. Omnix's start: recent edits as a grid of cards; the strips made in the
-   background when missing.
-4. Dailix's Home: trips as cards from their posters.
-5. Dailix's «→ Omnix» question: the day's edits as small cards.
+1. The frames: `cards::times`, `make`, the strip; `omnix card`.
+2. The widget: `cards::view::{tiles, card}`; the frames' `Cache` (read
+   when current, else made one edit at a time), shared by both programs.
+3. Omnix's start screen: recent edits, and each browsed project's edits.
+4. Dailix's Home: trips, from their clips' posters (`cards::spread`).
+5. Dailix's trip page and its «→ Omnix» question: the edits.
+
+Left: Dailix has no setting of its own to turn the motion off.

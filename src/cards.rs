@@ -6,6 +6,8 @@
 //! thread, again whenever the edit is newer than its strip. Dailix makes
 //! and reads them through here too.
 
+pub mod view;
+
 use crate::{fsutil, project};
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};

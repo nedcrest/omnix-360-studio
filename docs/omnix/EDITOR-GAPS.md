@@ -1455,6 +1455,9 @@ proxies) stays gap 74.
 - The scroll wheel over a list (iced's pick_list, Export's Loudness)
   changes its value as the panel is scrolled: the value moves under
   the pointer without a click.
+- Done (Dailix `43fb6dc`): the Trips place's default folder was
+  `~/Dailix/projects`, now `~/Dailix/trips`; Dailix's README named the
+  places «TMP, dailix, sources».
 
 ### 114. Omnix's toolbar on a 1280-wide window — small (found shooting the guide, 2026-11-14)
 

@@ -1,5 +1,45 @@
 # Audits — the lists to work off
 
+## Small audit of 2026-11-14 (before publishing; the time seam's guards, the sheet's move, the project cards)
+
+Two review agents: Omnix's `src/` since `6e58514` (the moved sheet crate
+skipped, its layout read), and Dailix since `55c76ab` with its use of
+Omnix's cards and both CIs. No wrong result in the seam's maths and the
+export's refactor identical in behaviour; the problems were in the cards.
+
+Fixed (Omnix `0650ab4`, `536ef85`, `5af6117`, `2e857b5`; Dailix
+`f25b76e`, `9433f34`, `37e46c4`):
+- A clicked card stayed hovered (a card gone sends no Exit): lit on
+  return and frame-rate ticks through the whole session, in both
+  programs. Let go of on leaving; ticks only for a card that moves.
+- An edit saved while its strip was being made kept the old frames: the
+  strip is dated as the edit it came from.
+- A failed strip was final for the session; a spoiled one cached as
+  none; two edits outside a trip could share a strip name, a deep path
+  pass a file name's length.
+- Omnix launched with a project made another edit's strip beside its
+  playback.
+- 1× in several keys wasn't exact; a doc comment on the wrong test; the
+  golden files open to line-end conversion on Windows; `snap` repeated;
+  a personal path in a comment.
+- Dailix's CI couldn't check a private Omnix out, and named it fixedly;
+  both build `--locked`.
+
+Left, and where it belongs:
+- **Clippy isn't at zero**: about 31 warnings in Omnix (mostly
+  `too_many_lines` in functions not touched since the lint came in), one
+  in Dailix (`main.rs` `run`). They go as their functions are next
+  touched (`code-rules`); CI can take `-D warnings` once they're gone.
+- **`Cut::len` and `Cut::clip_len`** say the same: step 2 of the time
+  seam moves `len`'s callers to `edit_len` or `clip_len` and drops it.
+- **Dailix's CI follows Omnix's main**, not a pinned commit, and its lock
+  resolves Omnix's dependencies at its own patch versions: on purpose
+  while the two move together; pin at the first release that needs it.
+- **Dailix has no tests** for which edits it follows or the posters'
+  order on a trip's card: with its next change there.
+- A strip's temporary file can stay behind if the program dies in the
+  write's last instant: harmless, never read.
+
 ## Small audit of 2026-11-12 (since `a4a4142`: voices 103, Dailix 104, 99b, framing 107)
 
 Two read-only reviews (core; window and Dailix), 23 findings. Fixed the

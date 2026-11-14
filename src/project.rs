@@ -582,6 +582,42 @@ fn project_dir(path: &Path) -> Result<PathBuf> {
     Ok(file.parent().map(Path::to_owned).unwrap_or_default())
 }
 
+/// `path` as an edit in `dir` stores it: relative to `dir` when inside it;
+/// when `dir` is a trip's video (`<trip>/videos/<name>`) and `path` is
+/// inside that trip, relative through it (`../../01_footage/…`), so the
+/// trip can move to another disk, or its place be renamed, and keep its
+/// edits (gap 116: they kept whole paths, and opened empty); else whole.
+pub(crate) fn stored(path: &Path, dir: &Path) -> PathBuf {
+    if let Ok(rel) = path.strip_prefix(dir) {
+        return rel.to_owned();
+    }
+    let trip = dailix_sheet::project::video_of(&dir.join("edit.json")).map(|(root, _)| root);
+    match trip.as_deref().and_then(|t| path.strip_prefix(t).ok()) {
+        Some(rel) => Path::new("../..").join(rel),
+        None => path.to_owned(),
+    }
+}
+
+/// A path an edit in `dir` stored, made whole again: `..` taken out, so it
+/// reads the same as the path it was made from (a clip's key in its trip,
+/// the bin's own files compare them).
+pub(crate) fn resolved(dir: &Path, stored: &Path) -> PathBuf {
+    if stored.is_absolute() {
+        return stored.to_owned();
+    }
+    let mut out = dir.to_path_buf();
+    for part in stored.components() {
+        match part {
+            std::path::Component::ParentDir => {
+                out.pop();
+            }
+            std::path::Component::CurDir => {}
+            other => out.push(other),
+        }
+    }
+    out
+}
+
 /// Music running on past the last cut fades out over this long before it.
 pub const END_FADE: f64 = 3.0;
 
@@ -1296,7 +1332,7 @@ impl Project {
                 if clip.end <= clip.start || clip.at < 0.0 {
                     bail!("{} clip {} is empty or starts before the edit", which.file_word(), n + 1);
                 }
-                clip.input = dir.join(&clip.input);
+                clip.input = resolved(dir, &clip.input);
             }
         }
         for (n, item) in project.overlays.iter_mut().chain(&mut project.text).flat_map(|l| &mut l.items).enumerate() {
@@ -1337,42 +1373,31 @@ impl Project {
         Ok(project)
     }
 
-    /// Writes the project as JSON. Clips in the project's folder or below
-    /// are stored relative to it, so the folder can move as a whole.
+    /// Writes the project as JSON. Files in the project's folder, or in
+    /// the trip it's a video of, are stored relative (`stored`), so the
+    /// folder, or the whole trip, can move.
     pub fn save(&self, path: &Path) -> Result<()> {
         let dir = &project_dir(path)?;
         let mut project = self.clone();
         for cut in &mut project.cuts {
-            if let Ok(rel) = cut.input.strip_prefix(dir) {
-                cut.input = rel.to_owned();
-            }
-            if let Some(audio) = cut.audio.as_mut()
-                && let Ok(rel) = audio.strip_prefix(dir)
-            {
-                *audio = rel.to_owned();
+            cut.input = stored(&cut.input, dir);
+            if let Some(audio) = cut.audio.as_mut() {
+                *audio = stored(audio, dir);
             }
             for track in cut.keyframes.tracks_mut() {
-                if let Ok(rel) = track.strip_prefix(dir) {
-                    *track = rel.to_owned();
-                }
+                *track = stored(track, dir);
             }
-            if let Some(lut) = cut.lut.as_mut().filter(|l| crate::lut::is_file(l))
-                && let Ok(rel) = Path::new(lut.as_str()).strip_prefix(dir)
-            {
-                *lut = rel.to_string_lossy().into_owned();
+            if let Some(lut) = cut.lut.as_mut().filter(|l| crate::lut::is_file(l)) {
+                *lut = stored(Path::new(lut.as_str()), dir).to_string_lossy().into_owned();
             }
         }
         for which in SoundTrack::ALL {
             for clip in &mut project.track_mut(which).clips {
-                if let Ok(rel) = clip.input.strip_prefix(dir) {
-                    clip.input = rel.to_owned();
-                }
+                clip.input = stored(&clip.input, dir);
             }
         }
         for item in project.overlays.iter_mut().chain(&mut project.text).flat_map(|l| &mut l.items) {
-            if let Ok(rel) = item.input.strip_prefix(dir) {
-                item.input = rel.to_owned();
-            }
+            item.input = stored(&item.input, dir);
         }
         project.settle_ids();
         crate::replace_file(path, (serde_json::to_string_pretty(&project)? + "\n").as_bytes())
@@ -1814,15 +1839,15 @@ fn cut_from_file(cut: &mut Cut, n: usize, dir: &Path) -> Result<()> {
     if !cut.speed.is_normal() {
         bail!("cut {} has a speed set: Omnix can't play a cut at speed yet", n + 1);
     }
-    cut.input = dir.join(&cut.input);
+    cut.input = resolved(dir, &cut.input);
     if let Some(audio) = cut.audio.as_mut() {
-        *audio = dir.join(&*audio);
+        *audio = resolved(dir, audio);
     }
     for track in cut.keyframes.tracks_mut() {
-        *track = dir.join(&*track);
+        *track = resolved(dir, track);
     }
     if let Some(lut) = cut.lut.as_mut().filter(|l| crate::lut::is_file(l)) {
-        *lut = dir.join(&*lut).to_string_lossy().into_owned();
+        *lut = resolved(dir, Path::new(lut.as_str())).to_string_lossy().into_owned();
     }
     if let Some(strength) = cut.old_lut_strength.take().filter(|s| *s != 1.0) {
         if cut.effects.is_empty() {
@@ -1857,7 +1882,7 @@ fn item_from_file(item: &mut crate::overlay::Item, n: usize, dir: &Path) -> Resu
         bail!("an overlay's effect keyframe isn't a number");
     }
     if item.file().is_some() {
-        item.input = dir.join(&item.input);
+        item.input = resolved(dir, &item.input);
     }
     item.motion.sort_by(|a, b| a.t.total_cmp(&b.t));
     item.effects.sort_by(|a, b| a.t.total_cmp(&b.t));
@@ -2266,6 +2291,50 @@ mod tests {
         assert_eq!(text.matches(r#""audio""#).count(), 2);
         assert_eq!(Project::load(&path).unwrap(), p);
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// Gap 116: a trip moved keeps its edits; what's outside it stays
+    /// whole; an old edit with whole paths opens as before.
+    #[test]
+    fn a_trip_moved_or_renamed_keeps_its_edits() {
+        let base = std::env::temp_dir().join(format!("omnix-trip-move-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let trip = base.join("trips/2030-05_sea");
+        let layout = dailix_sheet::Layout::new(&trip);
+        layout.create().unwrap();
+        std::fs::write(layout.project(), "{}").unwrap();
+        let edit = dailix_sheet::project::new_video(&trip, "all-days").unwrap();
+        let clip = trip.join("01_footage/2030-05-01/a.MP4");
+        let song = trip.join("02_audio/music/song.mp3");
+        let whole = format!(r#"{{"cuts": [{{"input": "{}", "in": 0, "out": 4}}, {{"input": "/elsewhere/b.MP4", "in": 0, "out": 2}}],
+            "music": {{"clips": [{{"input": "{}", "at": 0, "in": 0, "out": 6}}]}}}}"#, clip.display(), song.display());
+        std::fs::write(&edit, whole).unwrap();
+        // Written before gap 116, with whole paths: it opens as it did.
+        let p = Project::load(&edit).unwrap();
+        assert_eq!((p.cuts[0].input.clone(), p.music.clips[0].input.clone()), (clip.clone(), song.clone()));
+        p.save(&edit).unwrap();
+        let text = std::fs::read_to_string(&edit).unwrap();
+        assert!(text.contains(r#""input": "../../01_footage/2030-05-01/a.MP4""#) && text.contains(r#""input": "../../02_audio/music/song.mp3""#), "{text}");
+        assert!(text.contains(r#""input": "/elsewhere/b.MP4""#), "outside the trip: whole");
+        // The trips' folder renamed: the edit finds its clips in the new place.
+        let moved = base.join("moved/2030-05_sea");
+        std::fs::create_dir_all(moved.parent().unwrap()).unwrap();
+        std::fs::rename(&trip, &moved).unwrap();
+        let q = Project::load(&moved.join("videos/all-days/edit.json")).unwrap();
+        assert_eq!(q.cuts[0].input, moved.join("01_footage/2030-05-01/a.MP4"), "no «..» left in it");
+        assert_eq!((q.music.clips[0].input.clone(), q.cuts[1].input.clone()), (moved.join("02_audio/music/song.mp3"), PathBuf::from("/elsewhere/b.MP4")));
+        std::fs::remove_dir_all(&base).unwrap();
+    }
+
+    #[test]
+    fn a_stored_path_comes_back_as_it_was() {
+        let dir = Path::new("/t/trip/videos/a");
+        assert_eq!(resolved(dir, Path::new("../../01_footage/d/x.mp4")), PathBuf::from("/t/trip/01_footage/d/x.mp4"));
+        assert_eq!(resolved(dir, Path::new("./voice/x.flac")), PathBuf::from("/t/trip/videos/a/voice/x.flac"));
+        assert_eq!(resolved(dir, Path::new("/abs/x.mp4")), PathBuf::from("/abs/x.mp4"));
+        // Not a trip's video: a file above it stays whole.
+        assert_eq!(stored(Path::new("/t/other/x.mp4"), Path::new("/t/loose")), PathBuf::from("/t/other/x.mp4"));
+        assert_eq!(stored(Path::new("/t/loose/x.mp4"), Path::new("/t/loose")), PathBuf::from("x.mp4"));
     }
 
     #[test]

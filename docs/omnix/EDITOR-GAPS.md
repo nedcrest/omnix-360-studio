@@ -1447,14 +1447,24 @@ proxies) stays gap 74.
 
 Dailix wasn't friendly enough: buttons in many sizes and accents by
 accident, the same action worded three ways, danger beside the everyday,
-ratings as grey buttons, no way back from the sheet to its trip. The
-review and its nine steps, from the code and from how culling and media
-apps lay these jobs out: Dailix's `docs/UI-REVIEW.md`. Done: step 1 (a
-typed story no longer lost, the «→ Omnix» question two cards wide, the
-delete question counted off the window's thread, adding videos says what
-it did) and step 2 (one style module `ui.rs`, one set of words: Trips,
-TMP, Sources; Choose…; Empty edit). Next: the top bar with ☰ and the way
-back.
+ratings as grey buttons, no way back from the sheet to its trip, long
+jobs without a word. The review and its nine steps, from the code and
+from how culling and media apps lay these jobs out: Dailix's
+`docs/UI-REVIEW.md`. All nine built (2026-11-14): the four bugs; one
+style module (`ui.rs`) and one set of words (Trips, TMP, Sources;
+Choose…; Empty edit); the top bar (‹, Trips › trip › Contact sheet, ☰
+with text size, open, keys, settings, About; pop-up menus in
+`menu.rs`); ratings as a colour line, the linked ✓│?│✕ on the tile in
+hand, a filter with counts, the keys stepping through what's shown;
+the trip page's split «→ Omnix ▾» (the same on day cards and day
+headings), «Open the sheet», ⋯ with delete last; the player pane as an
+inspector (In, Out, Flag, Moment buttons; folding Marks, Voice, About
+the file); a days list at the sheet's left, the story saved by itself;
+Home's «Trips» heading with «+ New trip», the places as a quiet footer,
+a ⋯ on each card; a busy line for long jobs, the edit made off the
+window's thread, the notice and error closed by ✕. Not done: a sticky
+day heading (iced has no sticky layout; the bar's path names the day),
+tags as chips, the days list following the scroll.
 
 ### 111. Trips and edits to the trash; «edits», not «videos» — small (user, 2026-11-14)
 

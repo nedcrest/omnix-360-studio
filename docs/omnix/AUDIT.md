@@ -5,7 +5,7 @@
 One review agent: Omnix since `b84a3e3`, Dailix since `e0ccb40`. Omnix's
 UI changes clean; the problems were in `dailix add` and the sidecars.
 
-Fixed (Omnix `d9da2fb`; Dailix `c302feb`):
+Fixed (Omnix `d9da2fb`; Dailix `c302feb`, `61664b8`):
 - A.MOV added beside A.MP4 overwrote its sidecar: A.MP4 vanished from
   the sheet. Refused now (`sidecar_source`).
 - Span names rounded per part (59.6 s «0m60»), two spans could share a
@@ -18,11 +18,10 @@ Fixed (Omnix `d9da2fb`; Dailix `c302feb`):
   its own strings back; `@` in a file's name, `nan` as a time; ffmpeg
   without `-nostdin`; two adds of one file shared a part file; sidecars
   written in place.
+- A trip trashed while its posters were being made got its folder made
+  again; an open sheet of it stayed.
 
 Left, and where it belongs:
-- A trip trashed while its posters are being made: their tasks can make
-  a ghost folder, and an open sheet still points at it. With the
-  feedback for long jobs (UI review step 9).
 - «Close it in Omnix first» before trashing an edit is only words: an
   open Omnix saving it brings its folder back. When Omnix can say what
   it has open.

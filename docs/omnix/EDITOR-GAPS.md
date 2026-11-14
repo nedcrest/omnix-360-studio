@@ -1456,6 +1456,11 @@ outside it), read either way so old edits keep opening; or, on a
 missing clip, look for it at the same place inside the edit's trip.
 Before publishing, since a user's first move of a trip would hit it.
 
+**Built 2026-11-14, waits for the user's check** (Omnix `5f06f59`): the first way.
+`project::stored` keeps what's inside the trip relative through it,
+`resolved` makes it whole again without `..`; old edits open as before
+and are written the new way on their next save.
+
 ### 115. Small things found writing the guide — small (2026-11-14)
 
 - The bin shows its trip's whole path (`/home/<user>/…`), long and

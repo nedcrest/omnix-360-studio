@@ -22,11 +22,11 @@ jobs:
           components: clippy
       - uses: Swatinem/rust-cache@v2
       - name: Build
-        run: cargo build --workspace --all-targets
+        run: cargo build --locked --workspace --all-targets
       - name: Test
-        run: cargo test --workspace
+        run: cargo test --locked --workspace
         env:
           # A GPU test without a GPU fails here instead of passing unseen.
           OMNIX_REQUIRE_GPU: "1"
       - name: Clippy
-        run: cargo clippy --workspace --all-targets
+        run: cargo clippy --locked --workspace --all-targets

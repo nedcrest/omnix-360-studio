@@ -1,0 +1,16 @@
+# The user guide as a book (gap 109): `mdbook serve docs/guide` shows it
+# at http://localhost:3000, redrawn as pages change; GitHub shows the same
+# pages as plain Markdown. Built into the workspace's target/, not kept.
+[book]
+title = "Omnix and Dailix: the guide"
+authors = ["Dmytro Halushko"]
+language = "en"
+src = "."
+
+[build]
+build-dir = "../../target/guide"
+create-missing = false
+
+[output.html]
+default-theme = "navy"
+preferred-dark-theme = "navy"

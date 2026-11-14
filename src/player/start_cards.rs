@@ -124,7 +124,7 @@ impl App {
         let frames = self.start_cards.frames.get(edit).map_or(NONE, |(f, _)| f);
         let hovered = self.start_cards.hover.as_ref().filter(|h| &h.edit == edit).map(|h| self.card_motion.then(|| now.saturating_duration_since(h.since)));
         let note = if self.start_cards.making.as_ref() == Some(edit) { "making its frames…".to_owned() } else { note };
-        let info = iced::widget::column![text(dailix_sheet::project::edit_name(edit)).size(15), text(note).size(12).style(text::secondary)].spacing(2).into();
+        let info = iced::widget::column![text(dailix_sheet::project::edit_name(edit)).size(15)].push((!note.is_empty()).then(|| text(note).size(12).style(text::secondary))).spacing(2).into();
         let to = {
             let edit = edit.clone();
             move |e| Message::StartCard(CardMsg::Event(edit.clone(), e))

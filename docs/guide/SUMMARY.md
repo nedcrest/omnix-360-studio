@@ -9,6 +9,10 @@
 - [Choose in Dailix](tutorial-1-dailix.md)
 - [Edit in Omnix](tutorial-2-omnix.md)
 
+# Explanation
+
+- [How it fits together](explanation.md)
+
 # Reference
 
 - [Keys: Omnix](keys-omnix.md)

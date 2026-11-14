@@ -1451,9 +1451,11 @@ The built-in roles of a segment read «фон / B-roll», «розмова / syn
 English, and so in the guide's pictures (seen on the tutorial's first
 part). English names (B-roll, Sync, Establishing, Insert, Cutaway,
 Action, Reveal, Reaction; «No role»); the keys stay, so every sheet
-and edit reads as before. Whether the Ukrainian words stay anywhere (a
-language setting later) is the user's call. The guide's segment GIF is
-shot again after.
+and edit reads as before. Built 2026-11-14 (Omnix `689fff1`, Dailix
+`4e0748f`), with the last Ukrainian a user could see, found by a search
+of both repos: the app menu's description of Dailix. The guide's
+segment GIF shot again. Whether Ukrainian comes back (a language
+setting later) is the user's call.
 
 ### 112. Dailix's interface, looked at again — medium (user, 2026-11-14)
 

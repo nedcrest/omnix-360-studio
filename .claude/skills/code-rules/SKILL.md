@@ -54,7 +54,7 @@ places, drifting apart, and rules living in UI handlers without tests.
   removed if the work fails (the export's encoder does it on drop).
 - Doc comments say why; they sit on the item they describe. No dead code,
   no `allow(dead_code)`, no debug output.
-- No footage, personal paths (`<media>`, `~`) or film names in
+- No footage, personal paths (the user's home, his drives) or film names in
   code, tests or comments: made-up samples (`testmedia`).
 
 ## Habits that grew into a refactor
@@ -106,7 +106,7 @@ And two of process:
   or a label fits the block it's in (lane height and block width as
   limits, its own aspect); never "only when wider than three heights".
   Try a new piece at the smallest and the largest lane and window.
-- **Checks on the test project**: `<drive>/DAILIX/2026-08_test` (CONTEXT),
+- **Checks on the test project** (where it is: `docs/omnix/LOCAL.md`, this machine's),
   every lane filled; add to its edit what a new feature needs to be seen.
 
 ## Done means done
@@ -134,9 +134,10 @@ they're next touched, not in a package.
 
 ## Audits: small and often
 
-- A small audit when the hook says so, not by feel: `../.claude/
-  hooks/audit-due.sh` (a UserPromptSubmit hook) counts the code added in
-  Omnix and Dailix since `../.claude/last-audit` and speaks past
+- A small audit when the hook says so, not by feel: `audit-due.sh` (a
+  UserPromptSubmit hook in the folder holding both repos; a copy and how
+  it's wired: `docs/ai/hooks/`) counts the code added in Omnix and Dailix
+  since that folder's `.claude/last-audit` and speaks past
   about 2000 lines or 40 commits — a day of work, not «two or three
   days» (the user, 2026-11-11: the last one came after one day). One or
   two review agents over what changed since the marker, not five over
@@ -150,7 +151,7 @@ they're next touched, not in a package.
 ## Before each commit
 
 ```sh
-export PATH=$HOME/.cargo/bin:$PATH PKG_CONFIG_PATH=../omnix-360-studio/.localdeps/root/usr/lib/x86_64-linux-gnu/pkgconfig
+# Where ALSA's headers aren't installed, PKG_CONFIG_PATH as docs/omnix/LOCAL.md says.
 cargo build -q            # no warnings; never commit what doesn't build
 cargo test -q --workspace # all pass, the sheet core's too (GPU tests need the GPU)
 (cd ../dailix && cargo build -q && cargo test -q)   # it links this library

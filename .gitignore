@@ -1,2 +1,5 @@
 /target
 /dist
+
+# This machine's paths and the user's footage: local only (publishing, gap 109).
+docs/omnix/LOCAL.md

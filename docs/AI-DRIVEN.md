@@ -74,6 +74,7 @@ were written down as rules the agent reads before touching the code:
   guess.
 - **Audits by measure.** A hook counts the code added since the last
   audit and asks for a small one after about 2,000 lines or 40 commits.
+  Both hooks, and how they're wired: [`docs/ai/hooks/`](ai/hooks/).
   One or two review agents read what changed; findings are sorted (bugs
   now, the rest where it belongs) into `docs/omnix/AUDIT.md`.
 - **Memory across sessions.** Long work outlives one conversation.

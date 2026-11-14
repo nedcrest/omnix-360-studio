@@ -1443,6 +1443,19 @@ was filmed (its name's date, else the file's), with a sidecar; the
 originals only read. The rest of ingest (cards, phones, analysis,
 proxies) stays gap 74.
 
+### 115. Small things found writing the guide — small (2026-11-14)
+
+- The bin shows its trip's whole path (`/home/<user>/…`), long and
+  personal in a screenshot: as Dailix does, `~` for the home folder,
+  cut in the middle when long.
+- «No speech to lower the music under…» doesn't say how to get it: a
+  clip's own sound counts as speech only once its menu's «Its own sound
+  is speech» is ticked (`duck.rs`, `tracks.rs:361`); the message
+  should name it.
+- The scroll wheel over a list (iced's pick_list, Export's Loudness)
+  changes its value as the panel is scrolled: the value moves under
+  the pointer without a click.
+
 ### 114. Omnix's toolbar on a 1280-wide window — small (found shooting the guide, 2026-11-14)
 
 At 1280×800 (a common laptop), even with the interface at 100 %, the

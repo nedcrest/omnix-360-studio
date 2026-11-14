@@ -1443,6 +1443,19 @@ was filmed (its name's date, else the file's), with a sidecar; the
 originals only read. The rest of ingest (cards, phones, analysis,
 proxies) stays gap 74.
 
+### 112. Dailix's interface, looked at again — medium (user, 2026-11-14)
+
+Dailix wasn't friendly enough: buttons in many sizes and accents by
+accident, the same action worded three ways, danger beside the everyday,
+ratings as grey buttons, no way back from the sheet to its trip. The
+review and its nine steps, from the code and from how culling and media
+apps lay these jobs out: Dailix's `docs/UI-REVIEW.md`. Done: step 1 (a
+typed story no longer lost, the «→ Omnix» question two cards wide, the
+delete question counted off the window's thread, adding videos says what
+it did) and step 2 (one style module `ui.rs`, one set of words: Trips,
+TMP, Sources; Choose…; Empty edit). Next: the top bar with ☰ and the way
+back.
+
 ### 111. Trips and edits to the trash; «edits», not «videos» — small (user, 2026-11-14)
 
 Dailix had no way to delete a trip or one of its edits, and called the

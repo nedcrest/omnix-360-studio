@@ -517,34 +517,35 @@ effects and sound effects (but for a specific track). For speed, the clip's
 native sound has to slow down or speed up with it, so the timeline doesn't
 drift: a big, careful layer of work."
 
-What the code already gives:
-- Frames are picked by time, not by count (0.7.1's mixed-frame-rate fix),
-  so a cut that reads its clip slower is natural. A 100 fps Osmo clip at
-  0.3× is real slow motion; 30 fps at 0.5× repeats frames, or blends them
-  later.
-- Effect keyframes already ease values over a cut's time, which is FL's
-  automation idea. A speed curve would be one more automated value.
+**Built 2026-11-15** (card 31 with 31b's pitch; the time seam first,
+`TIME-SEAM.md`), waiting for the user's check:
+- `Cut.speed` (`src/speed.rs`): rate keys over clip time, 0.25–4×, a
+  constant one key; `tape` for the pitch. Every edit ↔ clip time goes
+  through the seam (`Cut::edit_len`, `edit_at`, `clip_at`), held there by
+  a source-scan test.
+- Ops `Speed` (one rate), `SpeedCurve` (keys, for 31c), `TapePitch`;
+  `describe` and `ops-schema` show them. Refused: out of range or order,
+  under `MIN_CUT` on the edit (picture or sound), a J- or L-cut.
+- Export: each edit frame shows the clip frame its time reads
+  (`Speed::frame_for`, CPU and GPU alike); the sound through `atempo`
+  (pitch kept, chained below 0.5×) or `asetrate` (like tape), a curve
+  cut into constant stretches (`ffmpeg::tempo`).
+- Player: the clock reads the seconds heard at the cut's speed; the
+  sound decodes through the same tempo.
+- UI: a cut's right-click menu, «Speed» ¼…4× and «Keep the sound's
+  pitch»; the label says «2×».
 
-To work out before building:
-- **Constant speed per cut first** (`Cut.speed`, 0.25–4×, new optional
-  field). Then a cut's length on the edit = (out − in) / speed. Every place
-  that maps edit time ↔ clip time must use it:
-  - `project::offsets`, `Edit::locate`;
-  - keyframes, effects and volume points (all stored in clip time, so they
-    stay on their footage);
-  - crossfades, thumbnails, the player clock, both exports and `check`.
-- **Sound follows the speed.** ffmpeg `atempo` keeps the pitch (chained for
-  < 0.5×) and is constant only; `asetrate` shifts the pitch like tape. The
-  player needs the same: decode through the same filter, so the playback
-  clock matches. Pad to the frames' length as now (`pad`), so later cuts
-  don't drift. Measure the sync by cross-correlation as for cleaned voice.
-- **Speed ramps** (automation over time) second. Time becomes the integral
-  of the speed curve. Sound must be done in pieces of constant tempo, or
-  with a time-stretcher (`rubberband`, rarely in ffmpeg builds).
-- **Grouped effects per track** (the FL idea; designed in gap 39): a cut's effects row could
-  show lanes per automated value (exposure, speed, volume) that fold open,
-  instead of one row of marks. A UI question, together with gap 9's action
-  bar and the effects panel.
+Still open:
+- **31f. Real slow motion from 100 fps clips.** The export decodes a
+  clip at the edit's rate before picking frames, so a 100 fps clip at
+  0.25× repeats frames like a 30 fps one. Decode a slowed cut at its
+  clip's own rate and pick by time (`Reading` already picks by time; the
+  pipelines and the GPU source pin the rate). The player already shows
+  every frame.
+- **J- and L-cuts at speed**: their sound beyond the picture plays as a
+  sound clip at 1×, so a speed is refused on them for now.
+- **Blending** frames slower than the clip has them (repeat today;
+  blend or `minterpolate` per cut, export only).
 
 ### 31b–31e. Speed: the pitch choice, a speed editor window, keyframes by right-click — large (user, 2026-11-01)
 
@@ -556,17 +557,17 @@ right-click on the timeline in the one-clip editor should insert
 keyframes too. We keep both: Kdenlive's way and the kind of speed editing
 I want."
 
-- **31b. Keep the timbre, or not.** A per-cut switch, «Keep the voice's
-  pitch», on by default:
+- **31b. Keep the timbre, or not** (built with 31: «Keep the sound's
+  pitch» in the cut's menu, `Speed.tape`; constant stretches with
+  `atempo`, no `rubberband`). A per-cut switch, on by default:
   - on: the sound is stretched in time, the pitch stays (`atempo`, or
     `rubberband` for ramps);
   - off: like tape or a record, slower is lower (`asetrate` + resample).
     Good for effect: a slowed-down fall, a sped-up silly walk.
-  - Optional field `Cut.keep_pitch` (absent = on), so old projects load.
-  - This machine's ffmpeg 6.1.1 has `rubberband` with runtime commands
-    (`C` in `ffmpeg -filters`), so its `tempo` can follow a ramp through
-    `sendcmd`. Not every build has it: check at start-up and fall back to
-    constant-tempo pieces with `atempo`.
+  - Stored as `Speed.tape` (absent = pitch kept), so old projects load.
+  - A ramp's sound is constant-tempo pieces with `atempo`; `rubberband`
+    (in this machine's ffmpeg, not in every build) could follow a smooth
+    ramp later, through `sendcmd`.
 - **31c. The speed editor, a window of its own.** Opened from a cut (its
   menu, or a double-click on the speed lane).
   - The cut's picture at the top, as in the one-clip editor.

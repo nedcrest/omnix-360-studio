@@ -475,11 +475,11 @@ impl Lanes<'_> {
             // lane isn't read as the whole range.
             let span = self.params.get(i).filter(|p| self.range(i) != p.range()).map(|&p| {
                 let (lo, hi) = self.range(i);
-                format!("  {}…{}", p.label(lo), p.label(hi))
+                format!("{}…{}", p.label(lo), p.label(hi))
             });
             frame.fill_text(Text { content: name.to_owned(), position: Point::new(PICK + 14.0, top + h / 2.0), color: ink, size: 11.0.into(), align_y: Vertical::Center, ..Default::default() });
             if let Some(span) = span {
-                frame.fill_text(Text { content: span, position: Point::new(PICK + 14.0, top + h - 2.0), color: ink.scale_alpha(0.6), size: 9.0.into(), align_y: Vertical::Bottom, ..Default::default() });
+                frame.fill_text(Text { content: span, position: Point::new(HEAD - 6.0, top + h / 2.0), color: ink.scale_alpha(0.6), size: 9.0.into(), align_x: iced::advanced::text::Alignment::Right, align_y: Vertical::Center, ..Default::default() });
             }
         }
     }

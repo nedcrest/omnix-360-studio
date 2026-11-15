@@ -1,5 +1,45 @@
 # Audits — the lists to work off
 
+## Small audit of 2026-11-15 (the time seam, speed, the lanes' scale, paste)
+
+Two review agents: Omnix since `4801410` (Dailix since `4d9f809`: its
+README and CI only).
+
+Fixed (`1c8609c`, `931164f`, `6208cc6`, `42cfe7b`, `0cebd43`,
+`8917dd5`, `f4c7577`, `12767cd`, `dd5803a`): a point dragged on a
+fitted lane ran away; sync lock played a song's stretch twice after a
+cut was slowed; sound at speed a few ms long, adding up over cuts; paste
+took cuts no op would make; a cut readied ahead kept its old speed; a
+fast cut's sound edges snapped off where drawn; a crossfade partner's
+drift in clip seconds; the CPU export eased a 360 seam per edit frame,
+not per clip frame (as the GPU); doc comments on the wrong items.
+
+Checked, not a bug: `Speed::frame_for` rounds to the nearest clip frame,
+and the player shows the frame due by its clock plus half a frame: the
+same frame.
+
+Left, and where it belongs:
+- `set_speed` settles crossfades but not `Edge.seconds` or the sound
+  fades (edit seconds too): a 3 s edge look on a cut set to 4× stays
+  stored at 3 s; the maths clamps it. Settle them with the next change
+  to `model/ops/cuts.rs`.
+- A point's value tag dragged on a fitted lane steps by the value's
+  whole range (zoom: ~6 % a pixel): step by the clip's scale in
+  `timeline/auto.rs` (`LaneDrag::Value`).
+- `Lanes::range` refits a clip on every `y`, every 3 px of a curve:
+  work it out once per clip in `draw_clip` and the hit test.
+- `OwnPlace` (timeline.rs) and `auto::Owner` have the same edit/own/end
+  over (from, start, len, speed): one type when either is next touched.
+- `Speed::short` and `describe` repeat «all rates alike»; «at 1× exact,
+  else through the seam» is written three times (`Sound::of_cut`,
+  `Sound::reads`, `duck::speech`); `Sound::clip_time` works out the
+  pieces' edit offsets by hand: a helper in `speed.rs` each, with the
+  next change there.
+- The source-scan guard (`time_snapshot::around_the_seam`) knows a cut
+  by a name ending in `cut`; cuts bound as `c` pass unseen (none today).
+- After a paste the playhead stays where it was, before the copies: put
+  it on the first copy if he finds it odd.
+
 ## Found while building card 31 (2026-11-15)
 
 - An ordinary video's frame comes out of the GPU about 1.9 RGB levels

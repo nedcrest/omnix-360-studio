@@ -570,6 +570,18 @@ I want."
     ramp later, through `sendcmd`.
 - **31c. The speed editor, a window of its own.** Opened from a cut (its
   menu, or a double-click on the speed lane).
+  **Decided with the user, 2026-11-15** (sketch shown in the session):
+  - **Ramps**: between two points the rate eases (as view keys do), not a
+    step; the seam integrates the eased rate, the sound plays in short
+    constant-tempo pieces. A point's ease is optional in the file
+    (absent: held, as speeds were stored until now).
+  - **Where**: over the timeline's part of the window, like a large
+    dialog; the picture above stays, showing the frame under the
+    curve's cursor (no player of its own).
+  - **Freeze** (0×, a held frame) later, as a kind of point of its own;
+    the first presets are «slow in the middle» and «ramp to the cut».
+  - OK applies the curve and the pitch as one undo step; Cancel leaves
+    the cut as it was.
   - The cut's picture at the top, as in the one-clip editor.
   - Under it, a **speed curve**: speed up the side (0.1× to 4×, a log
     scale so 0.5× and 2× sit at the same distance from 1×), time across.

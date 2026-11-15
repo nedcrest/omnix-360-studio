@@ -78,6 +78,7 @@ fn cut_op() -> impl Strategy<Value = CutOp> {
         (id(), time()).prop_map(|(cut, t)| CutOp::Unmark { cut, t }),
         (id(), end(), time()).prop_map(|(cut, end, t)| CutOp::SoundEdge { cut, end, t, most: 6.0 }),
         id().prop_map(|cut| CutOp::SoundToPicture { cut }),
+        (id(), 0.2..4.5f64).prop_map(|(cut, rate)| CutOp::Speed { cut, rate }),
     ]
 }
 

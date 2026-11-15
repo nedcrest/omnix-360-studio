@@ -1,5 +1,14 @@
 # Audits — the lists to work off
 
+## Found while building card 31 (2026-11-15)
+
+- An ordinary video's frame comes out of the GPU about 1.9 RGB levels
+  brighter than the CPU's (a flat grey clip, 64×36, every grey from 19
+  to 152; mean, not a pixel or two). Not speed's: the same at 1×. Where
+  it belongs: the flat clip's YUV→RGB on the two paths (range or
+  matrix), with a test over a grey ramp at 0 and at 255 — the next time
+  `render.rs` or the flat decode is touched.
+
 ## Small audit of 2026-11-14, third (the UI review's steps 3–9, the guide's generators)
 
 One review agent: Omnix since `b1c87a6`, Dailix since `c302feb`. The

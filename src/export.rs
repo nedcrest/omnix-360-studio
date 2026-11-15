@@ -237,10 +237,6 @@ pub(crate) fn export(project: &project::Project, opts: &StitchOpts, out: &Export
     if project.cuts.is_empty() {
         bail!("nothing to export yet: the project has music but no video cuts");
     }
-    // The time seam knows speed; the decoding and the mix don't yet (gap 31).
-    if let Some(n) = project.cuts.iter().position(|c| !c.speed.is_normal()) {
-        bail!("cut {} has a speed set: Omnix can't export a cut at speed yet", n + 1);
-    }
     let mut project = project.clone();
     let (pipelines, of_cut) = cut_pipelines(&mut project, opts, out.draft)?;
     let project = &project;

@@ -814,9 +814,8 @@ pub struct Cut {
     /// view keys.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub frame: Option<crate::frame::Frame>,
-    /// How fast it reads its clip (gap 31); normal unless set. Not yet
-    /// set by any op: a project with a speed is refused until the media
-    /// play at speed.
+    /// How fast it reads its clip (gap 31); normal unless set
+    /// (`CutOp::Speed`, `SpeedCurve`, `TapePitch`).
     #[serde(default, skip_serializing_if = "crate::speed::Speed::is_default")]
     pub speed: crate::speed::Speed,
 }
@@ -1843,8 +1842,8 @@ fn cut_from_file(cut: &mut Cut, n: usize, dir: &Path) -> Result<()> {
     if cut.end <= cut.start {
         bail!("cut {} ends ({} s) before it starts ({} s)", n + 1, cut.end, cut.start);
     }
-    if !cut.speed.is_normal() {
-        bail!("cut {} has a speed set: Omnix can't play a cut at speed yet", n + 1);
+    if let Err(why) = cut.speed.check() {
+        bail!("cut {}: {why}", n + 1);
     }
     cut.input = resolved(dir, &cut.input);
     if let Some(audio) = cut.audio.as_mut() {
@@ -2732,11 +2731,14 @@ mod tests {
     }
 
     #[test]
-    fn a_project_with_a_speed_is_refused_until_cuts_can_play_at_speed() {
+    fn a_project_s_speeds_are_read_and_checked() {
         let dir = std::env::temp_dir().join(format!("omnix-speed-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("fast.json");
-        std::fs::write(&path, r#"{"cuts": [{"input": "a.mp4", "in": 0, "out": 4, "speed": {"keys": [{"t": 0, "rate": 2}]}}]}"#).unwrap();
+        std::fs::write(&path, r#"{"cuts": [{"input": "a.mp4", "in": 0, "out": 4, "speed": {"keys": [{"t": 0, "rate": 2}], "tape": true}}]}"#).unwrap();
+        let p = Project::read(&path).unwrap();
+        assert_eq!((p.cuts[0].edit_len(), p.cuts[0].speed.tape), (2.0, true));
+        std::fs::write(&path, r#"{"cuts": [{"input": "a.mp4", "in": 0, "out": 4, "speed": {"keys": [{"t": 0, "rate": 9}]}}]}"#).unwrap();
         let err = Project::read(&path).unwrap_err();
         assert!(format!("{err:#}").contains("speed"), "{err:#}");
         // Normal speed written out is left out of the file.

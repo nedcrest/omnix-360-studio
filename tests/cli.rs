@@ -408,3 +408,43 @@ fn a_measuring_command_prints_the_ops_it_would_apply() {
     assert_eq!(applied, direct);
     assert!(untouched, "--ops writes nothing");
 }
+
+/// PSNR (dB) of the frame at `a_t` in `a` against the one at `b_t` in `b`:
+/// over 30 the same picture through the encoder, far under it another.
+fn psnr(dir: &Path, (a, a_t): (&str, f64), (b, b_t): (&str, f64)) -> f64 {
+    for (file, t, png) in [(a, a_t, "a.png"), (b, b_t, "b.png")] {
+        ffmpeg(dir, &["-ss", &t.to_string(), "-i", file, "-frames:v", "1", "-s", "320x180", png]);
+    }
+    let out = Command::new("ffmpeg").current_dir(dir).args(["-hide_banner", "-nostdin", "-i", "a.png", "-i", "b.png", "-lavfi", "psnr", "-f", "null", "-"]).output().unwrap();
+    let text = String::from_utf8_lossy(&out.stderr);
+    text.split("average:").nth(1).and_then(|r| r.split_whitespace().next()).and_then(|v| v.parse().ok()).unwrap_or_else(|| panic!("no PSNR in: {text}"))
+}
+
+/// Gap 31: a cut at twice the speed exports half its clip's frames and
+/// sound, each frame its clip's at twice the time; at half the speed,
+/// twice as many; its sound's pitch kept or, like tape, shifted.
+#[test]
+fn exports_cuts_at_speed() {
+    if !has_ffmpeg() {
+        return;
+    }
+    let d = dir("speed");
+    clip(&d, "a.mp4", 5.0, 440);
+    std::fs::write(d.join("fast.json"), r#"{"cuts": [{"input": "a.mp4", "in": 0, "out": 4, "speed": {"keys": [{"t": 0, "rate": 2}]}}]}"#).unwrap();
+    std::fs::write(d.join("slow.json"), r#"{"cuts": [{"input": "a.mp4", "in": 1, "out": 2, "speed": {"keys": [{"t": 0, "rate": 0.5}]}}, {"input": "a.mp4", "in": 3, "out": 4}]}"#).unwrap();
+    omnix(&d, &["export", "fast.json", "--cpu", "-o", "fast.mp4", "--size", "320x180"]);
+    omnix(&d, &["export", "slow.json", "--cpu", "-o", "slow.mp4", "--size", "320x180"]);
+    let fast: (u32, f64) = (probe(&d, "fast.mp4", "v", "nb_read_frames").parse().unwrap(), probe(&d, "fast.mp4", "a", "duration").parse().unwrap());
+    let slow: (u32, f64) = (probe(&d, "slow.mp4", "v", "nb_read_frames").parse().unwrap(), probe(&d, "slow.mp4", "a", "duration").parse().unwrap());
+    // At 1 s into the fast export, its clip's second 2, not 1.
+    let (same, other) = (psnr(&d, ("fast.mp4", 1.0), ("a.mp4", 2.0)), psnr(&d, ("fast.mp4", 1.0), ("a.mp4", 1.0)));
+    // At 1 s into the slow one, its clip's 1.5 s; the cut after it still in step.
+    let (slow_same, after) = (psnr(&d, ("slow.mp4", 1.0), ("a.mp4", 1.5)), psnr(&d, ("slow.mp4", 2.5), ("a.mp4", 3.5)));
+    std::fs::remove_dir_all(&d).unwrap();
+    assert_eq!(fast.0, 60);
+    assert!((fast.1 - 2.0).abs() < 1.0 / 30.0, "fast sound {}", fast.1);
+    assert!(same > 30.0 && other < same - 6.0, "fast picture: {same} dB at clip 2 s, {other} dB at 1 s");
+    assert_eq!(slow.0, 90);
+    assert!((slow.1 - 3.0).abs() < 1.0 / 30.0, "slow sound {}", slow.1);
+    assert!(slow_same > 30.0 && after > 30.0, "slow picture {slow_same} dB, the cut after {after} dB");
+}

@@ -121,7 +121,7 @@ pub fn describe(project: &Path) -> Result<()> {
 }
 
 /// `describe`'s lines for `p`.
-fn describe_lines(p: &Project) -> Vec<String> {
+pub(crate) fn describe_lines(p: &Project) -> Vec<String> {
     let mut out = Vec::new();
     let mut println = |line: String| out.push(line);
     let name = |path: &Path| path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
@@ -263,6 +263,9 @@ fn cut_lines(c: &crate::project::Cut) -> Vec<String> {
     }
     if c.speech {
         lines.push("its own sound is speech".to_owned());
+    }
+    if !c.speed.is_default() {
+        lines.push(format!("speed: {}; {:.2} s of its clip, {:.2} s on the edit", c.speed.describe(), c.clip_len(), c.edit_len()));
     }
     if let Some(f) = &c.frame {
         lines.push(format!("frame: {}", f.said()));

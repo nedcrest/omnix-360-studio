@@ -425,6 +425,57 @@ mod tests {
         draw_and_read(gpu, (w, h))
     }
 
+    /// Collects the frames an encode writes.
+    struct Frames(Vec<stitch::Frame>);
+
+    impl ffmpeg::FrameSink for Frames {
+        fn write(&mut self, frame: &stitch::Frame) -> Result<()> {
+            self.0.push(stitch::Frame { width: frame.width, height: frame.height, rgb: frame.rgb.clone(), deep: frame.deep });
+            Ok(())
+        }
+    }
+
+    /// Gap 31: a cut at speed is exported from the same clip frames on the
+    /// CPU and on the GPU, each edit frame its clip's at its speed's time:
+    /// at 2× frame k is the 1× export's frame 2k.
+    #[test]
+    fn gpu_and_cpu_pick_the_same_frames_at_speed() {
+        let Some(mut gpu) = test_gpu(false) else { return };
+        let dir = std::env::temp_dir().join(format!("omnix-speed-gpu-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let clip = dir.join("a.mp4");
+        let made = std::process::Command::new("ffmpeg").args(["-v", "error", "-y", "-f", "lavfi", "-i", "nullsrc=s=64x36:r=30:d=2,format=yuv420p,geq=lum='16+3*N':cb=128:cr=128", "-c:v", "libx264", "-qp", "0", "-pix_fmt", "yuv420p"]).arg(&clip).status();
+        if !made.is_ok_and(|s| s.success()) {
+            return;
+        }
+        let p = crate::Pipeline::new(&clip, &Default::default(), crate::stab::Mode::Off).unwrap();
+        let mut cut = crate::project::Cut::new(clip.clone(), 0.2, 1.8);
+        cut.flat = true;
+        let size = (64, 36);
+        let camera = |t: f64| crate::project::camera_at(std::slice::from_ref(&cut), 0, t, &|f, t| p.aim(f, t));
+        let run = |speed: &crate::speed::Speed, frames: usize, gpu: Option<&mut Gpu>| {
+            let read = crate::speed::Reading { start: 0.2, total: Some(frames), speed };
+            let mut out = Frames(Vec::new());
+            match gpu {
+                Some(gpu) => encode(gpu, &p, &Clip::new(&p).unwrap(), &read, &mut out, camera, size, &mut |_| Ok(())).unwrap(),
+                None => crate::pipeline::encode(&p, &read, &mut out, |t| crate::pipeline::Shot::View { camera: Box::new(camera(t)), size }, &mut |_| Ok(())).unwrap(),
+            }
+            out.0
+        };
+        let twice = crate::speed::Speed::constant(2.0);
+        let (cpu, on_gpu, normal) = (run(&twice, 20, None), run(&twice, 20, Some(&mut gpu)), run(&Default::default(), 40, None));
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert_eq!((cpu.len(), on_gpu.len()), (20, 20));
+        // Each frame a grey of its own, three luma steps on: the same pick
+        // is within a step, the next frame two steps (seven RGB levels) on.
+        let mean = |f: &stitch::Frame| f.rgb.iter().map(|&v| v as f64).sum::<f64>() / f.rgb.len() as f64;
+        for k in 0..20 {
+            assert_eq!(cpu[k].rgb, normal[2 * k].rgb, "frame {k} at 2× is frame {} at 1×", 2 * k);
+            let (c, g) = (mean(&cpu[k]), mean(&on_gpu[k]));
+            assert!((c - g).abs() < 3.0, "frame {k}: the GPU's grey {g:.1}, the CPU's {c:.1}");
+        }
+    }
+
     /// A join drawn by the player's transition pass is what the export's
     /// `transition::blend` makes of the two cuts drawn alone: every look,
     /// at the start, the middle and near the end; an edge look of one.

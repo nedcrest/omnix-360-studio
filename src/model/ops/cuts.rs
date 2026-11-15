@@ -117,6 +117,16 @@ pub enum CutOp {
     SoundEdge { cut: Id, end: End, t: f64, most: f64 },
     /// Its sound back to its picture's edges.
     SoundToPicture { cut: Id },
+    /// How fast it reads its clip, one rate throughout (gap 31): 0.5 is
+    /// half speed, 2 twice; 1 back to normal. Its clip span stays, its
+    /// length on the edit changes and the cuts after it move.
+    Speed { cut: Id, rate: f64 },
+    /// Its speed as a curve (31c): each key's rate from its clip time on,
+    /// in clip-time order; none: normal speed.
+    SpeedCurve { cut: Id, keys: Vec<crate::speed::SpeedKey> },
+    /// Its sound at speed like tape, slower is lower (on), or stretched
+    /// keeping its pitch (off, as it starts).
+    TapePitch { cut: Id, on: bool },
 }
 
 /// Two markers closer than this (seconds) are one.
@@ -168,14 +178,7 @@ pub(super) fn apply(p: &mut Project, op: &CutOp) -> Result<Outcome, OpError> {
             let style = p.cuts[i].style.as_mut().ok_or_else(|| OpError::Invalid(format!("cut #{cut} has no style to set")))?;
             said(format!("cut #{cut}: {}", set_knob(style.look, &mut style.params, key, *value)?))
         }
-        CutOp::EdgeKnob { cut, end, key, value } => {
-            let i = find(p, *cut)?;
-            let c = &mut p.cuts[i];
-            let edge = if *end == End::In { &mut c.edge_in } else { &mut c.edge_out };
-            let edge = edge.as_mut().ok_or_else(|| OpError::Invalid(format!("cut #{cut} has no look on that edge")))?;
-            let said_ = set_knob(edge.look, &mut edge.params, key, *value)?;
-            said(format!("cut #{cut}: {said_}"))
-        }
+        CutOp::EdgeKnob { cut, end, key, value } => edge_knob(p, *cut, *end, key, *value),
         &CutOp::Crossfade { cut, seconds } => {
             let i = find(p, cut)?;
             p.set_crossfade(i, seconds);
@@ -200,6 +203,9 @@ pub(super) fn apply(p: &mut Project, op: &CutOp) -> Result<Outcome, OpError> {
         &CutOp::MoveMark { cut, from, t } => move_mark(p, cut, from, t),
         &CutOp::SoundEdge { cut, end, t, most } => sound_edge(p, cut, end, t, most),
         &CutOp::SoundToPicture { cut } => sound_to_picture(p, cut),
+        &CutOp::Speed { cut, rate } => set_rate(p, cut, rate),
+        CutOp::SpeedCurve { cut, keys } => set_speed(p, *cut, keys.clone()),
+        &CutOp::TapePitch { cut, on } => tape_pitch(p, cut, on),
         &CutOp::Unmark { cut, t } => unmark(p, cut, t),
     }
 }
@@ -489,6 +495,13 @@ fn sound_edge(p: &mut Project, cut: Id, end: End, t: f64, most: f64) -> Result<O
         return Err(OpError::Invalid(format!("a sound edge at {t} s")));
     }
     let c = &mut p.cuts[i];
+    let past = match end {
+        End::In => t < c.start,
+        End::Out => t > c.end,
+    };
+    if past && !c.speed.is_normal() {
+        return Err(OpError::Invalid(format!("cut #{cut} plays at speed: its sound can't run past its picture yet (a J- or L-cut)")));
+    }
     let (from, to) = c.sound_span();
     match end {
         // At least MIN_CUT of sound on the edit, at the cut's speed.
@@ -500,6 +513,56 @@ fn sound_edge(p: &mut Project, cut: Id, end: End, t: f64, most: f64) -> Result<O
     }
     let (from, to) = c.sound_span();
     said(format!("cut #{cut}: sound {from:.2}-{to:.2} s (picture {:.2}-{:.2})", c.start, c.end))
+}
+
+/// One of cut `cut`'s edge look's settings, as `TransitionKnob`.
+fn edge_knob(p: &mut Project, cut: Id, end: End, key: &str, value: Option<f32>) -> Result<Outcome, OpError> {
+    let i = find(p, cut)?;
+    let c = &mut p.cuts[i];
+    let edge = if end == End::In { &mut c.edge_in } else { &mut c.edge_out };
+    let edge = edge.as_mut().ok_or_else(|| OpError::Invalid(format!("cut #{cut} has no look on that edge")))?;
+    let said_ = set_knob(edge.look, &mut edge.params, key, value)?;
+    said(format!("cut #{cut}: {said_}"))
+}
+
+/// Cut `cut` at one `rate` throughout, in `speed::RANGE`; 1 is normal.
+fn set_rate(p: &mut Project, cut: Id, rate: f64) -> Result<Outcome, OpError> {
+    let (lo, hi) = crate::speed::RANGE;
+    if !(lo..=hi).contains(&rate) {
+        return Err(OpError::OutOfRange { what: "speed", value: rate, least: lo, most: hi });
+    }
+    let keys = if rate == 1.0 { Vec::new() } else { crate::speed::Speed::constant(rate).keys };
+    set_speed(p, cut, keys)
+}
+
+fn tape_pitch(p: &mut Project, cut: Id, on: bool) -> Result<Outcome, OpError> {
+    let i = find(p, cut)?;
+    p.cuts[i].speed.tape = on;
+    said(format!("cut #{cut}: its sound at speed {}", if on { "like tape" } else { "keeps its pitch" }))
+}
+
+/// Cut `cut`'s speed keys to `keys` (none: normal), if they're in order
+/// and range and leave it at least `MIN_CUT` on the edit. A J- or L-cut
+/// keeps normal speed: its sound beyond the picture plays as it is.
+fn set_speed(p: &mut Project, cut: Id, keys: Vec<crate::speed::SpeedKey>) -> Result<Outcome, OpError> {
+    let i = find(p, cut)?;
+    let c = &mut p.cuts[i];
+    let speed = crate::speed::Speed { keys, tape: c.speed.tape };
+    speed.check().map_err(OpError::Invalid)?;
+    if !speed.is_normal() && (c.sound_before > 0.0 || c.sound_after > 0.0) {
+        return Err(OpError::Invalid(format!("cut #{cut} is a J- or L-cut: its sound beyond the picture can't play at speed yet, so its speed stays normal")));
+    }
+    // Its picture and its sound (shorter where it stops short) at least
+    // MIN_CUT on the edit.
+    let (from, to) = c.sound_span();
+    let len = speed.edit_secs(c.start, c.end).min(speed.edit_secs(from, to));
+    if len < MIN_CUT {
+        return Err(OpError::Invalid(format!("at that speed cut #{cut} would last {len:.2} s, less than {MIN_CUT} s")));
+    }
+    c.speed = speed;
+    crate::project::settle_crossfades(&mut p.cuts);
+    let c = &p.cuts[i];
+    said(format!("cut #{cut}: {}, {:.2} s on the edit", c.speed.describe(), c.edit_len()))
 }
 
 /// The marker within `SAME_MARK` of `t`.
@@ -719,6 +782,44 @@ mod tests {
         assert!(e.cuts[1].crossfade < 3.0 && e.cuts[1].crossfade > 0.0, "within the shorter cut: {}", e.cuts[1].crossfade);
         e.apply(&Op::Cut(CutOp::Stabilize { cut: a, mode: Some(Mode::Level) })).unwrap();
         assert_eq!(e.cuts[0].stabilize, Some(Mode::Level));
+        check(&e).unwrap();
+    }
+
+    /// Gap 31: a speed set on a cut makes it shorter or longer on the
+    /// edit, the cuts after it and the sync-locked music following; out of
+    /// range, too short, or a J- or L-cut, it's refused.
+    #[test]
+    fn a_cut_s_speed_changes_its_length_on_the_edit() {
+        let mut e = Edit::default();
+        let a = e.apply(&add("a.mp4", 4.0, Place::End)).unwrap().made.unwrap();
+        e.apply(&add("b.mp4", 2.0, Place::End)).unwrap();
+        e.music.sync = true;
+        e.music.clips.push(crate::project::MusicClip { input: "song.mp3".into(), at: 4.5, start: 0.0, end: 1.0, ..Default::default() });
+        let speed = |rate| Op::Cut(CutOp::Speed { cut: a, rate });
+        e.apply(&speed(2.0)).unwrap();
+        assert_eq!((e.cuts[0].clip_len(), e.cuts[0].edit_len(), e.duration()), (4.0, 2.0, 4.0));
+        assert_eq!(e.music.clips[0].at, 2.5, "the locked song under b moved with it");
+        assert!(crate::apply::describe_lines(&e).join("\n").contains("speed: 2× speed; 4.00 s of its clip, 2.00 s on the edit"));
+        e.apply(&speed(1.0)).unwrap();
+        assert!(e.cuts[0].speed.is_default() && e.duration() == 6.0);
+        for rate in [0.1, 5.0, f64::NAN] {
+            assert!(e.apply(&speed(rate)).is_err(), "{rate}");
+        }
+        // 0.2 s of clip at 4× is 0.05 s: under MIN_CUT.
+        let short = e.apply(&add("c.mp4", 0.2, Place::End)).unwrap().made.unwrap();
+        assert!(e.apply(&Op::Cut(CutOp::Speed { cut: short, rate: 4.0 })).is_err());
+        // A curve, out of order: refused; in order, kept.
+        let key = |t, rate| crate::speed::SpeedKey { t, rate };
+        assert!(e.apply(&Op::Cut(CutOp::SpeedCurve { cut: a, keys: vec![key(2.0, 1.0), key(1.0, 2.0)] })).is_err());
+        e.apply(&Op::Cut(CutOp::SpeedCurve { cut: a, keys: vec![key(0.0, 1.0), key(2.0, 2.0)] })).unwrap();
+        assert_eq!(e.cuts[0].edit_len(), 3.0);
+        e.apply(&Op::Cut(CutOp::TapePitch { cut: a, on: true })).unwrap();
+        assert!(e.cuts[0].speed.tape);
+        // Its sound can't run past its picture at speed; a J-cut keeps 1×.
+        assert!(e.apply(&Op::Cut(CutOp::SoundEdge { cut: a, end: End::Out, t: 4.5, most: 10.0 })).is_err());
+        e.apply(&speed(1.0)).unwrap();
+        e.apply(&Op::Cut(CutOp::SoundEdge { cut: a, end: End::Out, t: 4.5, most: 10.0 })).unwrap();
+        assert!(e.apply(&speed(2.0)).is_err(), "an L-cut keeps normal speed");
         check(&e).unwrap();
     }
 

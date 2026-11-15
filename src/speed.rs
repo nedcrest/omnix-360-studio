@@ -5,8 +5,8 @@
 //! constant. Rates from 0.25× to 4×.
 //!
 //! The time seam (`docs/omnix/TIME-SEAM.md`) turns clip time into edit
-//! time and back through here. Until card 31 makes the media play at speed,
-//! a project with a speed set is refused where it's read and exported.
+//! time and back through here; the player's clock, the decoders' frame
+//! picks and the sound's tempo (`ffmpeg::tempo`) read it too.
 
 use serde::{Deserialize, Serialize};
 
@@ -41,6 +41,19 @@ impl Speed {
     /// One rate throughout.
     pub fn constant(rate: f64) -> Speed {
         Speed { keys: vec![SpeedKey { t: 0.0, rate }], tape: false }
+    }
+
+    /// What it is, in words: «normal speed», «2× speed», «a speed curve
+    /// of 3 keys», with «like tape» where it's so.
+    pub fn describe(&self) -> String {
+        let rate = |r: f64| format!("{}×", (r * 100.0).round() / 100.0);
+        let what = match &self.keys[..] {
+            _ if self.is_normal() => "normal speed".to_owned(),
+            [k] => format!("{} speed", rate(k.rate)),
+            keys if keys.iter().all(|k| k.rate == keys[0].rate) => format!("{} speed", rate(keys[0].rate)),
+            keys => format!("a speed curve of {} keys, {}", keys.len(), keys.iter().map(|k| format!("{} from {:.2} s", rate(k.rate), k.t)).collect::<Vec<_>>().join(", ")),
+        };
+        if self.tape { format!("{what}, its sound like tape") } else { what }
     }
 
     /// Whether there's nothing to save: normal speed, the pitch kept.

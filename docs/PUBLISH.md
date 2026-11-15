@@ -95,8 +95,8 @@ read-only token as a secret, or Omnix made public first.
   Dailix. A change to `keys::markdown` or `reference::commands` here
   changes Dailix's pages too: bless from Dailix as well.
 
-- Links that are paths today: the README's `../dailix`, Dailix's back to
-  Omnix; CI badges.
+- ~~Links that are paths today~~: made whole GitHub addresses
+  2026-11-15 (the READMEs, the guide's clone lines). CI badges still to add.
 - `REPO` in `packaging/install.sh` (it downloads from that repo's
   latest release), and the Flatpak metainfo's homepage and screenshot.
 - The tag `v0.8.0` and a GitHub release with `dist/`'s archive and

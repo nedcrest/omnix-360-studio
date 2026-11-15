@@ -30,8 +30,8 @@ The two live in two repositories, cloned side by side; Dailix builds
 against Omnix's folder, which has to be named `omnix-360-studio`.
 
 ```sh
-git clone <omnix> omnix-360-studio
-git clone <dailix> dailix
+git clone https://github.com/nedcrest/omnix-360-studio
+git clone https://github.com/nedcrest/dailix
 cd omnix-360-studio && cargo build --release && cd ..
 cd dailix && cargo build --release && cd ..
 ```

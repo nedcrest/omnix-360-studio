@@ -6,7 +6,7 @@ A home-video editor with first-class **DJI Osmo 360** footage, written in Rust. 
 
 **New here? Read [the guide](docs/guide/README.md)**: installing, a tutorial from a trip's clips to a finished film, how it fits together, and every key, command and setting. (`mdbook serve docs/guide` shows it as a book.)
 
-Its sibling, **[Dailix](../dailix)**, is the contact sheet before the edit: it looks through a trip's footage, marks what's worth keeping and hands the chosen material to Omnix. The contact sheet's core, which both programs read and write, lives here (`crates/sheet`).
+Its sibling, **[Dailix](https://github.com/nedcrest/dailix)**, is the contact sheet before the edit: it looks through a trip's footage, marks what's worth keeping and hands the chosen material to Omnix. The contact sheet's core, which both programs read and write, lives here (`crates/sheet`).
 
 **Built with AI.** Omnix and Dailix were built by one person working with Claude: he decided, designed and tested on his own footage; Claude planned, wrote the code, tests and docs, and audited its own work. How that worked, and the rules that kept the code sound as it grew from 19,000 to 50,000 lines in three weeks: **[docs/AI-DRIVEN.md](docs/AI-DRIVEN.md)**.
 

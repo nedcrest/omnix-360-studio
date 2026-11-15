@@ -379,8 +379,106 @@ impl App {
     /// check switches; then the timeline's zoom and the sound. The
     /// chevron names the groups, here and in the top bar. Without a clip
     /// (an empty project) nothing plays and the playhead is at the start.
+    /// In a narrow window (gap 114: at 1280 px its end was cut off) the
+    /// switches are icons and the zoom has no slider; narrower still, the
+    /// zoom and the sound go to a second line, at its end.
     pub(super) fn transport_bar<'a>(&'a self, clip: Option<&'a Clip>) -> Element<'a, Message> {
+        let open = self.bar_labels;
+        let fit = bar_fit(self.window_width, self.ui_scale);
+        let compact = fit != BarFit::Full;
+        let left = row![
+            tip(
+                tint_button(Tint::Global, if open { CHEVRON_DOWN } else { CHEVRON_RIGHT }, Some(Message::BarLabels)),
+                text(if open { "Hide the groups' names" } else { "Show the groups' names" }),
+                tooltip::Position::Top,
+            ),
+            self.play_group(clip, open),
+            separator(),
+            self.add_group(open),
+            separator(),
+            self.cut_group(clip, open),
+            separator(),
+                        group("History", open, row![
+                            tip(tint_button(Tint::History, UNDO, Some(Message::Undo)), text("Undo (Ctrl+Z)"), tooltip::Position::Top),
+                            tip(tint_button(Tint::History, REDO, Some(Message::Redo)), text("Redo (Ctrl+Shift+Z)"), tooltip::Position::Top),
+                        ].spacing(12)),
+            separator(),
+                        group("Look", open, tip(
+                            tint_button(Tint::Look, EFFECTS, Some(Message::Effect(effects::EffectMsg::Toggle))),
+                            text(if self.side == Some(Side::Effects) { "Close the Effects panel (G)" } else { "Effects: light, colour, look and finish of the cut or the selected item (G)" }),
+                            tooltip::Position::Top,
+                        )),
+            separator(),
+            self.mode_group(open, compact),
+        ]
+        .spacing(12)
+        .align_y(Alignment::Center);
+        let right = row![self.zoom_group(open, compact), separator()]
+        .push(group("Sound", open, tip(
+            tint_button(Tint::Sound, if self.muted { SPEAKER_MUTED } else { SPEAKER }, Some(Message::AudioPanel)),
+            text(if self.side == Some(Side::Audio) { "Close the Audio panel" } else { "Audio: listening volume and the mix levels (M mutes)" }),
+            tooltip::Position::Top,
+        )))
+        .spacing(12)
+        .align_y(Alignment::Center);
+        let bar: Element<'a, Message> = match fit {
+            BarFit::TwoRows => column![left, row![space().width(Length::Fill), right]].spacing(6).into(),
+            _ => row![left, space().width(Length::Fill), right].spacing(12).align_y(Alignment::Center).into(),
+        };
+        container(bar).padding([4, 10]).into()
+    }
+
+    /// Play, play a range, the time, a frame saved.
+    fn play_group<'a>(&'a self, clip: Option<&'a Clip>, open: bool) -> Element<'a, Message> {
         let playing = clip.is_some_and(|c| c.playback.playing);
+        group("Play", open, row![
+        tip(
+            tint_button(Tint::Move, if playing { PAUSE } else { PLAY }, Some(Message::Toggle)),
+            text(if playing { "Pause (Space)" } else { "Play (Space)" }),
+            tooltip::Position::Top,
+        ),
+        tip(
+            tint_button(Tint::Move, PLAY_RANGE, self.range.map(|_| Message::PlayRange)),
+            text(if self.range.is_some() { "Play the range marked on the ruler once, then back to its start (Shift+Space)" } else { "Play a range: mark one with Shift and a drag on the ruler" }),
+            tooltip::Position::Top,
+        ),
+        // A fixed width: the digits' widths differ in most fonts (macOS's
+        // system font especially), and the row after it jittered as it ran.
+        text(format!("{} / {}", dailix_sheet::clock(self.position(), 2), dailix_sheet::clock(self.edit.duration(), 2))).width(170).center(),
+        tip(
+            tint_button(Tint::Move, SAVE_VIEW, (clip.is_some() && !playing).then_some(Message::Save(Saving::View))),
+            text("Save this frame as a PNG (pause first)"),
+            tooltip::Position::Top,
+        ),
+        ].spacing(12).align_y(Alignment::Center))
+    }
+
+    /// Clips, a blank, sounds, a voice-over, pictures, text and bars at the
+    /// playhead.
+    fn add_group(&self, open: bool) -> Element<'_, Message> {
+        let open_hint = if self.edit.cuts.is_empty() { "Open clips (Ctrl+O)" } else { "Add clips to the edit as cuts (Ctrl+O)" };
+        group("Add at the playhead", open, row![
+            tip(tint_button(Tint::Add, ADD_CLIP, Some(Message::Open)), text(open_hint), tooltip::Position::Top),
+            tip(tint_button(Tint::Add, ADD_BLANK, Some(Message::AddBlank)), text("Add a blank (black) cut at the playhead: between cuts at a join, else it splits the cut"), tooltip::Position::Top),
+            tip(
+                tint_button(Tint::Add, ADD_MUSIC, Some(Message::AddSound(SoundTrack::Music))),
+                text(if self.edit.music.clips.is_empty() { "Add music under the edit" } else { "Add more music, after the last song" }),
+                tooltip::Position::Top,
+            ),
+            tip(tint_button(Tint::Add, ADD_SFX, Some(Message::AddSound(SoundTrack::Sfx))), text("Add a sound effect at the playhead, on the SFX lane"), tooltip::Position::Top),
+            tip(
+                tint_button(Tint::Add, ADD_VOICE, Some(Message::Record(super::record_ui::RecordMsg::Toggle))),
+                text(if self.side == Some(Side::Record) { "Close the voice-over panel" } else { "Voice-over: record one at the playhead, or add one from disk" }),
+                tooltip::Position::Top,
+            ),
+            tip(tint_button(Tint::Add, ADD_OVERLAY, Some(Message::AddOverlay)), text("Add pictures over the picture, at the playhead (PNG transparency shows through)"), tooltip::Position::Top),
+            tip(tint_button(Tint::Add, ADD_TEXT, Some(Message::AddText)), text("Add text over the picture, at the playhead (typed in the Effects panel's Text group)"), tooltip::Position::Top),
+            tip(tint_button(Tint::Add, ADD_BARS, Some(Message::AddBars)), text("Cinematic bars at the playhead: they slide in and out at the item's ends (ratio, slide and colour in Effects)"), tooltip::Position::Top),
+        ].spacing(12).align_y(Alignment::Center))
+    }
+
+    /// Split, delete, a crossfade, the transitions.
+    fn cut_group<'a>(&'a self, clip: Option<&'a Clip>, open: bool) -> Element<'a, Message> {
         let target = clip.map_or(0.0, |c| c.playback.target());
         // With a song selected, C splits that instead.
         let music = self.selection.clip(&self.edit).and_then(|(which, i)| self.edit.track(which).clips.get(i));
@@ -391,124 +489,65 @@ impl App {
             Some(c) => self.position() > c.at + edit::MIN_CUT && self.position() < c.ends() - edit::MIN_CUT,
             None => self.edit.cuts.get(self.current).is_some_and(|c| target > c.start + edit::MIN_CUT && target < c.end - edit::MIN_CUT),
         };
-        let open = self.bar_labels;
-        let open_hint = if self.edit.cuts.is_empty() { "Open clips (Ctrl+O)" } else { "Add clips to the edit as cuts (Ctrl+O)" };
-        let transport = row![
-            tip(
-                tint_button(Tint::Global, if open { CHEVRON_DOWN } else { CHEVRON_RIGHT }, Some(Message::BarLabels)),
-                text(if open { "Hide the groups' names" } else { "Show the groups' names" }),
-                tooltip::Position::Top,
-            ),
-            group("Play", open, row![
-            tip(
-                tint_button(Tint::Move, if playing { PAUSE } else { PLAY }, Some(Message::Toggle)),
-                text(if playing { "Pause (Space)" } else { "Play (Space)" }),
-                tooltip::Position::Top,
-            ),
-            tip(
-                tint_button(Tint::Move, PLAY_RANGE, self.range.map(|_| Message::PlayRange)),
-                text(if self.range.is_some() { "Play the range marked on the ruler once, then back to its start (Shift+Space)" } else { "Play a range: mark one with Shift and a drag on the ruler" }),
-                tooltip::Position::Top,
-            ),
-            // A fixed width: the digits' widths differ in most fonts (macOS's
-            // system font especially), and the row after it jittered as it ran.
-            text(format!("{} / {}", dailix_sheet::clock(self.position(), 2), dailix_sheet::clock(self.edit.duration(), 2))).width(170).center(),
-            tip(
-                tint_button(Tint::Move, SAVE_VIEW, (clip.is_some() && !playing).then_some(Message::Save(Saving::View))),
-                text("Save this frame as a PNG (pause first)"),
-                tooltip::Position::Top,
-            ),
-            ].spacing(12).align_y(Alignment::Center)),
-            separator(),
-            group("Add at the playhead", open, row![
-                tip(tint_button(Tint::Add, ADD_CLIP, Some(Message::Open)), text(open_hint), tooltip::Position::Top),
-                tip(tint_button(Tint::Add, ADD_BLANK, Some(Message::AddBlank)), text("Add a blank (black) cut at the playhead: between cuts at a join, else it splits the cut"), tooltip::Position::Top),
-                tip(
-                    tint_button(Tint::Add, ADD_MUSIC, Some(Message::AddSound(SoundTrack::Music))),
-                    text(if self.edit.music.clips.is_empty() { "Add music under the edit" } else { "Add more music, after the last song" }),
-                    tooltip::Position::Top,
-                ),
-                tip(tint_button(Tint::Add, ADD_SFX, Some(Message::AddSound(SoundTrack::Sfx))), text("Add a sound effect at the playhead, on the SFX lane"), tooltip::Position::Top),
-                tip(
-                    tint_button(Tint::Add, ADD_VOICE, Some(Message::Record(super::record_ui::RecordMsg::Toggle))),
-                    text(if self.side == Some(Side::Record) { "Close the voice-over panel" } else { "Voice-over: record one at the playhead, or add one from disk" }),
-                    tooltip::Position::Top,
-                ),
-                tip(tint_button(Tint::Add, ADD_OVERLAY, Some(Message::AddOverlay)), text("Add pictures over the picture, at the playhead (PNG transparency shows through)"), tooltip::Position::Top),
-                tip(tint_button(Tint::Add, ADD_TEXT, Some(Message::AddText)), text("Add text over the picture, at the playhead (typed in the Effects panel's Text group)"), tooltip::Position::Top),
-                tip(tint_button(Tint::Add, ADD_BARS, Some(Message::AddBars)), text("Cinematic bars at the playhead: they slide in and out at the item's ends (ratio, slide and colour in Effects)"), tooltip::Position::Top),
-            ].spacing(12).align_y(Alignment::Center)),
-            separator(),
-            group("Cut", open, row![
-            tip(tint_button(Tint::Cut, SPLIT, can_split.then_some(Message::Split)), text(if music.is_some() { "Split the selected sound at the playhead (C)" } else { "Split the cut at the playhead (C)" }), tooltip::Position::Top),
-            tip(
-                tint_button(Tint::Cut, DELETE_CUT, (self.selection != Selection::None).then_some(Message::DeleteCut)),
-                text(if point {
-                    "Delete the selected volume point (Del)"
-                } else if music.is_some() {
-                    "Delete the selected sound (Del)"
-                } else if self.framing {
-                    "Delete the selected cut (Shift+Del)"
-                } else {
-                    "Delete the selected cut (Del)"
-                }),
-                tooltip::Position::Top,
-            ),
-            tip(
-                tint_button(Tint::Cut, CROSSFADE, crossfade_cut.map(|_| Message::ToggleCrossfade)),
-                text(match crossfade_cut {
-                    Some(c) if c.crossfade > 0.0 => "Take away this cut's crossfade (Shift-drag its start edge to change its length)",
-                    _ => "Crossfade into this cut from the one before, 1 s (Shift-drag its start edge to change its length)",
-                }),
-                tooltip::Position::Top,
-            ),
-            tip(
-                tint_button(Tint::Cut, TRANSITIONS, (self.edit.cuts.len() > 1).then_some(Message::TransitionsPanel)),
-                text(if self.side == Some(Side::Transitions) { "Close the Transitions panel (T)" } else { "Transitions: the join nearest the playhead, its look and length (T)" }),
-                tooltip::Position::Top,
-            ),
-            ].spacing(12).align_y(Alignment::Center)),
-            separator(),
-            group("History", open, row![
-                tip(tint_button(Tint::History, UNDO, Some(Message::Undo)), text("Undo (Ctrl+Z)"), tooltip::Position::Top),
-                tip(tint_button(Tint::History, REDO, Some(Message::Redo)), text("Redo (Ctrl+Shift+Z)"), tooltip::Position::Top),
-            ].spacing(12)),
-            separator(),
-            group("Look", open, tip(
-                tint_button(Tint::Look, EFFECTS, Some(Message::Effect(effects::EffectMsg::Toggle))),
-                text(if self.side == Some(Side::Effects) { "Close the Effects panel (G)" } else { "Effects: light, colour, look and finish of the cut or the selected item (G)" }),
-                tooltip::Position::Top,
-            )),
-            separator(),
-            group("Mode", open, row![
-            tip(
-                toggler(self.framing).label("Framing").on_toggle(Message::Framing),
-                text("Framing: the view's keyframes, field of view and angles; for a 360 clip also stabilisation, projection and tracking. Off: editing only, and the view can't be turned by accident."),
-                tooltip::Position::Top,
-            ),
-            tip(
-                toggler(self.check.on).label("Mix check").on_toggle(|on| Message::Check(super::mixcheck_ui::CheckMsg::Toggle(on))),
-                text("The sound against the export's loudness target and the mixing rules, in the picture's place: each clip as loud as it is, what to fix outlined; a click takes you to it"),
-                tooltip::Position::Top,
-            ),
-            tip(
-                toggler(self.bin.view).label("Bin").on_toggle(|_| Message::BinView(super::bin_view::BinMsg::Toggle)),
-                text("The project's media in tiles, in the picture's place (Shift+B)"),
-                tooltip::Position::Top,
-            ),
-            ].spacing(12).align_y(Alignment::Center)),
-        ]
-        .push(space().width(Length::Fill))
-        .push(group(
+        group("Cut", open, row![
+        tip(tint_button(Tint::Cut, SPLIT, can_split.then_some(Message::Split)), text(if music.is_some() { "Split the selected sound at the playhead (C)" } else { "Split the cut at the playhead (C)" }), tooltip::Position::Top),
+        tip(
+            tint_button(Tint::Cut, DELETE_CUT, (self.selection != Selection::None).then_some(Message::DeleteCut)),
+            text(if point {
+                "Delete the selected volume point (Del)"
+            } else if music.is_some() {
+                "Delete the selected sound (Del)"
+            } else if self.framing {
+                "Delete the selected cut (Shift+Del)"
+            } else {
+                "Delete the selected cut (Del)"
+            }),
+            tooltip::Position::Top,
+        ),
+        tip(
+            tint_button(Tint::Cut, CROSSFADE, crossfade_cut.map(|_| Message::ToggleCrossfade)),
+            text(match crossfade_cut {
+                Some(c) if c.crossfade > 0.0 => "Take away this cut's crossfade (Shift-drag its start edge to change its length)",
+                _ => "Crossfade into this cut from the one before, 1 s (Shift-drag its start edge to change its length)",
+            }),
+            tooltip::Position::Top,
+        ),
+        tip(
+            tint_button(Tint::Cut, TRANSITIONS, (self.edit.cuts.len() > 1).then_some(Message::TransitionsPanel)),
+            text(if self.side == Some(Side::Transitions) { "Close the Transitions panel (T)" } else { "Transitions: the join nearest the playhead, its look and length (T)" }),
+            tooltip::Position::Top,
+        ),
+        ].spacing(12).align_y(Alignment::Center))
+    }
+
+    /// The Framing, Mix check and Bin switches: named, or in a narrow
+    /// window an icon each, the name first in its tooltip.
+    fn mode_group(&self, open: bool, compact: bool) -> Element<'_, Message> {
+        let switch = |on: bool, name: &'static str, icon: &'static [u8], about: &'static str, to: Box<dyn Fn(bool) -> Message>| -> Element<'_, Message> {
+            let toggle = toggler(on).on_toggle(to);
+            let body: Element<'_, Message> = if compact { row![toggle, svg_icon(icon).width(18).height(18)].spacing(4).align_y(Alignment::Center).into() } else { toggle.label(name).into() };
+            tip(body, text(format!("{name}: {about}")), tooltip::Position::Top)
+        };
+        group("Mode", open, row![
+            switch(self.framing, "Framing", FRAMING, "the view's keyframes, field of view and angles; for a 360 clip also stabilisation, projection and tracking. Off: editing only, and the view can't be turned by accident.", Box::new(Message::Framing)),
+            switch(self.check.on, "Mix check", MIX_CHECK, "the sound against the export's loudness target and the mixing rules, in the picture's place: each clip as loud as it is, what to fix outlined; a click takes you to it", Box::new(|on| Message::Check(super::mixcheck_ui::CheckMsg::Toggle(on)))),
+            switch(self.bin.view, "Bin", BIN_VIEW, "the project's media in tiles, in the picture's place (Shift+B)", Box::new(|_| Message::BinView(super::bin_view::BinMsg::Toggle))),
+        ].spacing(12).align_y(Alignment::Center))
+    }
+
+    /// The timeline's zoom (its slider left out in a narrow window) and
+    /// snapping.
+    fn zoom_group(&self, open: bool, compact: bool) -> Element<'_, Message> {
+        group(
             "Timeline zoom",
             open,
             row![
                 tip(tint_button(Tint::Move, ZOOM_OUT, Some(Message::TimelineZoom(1.0 / 1.5, None))), text("Zoom the timeline out (Ctrl+−, or scroll on it)"), tooltip::Position::Top),
-                tip(
+                (!compact).then(|| tip(
                     slider(0.0..=1.0, self.timeline_zoom.ln() / self.timeline_most_zoom().ln().max(1e-9), Message::TimelineZoomTo).step(0.001).width(90),
                     text("Timeline zoom"),
                     tooltip::Position::Top,
-                ),
+                )),
                 tip(tint_button(Tint::Move, ZOOM_IN, Some(Message::TimelineZoom(1.5, None))), text("Zoom the timeline in (Ctrl+=, or scroll on it)"), tooltip::Position::Top),
                 tip(tint_button(Tint::Move, ZOOM_FIT, Some(Message::TimelineZoomTo(0.0))), text("Show the whole edit (Ctrl+0)"), tooltip::Position::Top),
                 tip(
@@ -519,17 +558,7 @@ impl App {
             ]
             .spacing(12)
             .align_y(Alignment::Center),
-        ))
-        .push(separator())
-        .push(group("Sound", open, tip(
-            tint_button(Tint::Sound, if self.muted { SPEAKER_MUTED } else { SPEAKER }, Some(Message::AudioPanel)),
-            text(if self.side == Some(Side::Audio) { "Close the Audio panel" } else { "Audio: listening volume and the mix levels (M mutes)" }),
-            tooltip::Position::Top,
-        )))
-        .spacing(12)
-        .padding([4, 10])
-        .align_y(Alignment::Center);
-        transport.into()
+        )
     }
 
     /// The framing row, while the Framing switch is on: the keyframe's
@@ -588,6 +617,44 @@ impl App {
 
 /// A group of the bars' buttons; with the names shown (the transport
 /// row's chevron), its name above it.
+/// How the transport row fits its window (gap 114).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum BarFit {
+    /// One line, the switches named.
+    Full,
+    /// One line, the switches as icons, the zoom without its slider.
+    Compact,
+    /// The zoom and the sound on a second line.
+    TwoRows,
+}
+
+/// The row's width at scale 1, in full and compact (measured 2026-11-14:
+/// about 1700 and 1520 px, with a little room).
+const BAR_FULL_WIDTH: f32 = 1720.0;
+const BAR_COMPACT_WIDTH: f32 = 1540.0;
+
+/// How the row fits a window `width` wide, the interface at `scale`.
+pub(super) fn bar_fit(width: f32, scale: f32) -> BarFit {
+    match width / scale.max(0.1) {
+        w if w >= BAR_FULL_WIDTH => BarFit::Full,
+        w if w >= BAR_COMPACT_WIDTH => BarFit::Compact,
+        _ => BarFit::TwoRows,
+    }
+}
+
 fn group<'a>(name: &'a str, open: bool, items: impl Into<Element<'a, Message>>) -> Element<'a, Message> {
     if open { column![text(name).size(11).style(text::secondary), items.into()].spacing(2).into() } else { items.into() }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_transport_row_fits_its_window() {
+        assert_eq!((bar_fit(1920.0, 1.0), bar_fit(1920.0 * 1.15, 1.15)), (BarFit::Full, BarFit::Full));
+        assert_eq!((bar_fit(1600.0, 1.0), bar_fit(1640.0 * 1.15, 1.15)), (BarFit::Compact, BarFit::Compact));
+        assert_eq!((bar_fit(1280.0, 1.0), bar_fit(1440.0, 1.0)), (BarFit::TwoRows, BarFit::TwoRows));
+        assert_eq!(bar_fit(1920.0, 1.5), BarFit::TwoRows, "a larger interface needs more room");
+    }
 }

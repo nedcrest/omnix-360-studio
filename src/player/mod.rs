@@ -121,7 +121,9 @@ pub fn run(inputs: Vec<PathBuf>, launch: Launch) -> Result<()> {
                     app.open_next()
                 }
             };
-            (app, Task::batch([task, cards]))
+            // The window's real width, before any resize says it.
+            let width = window::latest().and_then(window::size).map(|s| Message::WindowWidth(s.width));
+            (app, Task::batch([task, cards, width]))
         },
         App::update,
         App::view,
@@ -252,6 +254,9 @@ enum Message {
     ProjectPicked(Option<PathBuf>),
     /// The window's close button was pressed.
     CloseRequested,
+    /// The window's width, as it opened or was resized: the transport row
+    /// goes compact in a narrow one (gap 114).
+    WindowWidth(f32),
     /// The answer to "stop the export (or tracking) and quit?".
     StopAndClose(bool),
     /// The answer to "save changes first?" before doing `.0`.
@@ -716,6 +721,8 @@ struct App {
     framing: bool,
     /// The interface's size (iced's scale factor), kept in the settings.
     ui_scale: f32,
+    /// The window's width, as last reported.
+    window_width: f32,
     /// The Normalize dialog, while open.
     normalize: Option<sound_ui::Dialog>,
     /// The right-click menu on a cut's sound: which cut, where.
@@ -1042,6 +1049,7 @@ impl App {
             start_cards: Default::default(),
             card_motion: saved.card_motion,
             ui_scale: saved.ui_scale.clamp(*settings::UI_SCALE.start(), *settings::UI_SCALE.end()),
+            window_width: f32::MAX,
             duck_db: saved.duck_db.clamp(3.0, 30.0),
             ruler_large: saved.ruler_large,
             projects: saved.projects.clone(),
@@ -1154,6 +1162,10 @@ impl App {
 
     /// Handles `message`, then saves the settings if it changed any.
     fn update(&mut self, message: Message) -> Task<Message> {
+        if let Message::WindowWidth(w) = message {
+            self.window_width = w;
+            return Task::none();
+        }
         // Editing: what turns or keys the view does nothing (its controls
         // are hidden too; the mouse on the picture and the keys still send).
         // On an ordinary cut the mouse on the picture frames it (gap 107).
@@ -1243,7 +1255,7 @@ impl App {
         // The crossfade's partner too: paused, its frame came in only with
         // the next event.
         let busy = self.clip.iter().chain(self.partner.as_ref().map(|(_, c)| c)).any(|c| c.playback.busy()) || self.source_busy();
-        let close = window::close_requests().map(|_| Message::CloseRequested);
+        let close = Subscription::batch([window::close_requests().map(|_| Message::CloseRequested), window::resize_events().map(|(_, s)| Message::WindowWidth(s.width))]);
         // The wait before a hovered tile's frames show, a screen frame at a time.
         let close = if self.bin.view && self.bin.hover.as_ref().is_some_and(|(_, _, shown)| !shown) {
             Subscription::batch([close, window::frames().map(|_| Message::BinView(bin_view::BinMsg::HoverTick))])
@@ -1295,6 +1307,8 @@ impl App {
                 self.on_knobs(m);
                 Task::none()
             }
+            // Taken in `update`, first.
+            Message::WindowWidth(_) => Task::none(),
             Message::Template(m) => self.on_template(m),
             Message::Auto(m) => {
                 self.on_auto(m);

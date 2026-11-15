@@ -358,7 +358,7 @@ impl App {
         self.ducking = false;
         match result {
             Err(e) => self.error = Some(format!("Can't find the speech: {e}")),
-            Ok(spans) if spans.is_empty() => self.error = Some("No speech to lower the music under: it's found in cleaned voices and on the Voice lane.".into()),
+            Ok(spans) if spans.is_empty() => self.error = Some("No speech to lower the music under: it's found in cleaned voices, on the Voice lane, and in clips whose sound's menu has «Its own sound is speech» ticked.".into()),
             Ok(speech) => {
                 // One undo step; the line stays editable point by point.
                 match self.edit.apply(&Op::Sound(SoundOp::Duck { depth: self.duck_db, speech })) {

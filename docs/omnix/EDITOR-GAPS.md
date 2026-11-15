@@ -1625,6 +1625,15 @@ the system clipboard) and one op, `ProjectOp::Paste { fragment, at }`,
 so a paste is one undo step and keeps groups with fresh ids. Milestone
 «Зручний таймлайн».
 
+**Cuts built 2026-11-15, waiting for a check** (the user that day:
+Ctrl+V cuts at the playhead, Ctrl+Shift+V at the nearest join).
+`CutOp::Paste { cuts, place }`; a copy is a new cut (fresh id, no
+`origin`, no group), so joining a clip's pieces leaves copies alone —
+the user asked what «back to the original» should do with copies of a
+clip scattered or put inside it, and this was the advice. Left: sound
+clips, text and pictures in the fragment, a group pasted as a group,
+the system clipboard.
+
 ### 100. Outside material in Dailix: by link and dragged in — medium (recorded 2026-11-04, «Далі» 2026-11-11)
 
 From footage-agent's `grab.py`, recorded in Dailix's CONTEXT: yt-dlp

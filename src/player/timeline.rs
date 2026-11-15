@@ -2673,9 +2673,9 @@ impl std::ops::Deref for Marks {
 }
 
 impl Timeline {
-    /// A right-click: on a cut, what file it is; on a cut's sound or a
-    /// sound clip, its menu where the pointer is (Info is in it); on a
-    /// sound lane's empty stretch, the track's menu.
+    /// A right-click: on a cut, a sound or a sound clip, its menu where
+    /// the pointer is (Info is in it); on a sound lane's empty stretch,
+    /// the track's menu.
     fn right_press(&self, bounds: Rectangle, cursor: mouse::Cursor) -> Option<canvas::Action<Message>> {
         use super::sound_ui::{Menu, SoundMsg};
         let p = cursor.position_in(bounds)?;
@@ -2696,12 +2696,8 @@ impl Timeline {
             let which = self.sounds[lane].which;
             self.music_at(lane, p.x, bounds).map_or(Menu::Track(which), |i| Menu::Own(Own::Clip(which, i)))
         } else if p.y < self.rows.effects_top {
-            // A clip's piece: a menu to join them back; else its info.
-            let i = self.block_at(p.x, bounds)?;
-            if self.piece_colour(i).is_none() {
-                return Some(canvas::Action::publish(Message::Info(super::info::Of::Cut(i))).and_capture());
-            }
-            Menu::Pieces(i)
+            // A cut's picture: its menu (its pieces, Info, its speed).
+            Menu::Cut(self.block_at(p.x, bounds)?)
         } else {
             return None;
         };

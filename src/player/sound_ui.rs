@@ -42,8 +42,9 @@ pub enum Menu {
     ClipSound,
     Point(Own, usize),
     Line(Own),
-    /// A cut that's one of a clip's pieces («This was one clip»).
-    Pieces(usize),
+    /// A cut's picture: its pieces joined back («This was one clip»),
+    /// Info, its speed.
+    Cut(usize),
     /// A text or picture lane's head: its name and its sync lock.
     Lane(crate::overlay::Track, usize),
 }
@@ -395,10 +396,7 @@ impl App {
                 let lock = button(text(format!("{}Sync lock", if sync { "✓ " } else { "" })).size(13)).style(button::text).width(Length::Fill).padding([5, 10]).on_press(Message::LaneSync(track, lane, !sync));
                 items.push(tip(lock, text("Trimming, deleting or adding a cut keeps the text and pictures over each picture with it: shortened where it goes"), tooltip::Position::Right));
             }
-            Menu::Pieces(i) => {
-                items.push(item(format!("Join the pieces back ({})", self.edit.pieces(i).len()), Message::JoinPieces(i)));
-                items.push(item("Info".into(), Message::Info(super::info::Of::Cut(i))));
-            }
+            Menu::Cut(i) => self.cut_menu(i, &mut items, &mut rows),
         }
         if items.is_empty() {
             return below;
@@ -419,6 +417,30 @@ impl App {
 
 }
 
+impl App {
+    /// Cut `i`'s picture menu: its pieces joined back, Info, its speed
+    /// (gap 31) and its pitch at speed.
+    fn cut_menu<'a>(&'a self, i: usize, items: &mut Vec<Element<'a, Message>>, rows: &mut (usize, usize, usize)) {
+        let Some(c) = self.edit.cuts.get(i) else { return };
+        let item = |label: String, msg: Message| -> Element<'a, Message> { button(text(label).size(13)).style(button::text).width(Length::Fill).padding([5, 10]).on_press(msg).into() };
+        let mut first = Vec::new();
+        if !self.edit.pieces(i).is_empty() {
+            first.push(item(format!("Join the pieces back ({})", self.edit.pieces(i).len()), Message::JoinPieces(i)));
+        }
+        first.push(item("Info".into(), Message::Info(super::info::Of::Cut(i))));
+        push_group(items, rows, "", first, 0);
+        let steps = row(speed_steps(c).into_iter().map(|(label, rate, on)| {
+            let b = button(text(label).size(13)).padding([4, 0]).width(Length::Fill).style(if on { button::primary } else { button::text });
+            b.on_press(Message::CutSpeed(c.id, rate)).into()
+        }))
+        .padding([2, 6]);
+        let steps = tip(steps, text("How fast it plays its clip: its length on the edit changes, the cuts after it move"), tooltip::Position::Right);
+        let tape = c.speed.tape;
+        let pitch = item(format!("{}Keep the sound's pitch", if tape { "" } else { "✓ " }), Message::CutTape(c.id, !tape));
+        push_group(items, rows, "Speed", vec![steps, pitch], 0);
+    }
+}
+
 /// A menu group put in: a rule before it (not at the top), its heading if
 /// it has one, its entries; `rows` counts them for the menu's height
 /// (items, rules, headings), `taller` the rows its entries take beyond one
@@ -434,6 +456,18 @@ fn push_group<'a>(items: &mut Vec<Element<'a, Message>>, rows: &mut (usize, usiz
     }
     rows.0 += group.len() + taller;
     items.extend(group);
+}
+
+/// The speeds a cut's menu offers (gap 31): each step's label and rate,
+/// and whether the cut plays at it (none at a curve's).
+fn speed_steps(c: &crate::project::Cut) -> Vec<(&'static str, f64, bool)> {
+    const STEPS: [(&str, f64); 8] = [("¼", 0.25), ("½", 0.5), ("¾", 0.75), ("1×", 1.0), ("1½", 1.5), ("2×", 2.0), ("3×", 3.0), ("4×", 4.0)];
+    let now = match &c.speed.keys[..] {
+        _ if c.speed.is_normal() => Some(1.0),
+        [k] => Some(k.rate),
+        _ => None,
+    };
+    STEPS.iter().map(|&(label, rate)| (label, rate, now == Some(rate))).collect()
 }
 
 /// A cut's «Voice» entries (gap 103): its own sound, each voice Dailix
@@ -809,9 +843,32 @@ mod tests {
         let a = app.edit.cuts[0].id;
         app.op(Op::Cut(crate::model::ops::cuts::CutOp::Split { cut: a, t: 1.0 }));
         assert_eq!(app.edit.pieces(1), [0, 1]);
-        app.sound_menu = Some((Menu::Pieces(1), iced::Point::ORIGIN));
+        app.sound_menu = Some((Menu::Cut(1), iced::Point::ORIGIN));
         let _ = app.update(Message::JoinPieces(1));
         assert_eq!((app.edit.cuts.len(), app.edit.cuts[0].end, app.sound_menu), (2, 2.0, None));
+    }
+
+    /// Gap 31: a cut's menu offers its speeds, the one it plays at
+    /// marked; a step sets it, the menu closes, and its pitch is a tick.
+    #[test]
+    fn a_cuts_menu_sets_its_speed() {
+        use super::super::Message;
+        let mut app = app();
+        let (cut, before) = (app.edit.cuts[0].id, app.edit.duration());
+        let marked = |app: &super::super::App| speed_steps(&app.edit.cuts[0]).into_iter().filter(|s| s.2).map(|s| s.0).collect::<Vec<_>>();
+        assert_eq!(marked(&app), ["1×"]);
+        app.sound_menu = Some((Menu::Cut(0), iced::Point::ORIGIN));
+        let _ = app.update(Message::CutSpeed(cut, 2.0));
+        assert_eq!((marked(&app), app.sound_menu), (vec!["2×"], None));
+        assert!((app.edit.duration() - (before - app.edit.cuts[0].clip_len() / 2.0)).abs() < 1e-9);
+        let _ = app.update(Message::CutTape(cut, true));
+        assert!(app.edit.cuts[0].speed.tape);
+        // A curve is none of the steps.
+        let key = |t, rate| crate::speed::SpeedKey { t, rate };
+        app.op(Op::Cut(crate::model::ops::cuts::CutOp::SpeedCurve { cut, keys: vec![key(0.0, 1.0), key(0.5, 2.0)] }));
+        assert!(marked(&app).is_empty());
+        let _ = app.update(Message::CutSpeed(cut, 9.0));
+        assert!(app.error.is_some(), "out of range: said, nothing changed");
     }
 
     #[test]

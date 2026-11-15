@@ -125,13 +125,26 @@ impl App {
 }
 
 impl App {
-    /// The film's end and a clip's pieces, from a menu or a lane's sign
-    /// (gap 101, «This was one clip»): the menu closes.
+    /// The film's end, a clip's pieces and a cut's speed, from a menu or
+    /// a lane's sign (gap 101, «This was one clip», gap 31): the menu
+    /// closes.
     pub(super) fn on_mending(&mut self, message: Message) {
         self.sound_menu = None;
         match message {
             Message::TrimToEnd(things) if !things.is_empty() => {
                 self.op(Op::Project(crate::model::ops::project::ProjectOp::TrimToEnd { things }));
+            }
+            // At another speed the playing cut plays again from where it
+            // is in its clip.
+            Message::CutSpeed(cut, rate) => {
+                if self.op(Op::Cut(crate::model::ops::cuts::CutOp::Speed { cut, rate })).is_some() {
+                    self.reload_cut_sound();
+                }
+            }
+            Message::CutTape(cut, on) => {
+                if self.op(Op::Cut(crate::model::ops::cuts::CutOp::TapePitch { cut, on })).is_some() {
+                    self.reload_cut_sound();
+                }
             }
             Message::JoinPieces(i) => {
                 let at = self.position();

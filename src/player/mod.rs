@@ -358,6 +358,10 @@ enum Message {
     TrimToEnd(Vec<crate::project::Id>),
     /// Cut `i`'s pieces joined back into one («This was one clip»).
     JoinPieces(usize),
+    /// Cut `.0` at one rate throughout (gap 31); 1 is normal.
+    CutSpeed(crate::project::Id, f64),
+    /// Cut `.0`'s sound at speed like tape (true) or keeping its pitch.
+    CutTape(crate::project::Id, bool),
     /// Cut `.0`'s sound: a cleaned voice's file, or none for its own
     /// (gap 103); measured first, then `CutVoiceMeasured` sets it.
     CutVoice(crate::project::Id, Option<PathBuf>),
@@ -1299,6 +1303,18 @@ impl App {
         }
     }
 
+    /// A key pressed. Keys can seek out of sight (arrows, [ ]): the
+    /// timeline follows, but only when one did (Shift alone threw it back
+    /// to the playhead, user 2026-11-05).
+    fn on_key(&mut self, key: Key, mods: keyboard::Modifiers) -> Task<Message> {
+        let before = self.position();
+        let task = self.key(key, mods);
+        if (self.position() - before).abs() > 1e-6 {
+            self.reveal_playhead();
+        }
+        task
+    }
+
     fn handle(&mut self, message: Message) -> Task<Message> {
         // Each area handles its own messages (`on_*` in its module).
         match message {
@@ -1361,7 +1377,7 @@ impl App {
             m @ (Message::LookDone | Message::Aim(_) | Message::Framing { .. } | Message::KeyMove { .. } | Message::KeyAdd | Message::KeyDelete | Message::KeyEase { .. } | Message::KeyFollow { .. } | Message::Stab { .. } | Message::Projection { .. } | Message::KeyJump { .. } | Message::Look { .. } | Message::Zoom { .. } | Message::Fov { .. } | Message::AngleInput { .. } | Message::AngleDone | Message::AngleScrubStart { .. } | Message::AngleScrubDone | Message::AngleScrub { .. } | Message::AngleNudge { .. } | Message::AngleArrow { .. } | Message::Source { .. } | Message::RollingShutter { .. } | Message::FullOnPause { .. } | Message::ResetView) => self.on_framing(m),
             m @ (Message::AddOverlay | Message::OverlayPicked { .. } | Message::OverlaySelect { .. } | Message::OverlayMove { .. } | Message::OverlayToLane(..) | Message::OverlayTrim { .. } | Message::OverlayJump { .. } | Message::OverlayKeyMove { .. } | Message::OverlayPicture { .. } | Message::AddText | Message::AddBars | Message::LaneAdd(_) | Message::LaneRemove(..) | Message::LaneActive(..) | Message::LaneRename(..) | Message::LaneName(..) | Message::LaneHide(..) | Message::LaneSync(..)) => self.on_overlay_ui(m),
             m @ (Message::CutVoice(..) | Message::CutVoiceMeasured(..) | Message::CutSpeech(..) | Message::SheetVoices(_) | Message::SheetVoicesMeasured(_)) => self.on_cut_voice(m),
-            m @ (Message::TrimToEnd(_) | Message::JoinPieces(_)) => {
+            m @ (Message::TrimToEnd(_) | Message::JoinPieces(_) | Message::CutSpeed(..) | Message::CutTape(..)) => {
                 self.on_mending(m);
                 Task::none()
             }
@@ -1371,17 +1387,7 @@ impl App {
                 self.update(*inner)
             }
             Message::Effect(e) => self.effect_message(e),
-            Message::Key(key, mods) => {
-                let before = self.position();
-                let task = self.key(key, mods);
-                // Keys can seek out of sight (arrows, [ ]): follow, but only
-                // when one did (Shift alone threw the timeline back to the
-                // playhead, user 2026-11-05).
-                if (self.position() - before).abs() > 1e-6 {
-                    self.reveal_playhead();
-                }
-                task
-            }
+            Message::Key(key, mods) => self.on_key(key, mods),
             Message::Sound(msg) => self.sound_ui(msg),
             Message::Record(msg) => self.record_ui(msg),
             Message::Check(msg) => self.mix_check(msg),

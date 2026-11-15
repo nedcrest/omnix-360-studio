@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+- **Speed**: a cut slowed down or sped up from ¼× to 4× (its right-click
+  menu), its sound with it, keeping its pitch or like tape; in the
+  player and both exports (`CutOp::Speed`, `SpeedCurve`, `TapePitch`).
+  Under it the time seam: every clip ↔ edit time through one place.
+- **Copy and paste** cuts: Ctrl+C, Ctrl+V at the playhead (the cut there
+  split), Ctrl+Shift+V at the nearest join (`CutOp::Paste`).
+- **Automation lanes fitted**: each clip on its own scale, Absolute per
+  lane from its head's menu.
+- **The mouse frames an ordinary video in Framing only**: a stray click
+  while editing moved it.
+
 ## 0.8.0 — Omnix's first release (2026-11)
 
 Omnix grew from [rOsmo360](https://github.com/ravelund/rOsmo360) 0.7.1
@@ -65,5 +78,5 @@ Every item below has its section in
   renderer.
 - The contact sheet's core (`crates/sheet`), shared with Dailix, in this
   repo's workspace.
-- A project with a playback speed set is refused for now: speed (the
-  time seam under way, `docs/omnix/TIME-SEAM.md`) comes next.
+- A project with a playback speed set is refused (speed came after
+  0.8.0: see Unreleased).

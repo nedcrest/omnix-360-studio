@@ -131,16 +131,18 @@ fn frame_plan(project: &project::Project, pipelines: &[Pipeline], of_cut: &[usiz
 }
 
 /// Cut `cut`'s first frame (on its clip's frame grid, `handles` early)
-/// and how many frames, its clip `length` seconds long at `fps`.
+/// and how many frames it makes on the edit, its clip `length` seconds
+/// long at `fps`. Handles are edit seconds (`TIME-SEAM.md`): at speed,
+/// they read more or less of the clip.
 fn cut_frames(cut: &project::Cut, length: f64, fps: f64, handles: f64) -> Result<(f64, usize)> {
-    let from = (cut.start - handles).max(0.0);
-    let end = (cut.end + handles).min(length);
+    let from = cut.clip_at(-handles).max(0.0);
+    let end = cut.speed.clip_after(cut.end, handles).min(length);
     if end <= from {
         bail!("the cut from {} s starts after {} ends", cut.start, cut.input.display());
     }
     // Count frames over the span asked for, not from the frame the start
     // snaps to: snapping 14 s forward to 14.014 left `-d 5` at 149 frames.
-    Ok((crate::pipeline::snap(from, fps), ((end - from) * fps).round().max(1.0) as usize))
+    Ok((crate::pipeline::snap(from, fps), (cut.speed.edit_secs(from, end) * fps).round().max(1.0) as usize))
 }
 
 /// The sound under cuts `cuts`, each from `inputs` (its own audio or its
@@ -158,10 +160,11 @@ fn stretches<'a>(project: &'a project::Project, plan: &[(usize, f64, usize)], ov
 
 /// What's laid over each of a cut's `frames` from clip time `start`: its
 /// style where it's `graded`, its edge looks in the `whole` edit only.
+/// Frame `k` is `k / fps` edit seconds on, its clip time through the seam.
 fn overs(cut: &project::Cut, start: f64, frames: usize, fps: f64, graded: bool, whole: bool) -> Vec<dissolve::Over> {
     (0..frames)
         .map(|k| {
-            let t = start + k as f64 / fps;
+            let t = cut.speed.clip_after(start, k as f64 / fps);
             dissolve::Over { style: cut.style.as_ref().filter(|_| graded).map(|s| (s.spec(), t as f32)), edge: cut.edge_at(t).filter(|_| whole) }
         })
         .collect()
@@ -383,10 +386,28 @@ mod tests {
             let cut = &p.cuts[k];
             let edges: Vec<String> = overs(cut, start, frames, fps, true, true).iter().map(|o| o.edge.map_or_else(|| "-".to_owned(), |(e, q)| format!("{:?}:{q:.4}", e.look))).collect();
             writeln!(s, "cut {k} edges {}", edges.join(" ")).unwrap();
-            let framed: Vec<String> = (0..frames).step_by(15).filter_map(|f| cut.frame_at(start + f as f64 / fps).map(|fr| ns(fr.values()))).collect();
+            let framed: Vec<String> = (0..frames).step_by(15).filter_map(|f| cut.frame_at(cut.speed.clip_after(start, f as f64 / fps)).map(|fr| ns(fr.values()))).collect();
             writeln!(s, "cut {k} frame {}", framed.join(" | ")).unwrap();
         }
         golden("time-export", &s);
+    }
+
+    /// At twice the speed a cut makes half the frames, and each frame
+    /// reads two of its clip's; handles, edit seconds, read twice as much.
+    #[test]
+    fn a_fast_cut_is_planned_in_edit_frames() {
+        let mut cut = crate::project::Cut::new("a".into(), 10.0, 14.0);
+        cut.speed = crate::speed::Speed::constant(2.0);
+        assert_eq!(cut_frames(&cut, 60.0, 30.0, 0.0).unwrap(), (10.0, 60));
+        assert_eq!(cut_frames(&cut, 60.0, 30.0, 0.5).unwrap(), (9.0, 90));
+        // Its clip's end holds the handle back, at its clip's rate.
+        assert_eq!(cut_frames(&cut, 14.5, 30.0, 0.5).unwrap(), (9.0, 83));
+        cut.edge_out = Some(crate::project::Edge { look: crate::transition::Look::Flash, seconds: 1.0, params: Default::default() });
+        let overs = overs(&cut, 10.0, 60, 30.0, false, true);
+        // The edge look's last edit second: it starts at frame 30 (a share
+        // of none, so nothing yet) and is half way at frame 45.
+        assert!(overs[30].edge.is_none() && overs[31].edge.is_some());
+        assert_eq!(overs[45].edge.map(|e| e.1), Some(0.5));
     }
 
     #[test]

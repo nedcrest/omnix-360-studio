@@ -1,10 +1,10 @@
 # Contributing to Omnix
 
-Thanks for helping. Omnix is a free, open replacement for DJI Studio's playback and editing of Osmo 360 footage, and help is welcome: bug reports, testing on hardware we don't have (Windows PCs with a GPU, other Macs, other Linux setups), fixes and features.
+Thanks for helping. Omnix is a free home-video editor for Linux, for ordinary and 360 footage, forked from [rOsmo360](https://github.com/ravelund/rOsmo360) (its 360 playback is rOsmo360's). Help is welcome: bug reports, testing on hardware it hasn't run on (other Linux setups and GPUs; the Mac and Windows builds kept from rOsmo360 haven't been tested since the fork), fixes and features.
 
 ## Reporting a problem
 
-Open an [issue](https://github.com/ravelund/Omnix/issues) with:
+Open an [issue](https://github.com/nedcrest/omnix-360-studio/issues) with:
 
 - what you did, what you expected and what happened;
 - your system (OS, GPU), the Omnix version (`omnix --version`) and how you installed it;

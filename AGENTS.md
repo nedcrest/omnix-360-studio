@@ -4,7 +4,7 @@ Read this before changing anything. It's for AI coding agents (and the people dr
 
 ## What it is
 
-A Rust replacement for DJI Studio's playback and editing of DJI Osmo 360 `.OSV` footage: dual-fisheye stitching with DJI's own calibration, gyro stabilisation, rolling-shutter correction, a free-look player and timeline editor (iced), and export. One binary, `omnix`: `omnix play` is the GUI; the other subcommands (`export`, `stitch`, `preview`, `scan`, `check`, `info`, ...) are the CLI. Linux is the main platform, macOS (Apple Silicon) builds from source, Windows is in beta.
+A home-video editor in Rust (iced) for ordinary and DJI Osmo 360 footage: the timeline, sound lanes, the bin, an operations core (Omnix's), on rOsmo360's 360 playback, unchanged since the fork: dual-fisheye stitching with DJI's own calibration, gyro stabilisation, rolling-shutter correction, the free-look GPU player and export. One binary, `omnix`: `omnix play` is the GUI; the other subcommands (`export`, `stitch`, `preview`, `scan`, `check`, `info`, `apply`, `describe`, ...) are the CLI. Linux is where it's built and tested; the macOS and Windows builds are rOsmo360's, untested since the fork.
 
 ## Build and check
 

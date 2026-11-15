@@ -173,7 +173,7 @@ impl App {
                 // a frame at a time, skipping those overtaken (a jump each
                 // time started decoders faster than they ended).
                 if playing {
-                    if p.running() && (p.now() - t).abs() > 0.25 {
+                    if p.running() && p.media.speed.edit_secs(t, p.now()).abs() > 0.25 {
                         inc.playback = p.primed_again(p.media.speed.clip_after(t, Self::catch_up(p.startup())));
                     }
                 } else if (p.target() - t).abs() > 1.0 / p.media.fps {

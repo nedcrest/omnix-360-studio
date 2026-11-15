@@ -14,6 +14,10 @@ use crate::model::ops::{End, Op};
 /// (the usual), and note.
 pub(super) fn cut_labels(c: &Cut, default: Mode) -> Vec<String> {
     let mut label = format!("{} · {:.1} s", clip_name(&c.input), c.edit_len());
+    // At speed, how fast: the length above is the edit's.
+    if let Some(speed) = c.speed.short() {
+        label += &format!(" · {speed}");
+    }
     // Its sound from a file of its own: say which, by its name.
     if let Some(audio) = &c.audio {
         label += &format!(" · ♪ {}", audio.file_stem().map_or_else(String::new, |n| n.to_string_lossy().into_owned()));
@@ -287,6 +291,15 @@ impl App {
 mod tests {
     use super::super::tests::app;
     use super::*;
+
+    /// A cut's label says its length on the edit and, at speed, how fast.
+    #[test]
+    fn a_cut_s_label_says_its_speed() {
+        let mut c = Cut::new("a.mp4".into(), 0.0, 6.0);
+        assert_eq!(cut_labels(&c, Mode::Horizon), ["a · 6.0 s"]);
+        c.speed = crate::speed::Speed::constant(2.0);
+        assert_eq!(cut_labels(&c, Mode::Horizon), ["a · 3.0 s · 2×"]);
+    }
 
     /// Pack 2's key routes for drags: Alt+] trims the selected cut's end
     /// to the playhead, Alt+[ its start; Alt+→ moves it one place.

@@ -43,6 +43,16 @@ impl Speed {
         Speed { keys: vec![SpeedKey { t: 0.0, rate }], tape: false }
     }
 
+    /// What a cut's label says of it: «2×», «0.5×», «speed curve»; none at
+    /// normal speed.
+    pub fn short(&self) -> Option<String> {
+        match &self.keys[..] {
+            _ if self.is_normal() => None,
+            keys if keys.iter().all(|k| k.rate == keys[0].rate) => Some(format!("{}×", (keys[0].rate * 100.0).round() / 100.0)),
+            _ => Some("speed curve".to_owned()),
+        }
+    }
+
     /// What it is, in words: «normal speed», «2× speed», «a speed curve
     /// of 3 keys», with «like tape» where it's so.
     pub fn describe(&self) -> String {
@@ -227,6 +237,7 @@ mod tests {
         assert_eq!(s.edit_secs(0.0, 5.0), 5.0);
         assert_eq!((s.edit_secs(1.0, 3.0), s.edit_secs(3.0, 4.5)), (1.5, 1.5));
         assert_eq!(s.pieces(1.0, 4.5), vec![(1.0, 2.0, 1.0), (2.0, 4.0, 2.0), (4.0, 4.5, 0.5)]);
+        assert_eq!((s.short(), Speed::constant(0.5).short(), Speed::default().short()), (Some("speed curve".into()), Some("0.5×".into()), None));
         assert_eq!(Speed::default().pieces(1.0, 3.0), vec![(1.0, 3.0, 1.0)]);
         assert_eq!((s.clip_after(0.0, 2.5), s.clip_after(0.0, 4.0), s.clip_after(5.0, -2.5)), (3.0, 4.5, 3.0));
         // Round trips anywhere, either way.

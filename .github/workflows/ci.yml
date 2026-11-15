@@ -7,6 +7,9 @@ name: CI
 on:
   push:
   pull_request:
+  # By hand too (the Actions tab, or gh workflow run CI): the first push
+  # to a new repo started no run.
+  workflow_dispatch:
 
 jobs:
   test:

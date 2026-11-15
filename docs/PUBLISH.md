@@ -25,8 +25,9 @@ Clean:
 
 To fix:
 - **Author email**: all his commits carry his former work address.
-- **Pictures**: the README's screenshot and `docs/guide/` are rOsmo360's,
-  showing its old interface.
+- **Pictures**: the README's screenshot and `docs/guide/` were
+  rOsmo360's, showing its old interface (replaced since: Omnix's own
+  GIFs).
 - **Building**: Dailix finds Omnix at `../omnix-360-studio` (a path
   dependency), so a clone of Dailix alone doesn't build.
 - **No CI.**
@@ -125,9 +126,8 @@ working docs cleaned and published; version 0.8.0.
    2026-11-12: the time seam's guards, the sheet's move, the cards),
    its bugs fixed. Public code is read by strangers first.
 2. **No rOsmo360 pictures**: the README's screenshot and the user
-   guide's 22 pictures are «all rights reserved» by their author. The
-   guide's text is Omnix's already; its pictures are his to replace (or
-   the guide ships without them until the GIF guide).
+   guide's 22 pictures were «all rights reserved» by their author.
+   Done: the guide and the README show Omnix's own pictures now.
 3. **The working docs**: the AI page points at the roadmap, gaps and
    audits; `CONTEXT.md` (both) and the code rules hold personal paths
    and private notes (a passwords file's place in Dailix's). Cleaned and

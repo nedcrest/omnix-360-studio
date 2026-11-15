@@ -1,8 +1,9 @@
 # Omnix 360 Studio
 
-A Linux-native studio for DJI 360 video and a **simple home-video editor**
-("LightCut, a bit more"). Built as a local fork of
-[rOsmo360](https://github.com/ravelund/rOsmo360). 360 is one kind of clip
+A home-video editor for Linux, for ordinary and 360 footage (at first
+"LightCut, a bit more"; the vision as written on 2026-10-22). A fork of
+[rOsmo360](https://github.com/ravelund/rOsmo360) by Vibing with Ravelund,
+whose 360 playback it keeps. 360 is one kind of clip
 beside ordinary phone, Action 2 and Neo 2 footage. The default mode is plain
 editing, and 360 framing turns on for a selected 360 clip (`EDITOR-GAPS.md`
 gap 10).

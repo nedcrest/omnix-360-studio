@@ -1,8 +1,11 @@
 # The guide
 
-Omnix is a home-video editor for 360 and ordinary footage; Dailix is its
+Omnix is a home-video editor for ordinary and 360 footage; Dailix is its
 contact sheet, where a trip's footage is looked through and chosen
-before the edit. This guide covers both.
+before the edit. This guide covers both. Omnix's 360 playback (stitching
+the two lenses, stabilising with the camera's gyro) comes from
+[rOsmo360](https://github.com/ravelund/rOsmo360) by Vibing with
+Ravelund, which Omnix was forked from.
 
 - **New here?** [Install them and run them for the first
   time](install.md).

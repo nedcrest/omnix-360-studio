@@ -96,6 +96,9 @@ impl Speed {
         if let Some(k) = self.keys.iter().find(|k| !(lo..=hi).contains(&k.rate)) {
             return Err(format!("the speed {}× is outside {lo}..{hi}", k.rate));
         }
+        if self.keys.iter().any(|k| !k.t.is_finite()) {
+            return Err("a speed key's time isn't a number".into());
+        }
         if self.keys.windows(2).any(|w| w[1].t <= w[0].t) {
             return Err("the speed's keys are out of order".into());
         }
@@ -253,6 +256,7 @@ mod tests {
     fn a_speed_out_of_range_or_order_is_refused() {
         assert!(Speed::constant(5.0).check().is_err() && Speed::constant(0.2).check().is_err());
         assert!(Speed { keys: vec![SpeedKey { t: 2.0, rate: 1.0 }, SpeedKey { t: 1.0, rate: 2.0 }], tape: false }.check().is_err());
+        assert!(Speed { keys: vec![SpeedKey { t: f64::NAN, rate: 1.0 }], tape: false }.check().is_err());
         assert!(curve().check().is_ok() && Speed::default().check().is_ok());
     }
 

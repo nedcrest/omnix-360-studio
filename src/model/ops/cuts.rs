@@ -271,12 +271,20 @@ fn paste(p: &mut Project, cuts: &[Cut], place: &Place) -> Result<Outcome, OpErro
     if cuts.is_empty() {
         return Err(OpError::Invalid("nothing to paste".into()));
     }
+    // As the ops that make a cut hold it: a copy of a cut that was right
+    // is right, a cut written by hand may not be (the audit, 2026-11-15).
     for c in cuts {
         let len = c.speed.edit_secs(c.start, c.end);
-        if !(c.start.is_finite() && c.start >= 0.0 && len >= MIN_CUT) {
+        if !(c.start.is_finite() && c.end.is_finite() && c.start >= 0.0 && len >= MIN_CUT) {
             return Err(OpError::Invalid(format!("a cut of {} from {} to {} s is shorter than {MIN_CUT} s", c.input.display(), c.start, c.end)));
         }
         c.speed.check().map_err(OpError::Invalid)?;
+        if !c.speed.is_normal() && (c.sound_before > 0.0 || c.sound_after > 0.0) {
+            return Err(OpError::Invalid(format!("a cut of {} plays at speed with its sound past its picture", c.input.display())));
+        }
+        if c.sound_before > c.start || !(c.sound_before.is_finite() && c.sound_after.is_finite()) {
+            return Err(OpError::Invalid(format!("a cut of {}'s sound starts before its clip", c.input.display())));
+        }
     }
     let mut ids = Vec::with_capacity(cuts.len());
     let mut at = None;
@@ -900,6 +908,15 @@ mod tests {
         assert_eq!((e.cuts[1].input.to_str(), e.cuts[0].end), (Some("a.mp4"), 6.0));
         assert!(e.undo() && e.cuts.len() == before, "one step");
         assert!(e.apply(&Op::Cut(CutOp::Paste { cuts: Vec::new(), place: Place::End })).is_err());
+        // Cuts written by hand that no op would make: refused.
+        let mut bad = Cut::new("x.mp4".into(), 1.0, 3.0);
+        (bad.speed, bad.sound_after) = (crate::speed::Speed::constant(2.0), 1.0);
+        let mut early = Cut::new("x.mp4".into(), 1.0, 3.0);
+        early.sound_before = 2.0;
+        for c in [bad, early, Cut::new("x.mp4".into(), 1.0, f64::INFINITY)] {
+            assert!(e.apply(&Op::Cut(CutOp::Paste { cuts: vec![c], place: Place::End })).is_err());
+        }
+        check(&e).unwrap();
     }
 
     #[test]

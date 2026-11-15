@@ -4,9 +4,29 @@
 # here too; the CLI tests export real files through ffmpeg.
 name: CI
 
+# Not for a change to the docs, the pictures or the agent's skills alone
+# (the free Actions minutes: the user, 2026-11-15); by hand for anything.
 on:
   push:
+    paths:
+      - '**'
+      - '!**.md'
+      - '!docs/**'
+      - '!.claude/**'
+      # The guide's keys and commands pages are made from the code and a
+      # test holds them to it: a hand edit there must still be caught.
+      - 'docs/guide/keys-*.md'
+      - 'docs/guide/commands-*.md'
   pull_request:
+    paths:
+      - '**'
+      - '!**.md'
+      - '!docs/**'
+      - '!.claude/**'
+      # The guide's keys and commands pages are made from the code and a
+      # test holds them to it: a hand edit there must still be caught.
+      - 'docs/guide/keys-*.md'
+      - 'docs/guide/commands-*.md'
   # By hand too (the Actions tab, or gh workflow run CI): the first push
   # to a new repo started no run.
   workflow_dispatch:

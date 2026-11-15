@@ -13,7 +13,10 @@
 - **The mouse frames an ordinary video in Framing only**: a stray click
   while editing moved it.
 
-## 0.8.0 — Omnix's first release (2026-11)
+## 0.1.0 — Omnix's first release (2026-11)
+
+Omnix numbers its own versions from 0.1.0: it is its own program, not a
+release of rOsmo360 (whose own 0.8.0 came out on 2026-11-15).
 
 Omnix grew from [rOsmo360](https://github.com/ravelund/rOsmo360) 0.7.1
 (a DJI Osmo 360 player and timeline editor, by Vibing with Ravelund) into
@@ -79,4 +82,4 @@ Every item below has its section in
 - The contact sheet's core (`crates/sheet`), shared with Dailix, in this
   repo's workspace.
 - A project with a playback speed set is refused (speed came after
-  0.8.0: see Unreleased).
+  0.1.0: see Unreleased).

@@ -100,7 +100,7 @@ read-only token as a secret, or Omnix made public first.
   2026-11-15 (the READMEs, the guide's clone lines). CI badges still to add.
 - `REPO` in `packaging/install.sh` (it downloads from that repo's
   latest release), and the Flatpak metainfo's homepage and screenshot.
-- The tag `v0.8.0` and a GitHub release with `dist/`'s archive and
+- The tag `v0.1.0` and a GitHub release with `dist/`'s archive and
   AppImage (built and checked 2026-11-14; the Flatpak needs
   `org.flatpak.Builder` installed from Flathub, his call).
 - `git config user.email` in both repos to the personal address, so new
@@ -119,7 +119,9 @@ from one clone, CI rehearsed, the AI page (a draft he reads), the
 project cards (the «outside» closed for now).
 
 The user approved it all (2026-11-14): «should» is a must too; the
-working docs cleaned and published; version 0.8.0.
+working docs cleaned and published; version 0.1.0 (Omnix numbers its own
+versions from scratch, the user, 2026-11-15; rOsmo360 released its own
+0.8.0 the same day).
 
 **Must, before the repos go public:**
 1. **The small audit** the hook asks for (~4,000 lines since
@@ -141,7 +143,7 @@ working docs cleaned and published; version 0.8.0.
 
 **Should:**
 6. **A version and a tag.** `Cargo.toml` says 0.7.1, rOsmo360's last;
-   Omnix's first is its own (0.8.0, or 1.0 if he wants a statement), a
+   Omnix's first is its own, from scratch: 0.1.0 (the user, 2026-11-15), a
    short changelog of what Omnix added, a GitHub release.
 7. **Release builds checked**: `packaging/build-release.sh` (AppImage,
    Flatpak, Windows zip) last ran before the sheet moved in; it should

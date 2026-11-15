@@ -462,11 +462,11 @@ pub struct Timeline {
     /// Where the drag under way has snapped, edit time: a line there
     /// through every lane.
     pub snap_line: Option<f64>,
+    /// Automation lanes shown on their value's whole range (gap 108);
+    /// in the others each clip fits its points.
+    pub absolute: Vec<super::automation_ui::Param>,
     /// The automation lanes under the Effects row, by `grade::NAMES` index
     /// (gap 39).
-    /// Automation lanes shown on their value's whole range (gap 108);
-    /// the others fit their points.
-    pub absolute: Vec<super::automation_ui::Param>,
     pub auto_lanes: Vec<super::automation_ui::Param>,
     /// The overlay and text lanes' own automation lanes, lane by lane.
     pub overlay_auto: Vec<Vec<super::automation_ui::Param>>,

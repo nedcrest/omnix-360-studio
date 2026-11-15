@@ -616,8 +616,6 @@ impl App {
     }
 }
 
-/// A group of the bars' buttons; with the names shown (the transport
-/// row's chevron), its name above it.
 /// How the transport row fits its window (gap 114).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum BarFit {
@@ -643,6 +641,8 @@ pub(super) fn bar_fit(width: f32, scale: f32) -> BarFit {
     }
 }
 
+/// A group of the bars' buttons; with the names shown (the transport
+/// row's chevron), its name above it.
 fn group<'a>(name: &'a str, open: bool, items: impl Into<Element<'a, Message>>) -> Element<'a, Message> {
     if open { column![text(name).size(11).style(text::secondary), items.into()].spacing(2).into() } else { items.into() }
 }

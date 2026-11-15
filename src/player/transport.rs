@@ -241,6 +241,29 @@ impl App {
 
     pub(super) fn tick(&mut self) {
         let volume = self.clip_volume();
+        self.show_frames();
+        let Some(c) = &self.clip else { return };
+        let Some(cut) = self.edit.cuts.get(self.current) else { return };
+        let p = &c.playback;
+        // A cut running to its clip's end has paused there (`ended`), and
+        // still moves on.
+        if !p.playing && !p.ended {
+            self.preroll = None;
+            return;
+        }
+        let (now, ended, out) = (p.now(), p.ended, cut.end);
+        // A next cut that starts where this one ends in the same clip (after
+        // a split) and plays alike just plays on: no seek, nothing to prime.
+        let carries_on = self.edit.cuts.get(self.current + 1).is_some_and(|n| p.media.plays(n) && (n.start - cut.end).abs() < 1.5 / p.media.fps && n.crossfade == 0.0);
+        self.ready_next(now, volume, carries_on);
+        // At a cut's out point (or the clip's end), play on into the next cut.
+        if now >= out || ended {
+            self.move_on(carries_on, ended);
+        }
+    }
+
+    /// The frames due from the playing cut and its crossfade partner.
+    fn show_frames(&mut self) {
         if let Some((_, inc)) = &mut self.partner
             && inc.playback.go_at.is_none()
             && let Some((frame, fix)) = inc.playback.tick()
@@ -253,28 +276,22 @@ impl App {
             self.held = None;
         }
         self.error = c.playback.error.clone();
-        let Some(cut) = self.edit.cuts.get(self.current) else { return };
-        let p = &c.playback;
-        // A cut running to its clip's end has paused there (`ended`), and
-        // still moves on.
-        if !p.playing && !p.ended {
-            self.preroll = None;
-            return;
-        }
+    }
+
+    /// Towards the change to the next cut, with the playing one's clock at
+    /// clip time `now`: the next cut readied, its sound started a device
+    /// latency early, and at a crossfade played alongside.
+    fn ready_next(&mut self, now: f64, volume: f32, carries_on: bool) {
+        let cut = &self.edit.cuts[self.current];
         let next = self.current + 1;
         let next_cut = self.edit.cuts.get(next);
-        let loaded = |input: &PathBuf| self.library.iter().find(|m| &m.input == input);
-        // A next cut that starts where this one ends in the same clip (after
-        // a split) just plays on: no seek, nothing to prime.
-        let carries_on = next_cut.is_some_and(|n| n.input == cut.input && n.audio == cut.audio && n.sound_filter() == cut.sound_filter() && n.speed == cut.speed && (n.start - cut.end).abs() < 1.5 / p.media.fps && n.crossfade == 0.0);
         // Where the next cut comes in: this one's end, or before it by the
-        // crossfade.
+        // crossfade; and edit seconds before it, read at this cut's speed.
         let change = self.edit.crossfade_from(self.current).unwrap_or(cut.end);
+        let before_change = |secs: f64| cut.speed.clip_after(change, -secs);
         // In the last `PREROLL` seconds, ready the next cut so the change is
         // instant.
-        // Edit seconds before the change, read at this cut's speed.
-        let before_change = |secs: f64| cut.speed.clip_after(change, -secs);
-        if p.now() >= before_change(PREROLL)
+        if now >= before_change(PREROLL)
             && !carries_on
             && self.partner.as_ref().is_none_or(|(i, _)| *i != next)
             && let Some(n) = next_cut
@@ -289,14 +306,14 @@ impl App {
         // picture waits through it to stay in sync).
         if let Some((i, input, at, primed)) = &mut self.preroll
             && next_cut.is_some_and(|n| (*i, &*input, *at) == (next, &n.input, n.start))
-            && primed.sound_lead().is_some_and(|lead| p.now() >= before_change(lead))
+            && primed.sound_lead().is_some_and(|lead| now >= before_change(lead))
         {
             primed.start_sound();
         }
         // A crossfade starts: the next cut plays on alongside, drawn over
         // this one, until this one ends.
         if change < cut.end
-            && p.now() >= change
+            && now >= change
             && self.partner.as_ref().is_none_or(|(i, _)| *i != next)
             && let Some((i, input, at, mut primed)) = self.preroll.take()
             && next_cut.is_some_and(|n| (i, &input, at) == (next, &n.input, n.start))
@@ -304,21 +321,25 @@ impl App {
             primed.go();
             self.partner = Some((next, Clip { playback: primed, shown: None }));
         }
-        // At a cut's out point (or the clip's end), play on into the next cut.
-        if p.now() < cut.end && !p.ended {
-            return;
-        }
-        match next_cut {
-            None if p.playing => c.playback.pause(),
+    }
+
+    /// At the playing cut's out point: on into the next cut (on in the
+    /// same playback, the crossfade's partner, the one readied, or a fresh
+    /// one), or stopped at the edit's end or a clip still loading.
+    fn move_on(&mut self, carries_on: bool, ended: bool) {
+        let next = self.current + 1;
+        let playing = self.clip.as_ref().is_some_and(|c| c.playback.playing);
+        match self.edit.cuts.get(next) {
+            None if playing => self.with_playback(Playback::pause),
             None => {}
             // Its clip is still loading: wait at the out point.
-            Some(n) if loaded(&n.input).is_none() => {
-                if p.playing {
-                    c.playback.pause();
+            Some(n) if !self.library.iter().any(|m| m.input == n.input) => {
+                if playing {
+                    self.with_playback(Playback::pause);
                     self.save_status = Some(format!("Cut {} is still loading", next + 1));
                 }
             }
-            Some(_) if carries_on && !p.ended => {
+            Some(_) if carries_on && !ended => {
                 self.current = next;
                 let mode = self.edit.cuts[next].stabilize.unwrap_or(self.opts.stabilize);
                 self.with_playback(|p| p.media.stab.set_mode(mode));
@@ -334,9 +355,9 @@ impl App {
                 self.preroll = None;
             }
             Some(n) => {
-                let start = n.start;
+                let (start, input) = (n.start, n.input.clone());
                 match self.preroll.take() {
-                    Some((i, input, at, mut primed)) if (i, &input, at) == (next, &n.input, n.start) => {
+                    Some((i, at_input, at, mut primed)) if (i, &at_input, at) == (next, &input, start) => {
                         // The last frame stays up until the primed one's first.
                         if self.held.is_none() {
                             self.held = self.sphere();

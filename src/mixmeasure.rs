@@ -21,7 +21,7 @@ fn cut_sounds(project: &Project) -> Vec<Sound<'_>> {
         .cuts
         .iter()
         .enumerate()
-        .map(|(n, c)| Sound::of_cut(c, c.audio.as_deref().filter(|a| a.exists()).unwrap_or(&c.input), c.start, Some(c.len()), if n > 0 { c.crossfade } else { 0.0 }))
+        .map(|(n, c)| Sound::of_cut(c, c.audio.as_deref().filter(|a| a.exists()).unwrap_or(&c.input), c.start, Some(c.clip_len()), if n > 0 { c.crossfade } else { 0.0 }))
         .collect()
 }
 
@@ -83,14 +83,14 @@ pub fn measure(project: &Project, progress: &mut dyn FnMut(usize, usize)) -> Res
     // The clips' own sound.
     if !cuts.is_empty() {
         let offsets = crate::project::offsets(&project.cuts);
-        let mut ws: Vec<Window> = project.cuts.iter().zip(&offsets).map(|(c, &at)| window(at, at + c.len())).collect();
+        let mut ws: Vec<Window> = project.cuts.iter().zip(&offsets).map(|(c, &at)| window(at, at + c.edit_len())).collect();
         let mut sp: Vec<Window> = speech.iter().map(|&(a, b)| window(a, b)).collect();
         // With their sound past the pictures (J- and L-cuts).
         let beyond = project.sound_beyond();
         let mix = Mix { sound_db: project.sound.volume, tracks: beyond.iter().collect(), length, fades: project.fades };
         run(&cuts, &mix, &mut ws.iter_mut().chain(sp.iter_mut()).collect::<Vec<_>>())?;
         for ((n, c), w) in project.cuts.iter().enumerate().zip(ws) {
-            items.push(Item { lane: Lane::ClipSound, own: Own::Cut(n), at: w.from, len: c.len(), lufs: w.loudness.integrated(), loudest: w.loudness.loudest(), speech: (c.audio.is_some() || c.speech) && !c.mute });
+            items.push(Item { lane: Lane::ClipSound, own: Own::Cut(n), at: w.from, len: c.edit_len(), lufs: w.loudness.integrated(), loudest: w.loudness.loudest(), speech: (c.audio.is_some() || c.speech) && !c.mute });
         }
         for (k, w) in sp.into_iter().enumerate() {
             spans[k].push((Lane::ClipSound, w));

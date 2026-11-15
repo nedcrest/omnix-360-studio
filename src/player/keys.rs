@@ -429,8 +429,8 @@ fn stops(edit: &crate::model::edit::Edit) -> Vec<(f64, Stop)> {
     let offsets = crate::project::offsets(&edit.cuts);
     let mut all = vec![(0.0, Stop::Edge), (edit.duration(), Stop::Edge)];
     for (c, &at) in edit.cuts.iter().zip(&offsets) {
-        all.extend([(at, Stop::Cut), (at + c.len(), Stop::Cut)]);
-        all.extend(c.marks.iter().filter(|m| m.t >= c.start && m.t <= c.end).map(|m| (at + m.t - c.start, Stop::Marker)));
+        all.extend([(at, Stop::Cut), (at + c.edit_len(), Stop::Cut)]);
+        all.extend(c.marks.iter().filter(|m| m.t >= c.start && m.t <= c.end).map(|m| (at + c.edit_at(m.t), Stop::Marker)));
     }
     all
 }

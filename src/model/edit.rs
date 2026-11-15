@@ -474,10 +474,10 @@ impl Project {
         if let Some(i) = across {
             return Some(Zone::Overlap { join: i, seconds: crate::transition::stepped(b - a) });
         }
-        let k = (0..self.cuts.len()).find(|&k| centre >= offsets[k] && centre < offsets[k] + self.cuts[k].len())?;
-        let (from, to) = (offsets[k], offsets[k] + self.cuts[k].len());
+        let k = (0..self.cuts.len()).find(|&k| centre >= offsets[k] && centre < offsets[k] + self.cuts[k].edit_len())?;
+        let (from, to) = (offsets[k], offsets[k] + self.cuts[k].edit_len());
         let (end, seconds, join) = if centre - from < to - centre { (End::In, b - from, k) } else { (End::Out, to - a, k + 1) };
-        let seconds = crate::transition::stepped(seconds).min(self.cuts[k].len());
+        let seconds = crate::transition::stepped(seconds).min(self.cuts[k].edit_len());
         (join >= 1 && join < self.cuts.len()).then_some(Zone::Edge { join, end, seconds })
     }
 

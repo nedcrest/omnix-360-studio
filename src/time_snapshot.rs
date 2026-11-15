@@ -93,7 +93,7 @@ fn core(p: &Project) -> String {
     writeln!(s, "offsets {}", ns(o.iter().copied())).unwrap();
     writeln!(s, "edit_length {} duration {} film_end {:?}", n(crate::project::edit_length(&p.cuts)), n(p.duration()), p.film_end().map(n)).unwrap();
     for (i, c) in p.cuts.iter().enumerate() {
-        writeln!(s, "cut {i}: len {} at {} crossfade_from {:?} max_crossfade {}", n(c.len()), n(e.offset(i)), e.crossfade_from(i).map(n), n(crate::project::max_crossfade(&p.cuts, i))).unwrap();
+        writeln!(s, "cut {i}: len {} at {} crossfade_from {:?} max_crossfade {}", n(c.edit_len()), n(e.offset(i)), e.crossfade_from(i).map(n), n(crate::project::max_crossfade(&p.cuts, i))).unwrap();
         let (from, to) = c.sound_span();
         let (fi, fo) = c.sound_fades();
         writeln!(s, "  sound_span {} {} sound_fades {} {}", n(from), n(to), n(fi), n(fo)).unwrap();

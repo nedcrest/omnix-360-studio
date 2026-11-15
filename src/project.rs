@@ -993,7 +993,7 @@ impl Cut {
             beyond.push(MusicClip { fade_in: self.sound_fade_in.min(self.sound_before), ..like(at - self.sound_before, self.start - self.sound_before, self.start) });
         }
         if self.sound_after > 0.0 {
-            beyond.push(MusicClip { fade_out: self.sound_fade_out.min(self.sound_after), ..like(at + self.len(), self.end, self.end + self.sound_after) });
+            beyond.push(MusicClip { fade_out: self.sound_fade_out.min(self.sound_after), ..like(at + self.edit_len(), self.end, self.end + self.sound_after) });
         }
         beyond
     }
@@ -1008,10 +1008,6 @@ impl Cut {
             self.sound_before = self.sound_before.max(0.0);
             self.sound_after = self.sound_after.max(0.0);
         }
-    }
-
-    pub fn len(&self) -> f64 {
-        self.end - self.start
     }
 
     /// Its colour effects at clip time `t`: the values set, its automation
@@ -1191,7 +1187,9 @@ pub fn max_crossfade(cuts: &[Cut], i: usize) -> f64 {
         return 0.0;
     }
     let before = &cuts[i - 1];
-    (before.len() - before.crossfade).min(cuts[i].len()) - SOLO
+    // Crossfades are edit seconds (`TIME-SEAM.md`): the cuts' lengths on
+    // the edit bound them.
+    (before.edit_len() - before.crossfade).min(cuts[i].edit_len()) - SOLO
 }
 
 /// Keeps every crossfade within `max_crossfade` after cuts were trimmed,

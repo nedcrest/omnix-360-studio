@@ -130,7 +130,7 @@ fn describe_lines(p: &Project) -> Vec<String> {
     let offsets = crate::project::offsets(&p.cuts);
     println("cuts:".to_owned());
     for (i, (c, at)) in p.cuts.iter().zip(offsets).enumerate() {
-        println(format!("  cut #{:<3} {:7.2}-{:7.2} s  {} {:.2}-{:.2}  level {:+.1} dB{}", c.id, at, at + c.len(), name(&c.input), c.start, c.end, c.gain, if c.mute { " muted" } else { "" }));
+        println(format!("  cut #{:<3} {:7.2}-{:7.2} s  {} {:.2}-{:.2}  level {:+.1} dB{}", c.id, at, at + c.edit_len(), name(&c.input), c.start, c.end, c.gain, if c.mute { " muted" } else { "" }));
         if let (Some(origin), false) = (c.origin, p.pieces(i).is_empty()) {
             println(format!("    a piece of clip #{origin} (join_pieces joins them back)"));
         }

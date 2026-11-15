@@ -84,8 +84,8 @@ pub fn check(path: &Path, opts: &StitchOpts, fast_pan: f64) -> Result<()> {
     for (n, c) in cuts.iter().enumerate() {
         let at = offsets[n];
         let p = &pipelines[of_cut[n]];
-        if c.len() < SHORT_CUT {
-            say(at, Some(n), "short", format!("only {:.1} s long", c.len()));
+        if c.edit_len() < SHORT_CUT {
+            say(at, Some(n), "short", format!("only {:.1} s long", c.edit_len()));
         }
         if n > 0 {
             let before = &cuts[n - 1];

@@ -237,7 +237,7 @@ impl App {
             (Some(i), _) => self.edit.item(i).map(|it| Selected { target: Target::Overlay(i), at: it.at, len: it.end - it.start, start: it.start }),
             (None, Some(i)) => {
                 let c = &self.edit.cuts[i];
-                Some(Selected { target: Target::Cut(i), at: self.edit.edit_time(i, c.start), len: c.len(), start: c.start })
+                Some(Selected { target: Target::Cut(i), at: self.edit.edit_time(i, c.start), len: c.edit_len(), start: c.start })
             }
             (None, None) => None,
         };

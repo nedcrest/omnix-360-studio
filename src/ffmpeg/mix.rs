@@ -216,8 +216,16 @@ pub fn tempo(speed: &crate::speed::Speed, from: f64, to: Option<f64>, label: &st
 /// would otherwise pull every later cut's sound early: a camera's own track
 /// ends a few ms before its video (8 ms on an Action 2), a voice cleaned of
 /// noise some 30 ms before its clip.
+///
+/// At speed it's trimmed to that length too: `atempo` misses it by a few
+/// ms (6 s at 1.5× came out 4.0031 s), and a stretch a little long pushes
+/// every later cut's sound late (the audit, 2026-11-15).
 pub(super) fn pad(sound: &Sound<'_>) -> String {
-    sound.duration.map_or_else(String::new, |d| format!(",apad=whole_dur={d}"))
+    match sound.duration {
+        Some(d) if !sound.speed.is_normal() => format!(",apad=whole_dur={d},atrim=end={d}"),
+        Some(d) => format!(",apad=whole_dur={d}"),
+        None => String::new(),
+    }
 }
 
 /// `base` dB and the line through volume points `keys` as a `volume`
@@ -368,7 +376,7 @@ mod tests {
         assert_eq!(fast.reads(), Some(8.0));
         let graph = mixed(&mut tool("ffmpeg"), &[fast], &mix).unwrap();
         let chain = graph.split("[c1]").next().unwrap();
-        assert!(chain.find("atempo=2").unwrap() < chain.find("apad=whole_dur=4").unwrap(), "{graph}");
+        assert!(chain.find("atempo=2").unwrap() < chain.find("apad=whole_dur=4,atrim=end=4").unwrap(), "{graph}");
         assert!(chain.contains("(2+(t-0)*2)"), "the points' clock: {graph}");
         let slow = Sound { speed: &quarter, ..stretch(a, 0.0, &[]) };
         assert!(slow.tempo(1).contains("atempo=0.5,atempo=0.5"), "atempo goes no lower than 0.5");

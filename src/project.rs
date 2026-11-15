@@ -1072,8 +1072,13 @@ pub fn kept_picture(before: &[Cut], after: &[Cut]) -> Vec<(f64, f64, f64)> {
         let (s0, s1) = (b.start, b.clip_at(owned_to - old[k]));
         for (j, a) in after.iter().enumerate().filter(|(_, a)| kin(b, a)) {
             let (x0, x1) = (s0.max(a.start), s1.min(a.end));
+            // One length for both sides: at another speed the shorter, so
+            // a faster cut is a trimmed one (what lay under its end goes)
+            // and a slower one a lengthened one (nothing under the new
+            // end), as a trim does (the audit, 2026-11-15: the longer
+            // played a song's stretch twice).
             if x1 - x0 > 1e-6 {
-                kept.push((old[k] + b.edit_at(x0), new[j] + a.edit_at(x0), a.speed.edit_secs(x0, x1)));
+                kept.push((old[k] + b.edit_at(x0), new[j] + a.edit_at(x0), a.speed.edit_secs(x0, x1).min(b.speed.edit_secs(x0, x1))));
             }
         }
     }
@@ -2325,6 +2330,29 @@ mod tests {
             assert!(match (ef, es) { (Some(a), Some(b)) => (a - b).abs() < 1e-6, (a, b) => a == b }, "edge at {dt} s: {ef:?} against {es:?}");
             assert!((fast.sound_fade(tf) - slow.sound_fade(ts)).abs() < 1e-9, "sound at {dt} s");
         }
+    }
+
+    /// A cut's speed changed under a sync-locked song: faster, the song's
+    /// stretch under its end goes, as a trim; slower, nothing is played
+    /// twice (the audit, 2026-11-15).
+    #[test]
+    fn sync_lock_follows_a_change_of_speed_as_a_trim() {
+        let mut p = Project::default();
+        p.cuts = vec![Cut::new("a.mp4".into(), 0.0, 4.0), Cut::new("b.mp4".into(), 0.0, 4.0)];
+        p.settle_ids();
+        p.music.sync = true;
+        p.music.clips.push(MusicClip { input: "song.mp3".into(), at: 0.0, start: 0.0, end: 8.0, ..Default::default() });
+        let before = p.cuts.clone();
+        p.cuts[0].speed = crate::speed::Speed::constant(2.0);
+        p.follow_locked(&before);
+        let parts: Vec<(f64, f64, f64)> = p.music.clips.iter().map(|c| (c.at, c.start, c.end)).collect();
+        assert_eq!(parts, [(0.0, 0.0, 2.0), (2.0, 4.0, 8.0)], "faster: file 2..4 gone with a's end");
+        let before = p.cuts.clone();
+        p.cuts[0].speed = Default::default();
+        p.follow_locked(&before);
+        let mut heard: Vec<(f64, f64)> = p.music.clips.iter().map(|c| (c.start, c.end)).collect();
+        heard.sort_by(|a, b| a.0.total_cmp(&b.0));
+        assert!(heard.windows(2).all(|w| w[1].0 >= w[0].1 - 1e-9), "no file second twice: {heard:?}");
     }
 
     /// Sync lock at 2× (`kept_picture`, the seam's riskiest place): a

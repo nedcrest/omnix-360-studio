@@ -107,6 +107,15 @@ impl App {
         if self.normalize.is_some() {
             return Some(if escape { self.update(Message::Sound(sound_ui::SoundMsg::Cancel)) } else { Task::none() });
         }
+        // The speed window open: Esc lets it go, Delete takes its point
+        // away; the rest wait (the cut plays at its old speed till OK).
+        if self.speed_edit.is_some() {
+            return Some(match key.as_ref() {
+                Key::Named(Named::Escape) => self.update(Message::Speed(speed_window::SpeedMsg::Close(false))),
+                Key::Named(Named::Delete | Named::Backspace) => self.update(Message::Speed(speed_window::SpeedMsg::Remove)),
+                _ => Task::none(),
+            });
+        }
         // The «New» window open: Esc closes it; its field takes the rest.
         if self.new_menu.is_some() {
             return Some(if escape { self.update(Message::NewMenuClose) } else { Task::none() });

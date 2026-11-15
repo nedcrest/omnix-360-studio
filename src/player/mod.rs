@@ -27,6 +27,7 @@ mod playback;
 pub mod render;
 mod settings;
 mod sound_ui;
+mod speed_window;
 mod source;
 mod thumbs;
 mod effects;
@@ -579,6 +580,8 @@ enum Message {
     Split,
     /// The selected cuts copied (gap 102).
     CopyCuts,
+    /// The speed window (gap 31c).
+    Speed(speed_window::SpeedMsg),
     /// The copied cuts pasted at the playhead, splitting the cut there;
     /// at the nearest join if true.
     PasteCuts(bool),
@@ -938,6 +941,8 @@ struct App {
     absolute_lanes: Vec<automation_ui::Param>,
     /// The cuts Ctrl+C copied, as they were then (gap 102).
     copied: Vec<crate::project::Cut>,
+    /// The speed window, while it's open over the timeline (gap 31c).
+    speed_edit: Option<speed_window::SpeedEdit>,
     /// The box picks a white balance, not a colour to track.
     picking_white: bool,
     /// The panel docked at the right of the view, if one is open.
@@ -1114,6 +1119,7 @@ impl App {
             picking: None,
             absolute_lanes: Vec::new(),
             copied: Vec::new(),
+            speed_edit: None,
             picking_white: false,
             side: None,
             record: record_ui::Panel::new(saved.record_input.clone(), saved.record_channel, saved.record_countdown, saved.record_play),
@@ -1380,6 +1386,7 @@ impl App {
             m @ (Message::MarkEdit { .. } | Message::MarkNote { .. } | Message::MarkSave | Message::MarkDelete | Message::MarkClose | Message::AddMark | Message::MarkMove { .. } | Message::MarkSelect { .. }) => self.on_marks(m),
             m @ (Message::Tick | Message::TimelineZoom { .. } | Message::TimelineWheel { .. } | Message::TimelineZoomTo { .. } | Message::TimelinePan { .. } | Message::Toggle | Message::Scrub { .. } | Message::ScrubDone) => self.on_transport(m),
             m @ (Message::Select { .. } | Message::SelectOne(_) | Message::AddBlank | Message::SoundEdge { .. } | Message::Trim { .. } | Message::MoveCut { .. } | Message::SelectAtPlayhead | Message::StepsRested { .. } | Message::ToastGone { .. } | Message::StepNoteGone { .. } | Message::TrimToPlayhead { .. } | Message::Crossfade { .. } | Message::ToggleCrossfade | Message::Split | Message::DeleteCut | Message::Undo | Message::Redo) => self.on_cuts(m),
+            Message::Speed(m) => self.on_speed(m),
             m @ (Message::CopyCuts | Message::PasteCuts(_)) => {
                 self.on_clipboard(m);
                 Task::none()
@@ -1440,7 +1447,8 @@ impl App {
         }
         let clip = self.clip.as_ref();
         let error = self.error.as_ref().map(|e| text(e.clone()).style(text::danger));
-        let timeline = self.timeline_view();
+        // The speed window in the timeline's place while it's open.
+        let timeline = self.speed_window().unwrap_or_else(|| self.timeline_view());
         let timeline = container(timeline).padding([2, 10]);
         let divider = tip(
             canvas(divider::Divider).width(Length::Fill).height(divider::HEIGHT),

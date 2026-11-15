@@ -445,7 +445,8 @@ impl App {
         let steps = tip(steps, text("How fast it plays its clip: its length on the edit changes, the cuts after it move"), tooltip::Position::Right);
         let tape = c.speed.tape;
         let pitch = item(format!("{}Keep the sound's pitch", if tape { "" } else { "✓ " }), Message::CutTape(c.id, !tape));
-        push_group(items, rows, "Speed", vec![steps, pitch], 0);
+        let curve = item("Speed curve…".into(), Message::Speed(super::speed_window::SpeedMsg::Open(c.id)));
+        push_group(items, rows, "Speed", vec![steps, curve, pitch], 0);
     }
 }
 

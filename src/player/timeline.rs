@@ -209,7 +209,7 @@ const POINT: f32 = 4.0;
 const DOUBLE_CLICK: std::time::Duration = std::time::Duration::from_millis(400);
 /// A level dragged this close to 0 dB is 0 dB.
 const SNAP_DB: f64 = 1.0;
-const EFFECT_MARK: iced::Color = iced::Color::from_rgb(0.78, 0.55, 1.0);
+pub(super) const EFFECT_MARK: iced::Color = iced::Color::from_rgb(0.78, 0.55, 1.0);
 /// Where a volume line runs: its top and height. A sound track's over its
 /// lane, a cut's over the clip sound lane under it.
 type Lane = (f32, f32);

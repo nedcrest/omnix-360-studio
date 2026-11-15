@@ -3599,6 +3599,32 @@ mod tests {
         assert!(lanes.y(2, a, 140.0) > lanes.y(2, b, 233.0) + 1.0, "on one scale 233 % sits higher");
     }
 
+    /// A point dragged on a fitted clip holds still under the pointer:
+    /// its scale is the one it had when pressed, not refitted to it as it
+    /// moves (the audit, 2026-11-15: it ran away to the range's end).
+    #[test]
+    fn a_dragged_point_keeps_its_clip_s_scale() {
+        use super::auto::{LaneDrag, LaneHit};
+        use super::super::automation_ui::AutoMsg;
+        use crate::automation::{AutoClip, AutoPoint};
+        let (mut t, b) = timeline();
+        t.folds.frame = false;
+        t.rows = Rows::new(1.0, false, t.folds, 0);
+        t.blocks[0].cut.flat = true;
+        let point = |t: f64, v: f64| AutoPoint { t, v, ease: Default::default() };
+        t.blocks[0].cut.automation = vec![AutoClip { param: "frame.zoom".into(), from: 0.5, to: 3.5, points: vec![point(1.0, 100.0), point(3.0, 143.0)], follows: None, animation: None }];
+        let (top, _) = t.frame_lanes().lane(2);
+        let mut drag = t.frame_lanes().press(LaneHit::Point { lane: 2, owner: 0, t: 3.0 }, Point::ORIGIN, false).unwrap();
+        let mut got = Vec::new();
+        for _ in 0..3 {
+            let Some(Message::Auto(AutoMsg::Point { v, .. })) = t.frame_lanes().drag(&mut drag, Point::new(t.x(3.0, b), top + 6.0), b, Default::default()) else { panic!("a point's value") };
+            got.push(v);
+            t.blocks[0].cut.automation[0].points[1].v = v;
+        }
+        assert!(matches!(drag, LaneDrag::Point { .. }));
+        assert!(got.windows(2).all(|w| (w[0] - w[1]).abs() < 1e-9), "{got:?}");
+    }
+
     #[test]
     fn the_frame_row_opens_into_its_four_lanes_under_the_effects() {
         use super::auto::LaneHit;

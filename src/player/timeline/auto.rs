@@ -94,7 +94,9 @@ impl LaneHit {
 /// pressed), a clip drawn.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum LaneDrag {
-    Point { lane: usize, owner: usize, from: f64 },
+    /// `scale`: its clip's scale when pressed, kept for the whole drag
+    /// (refitted to the point as it moved, the point ran away).
+    Point { lane: usize, owner: usize, from: f64, scale: (f64, f64) },
     Value { lane: usize, owner: usize, t: f64, y0: f32, from: f64 },
     Edge { lane: usize, owner: usize, at: f64, start: bool, to: f64 },
     Body { lane: usize, owner: usize, at: f64, x0: f32, y0: f32, moved: bool },
@@ -141,15 +143,23 @@ impl Lanes<'_> {
     /// The height on lane `i` of clip `clip`'s value `v`, its scale top to
     /// bottom.
     pub(super) fn y(&self, i: usize, clip: &AutoClip, v: f64) -> f32 {
+        self.y_on(i, self.range(i, clip), v)
+    }
+
+    /// The height on lane `i` of value `v` on scale `(lo, hi)`.
+    fn y_on(&self, i: usize, (lo, hi): (f64, f64), v: f64) -> f32 {
         let (top, h) = self.lane(i);
-        let (lo, hi) = self.range(i, clip);
         top + h - 4.0 - ((v - lo) / (hi - lo)).clamp(0.0, 1.0) as f32 * (h - 8.0)
     }
 
     /// Clip `clip`'s value at height `y` on lane `i`.
     pub(super) fn value(&self, i: usize, clip: &AutoClip, y: f32) -> f64 {
+        self.value_on(i, self.range(i, clip), y)
+    }
+
+    /// The value at height `y` on lane `i` on scale `(lo, hi)`.
+    fn value_on(&self, i: usize, (lo, hi): (f64, f64), y: f32) -> f64 {
         let (top, h) = self.lane(i);
-        let (lo, hi) = self.range(i, clip);
         lo + ((top + h - 4.0 - y) / (h - 8.0)).clamp(0.0, 1.0) as f64 * (hi - lo)
     }
 
@@ -239,7 +249,10 @@ impl Lanes<'_> {
     pub(super) fn press(&self, hit: LaneHit, p: Point, ctrl: bool) -> Result<LaneDrag, Message> {
         Ok(match hit {
             LaneHit::Point { lane, owner, t } if ctrl => return Err(Message::Auto(AutoMsg::PointDelete { on: self.owners[owner].on, param: self.params[lane], t })),
-            LaneHit::Point { lane, owner, t } => LaneDrag::Point { lane, owner, from: t },
+            LaneHit::Point { lane, owner, t } => {
+                let clip = self.clip_at(lane, owner, t).ok_or(Message::ScrubDone)?;
+                LaneDrag::Point { lane, owner, from: t, scale: self.range(lane, clip) }
+            }
             LaneHit::Value { lane, owner, t, v } => LaneDrag::Value { lane, owner, t, y0: p.y, from: v },
             LaneHit::Edge { lane, owner, at, start } => {
                 let clip = self.clip_at(lane, owner, at).ok_or(Message::ScrubDone)?;
@@ -293,11 +306,11 @@ impl Lanes<'_> {
                 let v = (*from + ((*y0 - p.y) as f64 * per_px / step).round() * step).clamp(lo, hi);
                 Some(Message::Auto(AutoMsg::Point { on: self.owners[*owner].on, param, from: Some(*t), t: *t, v }))
             }
-            LaneDrag::Point { lane, owner, from } => {
+            LaneDrag::Point { lane, owner, from, scale } => {
                 let clip = self.clip_at(*lane, *owner, *from)?;
                 let o = &self.owners[*owner];
                 let t = self.own_time(o, p.x, b).clamp(clip.from, clip.to);
-                let message = AutoMsg::Point { on: o.on, param: self.params[*lane], from: Some(*from), t, v: self.value(*lane, clip, p.y) };
+                let message = AutoMsg::Point { on: o.on, param: self.params[*lane], from: Some(*from), t, v: self.value_on(*lane, *scale, p.y) };
                 *from = t;
                 Some(Message::Auto(message))
             }
@@ -378,7 +391,9 @@ impl Lanes<'_> {
                             let x = self.x(o, to, b);
                             self.clip_block(frame, i, if start { (x, r) } else { (l, x) });
                         }
-                        _ => self.draw_clip(frame, i, o, clip, (l, r), b),
+                        // The clip a point is dragged on keeps its scale.
+                        Some(&LaneDrag::Point { lane, owner, from, scale }) if (lane, owner) == (i, k) && clip.covers(from) => self.draw_clip(frame, i, o, clip, (l, r), b, scale),
+                        _ => self.draw_clip(frame, i, o, clip, (l, r), b, self.range(i, clip)),
                     }
                 }
             }
@@ -420,12 +435,15 @@ impl Lanes<'_> {
         frame.stroke(&block, Stroke::default().with_width(1.0).with_color(EFFECT_MARK.scale_alpha(0.7)));
     }
 
-    fn draw_clip(&self, frame: &mut Frame, i: usize, o: &Owner, clip: &AutoClip, (l, r): (f32, f32), b: Rectangle) {
+    /// Clip `clip` on lane `i` on scale `scale` (its own, or the one a drag
+    /// on it keeps).
+    #[allow(clippy::too_many_arguments)]
+    fn draw_clip(&self, frame: &mut Frame, i: usize, o: &Owner, clip: &AutoClip, (l, r): (f32, f32), b: Rectangle, scale: (f64, f64)) {
         self.clip_block(frame, i, (l, r));
         let curve = Path::new(|p| {
             let mut x = l;
             while x <= r {
-                let y = self.y(i, clip, clip.value_at(self.own_time(o, x, b)));
+                let y = self.y_on(i, scale, clip.value_at(self.own_time(o, x, b)));
                 if x == l { p.move_to(Point::new(x, y)) } else { p.line_to(Point::new(x, y)) }
                 x += 3.0;
             }
@@ -433,8 +451,8 @@ impl Lanes<'_> {
         frame.stroke(&curve, Stroke::default().with_width(1.5).with_color(EFFECT_MARK));
         // A fitted scale says its span, faint at the clip's right, so a
         // curve filling the lane isn't read as the whole range.
-        let (lo, hi) = self.range(i, clip);
-        if (lo, hi) != self.params[i].range() && r - l > 90.0 {
+        let (lo, hi) = scale;
+        if scale != self.params[i].range() && r - l > 90.0 {
             let (top, _) = self.lane(i);
             let span = format!("{}…{}", self.params[i].label(lo), self.params[i].label(hi));
             frame.fill_text(Text { content: span, position: Point::new(r - 4.0, top + 3.0), color: EFFECT_MARK.scale_alpha(0.75), size: 9.0.into(), align_x: iced::advanced::text::Alignment::Right, ..Default::default() });
@@ -442,7 +460,7 @@ impl Lanes<'_> {
         for q in &clip.points {
             let x = self.x(o, q.t, b);
             if x >= l - 0.5 && x <= r + 0.5 {
-                let y = self.y(i, clip, q.v);
+                let y = self.y_on(i, scale, q.v);
                 frame.fill(&Path::rectangle(Point::new(x - DOT, y - DOT), Size::new(2.0 * DOT, 2.0 * DOT)), EFFECT_MARK);
                 let tag = self.value_tag(i, x, y, q.v);
                 frame.fill(&Path::rounded_rectangle(tag.position(), tag.size(), 2.0.into()), iced::Color::from_rgba(0.0, 0.0, 0.0, 0.65));

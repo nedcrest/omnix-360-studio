@@ -34,7 +34,46 @@ pub(super) fn cut_labels(c: &Cut, default: Mode) -> Vec<String> {
     }
 }
 
+/// The cuts a copy takes (gap 102): those of `picked` that are cuts, in
+/// the edit's order, as they are now.
+pub(super) fn copied_cuts(cuts: &[Cut], picked: &[crate::project::Id]) -> Vec<Cut> {
+    cuts.iter().filter(|c| picked.contains(&c.id)).cloned().collect()
+}
+
 impl App {
+    /// Ctrl+C: the selected cuts copied; Ctrl+V: pasted at the playhead
+    /// (the cut there split), Ctrl+Shift+V at the nearest join, one undo
+    /// step, the copies selected after (gap 102).
+    pub(super) fn on_clipboard(&mut self, message: Message) {
+        match message {
+            Message::CopyCuts => {
+                let copied = copied_cuts(&self.edit.cuts, &self.picked_ids());
+                if copied.is_empty() {
+                    self.save_status = Some("Select a cut to copy".to_owned());
+                    return;
+                }
+                self.save_status = Some(format!("{} cut(s) copied: Ctrl+V at the playhead, Ctrl+Shift+V at the nearest join", copied.len()));
+                self.copied = copied;
+            }
+            Message::PasteCuts(at_join) => {
+                if self.copied.is_empty() {
+                    self.save_status = Some("Nothing copied yet: select a cut and press Ctrl+C".to_owned());
+                    return;
+                }
+                let at = self.position();
+                let place = if at_join { Place::Join(at) } else { Place::At(at) };
+                let n = self.copied.len();
+                let Some(first) = self.op(Op::Cut(CutOp::Paste { cuts: self.copied.clone(), place })).and_then(|o| o.made) else { return };
+                let i = self.edit.cut_index(first).unwrap_or(0);
+                let ids: Vec<crate::project::Id> = self.edit.cuts[i..(i + n).min(self.edit.cuts.len())].iter().map(|c| c.id).collect();
+                self.after_edit(at);
+                self.selection = Selection::Cut(first);
+                (self.also, self.picked_with) = (ids[1..].to_vec(), self.selection);
+            }
+            _ => {}
+        }
+    }
+
     /// A bin button's place as a spot on the edit, from the playhead now.
     pub(super) fn spot(&self, place: bin::Place) -> Place {
         match place {
@@ -291,6 +330,23 @@ impl App {
 mod tests {
     use super::super::tests::app;
     use super::*;
+
+    /// Gap 102: a copy takes the selected cuts in the edit's order; Ctrl+V
+    /// puts them in at the playhead, selected after.
+    #[test]
+    fn copied_cuts_are_pasted_at_the_playhead() {
+        let mut app = app();
+        let (a, b) = (app.edit.cuts[0].id, app.edit.cuts[1].id);
+        assert_eq!(copied_cuts(&app.edit.cuts, &[b, a]).iter().map(|c| c.id).collect::<Vec<_>>(), [a, b]);
+        let _ = app.update(Message::PasteCuts(false));
+        assert_eq!(app.edit.cuts.len(), 2, "nothing copied: nothing pasted");
+        app.selection = Selection::Cut(b);
+        let _ = app.update(Message::CopyCuts);
+        let _ = app.update(Message::PasteCuts(true));
+        assert_eq!(app.edit.cuts.len(), 3);
+        assert!(matches!(app.selection, Selection::Cut(id) if id != a && id != b), "the copy selected");
+        assert!(app.edit.undo() && app.edit.cuts.len() == 2);
+    }
 
     /// A cut's label says its length on the edit and, at speed, how fast.
     #[test]

@@ -577,6 +577,11 @@ enum Message {
     TrimToPlayhead(bool),
     /// Split the cut at the playhead.
     Split,
+    /// The selected cuts copied (gap 102).
+    CopyCuts,
+    /// The copied cuts pasted at the playhead, splitting the cut there;
+    /// at the nearest join if true.
+    PasteCuts(bool),
     /// The wheel on the timeline: across, up or down (lines), and the
     /// time under the pointer. Zooms there; with Shift, or across, pans.
     TimelineWheel(f32, f32, f64),
@@ -931,6 +936,8 @@ struct App {
     /// Automation lanes on their value's whole range, not fitted to their
     /// points (gap 108); while the window is open.
     absolute_lanes: Vec<automation_ui::Param>,
+    /// The cuts Ctrl+C copied, as they were then (gap 102).
+    copied: Vec<crate::project::Cut>,
     /// The box picks a white balance, not a colour to track.
     picking_white: bool,
     /// The panel docked at the right of the view, if one is open.
@@ -1106,6 +1113,7 @@ impl App {
             save_status: None,
             picking: None,
             absolute_lanes: Vec::new(),
+            copied: Vec::new(),
             picking_white: false,
             side: None,
             record: record_ui::Panel::new(saved.record_input.clone(), saved.record_channel, saved.record_countdown, saved.record_play),
@@ -1372,6 +1380,10 @@ impl App {
             m @ (Message::MarkEdit { .. } | Message::MarkNote { .. } | Message::MarkSave | Message::MarkDelete | Message::MarkClose | Message::AddMark | Message::MarkMove { .. } | Message::MarkSelect { .. }) => self.on_marks(m),
             m @ (Message::Tick | Message::TimelineZoom { .. } | Message::TimelineWheel { .. } | Message::TimelineZoomTo { .. } | Message::TimelinePan { .. } | Message::Toggle | Message::Scrub { .. } | Message::ScrubDone) => self.on_transport(m),
             m @ (Message::Select { .. } | Message::SelectOne(_) | Message::AddBlank | Message::SoundEdge { .. } | Message::Trim { .. } | Message::MoveCut { .. } | Message::SelectAtPlayhead | Message::StepsRested { .. } | Message::ToastGone { .. } | Message::StepNoteGone { .. } | Message::TrimToPlayhead { .. } | Message::Crossfade { .. } | Message::ToggleCrossfade | Message::Split | Message::DeleteCut | Message::Undo | Message::Redo) => self.on_cuts(m),
+            m @ (Message::CopyCuts | Message::PasteCuts(_)) => {
+                self.on_clipboard(m);
+                Task::none()
+            }
             m @ (Message::FrameKeyPick(..) | Message::FrameKeyMove(..)) => {
                 self.on_frame_key(m);
                 Task::none()

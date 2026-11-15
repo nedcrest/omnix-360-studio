@@ -64,7 +64,7 @@ fn line() -> impl Strategy<Value = Line> {
 fn cut_op() -> impl Strategy<Value = CutOp> {
     let place = prop_oneof![Just(Place::End), time().prop_map(Place::At), time().prop_map(Place::Join)];
     prop_oneof![
-        (0.0..1.0f64, 0.0..5.0f64, place).prop_map(|(start, len, place)| CutOp::Add { input: "x.mp4".into(), start, end: start + len, place, stabilize: None, lut: None }),
+        (0.0..1.0f64, 0.0..5.0f64, place.clone()).prop_map(|(start, len, place)| CutOp::Add { input: "x.mp4".into(), start, end: start + len, place, stabilize: None, lut: None }),
         (id(), end(), time()).prop_map(|(cut, end, t)| CutOp::Trim { cut, end, t, most: 6.0 }),
         (id(), prop::option::of(id())).prop_map(|(cut, before)| CutOp::Move { cut, before }),
         (id(), time()).prop_map(|(cut, t)| CutOp::Split { cut, t }),
@@ -79,6 +79,7 @@ fn cut_op() -> impl Strategy<Value = CutOp> {
         (id(), end(), time()).prop_map(|(cut, end, t)| CutOp::SoundEdge { cut, end, t, most: 6.0 }),
         id().prop_map(|cut| CutOp::SoundToPicture { cut }),
         (id(), 0.2..4.5f64).prop_map(|(cut, rate)| CutOp::Speed { cut, rate }),
+        (0.0..5.0f64, place).prop_map(|(len, place)| CutOp::Paste { cuts: vec![crate::project::Cut::new("x.mp4".into(), 0.0, len)], place }),
     ]
 }
 

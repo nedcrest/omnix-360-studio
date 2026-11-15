@@ -127,6 +127,12 @@ pub enum CutOp {
     /// Its sound at speed like tape, slower is lower (on), or stretched
     /// keeping its pitch (off, as it starts).
     TapePitch { cut: Id, on: bool },
+    /// Copies of `cuts` (as `describe --json` or a copy gives them) put in
+    /// at `place`, side by side in their order (gap 102): each a new cut
+    /// with a fresh id, no piece of what it was copied from (joining that
+    /// clip's pieces leaves it be) and in no group; the first with no
+    /// join look before it. One undo step.
+    Paste { cuts: Vec<Cut>, place: Place },
 }
 
 /// Two markers closer than this (seconds) are one.
@@ -206,6 +212,7 @@ pub(super) fn apply(p: &mut Project, op: &CutOp) -> Result<Outcome, OpError> {
         &CutOp::Speed { cut, rate } => set_rate(p, cut, rate),
         CutOp::SpeedCurve { cut, keys } => set_speed(p, *cut, keys.clone()),
         &CutOp::TapePitch { cut, on } => tape_pitch(p, cut, on),
+        CutOp::Paste { cuts, place } => paste(p, cuts, place),
         &CutOp::Unmark { cut, t } => unmark(p, cut, t),
     }
 }
@@ -257,6 +264,43 @@ fn add(p: &mut Project, input: &std::path::Path, start: &f64, end: &f64, place: 
     // gets an id of its own.
     p.settle_ids();
     Ok(Outcome { summary: format!("cut #{id} added, {}", position(at, p.cuts.len())), made: Some(id) })
+}
+
+/// Copies of `cuts` put in at `place` (`CutOp::Paste`).
+fn paste(p: &mut Project, cuts: &[Cut], place: &Place) -> Result<Outcome, OpError> {
+    if cuts.is_empty() {
+        return Err(OpError::Invalid("nothing to paste".into()));
+    }
+    for c in cuts {
+        let len = c.speed.edit_secs(c.start, c.end);
+        if !(c.start.is_finite() && c.start >= 0.0 && len >= MIN_CUT) {
+            return Err(OpError::Invalid(format!("a cut of {} from {} to {} s is shorter than {MIN_CUT} s", c.input.display(), c.start, c.end)));
+        }
+        c.speed.check().map_err(OpError::Invalid)?;
+    }
+    let mut ids = Vec::with_capacity(cuts.len());
+    let mut at = None;
+    for (k, c) in cuts.iter().enumerate() {
+        let id = p.next_id();
+        let mut copy = Cut { id, origin: None, group: None, ..c.clone() };
+        if k == 0 {
+            (copy.crossfade, copy.transition) = (0.0, None);
+        }
+        at = Some(match (at, place) {
+            (Some(i), _) => p.insert_cut(i + 1, copy),
+            (None, Place::End) => p.insert_cut(usize::MAX, copy),
+            (None, &Place::At(t)) => p.insert_at(t, copy),
+            (None, &Place::Join(t)) => {
+                let join = p.nearest_join(t);
+                p.insert_cut(join, copy)
+            }
+        });
+        // A split's second half gets an id of its own before the next.
+        p.settle_ids();
+        ids.push(id);
+    }
+    let first = at.map_or(0, |i| i + 1 - cuts.len());
+    Ok(Outcome { summary: format!("{} cut(s) pasted from {}: #{}", cuts.len(), position(first, p.cuts.len()), ids.iter().map(Id::to_string).collect::<Vec<_>>().join(", #")), made: ids.first().copied() })
 }
 
 /// Several cuts moved together.
@@ -821,6 +865,41 @@ mod tests {
         e.apply(&Op::Cut(CutOp::SoundEdge { cut: a, end: End::Out, t: 4.5, most: 10.0 })).unwrap();
         assert!(e.apply(&speed(2.0)).is_err(), "an L-cut keeps normal speed");
         check(&e).unwrap();
+    }
+
+    /// Gap 102: copies pasted at the playhead split the cut there and go
+    /// between its halves, each a new cut that joining the clip's pieces
+    /// leaves where it is; at the nearest join; one undo step each.
+    #[test]
+    fn copies_are_pasted_as_cuts_of_their_own() {
+        let mut e = Edit::default();
+        let inputs = |e: &Edit| e.cuts.iter().map(|c| c.input.display().to_string()).collect::<Vec<_>>();
+        let a = e.apply(&add("a.mp4", 6.0, Place::End)).unwrap().made.unwrap();
+        e.apply(&add("b.mp4", 2.0, Place::End)).unwrap();
+        let mut b = e.cuts[1].clone();
+        (b.crossfade, b.speed) = (0.5, crate::speed::Speed::constant(2.0));
+        let copied = vec![e.cuts[0].clone(), b];
+        let paste = |place| Op::Cut(CutOp::Paste { cuts: copied.clone(), place });
+        e.apply(&paste(Place::At(3.0))).unwrap();
+        assert_eq!(inputs(&e), ["a.mp4", "a.mp4", "b.mp4", "a.mp4", "b.mp4"], "a split at 3 s, the copies between");
+        let ids: Vec<Id> = e.cuts.iter().map(|c| c.id).collect();
+        assert_eq!(ids.iter().collect::<std::collections::HashSet<_>>().len(), 5, "fresh ids");
+        assert!(e.cuts[1].origin.is_none() && e.cuts[1].crossfade == 0.0 && e.cuts[2].speed.short().as_deref() == Some("2×"));
+        // Their lengths on the edit added, less the second copy's own
+        // crossfade into the first, kept.
+        assert_eq!(e.duration(), 6.0 + 2.0 + 6.0 + 1.0 - 0.5);
+        // The halves joined back: the copies stay, after it.
+        e.apply(&Op::Cut(CutOp::JoinPieces { cut: a })).unwrap();
+        assert_eq!(inputs(&e), ["a.mp4", "a.mp4", "b.mp4", "b.mp4"]);
+        assert_eq!((e.cuts[0].start, e.cuts[0].end), (0.0, 6.0));
+        check(&e).unwrap();
+        // At the join nearest 6.2 s: after the first cut, nothing split.
+        let before = e.cuts.len();
+        e.apply(&paste(Place::Join(6.2))).unwrap();
+        assert_eq!(e.cuts.len(), before + 2);
+        assert_eq!((e.cuts[1].input.to_str(), e.cuts[0].end), (Some("a.mp4"), 6.0));
+        assert!(e.undo() && e.cuts.len() == before, "one step");
+        assert!(e.apply(&Op::Cut(CutOp::Paste { cuts: Vec::new(), place: Place::End })).is_err());
     }
 
     #[test]

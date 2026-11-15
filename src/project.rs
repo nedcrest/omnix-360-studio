@@ -223,7 +223,7 @@ pub fn ramp(x: f64, secs: f64) -> f64 {
 
 /// A volume point: `volume` dB at time `t`, straight lines (in dB) between
 /// points, held before the first and after the last.
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct VolumeKey {
     pub t: f64,
@@ -668,7 +668,7 @@ impl Style {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Cut {
     /// Names it for operations and their undo (`OPS-API.md`): unique in
@@ -683,7 +683,9 @@ pub struct Cut {
     pub start: f64,
     #[serde(rename = "out")]
     pub end: f64,
+    /// The view's keys (a 360 cut's), as `view::Keyframe`s.
     #[serde(default)]
+    #[schemars(with = "Vec<serde_json::Value>")]
     pub keyframes: Keyframes,
     /// Its stabilisation, or the export's `--stabilize` (horizon by
     /// default) if it doesn't set one.

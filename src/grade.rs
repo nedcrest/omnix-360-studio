@@ -402,7 +402,7 @@ pub fn white_balance(rgb: [f64; 3]) -> (f64, f64) {
 
 /// A cut's effects from clip time `t`, eased like camera keyframes into the
 /// next.
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct EffectKey {
     pub t: f64,
     #[serde(flatten)]

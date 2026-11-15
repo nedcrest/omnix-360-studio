@@ -132,9 +132,9 @@ impl App {
             // cut alongside; the incoming cut paused in it (taken over to
             // edit): the one before, shown when it's not selected.
             let (i, t) = self.edit.crossfade_partner(self.current, t, playing)?;
-            Some((i, self.edit.cuts[i].input.clone(), t, playing && i > self.current))
+            Some((i, t, playing && i > self.current))
         })();
-        let Some((i, input, t, playing)) = want else {
+        let Some((i, t, playing)) = want else {
             self.partner = None;
             return;
         };
@@ -181,7 +181,7 @@ impl App {
                 }
             }
             // Played into: the cut readied ahead, if it was.
-            _ if playing && t - self.edit.cuts[i].start < 0.25 && self.preroll.as_ref().is_some_and(|(j, inp, at, _)| (*j, inp, *at) == (i, &input, self.edit.cuts[i].start)) => {
+            _ if playing && t - self.edit.cuts[i].start < 0.25 && self.preroll.as_ref().is_some_and(|p| readies(p, i, &self.edit.cuts[i])) => {
                 let (_, _, _, mut primed) = self.preroll.take().unwrap();
                 primed.go();
                 self.partner = Some((i, Clip { playback: primed, shown: None }));
@@ -295,7 +295,7 @@ impl App {
             && !carries_on
             && self.partner.as_ref().is_none_or(|(i, _)| *i != next)
             && let Some(n) = next_cut
-            && self.preroll.as_ref().is_none_or(|(i, input, start, _)| (*i, input, *start) != (next, &n.input, n.start))
+            && self.preroll.as_ref().is_none_or(|p| !readies(p, next, n))
             && let Some(media) = cut_media(&self.library, &self.opts, n)
         {
             let primed = Playback::primed(media, n.start, volume, self.full_on_pause);
@@ -304,8 +304,9 @@ impl App {
         // Its sound starts a device latency early, so it's heard from the
         // moment this cut's ends (that latency is otherwise a gap, and the
         // picture waits through it to stay in sync).
-        if let Some((i, input, at, primed)) = &mut self.preroll
-            && next_cut.is_some_and(|n| (*i, &*input, *at) == (next, &n.input, n.start))
+        if let Some(pre) = &mut self.preroll
+            && next_cut.is_some_and(|n| readies(pre, next, n))
+            && let primed = &mut pre.3
             && primed.sound_lead().is_some_and(|lead| now >= before_change(lead))
         {
             primed.start_sound();
@@ -315,9 +316,10 @@ impl App {
         if change < cut.end
             && now >= change
             && self.partner.as_ref().is_none_or(|(i, _)| *i != next)
-            && let Some((i, input, at, mut primed)) = self.preroll.take()
-            && next_cut.is_some_and(|n| (i, &input, at) == (next, &n.input, n.start))
+            && let Some(pre) = self.preroll.take()
+            && next_cut.is_some_and(|n| readies(&pre, next, n))
         {
+            let mut primed = pre.3;
             primed.go();
             self.partner = Some((next, Clip { playback: primed, shown: None }));
         }
@@ -355,9 +357,10 @@ impl App {
                 self.preroll = None;
             }
             Some(n) => {
-                let (start, input) = (n.start, n.input.clone());
-                match self.preroll.take() {
-                    Some((i, at_input, at, mut primed)) if (i, &at_input, at) == (next, &input, start) => {
+                let start = n.start;
+                let ready = self.preroll.take().filter(|p| readies(p, next, n));
+                match ready {
+                    Some((_, _, _, mut primed)) => {
                         // The last frame stays up until the primed one's first.
                         if self.held.is_none() {
                             self.held = self.sphere();
@@ -634,6 +637,13 @@ impl App {
 /// A cut's clip as the player opens it from the loaded `library`: its own
 /// sound and filters, the play size, its stabilisation. (Free of `App`, so
 /// it can be called while the playing clip is borrowed.)
+/// Whether `pre`, a playback readied ahead, is cut `i`'s as it is now:
+/// its place, its start and how it plays (`Media::plays`: a speed or a
+/// voice changed since leaves it stale; the audit, 2026-11-15).
+fn readies(pre: &(usize, PathBuf, f64, Playback), i: usize, cut: &Cut) -> bool {
+    pre.0 == i && pre.2 == cut.start && pre.3.media.plays(cut)
+}
+
 fn cut_media(library: &[Media], opts: &Options, cut: &Cut) -> Option<Media> {
     let mut media = library.iter().find(|m| m.input == cut.input)?.for_cut(cut);
     media.osv_size = opts.osv_size;

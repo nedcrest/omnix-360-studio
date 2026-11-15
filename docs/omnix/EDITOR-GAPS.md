@@ -1470,9 +1470,6 @@ and are written the new way on their next save.
   clip's own sound counts as speech only once its menu's «Its own sound
   is speech» is ticked (`duck.rs`, `tracks.rs:361`); the message
   should name it.
-- The scroll wheel over a list (iced's pick_list, Export's Loudness)
-  changes its value as the panel is scrolled: the value moves under
-  the pointer without a click.
 - Done (Dailix `43fb6dc`): the Trips place's default folder was
   `~/Dailix/projects`, now `~/Dailix/trips`; Dailix's README named the
   places «TMP, dailix, sources».

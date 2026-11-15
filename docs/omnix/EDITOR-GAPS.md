@@ -1466,7 +1466,7 @@ and are written the new way on their next save.
 - The bin shows its trip's whole path (`/home/<user>/…`), long and
   personal in a screenshot: as Dailix does, `~` for the home folder,
   cut in the middle when long.
-- «No speech to lower the music under…» doesn't say how to get it: a
+- Done (`20a88ce`): «No speech to lower the music under…» didn't say how to get it: a
   clip's own sound counts as speech only once its menu's «Its own sound
   is speech» is ticked (`duck.rs`, `tracks.rs:361`); the message
   should name it.
@@ -1485,6 +1485,12 @@ cut off (at Omnix's own 115 % from «Framing» on). The guide's Omnix
 shots are taken at 1440×900 meanwhile. To fit: the switches as icons
 with their names in tooltips when the room is short, or a second
 row, or the less used into a ⋯; the user's choice when it's built.
+
+**Built 2026-11-15, waits for the user's check** (`7be162e`): the user
+chose icons. Measured, the row needs ~1700 px in full, ~1520 compact;
+`bar_fit` picks: in full, compact (the switches as icons, the zoom
+without its slider), or the zoom and the sound on a second line at its
+end. The window's width followed (`WindowWidth`).
 
 ### 113. Roles named in English — small (user, 2026-11-14)
 

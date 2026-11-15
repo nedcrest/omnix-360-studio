@@ -160,8 +160,8 @@ written.
 
 ## Found while mapping
 
-- The **Snapping** button's tooltip says Shift drags free; the code and
-  the shortcuts window say Alt.
+- ~~The **Snapping** button's tooltip says Shift drags free~~: fixed
+  (`d3257a7`), Alt.
 - The **Play range** tooltip says Shift and a drag on the ruler; the
   shortcuts window says on the lanes' empty stretch (both work?).
 - Dailix's README lists neither `dailix about` nor `dailix voice …`.

@@ -28,14 +28,16 @@ const FLOOR_DB: f64 = -50.0;
 /// Shorter blips (a click, a breath) aren't speech.
 const SHORTEST: f64 = 0.25;
 
-/// What may hold speech: a file, its stretch in its own time, and where
-/// that stretch starts on the edit.
+/// What may hold speech: a file, its stretch in its own time, where that
+/// stretch starts on the edit, and how fast it plays (a cut's speed; a
+/// take's is normal).
 #[derive(Clone, Debug, PartialEq)]
 pub struct Source {
     pub file: PathBuf,
     pub start: f64,
     pub end: f64,
     pub at: f64,
+    pub speed: crate::speed::Speed,
 }
 
 /// The project's sources of speech: cuts with a cleaned voice and the
@@ -43,8 +45,8 @@ pub struct Source {
 pub fn sources(project: &Project) -> Vec<Source> {
     let offsets = crate::project::offsets(&project.cuts);
     // A cleaned voice, or its own sound when it's marked as speech (gap 103).
-    let cuts = project.cuts.iter().zip(offsets).filter(|(c, _)| !c.mute).filter_map(|(c, at)| Some(Source { file: c.audio.clone().or_else(|| c.speech.then(|| c.input.clone()))?, start: c.start, end: c.end, at }));
-    let takes = project.voice.clips.iter().filter(|c| !c.mute).map(|c| Source { file: c.input.clone(), start: c.start, end: c.end, at: c.at });
+    let cuts = project.cuts.iter().zip(offsets).filter(|(c, _)| !c.mute).filter_map(|(c, at)| Some(Source { file: c.audio.clone().or_else(|| c.speech.then(|| c.input.clone()))?, start: c.start, end: c.end, at, speed: c.speed.clone() }));
+    let takes = project.voice.clips.iter().filter(|c| !c.mute).map(|c| Source { file: c.input.clone(), start: c.start, end: c.end, at: c.at, speed: Default::default() });
     cuts.chain(takes).collect()
 }
 
@@ -73,7 +75,9 @@ pub fn speech(peaks: &[f32], step: f64, source: &Source) -> Vec<(f64, f64)> {
         }
     }
     spans.retain(|(a, b)| b - a >= SHORTEST);
-    spans.iter().map(|&(a, b)| (source.at + a - source.start, source.at + b - source.start)).collect()
+    // Own time to the edit's, through its speed.
+    let edit = |t: f64| if source.speed.is_normal() { source.at + t - source.start } else { source.at + source.speed.edit_secs(source.start, t) };
+    spans.iter().map(|&(a, b)| (edit(a), edit(b))).collect()
 }
 
 /// Where `project` holds speech, edit time: each source's waveform read
@@ -214,7 +218,7 @@ mod tests {
     }
 
     fn source(at: f64) -> Source {
-        Source { file: "voice.flac".into(), start: 1.0, end: 9.0, at }
+        Source { file: "voice.flac".into(), start: 1.0, end: 9.0, at, speed: Default::default() }
     }
 
     /// Peaks every 0.1 s: quiet, then speech from 2 s to 4 s with a 0.5 s
@@ -237,6 +241,9 @@ mod tests {
         assert_eq!(got.len(), 2, "{got:?}");
         assert!(near(got[0].0, 11.0) && near(got[0].1, 13.0), "the pause at 3 s bridged: {got:?}");
         assert!(near(got[1].0, 16.0) && near(got[1].1, 17.0), "the click at 6 s dropped: {got:?}");
+        // A cut at twice the speed: its speech half as far in, half as long.
+        let fast = speech(&peaks(), 0.1, &Source { speed: crate::speed::Speed::constant(2.0), ..source(10.0) });
+        assert!(near(fast[0].0, 10.5) && near(fast[0].1, 11.5) && near(fast[1].0, 13.0), "{fast:?}");
         // Outside its stretch nothing counts.
         let short = Source { start: 4.5, end: 6.5, ..source(0.0) };
         assert!(speech(&peaks(), 0.1, &short).is_empty());
@@ -329,6 +336,6 @@ mod tests {
         p.cuts = vec![wind, talk, muted];
         p.voice.clips.push(crate::project::MusicClip { input: "take.wav".into(), at: 1.0, start: 0.5, end: 2.0, ..Default::default() });
         let got = sources(&p);
-        assert_eq!(got, vec![Source { file: "voice/a.flac".into(), start: 2.0, end: 6.0, at: 3.0 }, Source { file: "take.wav".into(), start: 0.5, end: 2.0, at: 1.0 }]);
+        assert_eq!(got, vec![Source { file: "voice/a.flac".into(), start: 2.0, end: 6.0, at: 3.0, speed: Default::default() }, Source { file: "take.wav".into(), start: 0.5, end: 2.0, at: 1.0, speed: Default::default() }]);
     }
 }

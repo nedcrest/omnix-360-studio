@@ -327,7 +327,43 @@ impl Block {
     /// and volume line all live there.
     fn sound_span(&self) -> (f64, f64, f64) {
         let c = &self.cut;
-        (self.from - c.sound_before, c.start - c.sound_before, self.len() + c.sound_before + c.sound_after)
+        if c.speed.is_normal() {
+            return (self.from - c.sound_before, c.start - c.sound_before, self.len() + c.sound_before + c.sound_after);
+        }
+        // At speed its sound stops short only (no J or L): clip time read
+        // through its speed.
+        let (a, b) = c.sound_span();
+        (self.at(a), a, c.speed.edit_secs(a, b))
+    }
+}
+
+/// Where an own volume line lies (a cut's or a sound clip's): its lane,
+/// the edit time its sound starts at and that start's own time, its
+/// length on the edit, its points (own time), and the speed its own time
+/// runs at (a sound clip's is normal).
+struct OwnPlace<'a> {
+    lane: Lane,
+    from: f64,
+    start: f64,
+    len: f64,
+    keys: &'a [crate::project::VolumeKey],
+    speed: &'a crate::speed::Speed,
+}
+
+impl OwnPlace<'_> {
+    /// Edit time of its own time `t`.
+    fn edit(&self, t: f64) -> f64 {
+        self.from + self.speed.edit_secs(self.start, t)
+    }
+
+    /// Its own time at edit time `t`.
+    fn own(&self, t: f64) -> f64 {
+        self.speed.clip_after(self.start, t - self.from)
+    }
+
+    /// Its own time where it ends.
+    fn end(&self) -> f64 {
+        self.speed.clip_after(self.start, self.len)
     }
 }
 
@@ -785,15 +821,15 @@ impl Timeline {
 
     /// Where `own` is drawn: its lane, where it starts on the edit, its in
     /// point in its file, its length and its points.
-    fn own_place(&self, own: Own) -> Option<(Lane, f64, f64, f64, &[crate::project::VolumeKey])> {
+    fn own_place(&self, own: Own) -> Option<OwnPlace<'_>> {
         match own {
             Own::Cut(i) => self.blocks.get(i).map(|c| {
                 let (from, start, len) = c.sound_span();
-                (self.rows.cut_lane(), from, start, len, &c.cut.volume[..])
+                OwnPlace { lane: self.rows.cut_lane(), from, start, len, keys: &c.cut.volume, speed: &c.cut.speed }
             }),
             Own::Clip(which, i) => {
                 let li = self.sounds.iter().position(|l| l.which == which)?;
-                self.sounds[li].blocks.get(i).map(|m| (self.rows.sound_lane(li), m.clip.at, m.clip.start, m.len(), &m.clip.volume[..]))
+                self.sounds[li].blocks.get(i).map(|m| OwnPlace { lane: self.rows.sound_lane(li), from: m.clip.at, start: m.clip.start, len: m.len(), keys: &m.clip.volume, speed: &crate::speed::NORMAL })
             }
         }
     }
@@ -816,16 +852,16 @@ impl Timeline {
     fn on_sound_line(&self, p: Point, b: Rectangle) -> Option<Own> {
         let t = self.t(p.x, b);
         self.owns_at_y(p.y).into_iter().find(|&own| {
-            let Some((lane, from, start, len, keys)) = self.own_place(own) else { return false };
-            !keys.is_empty() && t >= from && t <= from + len && (Self::volume_y(lane, crate::project::volume_at(keys, start + t - from)) - p.y).abs() <= PICK
+            let Some(o) = self.own_place(own) else { return false };
+            !o.keys.is_empty() && t >= o.from && t <= o.from + o.len && (Self::volume_y(o.lane, crate::project::volume_at(o.keys, o.own(t))) - p.y).abs() <= PICK
         })
     }
 
     /// An own line's point under `p`, if any.
     fn sound_at(&self, p: Point, b: Rectangle) -> Option<(Own, usize)> {
         self.owns_at_y(p.y).into_iter().find_map(|own| {
-            let (lane, from, start, len, keys) = self.own_place(own)?;
-            let k = keys.iter().position(|k| k.t >= start && k.t <= start + len && (self.x(from + k.t - start, b) - p.x).abs() <= PICK && (Self::volume_y(lane, k.volume) - p.y).abs() <= PICK)?;
+            let o = self.own_place(own)?;
+            let k = o.keys.iter().position(|k| k.t >= o.start && k.t <= o.end() && (self.x(o.edit(k.t), b) - p.x).abs() <= PICK && (Self::volume_y(o.lane, k.volume) - p.y).abs() <= PICK)?;
             Some((own, k))
         })
     }
@@ -833,15 +869,15 @@ impl Timeline {
     /// Adds a point to `own`'s line at `p` and drags it on from there.
     fn add_point(&self, drag: &mut Drag, own: Own, p: Point, b: Rectangle) -> Option<Message> {
         let (t, db) = self.own_point(own, p, b)?;
-        let keys = self.own_place(own)?.4;
+        let keys = self.own_place(own)?.keys;
         *drag = Drag::Point { own, key: keys.partition_point(|k| k.t <= t) };
         Some(Message::PointAdd(own, t, db))
     }
 
     /// A new point on `own` at `p`: its file time and level.
     fn own_point(&self, own: Own, p: Point, b: Rectangle) -> Option<(f64, f64)> {
-        let (lane, from, start, ..) = self.own_place(own)?;
-        Some((start + self.t(p.x, b) - from, Self::volume_db(lane, p.y)))
+        let o = self.own_place(own)?;
+        Some((o.own(self.t(p.x, b)), Self::volume_db(o.lane, p.y)))
     }
 
     /// The colour of the line under cut `i` when it's one of a clip's
@@ -1283,7 +1319,7 @@ impl Timeline {
             // clip's own, its fades and crossfades (`mixdown::clip_gain`).
             if let Some(w) = &m.wave {
                 let heard = |t: f64| crate::mixdown::clip_gain(track, i, m.clip.at + t - m.clip.start, self.video) as f32;
-                let wave = Wave { left: l, right: r, top, height: h, start: m.clip.start, len: m.len() };
+                let wave = Wave { left: l, right: r, top, height: h, start: m.clip.start, len: m.len(), speed: &crate::speed::NORMAL };
                 wave.draw(frame, b, w, m.even_wave.as_ref().unwrap_or(w), heard, palette.background.base.text.scale_alpha(0.7));
             }
             if let Some(shown) = m.clip.beats {
@@ -1332,25 +1368,25 @@ impl Timeline {
             frame.fill(&Path::rectangle(Point::new(self.x(self.video, b) - 1.0, self.rows.sound_top(li)), Size::new(2.0, self.rows.lane_h(li))), ink);
         }
         // Each clip's own line, inside it.
-        for (i, m) in blocks.iter().enumerate() {
-            self.draw_own_line(frame, b, Own::Clip(*which, i), self.rows.sound_lane(li), m.clip.at, m.clip.start, m.len(), &m.clip.volume);
+        for i in 0..blocks.len() {
+            if let Some(o) = self.own_place(Own::Clip(*which, i)) {
+                self.draw_own_line(frame, b, Own::Clip(*which, i), &o);
+            }
         }
         for (i, m) in blocks.iter().enumerate() {
             draw_tag(frame, self.level_tag_at(Own::Clip(*which, i), b), &m.level);
         }
     }
 
-    /// An own volume line (a cut's or a sound clip's) inside its block on
-    /// `lane`, once it has points: the block starts at edit time `from`,
-    /// at `start` in its file, for `len` seconds; points outside it aren't
-    /// drawn (their indices still count).
-    #[allow(clippy::too_many_arguments)]
-    fn draw_own_line(&self, frame: &mut Frame, b: Rectangle, own: Own, lane: Lane, from: f64, start: f64, len: f64, keys: &[crate::project::VolumeKey]) {
+    /// An own volume line (a cut's or a sound clip's) inside its block
+    /// (`o`), once it has points; points outside it aren't drawn (their
+    /// indices still count).
+    fn draw_own_line(&self, frame: &mut Frame, b: Rectangle, own: Own, o: &OwnPlace) {
+        let (lane, start, end, keys) = (o.lane, o.start, o.end(), o.keys);
         if keys.is_empty() {
             return;
         }
-        let x = |t: f64| self.x(from + t - start, b);
-        let end = start + len;
+        let x = |t: f64| self.x(o.edit(t), b);
         let at = |t: f64| crate::project::volume_at(keys, t);
         let points: Vec<_> = keys.iter().map(|k| if k.t >= start && k.t <= end { (x(k.t), k.volume) } else { (f32::NAN, k.volume) }).collect();
         let selected = self.picked.point().filter(|p| p.0 == own).map(|p| p.1);
@@ -1380,9 +1416,13 @@ impl Timeline {
             // As it's heard: evened out (once that's read), its level and
             // points, the clips' level; what the file holds faint behind.
             let (_, from, len) = c.sound_span();
-            let ramp = |t: f64| crate::project::fade_ramp(t - from, from + len - t, c.cut.sound_fade_in, c.cut.sound_fade_out);
+            // Its fades are edit seconds from its sound's edges.
+            let ramp = |t: f64| {
+                let into = c.cut.speed.edit_secs(from, t);
+                crate::project::fade_ramp(into, len - into, c.cut.sound_fade_in, c.cut.sound_fade_out)
+            };
             let heard = |t: f64| crate::mixdown::cut_gain(self.clips_db, c.cut.sound_db(), crate::project::volume_at(&c.cut.volume, t), ramp(t)) as f32;
-            let wave = Wave { left: l, right: r, top, height: h, start: from, len };
+            let wave = Wave { left: l, right: r, top, height: h, start: from, len, speed: &c.cut.speed };
             wave.draw(frame, b, w, c.even_wave.as_ref().unwrap_or(w), heard, palette.background.base.text.scale_alpha(0.6));
         }
         // Its sound's fades, a handle at each top corner as on sound clips.
@@ -1417,9 +1457,10 @@ impl Timeline {
     /// Each cut's sound line on the clip sound lane, for cuts with points:
     /// the points within the cut, and the line from its in to its out point.
     fn draw_sound(&self, frame: &mut Frame, b: Rectangle) {
-        for (ci, c) in self.blocks.iter().enumerate() {
-            let (from, start, len) = c.sound_span();
-            self.draw_own_line(frame, b, Own::Cut(ci), self.rows.cut_lane(), from, start, len, &c.cut.volume);
+        for ci in 0..self.blocks.len() {
+            if let Some(o) = self.own_place(Own::Cut(ci)) {
+                self.draw_own_line(frame, b, Own::Cut(ci), &o);
+            }
         }
     }
 
@@ -3066,17 +3107,19 @@ impl canvas::Program<Message> for Marks {
 }
 
 /// Where a clip's waveform goes: its block's sides, top and height, and
-/// the stretch of the file it shows (in point and length, file time).
-struct Wave {
+/// the stretch of the file it shows: its in point (file time), its length
+/// on the edit, and the speed it reads the file at.
+struct Wave<'a> {
     left: f32,
     right: f32,
     top: f32,
     height: f32,
     start: f64,
     len: f64,
+    speed: &'a crate::speed::Speed,
 }
 
-impl Wave {
+impl Wave<'_> {
     /// Per two pixels, the loudest peak under them: `heard`'s peaks scaled
     /// by `gain` at that file time, drawn in `colour`; what goes over full
     /// scale (the limiter will hold it) in orange; and `file`'s own peaks
@@ -3092,7 +3135,7 @@ impl Wave {
         let (mut behind, mut bars, mut over) = (canvas::path::Builder::new(), canvas::path::Builder::new(), canvas::path::Builder::new());
         let mut x = l.max(0.0);
         while x < r.min(b.width) {
-            let (t0, t1) = (self.start + (x - l) as f64 * per_px, self.start + (x + 2.0 - l) as f64 * per_px);
+            let (t0, t1) = (self.speed.clip_after(self.start, (x - l) as f64 * per_px), self.speed.clip_after(self.start, (x + 2.0 - l) as f64 * per_px));
             let raw = peak(file, t0, t1);
             let bh = (raw * h).max(1.0);
             behind.rectangle(Point::new(x, mid - bh / 2.0), Size::new(1.5, bh));
@@ -3301,6 +3344,22 @@ mod tests {
         let clip_t = t.blocks[0].clip(f);
         assert!(((clip_t * 25.0) - (clip_t * 25.0).round()).abs() < 1e-9, "on one of the clip's frames: {clip_t}");
         assert!((f - 1.007).abs() <= 0.02 + 1e-9, "the nearest, at most half a frame away");
+    }
+
+    /// A cut at 2×: its sound's volume points sit where their footage is
+    /// on the edit, a point placed there is at that clip time, and its
+    /// sound's span is its picture's.
+    #[test]
+    fn a_fast_cut_s_sound_line_is_placed_through_its_speed() {
+        let (mut t, _) = timeline();
+        let b = &mut t.blocks[0];
+        b.cut.speed = crate::speed::Speed::constant(2.0);
+        let (start, from) = (b.cut.start, b.from);
+        b.cut.volume = vec![crate::project::VolumeKey { t: start + 1.0, volume: -6.0 }];
+        let o = t.own_place(Own::Cut(0)).unwrap();
+        assert_eq!((o.from, o.len), (from, t.blocks[0].len()));
+        assert!((o.edit(start + 1.0) - (from + 0.5)).abs() < 1e-12 && (o.own(from + 0.5) - (start + 1.0)).abs() < 1e-12);
+        assert!((o.end() - t.blocks[0].cut.end).abs() < 1e-12);
     }
 
     /// The time seam on the timeline: a cut at 2× is drawn half as long,

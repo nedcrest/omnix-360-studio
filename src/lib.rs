@@ -92,7 +92,7 @@ pub mod sound {
     pub fn speech(file: &std::path::Path) -> anyhow::Result<Vec<(f64, f64)>> {
         use crate::waveform::{WAVE_STEP, Waveform};
         let wave = Waveform::read(file, false)?;
-        let whole = crate::duck::Source { file: file.to_owned(), start: 0.0, end: wave.peaks.len() as f64 * WAVE_STEP, at: 0.0 };
+        let whole = crate::duck::Source { file: file.to_owned(), start: 0.0, end: wave.peaks.len() as f64 * WAVE_STEP, at: 0.0, speed: Default::default() };
         Ok(crate::duck::speech(&wave.peaks, WAVE_STEP, &whole))
     }
 }

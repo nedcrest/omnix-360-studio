@@ -3562,18 +3562,41 @@ mod tests {
         t.rows = Rows::new(1.0, false, t.folds, 1);
         t.blocks[0].cut.automation = vec![AutoClip { param: "exposure".into(), from: 1.0, to: 3.0, points: vec![AutoPoint { t: 2.0, v: 1.5, ease: Default::default() }], follows: None, animation: None }];
         let lanes = t.cut_lanes();
+        let clip = &t.blocks[0].cut.automation[0];
         let (top, h) = lanes.lane(0);
         let mid = top + h / 2.0;
-        assert!((lanes.value(0, lanes.y(0, 1.5)) - 1.5).abs() < 1e-3, "height and value both ways");
+        assert!((lanes.value(0, clip, lanes.y(0, clip, 1.5)) - 1.5).abs() < 1e-3, "height and value both ways");
         let at = |s: f64, y: f32| t.hit(Point::new(t.x(s, b), y), b, false, false);
-        assert!(matches!(at(2.0, lanes.y(0, 1.5)), Hit::Auto(false, LaneHit::Point { lane: 0, owner: 0, t }) if t == 2.0));
+        assert!(matches!(at(2.0, lanes.y(0, clip, 1.5)), Hit::Auto(false, LaneHit::Point { lane: 0, owner: 0, t }) if t == 2.0));
         assert!(matches!(at(1.0, mid), Hit::Auto(false, LaneHit::Edge { start: true, .. })) && matches!(at(3.0, mid), Hit::Auto(false, LaneHit::Edge { start: false, .. })));
         assert!(matches!(at(2.5, top + h - 3.0), Hit::Auto(false, LaneHit::Clip { owner: 0, .. })));
         assert!(matches!(at(0.5, mid), Hit::Auto(false, LaneHit::Empty { lane: 0, owner: 0 })));
         // The point's value tag, beside it: drags its value.
-        let tag = lanes.value_tag(0, t.x(2.0, b), lanes.y(0, 1.5), 1.5);
+        let tag = lanes.value_tag(0, t.x(2.0, b), lanes.y(0, clip, 1.5), 1.5);
         assert!(matches!(t.hit(tag.center(), b, false, false), Hit::Auto(false, LaneHit::Value { owner: 0, t, v, .. }) if t == 2.0 && v == 1.5));
         assert_eq!(lanes.tag(), "▾ Effects");
+    }
+
+    /// Gap 108: two zoom clips on one lane, up to 140 % and to 233 %, each
+    /// fill the lane on their own scale; Absolute puts both on 100–800 %.
+    #[test]
+    fn each_automation_clip_fills_its_lane_on_its_own_scale() {
+        use crate::automation::{AutoClip, AutoPoint};
+        let (mut t, _) = timeline();
+        t.folds.frame = false;
+        t.rows = Rows::new(1.0, false, t.folds, 0);
+        let clip = |to: f64| AutoClip { param: "frame.zoom".into(), from: 0.5, to: 3.5, points: vec![AutoPoint { t: 1.0, v: 100.0, ease: Default::default() }, AutoPoint { t: 3.0, v: to, ease: Default::default() }], follows: None, animation: None };
+        for (i, to) in [(0, 140.0), (1, 233.0)] {
+            t.blocks[i].cut.flat = true;
+            t.blocks[i].cut.automation = vec![clip(to)];
+        }
+        let lanes = t.frame_lanes();
+        let (a, b) = (&t.blocks[0].cut.automation[0], &t.blocks[1].cut.automation[0]);
+        assert!((lanes.y(2, a, 140.0) - lanes.y(2, b, 233.0)).abs() < 1e-3, "both tops alike");
+        assert!((lanes.y(2, a, 100.0) - lanes.y(2, b, 100.0)).abs() < 1e-3, "both bottoms alike");
+        t.absolute = vec![super::super::automation_ui::Param::Frame(2)];
+        let lanes = t.frame_lanes();
+        assert!(lanes.y(2, a, 140.0) > lanes.y(2, b, 233.0) + 1.0, "on one scale 233 % sits higher");
     }
 
     #[test]
@@ -3590,7 +3613,7 @@ mod tests {
         assert!(t.rows.frame_top >= t.rows.auto_top && t.rows.keys_top > t.rows.frame_auto_top, "under the Effects row, over the View row");
         // The zoom lane (2), its point and an empty stretch, as the Frame row's.
         let at = |s: f64, y: f32| t.hit(Point::new(t.x(s, b), y), b, false, false);
-        assert!(matches!(at(2.0, lanes.y(2, 150.0)), Hit::Auto(true, LaneHit::Point { lane: 2, owner: 0, t }) if t == 2.0));
+        assert!(matches!(at(2.0, lanes.y(2, &t.blocks[0].cut.automation[0], 150.0)), Hit::Auto(true, LaneHit::Point { lane: 2, owner: 0, t }) if t == 2.0));
         let (top, h) = lanes.lane(0);
         assert!(matches!(at(0.5, top + h / 2.0), Hit::Auto(true, LaneHit::Empty { lane: 0, owner: 0 })));
         // Folded, it takes one row and no lanes.
@@ -3715,7 +3738,7 @@ mod tests {
         let lanes = lane.lanes(true);
         assert_eq!((lane.lanes(false).params.len(), lane.height()), (0, lane.0.rows.overlay + EFFECTS + KEYS + AUTO), "its place's lane under its Motion row");
         // The point at its own 1 s, edit 3 s, a quarter across.
-        let p = Point::new(lane.0.x(3.0, b), lanes.y(0, 0.25));
+        let p = Point::new(lane.0.x(3.0, b), lanes.y(0, &lanes.owners[0].clips[0], 0.25));
         assert!(matches!(lane.hit(p, b), OverlayHit::Auto(true, LaneHit::Point { lane: 0, owner: 0, t }) if t == 1.0));
         assert_eq!(lanes.owners[0].on, AutoOn::Item(9));
         assert_eq!(Param::Place(0).label(0.25), "0.25");

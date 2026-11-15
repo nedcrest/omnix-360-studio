@@ -126,29 +126,30 @@ impl Lanes<'_> {
         (self.top + i as f32 * AUTO, AUTO)
     }
 
-    /// Lane `i`'s scale, bottom to top: its points' own span with a
-    /// margin (gap 108, `fit`), or its value's whole range where the lane
-    /// is set to Absolute (or has no points).
-    pub(super) fn range(&self, i: usize) -> (f64, f64) {
+    /// Clip `clip`'s scale on lane `i`, bottom to top: its own points'
+    /// span with a margin (gap 108, `fit`; each clip its own, the user,
+    /// 2026-11-15), or its value's whole range where the lane is set to
+    /// Absolute.
+    pub(super) fn range(&self, i: usize, clip: &AutoClip) -> (f64, f64) {
         let param = self.params[i];
         if self.t.absolute.contains(&param) {
             return param.range();
         }
-        let name = param.name();
-        fit(self.owners.iter().flat_map(|o| o.clips.iter().filter(|a| a.param == name)).flat_map(|a| a.points.iter().map(|p| p.v)), param.range())
+        fit(clip.points.iter().map(|p| p.v), param.range())
     }
 
-    /// The height on lane `i` of value `v`, its scale top to bottom.
-    pub(super) fn y(&self, i: usize, v: f64) -> f32 {
+    /// The height on lane `i` of clip `clip`'s value `v`, its scale top to
+    /// bottom.
+    pub(super) fn y(&self, i: usize, clip: &AutoClip, v: f64) -> f32 {
         let (top, h) = self.lane(i);
-        let (lo, hi) = self.range(i);
+        let (lo, hi) = self.range(i, clip);
         top + h - 4.0 - ((v - lo) / (hi - lo)).clamp(0.0, 1.0) as f32 * (h - 8.0)
     }
 
-    /// The value at height `y` on lane `i`.
-    pub(super) fn value(&self, i: usize, y: f32) -> f64 {
+    /// Clip `clip`'s value at height `y` on lane `i`.
+    pub(super) fn value(&self, i: usize, clip: &AutoClip, y: f32) -> f64 {
         let (top, h) = self.lane(i);
-        let (lo, hi) = self.range(i);
+        let (lo, hi) = self.range(i, clip);
         lo + ((top + h - 4.0 - y) / (h - 8.0)).clamp(0.0, 1.0) as f64 * (hi - lo)
     }
 
@@ -217,10 +218,10 @@ impl Lanes<'_> {
                 let x = self.x(o, q.t, b);
                 x >= l - 0.5 && x <= r + 0.5
             };
-            if let Some(q) = clip.points.iter().filter(shown).find(|q| self.value_tag(lane, self.x(o, q.t, b), self.y(lane, q.v), q.v).contains(p)) {
+            if let Some(q) = clip.points.iter().filter(shown).find(|q| self.value_tag(lane, self.x(o, q.t, b), self.y(lane, clip, q.v), q.v).contains(p)) {
                 return Some(LaneHit::Value { lane, owner, t: q.t, v: q.v });
             }
-            if let Some(q) = clip.points.iter().filter(shown).find(|q| (self.x(o, q.t, b) - p.x).abs() <= DOT + 2.0 && (self.y(lane, q.v) - p.y).abs() <= DOT + 2.0) {
+            if let Some(q) = clip.points.iter().filter(shown).find(|q| (self.x(o, q.t, b) - p.x).abs() <= DOT + 2.0 && (self.y(lane, clip, q.v) - p.y).abs() <= DOT + 2.0) {
                 return Some(LaneHit::Point { lane, owner, t: q.t });
             }
             let at = (clip.from + clip.to) / 2.0;
@@ -296,7 +297,7 @@ impl Lanes<'_> {
                 let clip = self.clip_at(*lane, *owner, *from)?;
                 let o = &self.owners[*owner];
                 let t = self.own_time(o, p.x, b).clamp(clip.from, clip.to);
-                let message = AutoMsg::Point { on: o.on, param: self.params[*lane], from: Some(*from), t, v: self.value(*lane, p.y) };
+                let message = AutoMsg::Point { on: o.on, param: self.params[*lane], from: Some(*from), t, v: self.value(*lane, clip, p.y) };
                 *from = t;
                 Some(Message::Auto(message))
             }
@@ -351,7 +352,10 @@ impl Lanes<'_> {
                 let was = if start { clip.from } else { clip.to };
                 ((to - was).abs() > 1e-9).then(|| Message::Auto(AutoMsg::Trim { on: self.owners[owner].on, param: self.params[lane], at, start, t: to }))
             }
-            LaneDrag::Body { lane, owner, at, moved: false, y0, .. } => Some(Message::Auto(AutoMsg::Point { on: self.owners[owner].on, param: self.params[lane], from: None, t: at, v: self.value(lane, y0) })),
+            LaneDrag::Body { lane, owner, at, moved: false, y0, .. } => {
+                let v = self.value(lane, self.clip_at(lane, owner, at)?, y0);
+                Some(Message::Auto(AutoMsg::Point { on: self.owners[owner].on, param: self.params[lane], from: None, t: at, v }))
+            }
             _ => Some(Message::ScrubDone),
         }
     }
@@ -421,16 +425,24 @@ impl Lanes<'_> {
         let curve = Path::new(|p| {
             let mut x = l;
             while x <= r {
-                let y = self.y(i, clip.value_at(self.own_time(o, x, b)));
+                let y = self.y(i, clip, clip.value_at(self.own_time(o, x, b)));
                 if x == l { p.move_to(Point::new(x, y)) } else { p.line_to(Point::new(x, y)) }
                 x += 3.0;
             }
         });
         frame.stroke(&curve, Stroke::default().with_width(1.5).with_color(EFFECT_MARK));
+        // A fitted scale says its span, faint at the clip's right, so a
+        // curve filling the lane isn't read as the whole range.
+        let (lo, hi) = self.range(i, clip);
+        if (lo, hi) != self.params[i].range() && r - l > 90.0 {
+            let (top, _) = self.lane(i);
+            let span = format!("{}…{}", self.params[i].label(lo), self.params[i].label(hi));
+            frame.fill_text(Text { content: span, position: Point::new(r - 4.0, top + 3.0), color: EFFECT_MARK.scale_alpha(0.75), size: 9.0.into(), align_x: iced::advanced::text::Alignment::Right, ..Default::default() });
+        }
         for q in &clip.points {
             let x = self.x(o, q.t, b);
             if x >= l - 0.5 && x <= r + 0.5 {
-                let y = self.y(i, q.v);
+                let y = self.y(i, clip, q.v);
                 frame.fill(&Path::rectangle(Point::new(x - DOT, y - DOT), Size::new(2.0 * DOT, 2.0 * DOT)), EFFECT_MARK);
                 let tag = self.value_tag(i, x, y, q.v);
                 frame.fill(&Path::rounded_rectangle(tag.position(), tag.size(), 2.0.into()), iced::Color::from_rgba(0.0, 0.0, 0.0, 0.65));
@@ -471,16 +483,7 @@ impl Lanes<'_> {
         for (i, name) in names.enumerate() {
             let (top, h) = self.lane(i);
             head_cell(frame, top, h, EFFECT_MARK);
-            // A fitted scale says its span, faint, so a curve filling the
-            // lane isn't read as the whole range.
-            let span = self.params.get(i).filter(|p| self.range(i) != p.range()).map(|&p| {
-                let (lo, hi) = self.range(i);
-                format!("{}…{}", p.label(lo), p.label(hi))
-            });
             frame.fill_text(Text { content: name.to_owned(), position: Point::new(PICK + 14.0, top + h / 2.0), color: ink, size: 11.0.into(), align_y: Vertical::Center, ..Default::default() });
-            if let Some(span) = span {
-                frame.fill_text(Text { content: span, position: Point::new(HEAD - 6.0, top + h / 2.0), color: ink.scale_alpha(0.6), size: 9.0.into(), align_x: iced::advanced::text::Alignment::Right, align_y: Vertical::Center, ..Default::default() });
-            }
         }
     }
 

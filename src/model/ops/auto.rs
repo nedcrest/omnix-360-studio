@@ -336,7 +336,7 @@ fn follow(p: &mut Project, item: Id, cut: Id, track: &str, params: &[String], of
     let at = crate::project::offsets(&p.cuts)[ci];
     let c = &p.cuts[ci];
     let tr = c.tracks.iter().find(|t| t.name == track).ok_or_else(|| OpError::NotFound(format!("track «{track}» on cut #{cut}")))?;
-    let samples: Vec<(f64, crate::automation::TrackSample)> = tr.samples.iter().filter(|s| s.t >= c.start && s.t <= c.end).map(|s| (at + s.t - c.start, *s)).collect();
+    let samples: Vec<(f64, crate::automation::TrackSample)> = tr.samples.iter().filter(|s| s.t >= c.start && s.t <= c.end).map(|s| (at + c.edit_at(s.t), *s)).collect();
     let it = p.item_mut(item).ok_or_else(|| OpError::NotFound(format!("item #{item}")))?;
     let within: Vec<(f64, crate::automation::TrackSample)> = samples.into_iter().map(|(e, s)| (it.local(e), s)).filter(|(t, _)| *t >= it.start && *t <= it.end).collect();
     for (k, param) in params.iter().enumerate() {

@@ -400,7 +400,8 @@ impl Project {
     /// reframed on its own from then on.
     pub fn split(&mut self, i: usize, t: f64) -> bool {
         let c = &self.cuts[i];
-        if t < c.start + MIN_CUT || t > c.end - MIN_CUT {
+        // Each half at least MIN_CUT on the edit (an edit length).
+        if t < c.clip_at(MIN_CUT) || t > c.clip_before_end(MIN_CUT) {
             return false;
         }
         // Each half keeps its sound fade, its sound past the picture and
@@ -435,10 +436,12 @@ impl Project {
         let c = &mut self.cuts[i];
         // Bounds kept the right way round: a cut ending near its clip's
         // end (or a clip shorter than told) would make `clamp` panic.
+        // MIN_CUT is an edit length: the far end's clip time that far in.
         if start {
-            c.start = t.clamp(0.0, (c.end - MIN_CUT).max(0.0));
+            c.start = t.clamp(0.0, c.clip_before_end(MIN_CUT).max(0.0));
         } else {
-            c.end = t.clamp(c.start + MIN_CUT, clip_len.max(c.start + MIN_CUT));
+            let least = c.clip_at(MIN_CUT);
+            c.end = t.clamp(least, clip_len.max(least));
         }
         // The sound past the picture moves with its edge, within the clip.
         c.settle_sound(clip_len);
@@ -552,6 +555,18 @@ mod tests {
     /// on the edit as B reading 10-14 s at 1× would, its clip times twice
     /// as far apart; the crossfade into it, in edit time, takes 2 clip
     /// seconds of B and 1 of A.
+    /// MIN_CUT is an edit length: at 2× the shortest piece a split or a
+    /// trim leaves is 0.4 s of its clip.
+    #[test]
+    fn the_shortest_piece_is_measured_on_the_edit() {
+        let mut p = Project { cuts: vec![Cut::new("a.mp4".into(), 10.0, 14.0)], ..Default::default() };
+        p.cuts[0].speed = crate::speed::Speed::constant(2.0);
+        assert!(!p.clone().split(0, 10.3) && !p.clone().split(0, 13.7), "within 0.2 s of the edit from an end");
+        assert!(p.clone().split(0, 10.45));
+        p.trim(0, false, 10.1, 20.0);
+        assert!((p.cuts[0].end - 10.4).abs() < 1e-12 && (p.cuts[0].edit_len() - MIN_CUT).abs() < 1e-12, "{}", p.cuts[0].end);
+    }
+
     #[test]
     fn a_cut_at_twice_the_speed_sits_on_the_edit_as_one_half_as_long() {
         let film = |end: f64, speed: f64| {

@@ -267,7 +267,7 @@ pub fn check(p: &Project) -> Result<(), String> {
         line(format!("cut #{}", c.id), &c.volume)?;
         c.speed.check().map_err(|e| format!("cut #{}: {e}", c.id))?;
         let (from, to) = c.sound_span();
-        if !(from >= -1e-9 && to - from >= crate::model::edit::MIN_CUT - 1e-9) {
+        if !(from >= -1e-9 && c.speed.edit_secs(from, to) >= crate::model::edit::MIN_CUT - 1e-9) {
             return Err(format!("cut #{}'s sound runs {from:.3}-{to:.3} s: before its clip or too short", c.id));
         }
         if c.marks.iter().any(|m| !m.t.is_finite()) || c.marks.windows(2).any(|w| w[0].t > w[1].t) {

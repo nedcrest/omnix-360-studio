@@ -273,7 +273,7 @@ fn split(p: &mut Project, cut: Id, t: f64) -> Result<Outcome, OpError> {
     let i = find(p, cut)?;
     if !p.split(i, t) {
         let c = &p.cuts[i];
-        return Err(OpError::OutOfRange { what: "split time", value: t, least: c.start + MIN_CUT, most: c.end - MIN_CUT });
+        return Err(OpError::OutOfRange { what: "split time", value: t, least: c.clip_at(MIN_CUT), most: c.clip_before_end(MIN_CUT) });
     }
     let id = p.next_id();
     p.cuts[i + 1].id = id;
@@ -387,6 +387,8 @@ fn transition(p: &mut Project, cut: Id, look: Option<crate::transition::Look>) -
 fn edge(p: &mut Project, cut: Id, end: End, look: Option<crate::transition::Look>, seconds: f64) -> Result<Outcome, OpError> {
     let i = find(p, cut)?;
     let c = &mut p.cuts[i];
+    // An edge look lasts edit seconds: at most the cut's length on the edit.
+    let longest = c.edit_len();
     let edge = if end == End::In { &mut c.edge_in } else { &mut c.edge_out };
     let Some(look) = look else {
         *edge = None;
@@ -395,7 +397,7 @@ fn edge(p: &mut Project, cut: Id, end: End, look: Option<crate::transition::Look
     if !look.is_edge() {
         return Err(OpError::Invalid(format!("{} goes across a join (Transition), not on an edge", look.name())));
     }
-    let seconds = crate::transition::stepped(seconds).min(c.end - c.start);
+    let seconds = crate::transition::stepped(seconds).min(longest);
     // The settings were the old look's.
     let params = edge.take().filter(|e| e.look == look).map(|e| e.params).unwrap_or_default();
     *edge = Some(crate::project::Edge { look, seconds, params });
@@ -489,8 +491,12 @@ fn sound_edge(p: &mut Project, cut: Id, end: End, t: f64, most: f64) -> Result<O
     let c = &mut p.cuts[i];
     let (from, to) = c.sound_span();
     match end {
-        End::In => c.sound_before = c.start - t.clamp(0.0, (to - MIN_CUT).max(0.0)),
-        End::Out => c.sound_after = t.clamp(from + MIN_CUT, most.max(from + MIN_CUT)) - c.end,
+        // At least MIN_CUT of sound on the edit, at the cut's speed.
+        End::In => c.sound_before = c.start - t.clamp(0.0, c.speed.clip_after(to, -MIN_CUT).max(0.0)),
+        End::Out => {
+            let least = c.speed.clip_after(from, MIN_CUT);
+            c.sound_after = t.clamp(least, most.max(least)) - c.end;
+        }
     }
     let (from, to) = c.sound_span();
     said(format!("cut #{cut}: sound {from:.2}-{to:.2} s (picture {:.2}-{:.2})", c.start, c.end))

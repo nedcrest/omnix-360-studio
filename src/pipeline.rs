@@ -244,6 +244,32 @@ impl Pipeline {
 
     /// Stitches one frame, measuring the seam afresh and easing towards it.
     pub(crate) fn render(&self, frames: &[stitch::Frame], t: f64, carry: &mut Carry, shot: &Shot) -> stitch::Frame {
+        self.ease(frames, carry);
+        self.draw(frames, t, carry, shot)
+    }
+
+    /// Measures a decoded frame's seam and eases `carry` towards it: once
+    /// per clip frame, as the GPU's export does, however many edit frames
+    /// show it (at 0.5× a frame held was eased twice; the audit,
+    /// 2026-11-15). Nothing for an ordinary video.
+    pub(crate) fn ease(&self, frames: &[stitch::Frame], carry: &mut Carry) {
+        if self.flat.is_some() {
+            return;
+        }
+        let rgb = |i: usize, u: f64, v: f64| self.lenses[i].sample(frames, u, v).map(|c| c / 255.0);
+        if let Some(seam) = &self.seam {
+            let now = seam.measure(|i, u, v| Some(rgb(i, u, v)));
+            carry.gains.get_or_insert(now).ease(&now, exposure::EASE);
+        }
+        if let Some(aligner) = &self.aligner {
+            let now = aligner.measure(&aligner.strips(|i, u, v| Some(rgb(i, u, v).iter().sum::<f64>() / 3.0)), carry.field.as_ref());
+            carry.field.get_or_insert_with(|| now.clone()).ease(&now, align::EASE);
+        }
+    }
+
+    /// Stitches one frame with the seam as `carry` has it (`ease`), its
+    /// attitude at clip time `t`.
+    pub(crate) fn draw(&self, frames: &[stitch::Frame], t: f64, carry: &Carry, shot: &Shot) -> stitch::Frame {
         if self.flat.is_some() {
             let picture = &frames[0];
             return match *shot {
@@ -260,20 +286,9 @@ impl Pipeline {
             };
         }
         let views = if self.stab.has_data() { self.stab.rig_from_view(t * 1000.0, self.readout_ms, self.rs_steps) } else { vec![stitch::IDENTITY] };
-        let rgb = |i: usize, u: f64, v: f64| self.lenses[i].sample(frames, u, v).map(|c| c / 255.0);
-        let exposure = self.seam.as_ref().map(|seam| {
-            let now = seam.measure(|i, u, v| Some(rgb(i, u, v)));
-            let g = carry.gains.get_or_insert(now);
-            g.ease(&now, exposure::EASE);
-            (seam, *g)
-        });
-        let align = self.aligner.as_ref().map(|aligner| {
-            let now = aligner.measure(&aligner.strips(|i, u, v| Some(rgb(i, u, v).iter().sum::<f64>() / 3.0)), carry.field.as_ref());
-            let f = carry.field.get_or_insert_with(|| now.clone());
-            f.ease(&now, align::EASE);
-            (aligner, f.clone())
-        });
-        let seam = stitch::Seam { exposure: exposure.as_ref().map(|(s, g)| (*s, g)), align: align.as_ref().map(|(a, f)| (*a, f)), cut: self.cut };
+        let exposure = self.seam.as_ref().zip(carry.gains.as_ref());
+        let align = self.aligner.as_ref().zip(carry.field.as_ref());
+        let seam = stitch::Seam { exposure, align, cut: self.cut };
         match *shot {
             Shot::Equirect(width) => stitch::equirect(&self.lenses, frames, width, self.only, &views, &seam),
             Shot::View { ref camera, size: (w, h) } => {
@@ -386,12 +401,14 @@ pub(crate) fn encode(p: &Pipeline, read: &crate::speed::Reading, encoder: &mut d
     let mut n = 0;
     while read.total.is_none_or(|total| n < total) {
         let want = read.frame(n, p.fps);
+        // Each clip frame decoded eases the seam once, shown or skipped.
         while decoded.as_ref().is_none_or(|(m, _)| *m < want) {
             let Some(frames) = stream.next()? else { break };
+            p.ease(&frames, &mut carry);
             decoded = Some((decoded.as_ref().map_or(0, |(m, _)| m + 1), frames));
         }
         let Some((m, frames)) = decoded.as_ref().filter(|(m, _)| *m >= want) else { break };
-        let frame = p.render(frames, read.frame_time(*m, p.fps), &mut carry, &shot(read.clip_time(n, p.fps)));
+        let frame = p.draw(frames, read.frame_time(*m, p.fps), &carry, &shot(read.clip_time(n, p.fps)));
         encoder.write(&frame)?;
         last = Some(frame);
         n += 1;

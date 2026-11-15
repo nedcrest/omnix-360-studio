@@ -1569,6 +1569,13 @@ so. Plan: `docs/PUBLISH.md`.
 
 ### 108. An automation clip's height fitted to its values («Snap to scale») — small (user, 2026-11-12)
 
+**Built 2026-11-15, waiting for a check**, as the user put it then: per
+lane, not per clip, and fitted by default — a lane's scale is its
+points' span with a margin (`timeline::auto::fit`), the span faint at
+the head's right; a right-click on the head chooses «Relative scale» or
+«Absolute scale», kept while the window is open. What follows is the
+first idea.
+
 A lane's height is its value's whole range (zoom 100–800 %, exposure
 −5..5), so a move of a few per cent is a flat line. The user: right-click
 an automation clip → «Snap to scale»: the lane's height shows that clip's

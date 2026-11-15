@@ -224,15 +224,23 @@ must be as before.
    at 2× (a fast cut fades and edges like a slow one half as long; sync
    lock after a fast cut's trim; the shortest piece at 2×).
 3. Timeline: `Block` / `Owner` over the seam, drags through edit seconds,
-   snap targets, zones, thumbnails, the sound cache key.
+   snap targets, zones, thumbnails, the sound cache key. — **done
+   2026-11-15** (`c0dd9ad`); the cut's own sound drawn in its span
+   (volume line, waveform, fades) waits for 31, which plays it at speed.
 4. Player: transport (scrub, crossfade shares, `follow_crossfade`), keys,
-   effects `focus`, cuts `trim_to`, info, labels.
+   effects `focus`, cuts `trim_to`, info, labels. — **done 2026-11-15**
+   (`35ceb45`): labels, Info, Effects focus; the rest already went
+   through the core; frame steps, preroll and the clock are media (31).
 5. Agents and CLI: `describe`, `check`, `preview`, `duck`, `ops/auto`
-   follow, `mixmeasure` windows.
+   follow, `mixmeasure` windows. — **done 2026-11-15** (`d81e496`;
+   `ops/auto` in step 2); `duck`'s speech is sound, 31.
 6. Export: the frame plan and the per-frame clip time through the seam
-   (the decode itself stays 1:1 until 31).
+   (the decode itself stays 1:1 until 31). — **done 2026-11-15**
+   (`13adabc`).
 7. A guard test: no `end - start` / `+ t - start` on a cut outside the
-   seam (a source scan), so new code can't go around it.
+   seam (a source scan), so new code can't go around it. — **done
+   2026-11-15** (`385b9f3`, `time_snapshot::no_cut_time_is_worked_out_around_the_seam`).
+   The seam is in; card 31 (media at speed) is what's left.
 
 Every step: all 336 tests pass unchanged at 1×; the user's check is that
 nothing changed (play, trims, crossfades, J/L, sync lock, export).

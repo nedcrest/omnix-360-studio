@@ -373,24 +373,31 @@ impl Stream {
     }
 }
 
-/// Stitches `total` frames (or to the end) from `start` into `encoder`,
-/// framing each as `shot` says for its time. If the clip ends early, the
-/// last frame is repeated up to `total`, so the sound stays in step.
-pub(crate) fn encode(p: &Pipeline, start: f64, total: Option<usize>, encoder: &mut dyn ffmpeg::FrameSink, shot: impl Fn(f64) -> Shot, tick: &mut dyn FnMut(usize) -> Result<()>) -> Result<()> {
-    let mut stream = p.stream(start)?;
+/// Stitches what `read` says into `encoder`, framing each frame as `shot`
+/// says for its clip time: at speed, clip frames are repeated or skipped
+/// (`Reading::frame`). If the clip ends early, the last frame is repeated
+/// up to the total, so the sound stays in step.
+pub(crate) fn encode(p: &Pipeline, read: &crate::speed::Reading, encoder: &mut dyn ffmpeg::FrameSink, shot: impl Fn(f64) -> Shot, tick: &mut dyn FnMut(usize) -> Result<()>) -> Result<()> {
+    let mut stream = p.stream(read.start)?;
     let mut carry = Carry::default();
+    // The clip frame decoded last, and its index.
+    let mut decoded: Option<(usize, Vec<stitch::Frame>)> = None;
     let mut last = None;
     let mut n = 0;
-    while total.is_none_or(|total| n < total) {
-        let Some(frames) = stream.next()? else { break };
-        let t = start + n as f64 / p.fps;
-        let frame = p.render(&frames, t, &mut carry, &shot(t));
+    while read.total.is_none_or(|total| n < total) {
+        let want = read.frame(n, p.fps);
+        while decoded.as_ref().is_none_or(|(m, _)| *m < want) {
+            let Some(frames) = stream.next()? else { break };
+            decoded = Some((decoded.as_ref().map_or(0, |(m, _)| m + 1), frames));
+        }
+        let Some((m, frames)) = decoded.as_ref().filter(|(m, _)| *m >= want) else { break };
+        let frame = p.render(frames, read.frame_time(*m, p.fps), &mut carry, &shot(read.clip_time(n, p.fps)));
         encoder.write(&frame)?;
         last = Some(frame);
         n += 1;
         tick(n)?;
     }
-    if let Some(total) = total {
+    if let Some(total) = read.total {
         // A cut with no frames would write none while its sound still
         // counted, and every later cut would run behind its sound.
         let last = last.context("no frames decoded")?;

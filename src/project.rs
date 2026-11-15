@@ -817,7 +817,7 @@ pub struct Cut {
     /// How fast it reads its clip (gap 31); normal unless set. Not yet
     /// set by any op: a project with a speed is refused until the media
     /// play at speed.
-    #[serde(default, skip_serializing_if = "crate::speed::Speed::is_normal")]
+    #[serde(default, skip_serializing_if = "crate::speed::Speed::is_default")]
     pub speed: crate::speed::Speed,
 }
 

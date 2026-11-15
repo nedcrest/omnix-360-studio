@@ -834,7 +834,7 @@ fn render_equirect(input: &Path, start: f64, duration: Option<f64>, output: &Pat
         }
         Ok(())
     };
-    encode(&p, start, total, &mut encoder, |_| Shot::Equirect(width), &mut tick)?;
+    encode(&p, &crate::speed::Reading { start, total, speed: &Default::default() }, &mut encoder, |_| Shot::Equirect(width), &mut tick)?;
     eprintln!();
     encoder.finish()?;
     eprintln!("wrote {}", output.display());

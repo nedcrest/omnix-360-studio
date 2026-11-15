@@ -293,9 +293,10 @@ pub(crate) fn export(project: &project::Project, opts: &StitchOpts, out: &Export
             sink.cut(frames, head, tail, cut.transition_spec(), overs(cut, start, frames, fps, graded, whole))?;
             let view_at = |t: f64| camera(project, &pipelines[i], n, t, (whole, graded));
             // On an error the encoder, dropped unfinished, removes the file.
+            let read = crate::speed::Reading { start, total: Some(frames), speed: &cut.speed };
             match &mut gpu {
-                Some(gpu) => player::render::encode(gpu, &pipelines[i], &clips[i], start, frames, &mut sink, view_at, size, &mut tick)?,
-                None => encode(&pipelines[i], start, Some(frames), &mut sink, |t| Shot::View { camera: Box::new(view_at(t)), size }, &mut tick)?,
+                Some(gpu) => player::render::encode(gpu, &pipelines[i], &clips[i], &read, &mut sink, view_at, size, &mut tick)?,
+                None => encode(&pipelines[i], &read, &mut sink, |t| Shot::View { camera: Box::new(view_at(t)), size }, &mut tick)?,
             }
             done += frames;
         }

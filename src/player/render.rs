@@ -214,39 +214,85 @@ struct Measured {
     frame: Frame,
     fix: SeamFix,
     views: Vec<M3>,
-    t: f64,
 }
 
-/// Stitches `total` frames of `p`'s clip from `start` into `encoder` on the
-/// GPU, as `crate::encode` does on the CPU: the same frame times, attitude
-/// and rolling-shutter steps, and the last frame repeated if the clip ends
-/// early so the sound stays in step.
+/// Stitches what `read` says of `p`'s clip into `encoder` on the GPU, as
+/// `crate::encode` does on the CPU: the same frames picked at speed, frame
+/// times, attitude and rolling-shutter steps, and the last frame repeated
+/// if the clip ends early so the sound stays in step.
 #[allow(clippy::too_many_arguments)]
 pub fn encode(
     gpu: &mut Gpu,
     p: &crate::Pipeline,
     clip: &Clip,
-    start: f64,
-    total: usize,
+    read: &crate::speed::Reading,
     encoder: &mut dyn ffmpeg::FrameSink,
     camera: impl Fn(f64) -> Camera,
     size: (usize, usize),
     tick: &mut dyn FnMut(usize) -> Result<()>,
 ) -> Result<()> {
+    let total = read.total.context("the GPU export reads a cut's frames, not a clip to its end")?;
     let kind = match (&p.flat, &p.proxy) {
         (Some(flat), _) => Kind::Flat { path: p.input.clone(), flat: *flat, size: None, rate: p.rate },
         (None, Some(proxy)) => Kind::Lrf(proxy.clone()),
         (None, None) => Kind::Osv { path: p.input.clone(), tracks: p.tracks.clone(), size: None },
     };
-    let stream = source::spawn(kind, clip.hw, start, p.fps)?;
+    let stream = source::spawn(kind, clip.hw, read.start, p.fps)?;
     let failed = stream.error.clone();
+    // The clip frames the cut shows: to the last one its last edit frame picks.
+    let needed = total.checked_sub(1).map_or(0, |k| read.frame(k, p.fps) + 1);
+    let measured = measure(p, clip, stream, needed, read.start);
+    let mut last: Option<stitch::Frame> = None;
+    let mut written = 0;
+    let mut write = |frame: stitch::Frame| -> Result<()> {
+        encoder.write(&frame)?;
+        written += 1;
+        tick(written)?;
+        last = Some(frame);
+        Ok(())
+    };
     let rig = &clip.rig;
-    // Seam and attitude for the next frames while this one renders. The
-    // threads end with the stream, or when this returns and drops `measured`.
+    let mut k = 0;
+    for (m, frame) in measured.iter().enumerate() {
+        let shown = Shown::new(frame.frame, frame.fix);
+        // Each edit frame this clip frame stands for: none at speed when
+        // it's skipped, two at half speed.
+        while k < total && read.frame(k, p.fps) == m {
+            if gpu.pending.len() == IN_FLIGHT
+                && let Some(done) = gpu.finish()?
+            {
+                write(done)?;
+            }
+            gpu.submit(rig, &shown, &camera(read.clip_time(k, p.fps)), &frame.views, size);
+            k += 1;
+        }
+    }
+    while let Some(done) = gpu.finish()? {
+        write(done)?;
+    }
+    // The clip ran out before the cut did: a decoder that failed says so,
+    // else the last frame is held.
+    if let Some(why) = failed.lock().unwrap().take() {
+        bail!("{}: {why}", p.input.display());
+    }
+    let last = last.context("no frames decoded")?;
+    p.warn_held(total - written);
+    for k in written..total {
+        encoder.write(&last)?;
+        tick(k + 1)?;
+    }
+    Ok(())
+}
+
+/// The first `needed` frames of `stream` with their seam fixes and the
+/// attitude at each frame's own clip time (from `start` at the clip's
+/// rate), measured on two threads ahead of the shader. The threads end
+/// with the stream, or when the receiver is dropped.
+fn measure(p: &crate::Pipeline, clip: &Clip, stream: source::Stream, needed: usize, start: f64) -> std::sync::mpsc::Receiver<Measured> {
     let (sampled_tx, sampled) = sync_channel::<(Frame, SeamSample)>(2);
-    let sample_rig = rig.clone();
+    let sample_rig = clip.rig.clone();
     std::thread::spawn(move || {
-        for frame in stream.frames.iter().take(total) {
+        for frame in stream.frames.iter().take(needed) {
             let sample = SeamSample::new(&sample_rig, &frame);
             if sampled_tx.send((frame, sample)).is_err() {
                 break;
@@ -254,7 +300,7 @@ pub fn encode(
         }
     });
     let (tx, measured) = sync_channel::<Measured>(2);
-    let (seam_rig, stab, readout_ms, rs_steps, cut, fps) = (rig.clone(), p.stab.clone(), p.readout_ms, p.rs_steps, p.cut, p.fps);
+    let (seam_rig, stab, readout_ms, rs_steps, cut, fps) = (clip.rig.clone(), p.stab.clone(), p.readout_ms, p.rs_steps, p.cut, p.fps);
     std::thread::spawn(move || {
         let mut fix = SeamFix::default();
         for (n, (frame, sample)) in sampled.iter().enumerate() {
@@ -264,44 +310,12 @@ pub fn encode(
                 fix.field.cut.fill(0.0);
             }
             let views = if stab.has_data() { stab.rig_from_view(t * 1000.0, readout_ms, rs_steps) } else { vec![stitch::IDENTITY] };
-            if tx.send(Measured { frame, fix: fix.clone(), views, t }).is_err() {
+            if tx.send(Measured { frame, fix: fix.clone(), views }).is_err() {
                 break;
             }
         }
     });
-    let mut last: Option<stitch::Frame> = None;
-    let mut done = 0;
-    let mut write = |frame: &stitch::Frame| -> Result<usize> {
-        encoder.write(frame)?;
-        done += 1;
-        tick(done)?;
-        Ok(done)
-    };
-    let mut written = 0;
-    for m in measured.iter() {
-        if gpu.pending.len() == IN_FLIGHT
-            && let Some(frame) = gpu.finish()?
-        {
-            written = write(&frame)?;
-            last = Some(frame);
-        }
-        gpu.submit(rig, &Shown::new(m.frame, m.fix), &camera(m.t), &m.views, size);
-    }
-    while let Some(frame) = gpu.finish()? {
-        written = write(&frame)?;
-        last = Some(frame);
-    }
-    // The clip ran out before the cut did: a decoder that failed says so,
-    // else the last frame is held.
-    if let Some(why) = failed.lock().unwrap().take() {
-        bail!("{}: {why}", p.input.display());
-    }
-    let last = last.context("no frames decoded")?;
-    p.warn_held(total - written);
-    for _ in written..total {
-        write(&last)?;
-    }
-    Ok(())
+    measured
 }
 
 /// An IEEE half-precision float's value.

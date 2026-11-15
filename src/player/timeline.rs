@@ -1900,7 +1900,7 @@ impl OverlayLane {
         let all = t.track_auto(self.1).get(self.2).map_or(&[][..], Vec::as_slice);
         let params = all.iter().copied().filter(|p| matches!(p, Param::Place(_)) == motion).collect();
         let fixed_of = |it: &crate::overlay::Item| if motion { Vec::new() } else { super::automation_ui::fixed_of_item(it) };
-        let owners: Vec<auto::Owner> = self.blocks().iter().map(|o| auto::Owner { on: AutoOn::Item(o.item.id), from: o.item.at, start: o.item.start, len: o.len(), speed: &auto::AS_IS, clips: &o.item.automation, fixed: fixed_of(&o.item) }).collect();
+        let owners: Vec<auto::Owner> = self.blocks().iter().map(|o| auto::Owner { on: AutoOn::Item(o.item.id), from: o.item.at, start: o.item.start, len: o.len(), speed: &crate::speed::NORMAL, clips: &o.item.automation, fixed: fixed_of(&o.item) }).collect();
         let fixed = super::automation_ui::fixed_rows(owners.iter().map(|o| &o.fixed[..]));
         let (name, row_top, row_h) = if motion { ("Motion", self.motion_top(), KEYS) } else { ("Effects", t.rows.overlay, EFFECTS) };
         auto::Lanes { t, params, name, row_top, row_h, top: row_top + row_h, folded, owners, fixed }

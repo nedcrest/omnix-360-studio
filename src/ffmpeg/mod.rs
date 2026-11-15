@@ -867,13 +867,14 @@ pub fn wav(input: &Path, start: f64, duration: f64, output: &Path) -> Result<()>
 /// as its frames where it has no sound (a picture, a silent video).
 fn sound_inputs(cmd: &mut Command, audio: &[Sound<'_>]) {
     for s in audio {
-        match s.duration {
+        // Clip seconds: at speed, its tempo makes them its edit length.
+        match s.reads() {
             Some(d) if !has_audio(s.input).unwrap_or(false) => {
                 cmd.args(["-f", "lavfi", "-t", &d.to_string(), "-i", "anullsrc=r=48000:cl=stereo"]);
             }
-            _ => {
+            reads => {
                 cmd.args(["-ss", &s.start.to_string()]);
-                if let Some(d) = s.duration {
+                if let Some(d) = reads {
                     cmd.args(["-t", &d.to_string()]);
                 }
                 cmd.arg("-i").arg(s.input);
@@ -922,7 +923,7 @@ impl Encoder {
         // The music's inputs, before any output option.
         // Anything a cut's stretch gets only in a mix: its fades and
         // silences too, or a cut with only a fade exported without it.
-        let points = audio.iter().any(|s| !s.volume.is_empty() || s.crossfade > 0.0 || s.gain != 0.0 || s.filter.is_some() || s.fade_in > 0.0 || s.fade_out > 0.0 || s.head > 0.0 || s.tail > 0.0);
+        let points = audio.iter().any(|s| !s.volume.is_empty() || s.crossfade > 0.0 || s.gain != 0.0 || s.filter.is_some() || s.fade_in > 0.0 || s.fade_out > 0.0 || s.head > 0.0 || s.tail > 0.0 || !s.speed.is_normal());
         let graph = mix.filter(|m| m.matters() || points).map(|m| mixed(&mut cmd, audio, m)).transpose()?;
         cmd.args(["-map", "0:v"]);
         if let Some(graph) = graph {

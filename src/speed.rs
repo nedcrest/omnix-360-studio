@@ -19,7 +19,14 @@ pub struct Speed {
     /// In clip-time order.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub keys: Vec<SpeedKey>,
+    /// Its sound plays like tape, slower is lower (gap 31b); else it keeps
+    /// its pitch, stretched in time.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub tape: bool,
 }
+
+/// Normal speed, for what is always played as it is (a title, a picture).
+pub static NORMAL: Speed = Speed { keys: Vec::new(), tape: false };
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -33,7 +40,25 @@ pub struct SpeedKey {
 impl Speed {
     /// One rate throughout.
     pub fn constant(rate: f64) -> Speed {
-        Speed { keys: vec![SpeedKey { t: 0.0, rate }] }
+        Speed { keys: vec![SpeedKey { t: 0.0, rate }], tape: false }
+    }
+
+    /// Whether there's nothing to save: normal speed, the pitch kept.
+    pub fn is_default(&self) -> bool {
+        self.is_normal() && !self.tape
+    }
+
+    /// The stretches of constant rate reading the clip from `a` to `b`:
+    /// each one's clip span and rate.
+    pub fn pieces(&self, a: f64, b: f64) -> Vec<(f64, f64, f64)> {
+        let mut out = Vec::new();
+        let mut t = a;
+        for c in self.changes().filter(|&c| c > a && c < b) {
+            out.push((t, c, self.after(t)));
+            t = c;
+        }
+        out.push((t, b, self.after(t)));
+        out
     }
 
     /// Whether it reads its clip as recorded: one clip second an edit
@@ -114,6 +139,42 @@ impl Speed {
             t - left * self.before(t)
         }
     }
+
+    /// The clip frame, counted from clip time `start` at `fps`, that edit
+    /// frame `k` shows: at 0.5× each clip frame twice, at 2× every other
+    /// one. At 1× it is `k`, without a sum.
+    pub fn frame_for(&self, start: f64, k: usize, fps: f64) -> usize {
+        if self.is_normal() {
+            return k;
+        }
+        ((self.clip_after(start, k as f64 / fps) - start) * fps).round().max(0.0) as usize
+    }
+}
+
+/// What the export reads of a clip for a cut: `total` edit frames (or to
+/// the clip's end) from clip time `start`, at `speed`. The CPU and the
+/// GPU pick their frames through it alike.
+pub struct Reading<'a> {
+    pub start: f64,
+    pub total: Option<usize>,
+    pub speed: &'a Speed,
+}
+
+impl Reading<'_> {
+    /// The clip frame edit frame `k` shows (`Speed::frame_for`).
+    pub fn frame(&self, k: usize, fps: f64) -> usize {
+        self.speed.frame_for(self.start, k, fps)
+    }
+
+    /// Edit frame `k`'s clip time: where its view and its looks are read.
+    pub fn clip_time(&self, k: usize, fps: f64) -> f64 {
+        self.speed.clip_after(self.start, k as f64 / fps)
+    }
+
+    /// Clip frame `m`'s own time: its gyro and its rolling shutter.
+    pub fn frame_time(&self, m: usize, fps: f64) -> f64 {
+        self.start + m as f64 / fps
+    }
 }
 
 #[cfg(test)]
@@ -122,7 +183,7 @@ mod tests {
 
     /// 1× until clip second 2, 2× to 4, 0.5× after.
     fn curve() -> Speed {
-        Speed { keys: vec![SpeedKey { t: 0.0, rate: 1.0 }, SpeedKey { t: 2.0, rate: 2.0 }, SpeedKey { t: 4.0, rate: 0.5 }] }
+        Speed { keys: vec![SpeedKey { t: 0.0, rate: 1.0 }, SpeedKey { t: 2.0, rate: 2.0 }, SpeedKey { t: 4.0, rate: 0.5 }], tape: false }
     }
 
     #[test]
@@ -133,7 +194,7 @@ mod tests {
             assert_eq!((s.edit_secs(10.3, 14.7), s.clip_after(10.3, 4.4), s.clip_after(14.7, -4.4)), (14.7 - 10.3, 10.3 + 4.4, 14.7 - 4.4));
         }
         // Several keys all at 1×: as exact, not a sum of pieces.
-        let ones = Speed { keys: vec![SpeedKey { t: 0.0, rate: 1.0 }, SpeedKey { t: 11.1, rate: 1.0 }, SpeedKey { t: 12.9, rate: 1.0 }] };
+        let ones = Speed { keys: vec![SpeedKey { t: 0.0, rate: 1.0 }, SpeedKey { t: 11.1, rate: 1.0 }, SpeedKey { t: 12.9, rate: 1.0 }], tape: false };
         assert_eq!((ones.edit_secs(10.3, 14.7), ones.clip_after(10.3, 4.4)), (14.7 - 10.3, 10.3 + 4.4));
         assert!(!Speed::constant(2.0).is_normal());
     }
@@ -152,6 +213,8 @@ mod tests {
         // 0-2 at 1× (2 s), 2-4 at 2× (1 s), 4-5 at 0.5× (2 s).
         assert_eq!(s.edit_secs(0.0, 5.0), 5.0);
         assert_eq!((s.edit_secs(1.0, 3.0), s.edit_secs(3.0, 4.5)), (1.5, 1.5));
+        assert_eq!(s.pieces(1.0, 4.5), vec![(1.0, 2.0, 1.0), (2.0, 4.0, 2.0), (4.0, 4.5, 0.5)]);
+        assert_eq!(Speed::default().pieces(1.0, 3.0), vec![(1.0, 3.0, 1.0)]);
         assert_eq!((s.clip_after(0.0, 2.5), s.clip_after(0.0, 4.0), s.clip_after(5.0, -2.5)), (3.0, 4.5, 3.0));
         // Round trips anywhere, either way.
         for a in [0.0, 1.7, 2.0, 3.3, 4.0, 6.1] {
@@ -165,7 +228,22 @@ mod tests {
     #[test]
     fn a_speed_out_of_range_or_order_is_refused() {
         assert!(Speed::constant(5.0).check().is_err() && Speed::constant(0.2).check().is_err());
-        assert!(Speed { keys: vec![SpeedKey { t: 2.0, rate: 1.0 }, SpeedKey { t: 1.0, rate: 2.0 }] }.check().is_err());
+        assert!(Speed { keys: vec![SpeedKey { t: 2.0, rate: 1.0 }, SpeedKey { t: 1.0, rate: 2.0 }], tape: false }.check().is_err());
         assert!(curve().check().is_ok() && Speed::default().check().is_ok());
+    }
+
+    #[test]
+    fn each_edit_frame_shows_the_clip_frame_its_time_reads() {
+        let picks = |s: &Speed| (0..8).map(|k| s.frame_for(10.0, k, 30.0)).collect::<Vec<_>>();
+        assert_eq!(picks(&Speed::default()), (0..8).collect::<Vec<_>>());
+        assert_eq!(picks(&Speed::constant(2.0)), vec![0, 2, 4, 6, 8, 10, 12, 14]);
+        // Half speed: each frame twice (k/2 rounds half away from none).
+        assert_eq!(picks(&Speed::constant(0.5)), vec![0, 1, 1, 2, 2, 3, 3, 4]);
+        // Never back, through a curve's changes.
+        let c = curve();
+        let along: Vec<usize> = (0..200).map(|k| c.frame_for(0.0, k, 30.0)).collect();
+        assert!(along.windows(2).all(|w| w[1] >= w[0]));
+        let r = Reading { start: 10.0, total: Some(8), speed: &Speed::constant(2.0) };
+        assert_eq!((r.frame(3, 30.0), r.clip_time(3, 30.0), r.frame_time(6, 30.0)), (6, 10.2, 10.2));
     }
 }

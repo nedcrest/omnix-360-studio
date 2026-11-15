@@ -31,6 +31,9 @@ pub struct Sound<'a> {
     /// fades sit at the sound's edges inside them. Only in a mix.
     pub head: f64,
     pub tail: f64,
+    /// How fast it reads its input: `duration`, the fades, the head and
+    /// the tail are edit seconds, `start` and the volume points clip time.
+    pub speed: &'a crate::speed::Speed,
 }
 
 /// The mix's last stage: peaks held under −1.2 dBFS (0.87), so cuts raised
@@ -69,7 +72,7 @@ impl<'a> Sound<'a> {
     /// `duration` seconds of `input` from `start`, as recorded: no level,
     /// points, filters or fades.
     pub fn plain(input: &'a Path, start: f64, duration: Option<f64>) -> Self {
-        Sound { input, start, duration, volume: &[], gain: 0.0, filter: None, crossfade: 0.0, fade_in: 0.0, fade_out: 0.0, head: 0.0, tail: 0.0 }
+        Sound { input, start, duration, volume: &[], gain: 0.0, filter: None, crossfade: 0.0, fade_in: 0.0, fade_out: 0.0, head: 0.0, tail: 0.0, speed: &crate::speed::NORMAL }
     }
 
     /// Cut `c`'s stretch under its picture, from `input` at clip time
@@ -77,6 +80,8 @@ impl<'a> Sound<'a> {
     /// silence where its sound stops short. A fade at an edge its sound runs
     /// past belongs to the sound beyond (`Cut::sound_beyond`), not here.
     pub fn of_cut(c: &'a crate::project::Cut, input: &'a Path, start: f64, duration: Option<f64>, crossfade: f64) -> Sound<'a> {
+        // Where its sound stops short, clip seconds, as edit seconds.
+        let short = |from: f64, secs: f64| if c.speed.is_normal() { secs } else { c.speed.edit_secs(from, from + secs) };
         Sound {
             input,
             start,
@@ -87,9 +92,101 @@ impl<'a> Sound<'a> {
             crossfade,
             fade_in: c.sound_fades().0,
             fade_out: c.sound_fades().1,
-            head: (-c.sound_before).max(0.0),
-            tail: (-c.sound_after).max(0.0),
+            head: short(c.start, (-c.sound_before).max(0.0)),
+            tail: short(c.end - (-c.sound_after).max(0.0), (-c.sound_after).max(0.0)),
+            speed: &c.speed,
         }
+    }
+
+    /// How much of its input it reads, clip seconds: its `duration` at its
+    /// speed.
+    pub(super) fn reads(&self) -> Option<f64> {
+        self.duration.map(|d| if self.speed.is_normal() { d } else { self.speed.clip_after(self.start, d) - self.start })
+    }
+
+    /// Its stream's time `t` (edit seconds from its start) as clip time,
+    /// for its volume points: `(t+start)`, through its speed's stretches.
+    fn clip_time(&self) -> String {
+        if self.speed.is_normal() {
+            return format!("(t+{})", self.start);
+        }
+        let mut e = 0.0;
+        let pieces: Vec<(f64, f64, f64)> = self.speed.pieces(self.start, f64::INFINITY).into_iter().map(|(a, b, r)| {
+            let at = e;
+            e += (b - a) / r;
+            (at, a, r)
+        }).collect();
+        let (last, rest) = pieces.split_last().expect("one stretch at least");
+        let mut x = format!("({}+(t-{})*{})", last.1, last.0, last.2);
+        for (w, next) in rest.iter().zip(&pieces[1..]).rev() {
+            x = format!("if(lt(t,{}),{}+(t-{})*{},{x})", next.0, w.1, w.0, w.2);
+        }
+        x
+    }
+
+    /// Its sound at its speed, as filters after its clean-up: a tempo per
+    /// stretch of constant rate (`atempo`, which keeps the pitch, twice
+    /// below 0.5×; like tape, `asetrate`), the stretches cut apart and
+    /// joined. `i` names its labels. At normal speed, nothing.
+    fn tempo(&self, i: usize) -> String {
+        if self.speed.is_normal() {
+            return String::new();
+        }
+        let rate = |r: f64| {
+            if self.speed.tape {
+                format!("asetrate={},aresample=48000", 48000.0 * r)
+            } else if r < 0.5 {
+                format!("atempo=0.5,atempo={}", r / 0.5)
+            } else {
+                format!("atempo={r}")
+            }
+        };
+        let end = self.reads().map_or(f64::INFINITY, |d| self.start + d);
+        let pieces = self.speed.pieces(self.start, end);
+        if let [(_, _, r)] = pieces[..] {
+            return format!(",{}", rate(r));
+        }
+        let n = pieces.len();
+        let mut s = format!(",asplit={n}{};", (0..n).map(|k| format!("[t{i}_{k}]")).collect::<String>());
+        for (k, (a, b, r)) in pieces.iter().enumerate() {
+            let to = if b.is_finite() { format!(":end={}", b - self.start) } else { String::new() };
+            s += &format!("[t{i}_{k}]atrim=start={}{to},asetpts=PTS-STARTPTS,{}[u{i}_{k}];", a - self.start, rate(*r));
+        }
+        s + &(0..n).map(|k| format!("[u{i}_{k}]")).collect::<String>() + &format!("concat=n={n}:v=0:a=1")
+    }
+
+    /// Its stream's filters after the resampling, as input `i` of a mix:
+    /// its clean-up, its tempo, its pad, its level and points, its fades.
+    fn chain(&self, i: usize) -> String {
+        // Its volume points, in clip time: the stretch's time starts at 0.
+        // Muted is silent whatever its points say (the player's rule).
+        let level = if self.gain <= crate::project::OFF_DB {
+            ",volume=0".to_owned()
+        } else if self.volume.is_empty() && self.gain == 0.0 {
+            String::new()
+        } else {
+            format!(",{}", level_filter(self.gain, self.volume, &self.clip_time()))
+        };
+        let even = self.filter.as_ref().map_or_else(String::new, |f| format!(",{f}"));
+        // Straight, as the player's `Cut::sound_fade`, at the sound's
+        // own edges; silent past them.
+        let mut fades = String::new();
+        if self.head > 0.0 {
+            fades += &format!(",volume=0:enable='lt(t,{})'", self.head);
+        }
+        if self.fade_in > 0.0 {
+            fades += &format!(",afade=t=in:st={}:d={}", self.head, self.fade_in);
+        }
+        if let Some(d) = self.duration {
+            let end = d - self.tail;
+            if self.fade_out > 0.0 {
+                fades += &format!(",afade=t=out:st={}:d={}", (end - self.fade_out).max(0.0), self.fade_out.min(end));
+            }
+            if self.tail > 0.0 {
+                fades += &format!(",volume=0:enable='gt(t,{end})'");
+            }
+        }
+        format!("{even}{}{}{level}{fades}", self.tempo(i), pad(self))
     }
 
     /// Whether its input gives sound: its clip's, or silence in its place
@@ -144,35 +241,7 @@ pub(super) fn mixed(cmd: &mut Command, audio: &[Sound<'_>], mix: &Mix<'_>) -> Re
     let mut graph = String::new();
     if !audio.is_empty() && audio.iter().all(Sound::sounds) {
         for (i, sound) in (1..).zip(audio) {
-            // Its volume points, in clip time: the stretch's time starts at 0.
-            // Muted is silent whatever its points say (the player's rule).
-            let level = if sound.gain <= crate::project::OFF_DB {
-                ",volume=0".to_owned()
-            } else if sound.volume.is_empty() && sound.gain == 0.0 {
-                String::new()
-            } else {
-                format!(",{}", level_filter(sound.gain, sound.volume, &format!("(t+{})", sound.start)))
-            };
-            let even = sound.filter.as_ref().map_or_else(String::new, |f| format!(",{f}"));
-            // Straight, as the player's `Cut::sound_fade`, at the sound's
-            // own edges; silent past them.
-            let mut fades = String::new();
-            if sound.head > 0.0 {
-                fades += &format!(",volume=0:enable='lt(t,{})'", sound.head);
-            }
-            if sound.fade_in > 0.0 {
-                fades += &format!(",afade=t=in:st={}:d={}", sound.head, sound.fade_in);
-            }
-            if let Some(d) = sound.duration {
-                let end = d - sound.tail;
-                if sound.fade_out > 0.0 {
-                    fades += &format!(",afade=t=out:st={}:d={}", (end - sound.fade_out).max(0.0), sound.fade_out.min(end));
-                }
-                if sound.tail > 0.0 {
-                    fades += &format!(",volume=0:enable='gt(t,{end})'");
-                }
-            }
-            graph += &format!("[{i}:a:0]{stereo}{even}{}{level}{fades}[c{i}];", pad(sound));
+            graph += &format!("[{i}:a:0]{stereo}{}[c{i}];", sound.chain(i));
         }
         // Joined in turn: a crossfade overlaps a stretch's end with the
         // next's start (equal power, as the music's), else end to end.
@@ -259,7 +328,7 @@ mod tests {
     use super::*;
 
     fn stretch<'a>(input: &'a Path, gain: f64, volume: &'a [crate::project::VolumeKey]) -> Sound<'a> {
-        Sound { input, start: 2.0, duration: Some(4.0), volume, gain, filter: None, crossfade: 0.0, fade_in: 0.0, fade_out: 0.0, head: 0.0, tail: 0.0 }
+        Sound { input, start: 2.0, duration: Some(4.0), volume, gain, filter: None, crossfade: 0.0, fade_in: 0.0, fade_out: 0.0, head: 0.0, tail: 0.0, speed: &crate::speed::NORMAL }
     }
 
     #[test]
@@ -273,6 +342,40 @@ mod tests {
         assert!(graph.contains("[1:a:0]") && graph.split("[c1]").next().unwrap().contains("volume=0"), "{graph}");
         assert!(graph.contains(&format!("volume={}", crate::project::gain(3.0))), "{graph}");
         assert!(graph.ends_with(&format!("{LIMITER}[a]")), "{graph}");
+    }
+
+    /// A cut's sound at speed: its clip read for its span, its tempo
+    /// before its pad (so the pad, its fades and its crossfade are edit
+    /// seconds), its points read through its speed.
+    #[test]
+    fn a_cut_s_sound_plays_at_its_speed() {
+        use crate::speed::{Speed, SpeedKey};
+        let up = [crate::project::VolumeKey { t: 3.0, volume: 6.0 }, crate::project::VolumeKey { t: 5.0, volume: 0.0 }];
+        let music = crate::project::Music::default();
+        let mix = Mix { sound_db: 0.0, tracks: vec![&music], length: 8.0, fades: Default::default() };
+        let (twice, quarter) = (Speed::constant(2.0), Speed::constant(0.25));
+        let a = Path::new("a.mp4");
+        // 4 edit seconds at 2× read 8 clip seconds.
+        let fast = Sound { speed: &twice, ..stretch(a, 0.0, &up) };
+        assert_eq!(fast.reads(), Some(8.0));
+        let graph = mixed(&mut tool("ffmpeg"), &[fast], &mix).unwrap();
+        let chain = graph.split("[c1]").next().unwrap();
+        assert!(chain.find("atempo=2").unwrap() < chain.find("apad=whole_dur=4").unwrap(), "{graph}");
+        assert!(chain.contains("(2+(t-0)*2)"), "the points' clock: {graph}");
+        let slow = Sound { speed: &quarter, ..stretch(a, 0.0, &[]) };
+        assert!(slow.tempo(1).contains("atempo=0.5,atempo=0.5"), "atempo goes no lower than 0.5");
+        let tape = Speed { tape: true, ..Speed::constant(2.0) };
+        assert_eq!(Sound { speed: &tape, ..stretch(a, 0.0, &[]) }.tempo(1), ",asetrate=96000,aresample=48000");
+        // A curve: 1× to clip second 3, then 2×: two stretches joined.
+        let curve = Speed { keys: vec![SpeedKey { t: 0.0, rate: 1.0 }, SpeedKey { t: 3.0, rate: 2.0 }], tape: false };
+        let ramp = Sound { speed: &curve, ..stretch(a, 0.0, &[]) };
+        // 1 s at 1×, then 3 edit s at 2×: clip 2..9.
+        assert_eq!(ramp.reads(), Some(7.0));
+        assert_eq!(ramp.tempo(1), ",asplit=2[t1_0][t1_1];[t1_0]atrim=start=0:end=1,asetpts=PTS-STARTPTS,atempo=1[u1_0];[t1_1]atrim=start=1:end=7,asetpts=PTS-STARTPTS,atempo=2[u1_1];[u1_0][u1_1]concat=n=2:v=0:a=1");
+        assert_eq!(ramp.clip_time(), "if(lt(t,1),2+(t-0)*1,(3+(t-1)*2))");
+        // At normal speed the graph is as it was.
+        assert_eq!(stretch(a, 0.0, &up).clip_time(), "(t+2)");
+        assert_eq!(stretch(a, 0.0, &up).tempo(1), "");
     }
 
     #[test]

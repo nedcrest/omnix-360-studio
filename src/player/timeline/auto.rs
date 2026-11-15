@@ -48,9 +48,6 @@ pub(super) struct Owner<'a> {
     pub fixed: Vec<(&'static str, String)>,
 }
 
-/// Text and pictures read their own time as the edit runs.
-pub(super) static AS_IS: crate::speed::Speed = crate::speed::Speed { keys: Vec::new() };
-
 impl Owner<'_> {
     /// Edit time of its own time `t` (the time seam).
     fn edit(&self, t: f64) -> f64 {

@@ -25,6 +25,9 @@ pub struct Media {
     /// The filters the cut's sound goes through (`Cut::sound_filter`), on
     /// the copy it plays.
     pub filter: Option<String>,
+    /// How fast the cut reads it (`Cut::speed`), on the copy it plays: its
+    /// clock and its sound follow it.
+    pub speed: crate::speed::Speed,
     pub rig: Arc<Rig>,
     pub stab: Stabilizer,
     pub readout_ms: f64,
@@ -42,17 +45,30 @@ impl Media {
         self.audio.as_deref().unwrap_or(&self.input)
     }
 
-    /// The filters its sound goes through: rumble cut, cleaning, evening.
-    pub fn filter(&self) -> Option<&str> {
-        self.filter.as_deref()
+    /// The filters its sound goes through played from clip time `t`:
+    /// rumble cut, cleaning, evening, then its speed's tempo.
+    pub fn filter_at(&self, t: f64) -> Option<String> {
+        let tempo = ffmpeg::tempo(&self.speed, t, None, "p");
+        match (self.filter.as_deref(), tempo.is_empty()) {
+            (f, true) => f.map(str::to_owned),
+            (None, false) => Some(tempo),
+            (Some(f), false) => Some(format!("{f},{tempo}")),
+        }
     }
 
     /// This clip as cut `cut` plays it: with the cut's audio file, if any.
     pub(super) fn for_cut(&self, cut: &Cut) -> Media {
         let mut media = self.clone();
         media.filter = cut.sound_filter();
+        media.speed = cut.speed.clone();
         media.hear(heard_audio(cut));
         media
+    }
+
+    /// Whether this copy plays cut `cut` as it is: the same clip, sound
+    /// file, filters and speed (`for_cut` made it so). Else it's made again.
+    pub(super) fn plays(&self, cut: &Cut) -> bool {
+        self.input == cut.input && self.audio == heard_audio(cut) && self.filter == cut.sound_filter() && self.speed == cut.speed
     }
 
     /// Its sound from `audio` (none: the clip's own): there's sound if
@@ -94,6 +110,7 @@ impl Media {
             own_audio,
             audio: None,
             filter: None,
+            speed: Default::default(),
             proxy,
             osv_size: opts.osv_size,
             hw,
@@ -173,6 +190,46 @@ pub fn cache_clip(input: &Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A cut's copy plays at its speed: its sound's filters end in its
+    /// tempo from where it starts, and a change of speed makes it again.
+    #[test]
+    fn a_cut_at_speed_plays_through_its_tempo() {
+        use crate::speed::{Speed, SpeedKey};
+        let mut cut = Cut::new("a.mp4".into(), 0.0, 10.0);
+        cut.speed = Speed { keys: vec![SpeedKey { t: 0.0, rate: 1.0 }, SpeedKey { t: 4.0, rate: 2.0 }], tape: false };
+        let library = Media { input: "a.mp4".into(), ..test_media() };
+        let m = library.for_cut(&cut);
+        assert_eq!(m.filter_at(5.0).as_deref(), Some("atempo=2"));
+        assert!(m.filter_at(1.0).unwrap().starts_with("asplit=2"));
+        assert!(m.plays(&cut));
+        cut.speed = Speed::constant(0.5);
+        assert!(!m.plays(&cut), "another speed: made again");
+        assert_eq!(library.for_cut(&Cut::new("a.mp4".into(), 0.0, 10.0)).filter_at(3.0), None, "at 1×, its filters only");
+    }
+
+    /// A media with nothing loaded, for what reads its fields only.
+    fn test_media() -> Media {
+        Media {
+            input: PathBuf::new(),
+            proxy: None,
+            osv_size: None,
+            osv_full: 0,
+            hw: Hwaccel::Software,
+            has_audio: false,
+            own_audio: false,
+            audio: None,
+            filter: None,
+            speed: Default::default(),
+            rig: Arc::new(Rig::flat(0, crate::hdr::Hdr::None)),
+            stab: Stabilizer::new(&[], Mode::Off, ImuAxes::X180, -1.0, 0.0),
+            readout_ms: 0.0,
+            fps: 30.0,
+            duration: 10.0,
+            flat: None,
+            color_mode: Default::default(),
+        }
+    }
 
     #[test]
     fn a_silent_clips_voice_taken_away_leaves_it_silent() {

@@ -165,7 +165,7 @@ impl Playback {
         p.start_stream(t);
         p.playing = false;
         if p.media.has_audio {
-            p.ready = Audio::prepare(p.media.heard(), t, volume, p.media.filter()).inspect_err(|e| eprintln!("no sound ready: {e:#}")).ok().map(|a| (t, a));
+            p.ready = Audio::prepare(p.media.heard(), t, volume, p.media.filter_at(t).as_deref()).inspect_err(|e| eprintln!("no sound ready: {e:#}")).ok().map(|a| (t, a));
         }
         p
     }
@@ -223,13 +223,15 @@ impl Playback {
         ((t * self.media.fps).round() / self.media.fps).clamp(0.0, last)
     }
 
-    /// The playback clock: where playback is now, between frames too.
+    /// The playback clock: where playback is now, between frames too, in
+    /// clip time: the seconds heard (or passed) read at the cut's speed.
     pub fn now(&self) -> f64 {
+        let on = |secs: f64| self.media.speed.clip_after(self.anchor_pts, secs);
         match (self.playing, &self.audio) {
             (false, _) => self.anchor_pts,
             _ if self.sound_waits => self.anchor_pts,
-            (true, Some(audio)) => self.anchor_pts + audio.elapsed(),
-            (true, None) => self.anchor_pts + self.anchor_at.elapsed().as_secs_f64(),
+            (true, Some(audio)) => on(audio.elapsed()),
+            (true, None) => on(self.anchor_at.elapsed().as_secs_f64()),
         }
     }
 
@@ -268,7 +270,7 @@ impl Playback {
             self.audio = Some(ready);
             return;
         }
-        match Audio::start(self.media.heard(), t, self.volume, self.media.filter()) {
+        match Audio::start(self.media.heard(), t, self.volume, self.media.filter_at(t).as_deref()) {
             Ok(a) => self.audio = Some(a),
             Err(e) => {
                 eprintln!("no sound: {e:#}");

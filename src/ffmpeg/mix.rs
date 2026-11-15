@@ -124,35 +124,12 @@ impl<'a> Sound<'a> {
         x
     }
 
-    /// Its sound at its speed, as filters after its clean-up: a tempo per
-    /// stretch of constant rate (`atempo`, which keeps the pitch, twice
-    /// below 0.5×; like tape, `asetrate`), the stretches cut apart and
-    /// joined. `i` names its labels. At normal speed, nothing.
+    /// Its sound at its speed, after its clean-up (`tempo`); `i` names
+    /// its labels.
     fn tempo(&self, i: usize) -> String {
-        if self.speed.is_normal() {
-            return String::new();
-        }
-        let rate = |r: f64| {
-            if self.speed.tape {
-                format!("asetrate={},aresample=48000", 48000.0 * r)
-            } else if r < 0.5 {
-                format!("atempo=0.5,atempo={}", r / 0.5)
-            } else {
-                format!("atempo={r}")
-            }
-        };
-        let end = self.reads().map_or(f64::INFINITY, |d| self.start + d);
-        let pieces = self.speed.pieces(self.start, end);
-        if let [(_, _, r)] = pieces[..] {
-            return format!(",{}", rate(r));
-        }
-        let n = pieces.len();
-        let mut s = format!(",asplit={n}{};", (0..n).map(|k| format!("[t{i}_{k}]")).collect::<String>());
-        for (k, (a, b, r)) in pieces.iter().enumerate() {
-            let to = if b.is_finite() { format!(":end={}", b - self.start) } else { String::new() };
-            s += &format!("[t{i}_{k}]atrim=start={}{to},asetpts=PTS-STARTPTS,{}[u{i}_{k}];", a - self.start, rate(*r));
-        }
-        s + &(0..n).map(|k| format!("[u{i}_{k}]")).collect::<String>() + &format!("concat=n={n}:v=0:a=1")
+        let to = self.reads().map(|d| self.start + d);
+        let tempo = tempo(self.speed, self.start, to, &i.to_string());
+        if tempo.is_empty() { tempo } else { format!(",{tempo}") }
     }
 
     /// Its stream's filters after the resampling, as input `i` of a mix:
@@ -201,6 +178,37 @@ impl Mix<'_> {
     pub(super) fn matters(&self) -> bool {
         self.sound_db != 0.0 || self.tracks.iter().any(|t| !t.clips.is_empty()) || !self.fades.is_none()
     }
+}
+
+/// Sound read from clip time `from` (to `to`, else on) at `speed`, as
+/// filters: a tempo per stretch of constant rate (`atempo`, which keeps
+/// the pitch, twice below 0.5×; like tape, `asetrate` at 48 kHz), a curve's
+/// stretches cut apart and joined, labelled by `label`. At normal speed,
+/// nothing. The export's mix and the player's sound both use it.
+pub fn tempo(speed: &crate::speed::Speed, from: f64, to: Option<f64>, label: &str) -> String {
+    if speed.is_normal() {
+        return String::new();
+    }
+    let rate = |r: f64| {
+        if speed.tape {
+            format!("aresample=48000,asetrate={},aresample=48000", 48000.0 * r)
+        } else if r < 0.5 {
+            format!("atempo=0.5,atempo={}", r / 0.5)
+        } else {
+            format!("atempo={r}")
+        }
+    };
+    let pieces = speed.pieces(from, to.unwrap_or(f64::INFINITY));
+    if let [(_, _, r)] = pieces[..] {
+        return rate(r);
+    }
+    let n = pieces.len();
+    let mut s = format!("asplit={n}{};", (0..n).map(|k| format!("[t{label}_{k}]")).collect::<String>());
+    for (k, (a, b, r)) in pieces.iter().enumerate() {
+        let end = if b.is_finite() { format!(":end={}", b - from) } else { String::new() };
+        s += &format!("[t{label}_{k}]atrim=start={}{end},asetpts=PTS-STARTPTS,{}[u{label}_{k}];", a - from, rate(*r));
+    }
+    s + &(0..n).map(|k| format!("[u{label}_{k}]")).collect::<String>() + &format!("concat=n={n}:v=0:a=1")
 }
 
 /// Pads a stretch with silence to its frames' length, as a filter to append
@@ -365,7 +373,9 @@ mod tests {
         let slow = Sound { speed: &quarter, ..stretch(a, 0.0, &[]) };
         assert!(slow.tempo(1).contains("atempo=0.5,atempo=0.5"), "atempo goes no lower than 0.5");
         let tape = Speed { tape: true, ..Speed::constant(2.0) };
-        assert_eq!(Sound { speed: &tape, ..stretch(a, 0.0, &[]) }.tempo(1), ",asetrate=96000,aresample=48000");
+        assert_eq!(Sound { speed: &tape, ..stretch(a, 0.0, &[]) }.tempo(1), ",aresample=48000,asetrate=96000,aresample=48000");
+        // The player's, from where it starts playing, on to the end.
+        assert_eq!(tempo(&Speed { keys: vec![SpeedKey { t: 0.0, rate: 1.0 }, SpeedKey { t: 3.0, rate: 2.0 }], tape: false }, 4.0, None, "p"), "atempo=2");
         // A curve: 1× to clip second 3, then 2×: two stretches joined.
         let curve = Speed { keys: vec![SpeedKey { t: 0.0, rate: 1.0 }, SpeedKey { t: 3.0, rate: 2.0 }], tape: false };
         let ramp = Sound { speed: &curve, ..stretch(a, 0.0, &[]) };

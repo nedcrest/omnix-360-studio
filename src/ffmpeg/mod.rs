@@ -11,7 +11,7 @@ use crate::hdr::Hdr;
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 
 mod mix;
-pub use mix::{LIMITER, Mix, Sound};
+pub use mix::{LIMITER, Mix, Sound, tempo};
 use mix::{mixed, pad};
 
 /// A command running ffmpeg's `tool` (`ffmpeg` or `ffprobe`): one bundled

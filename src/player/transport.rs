@@ -139,7 +139,7 @@ impl App {
             return;
         };
         match &mut self.partner {
-            Some((j, inc)) if *j == i && inc.playback.media.input == input && inc.playback.media.audio == heard_audio(&self.edit.cuts[i]) && inc.playback.media.filter == self.edit.cuts[i].sound_filter() => {
+            Some((j, inc)) if *j == i && inc.playback.media.plays(&self.edit.cuts[i]) => {
                 let p = &mut inc.playback;
                 // Primed to catch up: started as the edit gets there.
                 if let Some(at) = p.go_at {
@@ -158,7 +158,7 @@ impl App {
                     if !playing {
                         p.pause();
                     } else {
-                        inc.playback = p.primed_again(t + Self::catch_up(p.startup()));
+                        inc.playback = p.primed_again(p.media.speed.clip_after(t, Self::catch_up(p.startup())));
                         return;
                     }
                 }
@@ -174,7 +174,7 @@ impl App {
                 // time started decoders faster than they ended).
                 if playing {
                     if p.running() && (p.now() - t).abs() > 0.25 {
-                        inc.playback = p.primed_again(t + Self::catch_up(p.startup()));
+                        inc.playback = p.primed_again(p.media.speed.clip_after(t, Self::catch_up(p.startup())));
                     }
                 } else if (p.target() - t).abs() > 1.0 / p.media.fps {
                     p.scrub(t);
@@ -191,7 +191,8 @@ impl App {
                 // Playing, primed ahead to start as the edit gets there, as
                 // a resync is.
                 let playback = if playing {
-                    let mut p = Playback::primed(media, t + Self::catch_up(0.0), 0.0, self.full_on_pause);
+                    let at = media.speed.clip_after(t, Self::catch_up(0.0));
+                    let mut p = Playback::primed(media, at, 0.0, self.full_on_pause);
                     p.go_at = Some(p.target());
                     p
                 } else {
@@ -205,7 +206,8 @@ impl App {
     }
 
     /// How far ahead of the edit a crossfade's partner is primed to catch
-    /// up, for a decoder that took `startup` seconds to start last time:
+    /// up, edit seconds, for a decoder that took `startup` seconds to start
+    /// last time:
     /// with room for it to take longer (it varied 1.1-1.4 s), at least half
     /// a second.
     pub(super) fn catch_up(startup: f64) -> f64 {
@@ -264,13 +266,15 @@ impl App {
         let loaded = |input: &PathBuf| self.library.iter().find(|m| &m.input == input);
         // A next cut that starts where this one ends in the same clip (after
         // a split) just plays on: no seek, nothing to prime.
-        let carries_on = next_cut.is_some_and(|n| n.input == cut.input && n.audio == cut.audio && n.sound_filter() == cut.sound_filter() && (n.start - cut.end).abs() < 1.5 / p.media.fps && n.crossfade == 0.0);
+        let carries_on = next_cut.is_some_and(|n| n.input == cut.input && n.audio == cut.audio && n.sound_filter() == cut.sound_filter() && n.speed == cut.speed && (n.start - cut.end).abs() < 1.5 / p.media.fps && n.crossfade == 0.0);
         // Where the next cut comes in: this one's end, or before it by the
         // crossfade.
         let change = self.edit.crossfade_from(self.current).unwrap_or(cut.end);
         // In the last `PREROLL` seconds, ready the next cut so the change is
         // instant.
-        if p.now() >= change - PREROLL
+        // Edit seconds before the change, read at this cut's speed.
+        let before_change = |secs: f64| cut.speed.clip_after(change, -secs);
+        if p.now() >= before_change(PREROLL)
             && !carries_on
             && self.partner.as_ref().is_none_or(|(i, _)| *i != next)
             && let Some(n) = next_cut
@@ -285,7 +289,7 @@ impl App {
         // picture waits through it to stay in sync).
         if let Some((i, input, at, primed)) = &mut self.preroll
             && next_cut.is_some_and(|n| (*i, &*input, *at) == (next, &n.input, n.start))
-            && primed.sound_lead().is_some_and(|lead| p.now() >= change - lead)
+            && primed.sound_lead().is_some_and(|lead| p.now() >= before_change(lead))
         {
             primed.start_sound();
         }
@@ -354,7 +358,7 @@ impl App {
         let Some(cut) = self.edit.cuts.get(i) else { return };
         let t = t.clamp(cut.start, cut.end);
         // Another clip, or the same clip heard through another audio file.
-        let other_clip = self.clip.as_ref().is_none_or(|c| c.playback.media.input != cut.input || c.playback.media.audio != heard_audio(cut) || c.playback.media.filter != cut.sound_filter());
+        let other_clip = self.clip.as_ref().is_none_or(|c| !c.playback.media.plays(cut));
         if (i != self.current || other_clip) && self.held.is_none() {
             self.held = self.sphere();
         }
@@ -469,13 +473,13 @@ impl App {
         }
     }
 
-    /// After a cut's sound changed (its level is followed every frame; its
-    /// evening out is in the decode), restarts the playing cut's sound if
-    /// evening out changed, where it is.
+    /// After a cut's sound or speed changed (its level is followed every
+    /// frame; its evening out and its tempo are in the decode), restarts
+    /// the playing cut where it is if either changed.
     pub(super) fn reload_cut_sound(&mut self) {
         let Some(cut) = self.edit.cuts.get(self.current) else { return };
         let Some(c) = &self.clip else { return };
-        if c.playback.media.filter == cut.sound_filter() {
+        if c.playback.media.plays(cut) {
             return;
         }
         let playing = c.playback.playing;

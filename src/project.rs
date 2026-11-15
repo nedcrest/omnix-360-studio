@@ -941,8 +941,10 @@ impl Cut {
         if t < from || t > to {
             return 0.0;
         }
+        // The fades are edit seconds: how far `t` is from each end, on
+        // the edit, at the cut's speed.
         let (fade_in, fade_out) = self.sound_fades();
-        fade_ramp(t - from, to - t, fade_in, fade_out)
+        fade_ramp(self.speed.edit_secs(from, t), self.speed.edit_secs(t, to), fade_in, fade_out)
     }
 
     /// Its sound's fades at its picture's ends, seconds: its own, as long
@@ -959,8 +961,12 @@ impl Cut {
     /// `transition::colour`'s `p`): growing to the out point, ebbing from
     /// the in point; where the two meet on a short cut, the stronger.
     pub fn edge_at(&self, t: f64) -> Option<(crate::transition::Spec, f32)> {
-        let out = self.edge_out.as_ref().map(|e| (e, (t - (self.end - e.seconds)) / e.seconds));
-        let start = self.edge_in.as_ref().map(|e| (e, 1.0 - (t - self.start) / e.seconds));
+        // `Edge.seconds` are edit seconds: the share is of the edit time to
+        // the ends.
+        // (From where the look starts, so at 1× the sums are the same ones
+        // as before: the export's plan stays exact.)
+        let out = self.edge_out.as_ref().map(|e| (e, self.speed.edit_secs(self.clip_before_end(e.seconds), t) / e.seconds));
+        let start = self.edge_in.as_ref().map(|e| (e, 1.0 - self.edit_at(t) / e.seconds));
         [start, out].into_iter().flatten().map(|(e, q)| (e, q.clamp(0.0, 1.0))).filter(|&(_, q)| q > 0.0).max_by(|a, b| a.1.total_cmp(&b.1)).map(|(e, q)| (e.spec(), q as f32))
     }
 
@@ -1004,7 +1010,7 @@ impl Cut {
         self.sound_before = self.sound_before.min(self.start);
         self.sound_after = self.sound_after.min((most - self.end).max(0.0));
         let (from, to) = self.sound_span();
-        if to - from < crate::model::edit::MIN_CUT {
+        if self.speed.edit_secs(from, to) < crate::model::edit::MIN_CUT {
             self.sound_before = self.sound_before.max(0.0);
             self.sound_after = self.sound_after.max(0.0);
         }
@@ -1059,11 +1065,14 @@ pub fn kept_picture(before: &[Cut], after: &[Cut]) -> Vec<(f64, f64, f64)> {
     let mut kept = Vec::new();
     for (k, b) in before.iter().enumerate() {
         let owned_to = old.get(k + 1).copied().unwrap_or_else(|| edit_length(before));
-        let (s0, s1) = (b.start, b.start + (owned_to - old[k]));
+        // Through the seam: the stretch it holds is edit time, read back
+        // into its clip at its speed; where a kept piece sits, and how long
+        // it lasts, edit time again.
+        let (s0, s1) = (b.start, b.clip_at(owned_to - old[k]));
         for (j, a) in after.iter().enumerate().filter(|(_, a)| kin(b, a)) {
             let (x0, x1) = (s0.max(a.start), s1.min(a.end));
             if x1 - x0 > 1e-6 {
-                kept.push((old[k] + (x0 - b.start), new[j] + (x0 - a.start), x1 - x0));
+                kept.push((old[k] + b.edit_at(x0), new[j] + a.edit_at(x0), a.speed.edit_secs(x0, x1)));
             }
         }
     }
@@ -1301,7 +1310,7 @@ impl Project {
 
     /// How far faded to black cut `n` is at clip time `t`, 0..1.
     pub fn black_at(&self, n: usize, t: f64) -> f64 {
-        let at = offsets(&self.cuts)[n] + t - self.cuts[n].start;
+        let at = offsets(&self.cuts)[n] + self.cuts[n].edit_at(t);
         self.fades.black(at, self.duration())
     }
 
@@ -1747,8 +1756,8 @@ impl Project {
     /// `own`'s sound settings, to change.
     pub fn own_sound(&mut self, own: Own) -> Option<OwnSound<'_>> {
         match own {
-            Own::Cut(i) => self.cuts.get_mut(i).map(|c| OwnSound { range: (c.start, c.end), gain: &mut c.gain, even: &mut c.even, mute: &mut c.mute, low_cut: &mut c.low_cut, clean: &mut c.clean, loudness: &mut c.loudness, volume: &mut c.volume, fade_in: &mut c.sound_fade_in, fade_out: &mut c.sound_fade_out }),
-            Own::Clip(which, i) => self.track_mut(which).clips.get_mut(i).map(|c| OwnSound { range: (c.start, c.end), gain: &mut c.gain, even: &mut c.even, mute: &mut c.mute, low_cut: &mut c.low_cut, clean: &mut c.clean, loudness: &mut c.loudness, volume: &mut c.volume, fade_in: &mut c.fade_in, fade_out: &mut c.fade_out }),
+            Own::Cut(i) => self.cuts.get_mut(i).map(|c| OwnSound { range: (c.start, c.end), edit_len: c.edit_len(), gain: &mut c.gain, even: &mut c.even, mute: &mut c.mute, low_cut: &mut c.low_cut, clean: &mut c.clean, loudness: &mut c.loudness, volume: &mut c.volume, fade_in: &mut c.sound_fade_in, fade_out: &mut c.sound_fade_out }),
+            Own::Clip(which, i) => self.track_mut(which).clips.get_mut(i).map(|c| OwnSound { range: (c.start, c.end), edit_len: c.end - c.start, gain: &mut c.gain, even: &mut c.even, mute: &mut c.mute, low_cut: &mut c.low_cut, clean: &mut c.clean, loudness: &mut c.loudness, volume: &mut c.volume, fade_in: &mut c.fade_in, fade_out: &mut c.fade_out }),
         }
     }
 
@@ -1904,6 +1913,9 @@ pub struct OwnSound<'a> {
     pub fade_out: &'a mut f64,
     /// Its stretch of its file.
     pub range: (f64, f64),
+    /// How long that stretch lasts on the edit: its fades are edit
+    /// seconds (a cut's at its speed; a sound clip's as long as its range).
+    pub edit_len: f64,
 }
 
 impl OwnSound<'_> {
@@ -1911,7 +1923,7 @@ impl OwnSound<'_> {
     /// its length leaves beside the other fade. A cut's sound and a sound
     /// clip's alike.
     pub fn set_fade(&mut self, in_edge: bool, seconds: f64) {
-        let len = self.range.1 - self.range.0;
+        let len = self.edit_len;
         let (this, other) = if in_edge { (&mut *self.fade_in, *self.fade_out) } else { (&mut *self.fade_out, *self.fade_in) };
         *this = seconds.clamp(0.0, (len - other).max(0.0));
     }
@@ -2289,6 +2301,45 @@ mod tests {
         assert_eq!(text.matches(r#""audio""#).count(), 2);
         assert_eq!(Project::load(&path).unwrap(), p);
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// The time seam's metamorphic check (`TIME-SEAM.md`): a cut of 4 clip
+    /// seconds at 2× is, on the edit, a cut of 2 s at 1×: its edge look,
+    /// its sound's fades, where its sound may end, all at the same edit
+    /// times.
+    #[test]
+    fn a_cut_at_twice_the_speed_is_a_cut_half_as_long_on_the_edit() {
+        let edge = || Some(Edge { look: crate::transition::Look::EdgeBlur, seconds: 0.5, params: Default::default() });
+        let mut fast = Cut::new("a.mp4".into(), 10.0, 14.0);
+        fast.speed = crate::speed::Speed::constant(2.0);
+        let mut slow = Cut::new("a.mp4".into(), 10.0, 12.0);
+        for c in [&mut fast, &mut slow] {
+            (c.edge_in, c.edge_out, c.sound_fade_in, c.sound_fade_out) = (edge(), edge(), 0.3, 0.6);
+        }
+        assert_eq!((fast.edit_len(), slow.edit_len()), (2.0, 2.0));
+        for k in 0..=20 {
+            let dt = 2.0 * f64::from(k) / 20.0;
+            let (tf, ts) = (fast.clip_at(dt), slow.clip_at(dt));
+            let (ef, es) = (fast.edge_at(tf).map(|(_, q)| q), slow.edge_at(ts).map(|(_, q)| q));
+            assert!(match (ef, es) { (Some(a), Some(b)) => (a - b).abs() < 1e-6, (a, b) => a == b }, "edge at {dt} s: {ef:?} against {es:?}");
+            assert!((fast.sound_fade(tf) - slow.sound_fade(ts)).abs() < 1e-9, "sound at {dt} s");
+        }
+    }
+
+    /// Sync lock at 2× (`kept_picture`, the seam's riskiest place): a
+    /// fast cut trimmed by a clip second at its head loses half a second
+    /// of the edit, and what's after moves up by that much.
+    #[test]
+    fn sync_lock_reads_a_fast_cut_s_trim_in_edit_time() {
+        let mut a = Cut::new("a.mp4".into(), 0.0, 4.0);
+        (a.id, a.speed) = (1, crate::speed::Speed::constant(2.0));
+        let mut b = Cut::new("b.mp4".into(), 0.0, 2.0);
+        b.id = 2;
+        let before = vec![a.clone(), b.clone()];
+        let mut trimmed = a.clone();
+        trimmed.start = 1.0;
+        let kept = kept_picture(&before, &[trimmed, b]);
+        assert_eq!(kept, [(0.5, 0.0, 1.5), (2.0, 1.5, 2.0)], "(old start, new start, length), edit seconds");
     }
 
     /// Gap 116: a trip moved keeps its edits; what's outside it stays

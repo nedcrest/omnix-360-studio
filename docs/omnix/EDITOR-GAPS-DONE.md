@@ -1411,6 +1411,18 @@ and brightest, the levels already there undone). Milestone «Ефекти,
 one value for the cut; a measure over the whole cut, or levels moving
 with the light, is for later (the user asked, 2026-11-10; gap 89).
 
+### 85. Project cards in a grid with a GIF on hover — idea, backlog (user, 2026-11-07)
+
+Omnix's start window (recent edits, «Browse projects») and the trips'
+lists show plain rows today; they do their job. Later: cards in a grid,
+each with basic facts and a short description, and a moving preview of
+the project (a GIF-like loop of a few frames) played only while the
+pointer is over the card. Dailix's trip cards (gap 82) are the first
+step; the hover preview could reuse the bin's hover frames (gap 60).
+Milestone «Матеріал і бін».
+
+**Done** as gap 110's project cards (2026-11-14): mosaics of the edit's own frames on the start screens, changing while the pointer is over them (`omnix card`). Closed in the roadmap's audit, 2026-11-15.
+
 ### 97. Text and overlay lanes: names, dragging between them, hiding one — done, checked by the user 2026-11-10 (left from gap 70, 2026-11-10)
 
 Gap 70 gave the tracks lanes; what it left: a lane's name of the user's

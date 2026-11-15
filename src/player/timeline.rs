@@ -464,6 +464,9 @@ pub struct Timeline {
     pub snap_line: Option<f64>,
     /// The automation lanes under the Effects row, by `grade::NAMES` index
     /// (gap 39).
+    /// Automation lanes shown on their value's whole range (gap 108);
+    /// the others fit their points.
+    pub absolute: Vec<super::automation_ui::Param>,
     pub auto_lanes: Vec<super::automation_ui::Param>,
     /// The overlay and text lanes' own automation lanes, lane by lane.
     pub overlay_auto: Vec<Vec<super::automation_ui::Param>>,
@@ -1538,11 +1541,13 @@ impl Timeline {
         }
     }
 
-    /// The menu a sound lane's header opens: the lane's own level and what
-    /// acts on the whole lane.
+    /// The menu a lane's header opens: an automation lane's scale (gap
+    /// 108); a sound lane's own level and what acts on the whole lane.
     fn head_menu(&self, p: Point) -> Option<super::sound_ui::Menu> {
         use super::sound_ui::Menu;
-        if self.rows.on_clip_sound(p.y) {
+        if let Some(param) = self.cut_lanes().head_at(p).or_else(|| self.frame_lanes().head_at(p)) {
+            Some(Menu::Scale(param))
+        } else if self.rows.on_clip_sound(p.y) {
             Some(Menu::ClipSound)
         } else {
             self.rows.sound_at_y(p.y).map(|li| Menu::Track(self.sounds[li].which))
@@ -1927,6 +1932,26 @@ impl OverlayLane {
         }
     }
 
+    /// A right-click: on an automation lane a point's ease or a clip gone,
+    /// on its head its scale (gap 108); on the lane's name its menu (to
+    /// name it, gap 97, or lock it, 99b); on an overlay picture what file
+    /// it is (text has none).
+    fn right_press(&self, cursor: mouse::Cursor, bounds: Rectangle) -> Option<canvas::Action<Message>> {
+        let p = cursor.position_in(bounds)?;
+        let menu = |menu| Some(canvas::Action::publish(Message::Sound(super::sound_ui::SoundMsg::Menu(Some((menu, cursor.position()?))))).and_capture());
+        if let Some(lanes) = [false, true].into_iter().map(|m| self.lanes(m)).find(|l| l.lane_at(p.y).is_some()) {
+            if p.x >= HEAD {
+                return Some(canvas::Action::publish(lanes.right(p, bounds)?).and_capture());
+            }
+            return lanes.head_at(p).and_then(|param| menu(super::sound_ui::Menu::Scale(param)));
+        }
+        if p.x < HEAD && p.y < self.0.rows.overlay && !self.folded() && !self.signs().iter().any(|(_, r)| r.contains(p)) {
+            return menu(super::sound_ui::Menu::Lane(self.1, self.2));
+        }
+        let item = self.item_at(p.x, bounds).filter(|_| self.1 == Track::Overlay && p.y < self.0.rows.overlay)?;
+        Some(canvas::Action::publish(Message::Info(super::info::Of::Overlay(self.r(item)))).and_capture())
+    }
+
     /// Its own automation lanes: its effects' under its Effects row, its
     /// place's (across, down, size, rotation) under its Motion row.
     fn lanes(&self, motion: bool) -> auto::Lanes<'_> {
@@ -2146,23 +2171,7 @@ impl canvas::Program<Message> for OverlayLane {
                 let p = cursor.position_in(bounds).filter(|p| p.x >= HEAD)?;
                 Some(canvas::Action::publish(Message::DropPicture(path.clone(), self.2, t.t(p.x, bounds).max(0.0))).and_capture())
             }
-            // Right-click on its automation lanes: a point's ease, a clip gone.
-            Mouse(mouse::Event::ButtonPressed(mouse::Button::Right)) if cursor.position_in(bounds).is_some_and(|p| p.x >= HEAD && [false, true].iter().any(|&m| self.lanes(m).lane_at(p.y).is_some())) => {
-                let p = cursor.position_in(bounds)?;
-                let message = [false, true].into_iter().find_map(|m| Some(self.lanes(m)).filter(|l| l.lane_at(p.y).is_some())?.right(p, bounds))?;
-                Some(canvas::Action::publish(message).and_capture())
-            }
-            // Right-click its name: its menu, to name it (gap 97) or lock it (99b).
-            Mouse(mouse::Event::ButtonPressed(mouse::Button::Right)) if cursor.position_in(bounds).is_some_and(|p| p.x < HEAD && p.y < self.0.rows.overlay && !self.folded() && !self.signs().iter().any(|(_, r)| r.contains(p))) => {
-                let menu = super::sound_ui::Menu::Lane(self.1, self.2);
-                Some(canvas::Action::publish(Message::Sound(super::sound_ui::SoundMsg::Menu(Some((menu, cursor.position()?))))).and_capture())
-            }
-            // Right-click an overlay picture: what file it is (text has none).
-            Mouse(mouse::Event::ButtonPressed(mouse::Button::Right)) if self.1 == Track::Overlay => {
-                let p = cursor.position_in(bounds)?;
-                let item = self.item_at(p.x, bounds).filter(|_| p.y < self.0.rows.overlay)?;
-                Some(canvas::Action::publish(Message::Info(super::info::Of::Overlay(self.r(item)))).and_capture())
-            }
+            Mouse(mouse::Event::ButtonPressed(mouse::Button::Right)) => self.right_press(cursor, bounds),
             Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => self.press(drag, cursor.position_in(bounds)?, bounds),
             Mouse(mouse::Event::CursorMoved { position }) => {
                 let x = position.x - bounds.x;
@@ -3219,6 +3228,7 @@ mod tests {
             snapping: true,
             snap_line: None,
             auto_lanes: vec![],
+            absolute: vec![],
             overlay_auto: vec![vec![]],
             text_auto: vec![vec![]],
             active_lanes: [0; 2],

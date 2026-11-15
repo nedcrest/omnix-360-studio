@@ -126,17 +126,29 @@ impl Lanes<'_> {
         (self.top + i as f32 * AUTO, AUTO)
     }
 
-    /// The height on lane `i` of value `v`, its range top to bottom.
+    /// Lane `i`'s scale, bottom to top: its points' own span with a
+    /// margin (gap 108, `fit`), or its value's whole range where the lane
+    /// is set to Absolute (or has no points).
+    pub(super) fn range(&self, i: usize) -> (f64, f64) {
+        let param = self.params[i];
+        if self.t.absolute.contains(&param) {
+            return param.range();
+        }
+        let name = param.name();
+        fit(self.owners.iter().flat_map(|o| o.clips.iter().filter(|a| a.param == name)).flat_map(|a| a.points.iter().map(|p| p.v)), param.range())
+    }
+
+    /// The height on lane `i` of value `v`, its scale top to bottom.
     pub(super) fn y(&self, i: usize, v: f64) -> f32 {
         let (top, h) = self.lane(i);
-        let (lo, hi) = self.params[i].range();
+        let (lo, hi) = self.range(i);
         top + h - 4.0 - ((v - lo) / (hi - lo)).clamp(0.0, 1.0) as f32 * (h - 8.0)
     }
 
     /// The value at height `y` on lane `i`.
     pub(super) fn value(&self, i: usize, y: f32) -> f64 {
         let (top, h) = self.lane(i);
-        let (lo, hi) = self.params[i].range();
+        let (lo, hi) = self.range(i);
         lo + ((top + h - 4.0 - y) / (h - 8.0)).clamp(0.0, 1.0) as f64 * (hi - lo)
     }
 
@@ -459,8 +471,23 @@ impl Lanes<'_> {
         for (i, name) in names.enumerate() {
             let (top, h) = self.lane(i);
             head_cell(frame, top, h, EFFECT_MARK);
+            // A fitted scale says its span, faint, so a curve filling the
+            // lane isn't read as the whole range.
+            let span = self.params.get(i).filter(|p| self.range(i) != p.range()).map(|&p| {
+                let (lo, hi) = self.range(i);
+                format!("  {}…{}", p.label(lo), p.label(hi))
+            });
             frame.fill_text(Text { content: name.to_owned(), position: Point::new(PICK + 14.0, top + h / 2.0), color: ink, size: 11.0.into(), align_y: Vertical::Center, ..Default::default() });
+            if let Some(span) = span {
+                frame.fill_text(Text { content: span, position: Point::new(PICK + 14.0, top + h - 2.0), color: ink.scale_alpha(0.6), size: 9.0.into(), align_y: Vertical::Bottom, ..Default::default() });
+            }
         }
+    }
+
+    /// The value lane whose head is at `p`, for its scale's menu.
+    pub(super) fn head_at(&self, p: Point) -> Option<Param> {
+        (p.x < HEAD).then_some(())?;
+        self.params.get(self.lane_at(p.y)?).copied()
     }
 
     /// Whether `p` is on the Effects row's name, folding the lanes (while
@@ -468,6 +495,22 @@ impl Lanes<'_> {
     pub(super) fn on_tag(&self, p: Point) -> bool {
         self.rows() > 0 && p.x < HEAD && fold_tag(&self.tag(), self.row_top + self.row_h / 2.0).contains(p)
     }
+}
+
+/// A lane's scale fitted to its points' `values` (gap 108): their span
+/// with a fifth of it either side, at least a twentieth of the value's
+/// `full` range, kept inside it; the full range with no points.
+pub(super) fn fit(values: impl Iterator<Item = f64>, full: (f64, f64)) -> (f64, f64) {
+    let (lo, hi) = values.fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), v| (lo.min(v), hi.max(v)));
+    if lo > hi {
+        return full;
+    }
+    let least = (full.1 - full.0) / 20.0;
+    let pad = ((hi - lo) / 5.0).max((least - (hi - lo)) / 2.0).max(0.0);
+    let (a, b) = ((lo - pad).max(full.0), (hi + pad).min(full.1));
+    // Pushed off one end: the room given to the other, the span kept.
+    let width = (hi - lo + 2.0 * pad).min(full.1 - full.0);
+    if a == full.0 { (a, a + width) } else if b == full.1 { (b - width, b) } else { (a, b) }
 }
 
 impl Timeline {
@@ -490,5 +533,24 @@ impl Timeline {
         let owners: Vec<Owner> = self.blocks.iter().enumerate().map(|(i, c)| Owner { on: AutoOn::Cut(i), from: c.from, start: c.cut.start, len: c.len(), speed: &c.cut.speed, clips: &c.cut.automation, fixed: super::super::automation_ui::fixed_of_cut(&c.cut) }).collect();
         let fixed = super::super::automation_ui::fixed_rows(owners.iter().map(|o| &o.fixed[..]));
         Lanes { t: self, params: self.auto_lanes.clone(), name: "Effects", row_top: self.rows.effects_top, row_h: EFFECTS, top: self.rows.auto_top, folded: self.folds.effects, owners, fixed }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::fit;
+
+    /// Gap 108: zoom points at 100 and 143 % fill their lane, not a
+    /// seventh of 100–800; one value alone gets a twentieth of the range
+    /// around it; near an end the span is kept, shifted inside.
+    #[test]
+    fn a_lane_s_scale_fits_its_points() {
+        let (lo, hi) = fit([100.0, 143.0, 143.0].into_iter(), (100.0, 800.0));
+        assert!(lo == 100.0 && (hi - 160.2).abs() < 1e-9, "{lo} {hi}");
+        assert_eq!(fit([400.0].into_iter(), (100.0, 800.0)), (382.5, 417.5));
+        assert_eq!(fit([-15.0, -6.0].into_iter(), (-180.0, 180.0)), (-19.5, -1.5));
+        assert_eq!(fit(std::iter::empty(), (-5.0, 5.0)), (-5.0, 5.0));
+        let (lo, hi) = fit([4.9, 5.0].into_iter(), (-5.0, 5.0));
+        assert!(hi == 5.0 && (hi - lo - 0.5).abs() < 1e-9, "{lo} {hi}");
     }
 }

@@ -26,7 +26,7 @@ pub enum LaneOf {
 
 /// A value a lane moves: a colour effect (`grade::NAMES` index) or, on an
 /// item, its place (`Place::NAMES` index).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Param {
     Grade(usize),
     Place(usize),

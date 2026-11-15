@@ -141,6 +141,12 @@ impl App {
                     self.reload_cut_sound();
                 }
             }
+            Message::LaneScale(param, absolute) => {
+                self.absolute_lanes.retain(|&p| p != param);
+                if absolute {
+                    self.absolute_lanes.push(param);
+                }
+            }
             Message::CutTape(cut, on) => {
                 if self.op(Op::Cut(crate::model::ops::cuts::CutOp::TapePitch { cut, on })).is_some() {
                     self.reload_cut_sound();

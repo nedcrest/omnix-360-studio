@@ -347,6 +347,7 @@ impl App {
             snapping: self.snapping && !self.modifiers.alt(),
             snap_line: self.snap_line,
             auto_lanes: self.lanes_of(super::automation_ui::LaneOf::Cuts),
+            absolute: self.absolute_lanes.clone(),
             overlay_auto: self.lanes_of_track(crate::overlay::Track::Overlay),
             held: self.modifiers,
             text_auto: self.lanes_of_track(crate::overlay::Track::Text),

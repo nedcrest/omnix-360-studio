@@ -45,6 +45,8 @@ pub enum Menu {
     /// A cut's picture: its pieces joined back («This was one clip»),
     /// Info, its speed.
     Cut(usize),
+    /// An automation lane's head: its scale, fitted or whole (gap 108).
+    Scale(super::automation_ui::Param),
     /// A text or picture lane's head: its name and its sync lock.
     Lane(crate::overlay::Track, usize),
 }
@@ -397,6 +399,12 @@ impl App {
                 items.push(tip(lock, text("Trimming, deleting or adding a cut keeps the text and pictures over each picture with it: shortened where it goes"), tooltip::Position::Right));
             }
             Menu::Cut(i) => self.cut_menu(i, &mut items, &mut rows),
+            Menu::Scale(param) => {
+                let whole = self.absolute_lanes.contains(&param);
+                let tick = |on: bool, label: &str| format!("{}{label}", if on { "✓ " } else { "" });
+                items.push(tip(item(tick(!whole, "Relative scale"), Message::LaneScale(param, false)), text("The lane's height is its points' own span: a small change fills it"), tooltip::Position::Right));
+                items.push(tip(item(tick(whole, "Absolute scale"), Message::LaneScale(param, true)), text("The lane's height is the value's whole range"), tooltip::Position::Right));
+            }
         }
         if items.is_empty() {
             return below;

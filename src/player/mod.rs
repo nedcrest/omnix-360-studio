@@ -358,6 +358,9 @@ enum Message {
     TrimToEnd(Vec<crate::project::Id>),
     /// Cut `i`'s pieces joined back into one («This was one clip»).
     JoinPieces(usize),
+    /// An automation lane on its value's whole range (true) or fitted to
+    /// its points (gap 108).
+    LaneScale(automation_ui::Param, bool),
     /// Cut `.0` at one rate throughout (gap 31); 1 is normal.
     CutSpeed(crate::project::Id, f64),
     /// Cut `.0`'s sound at speed like tape (true) or keeping its pitch.
@@ -925,6 +928,9 @@ struct App {
     /// Picking a colour to track: `Some(None)` until a box is drawn, then
     /// the box in fractions of the view.
     picking: Option<Option<Rectangle>>,
+    /// Automation lanes on their value's whole range, not fitted to their
+    /// points (gap 108); while the window is open.
+    absolute_lanes: Vec<automation_ui::Param>,
     /// The box picks a white balance, not a colour to track.
     picking_white: bool,
     /// The panel docked at the right of the view, if one is open.
@@ -1099,6 +1105,7 @@ impl App {
             view_size: Size::new(16.0, 9.0),
             save_status: None,
             picking: None,
+            absolute_lanes: Vec::new(),
             picking_white: false,
             side: None,
             record: record_ui::Panel::new(saved.record_input.clone(), saved.record_channel, saved.record_countdown, saved.record_play),
@@ -1376,7 +1383,7 @@ impl App {
             m @ (Message::LookDone | Message::Aim(_) | Message::Framing { .. } | Message::KeyMove { .. } | Message::KeyAdd | Message::KeyDelete | Message::KeyEase { .. } | Message::KeyFollow { .. } | Message::Stab { .. } | Message::Projection { .. } | Message::KeyJump { .. } | Message::Look { .. } | Message::Zoom { .. } | Message::Fov { .. } | Message::AngleInput { .. } | Message::AngleDone | Message::AngleScrubStart { .. } | Message::AngleScrubDone | Message::AngleScrub { .. } | Message::AngleNudge { .. } | Message::AngleArrow { .. } | Message::Source { .. } | Message::RollingShutter { .. } | Message::FullOnPause { .. } | Message::ResetView) => self.on_framing(m),
             m @ (Message::AddOverlay | Message::OverlayPicked { .. } | Message::OverlaySelect { .. } | Message::OverlayMove { .. } | Message::OverlayToLane(..) | Message::OverlayTrim { .. } | Message::OverlayJump { .. } | Message::OverlayKeyMove { .. } | Message::OverlayPicture { .. } | Message::AddText | Message::AddBars | Message::LaneAdd(_) | Message::LaneRemove(..) | Message::LaneActive(..) | Message::LaneRename(..) | Message::LaneName(..) | Message::LaneHide(..) | Message::LaneSync(..)) => self.on_overlay_ui(m),
             m @ (Message::CutVoice(..) | Message::CutVoiceMeasured(..) | Message::CutSpeech(..) | Message::SheetVoices(_) | Message::SheetVoicesMeasured(_)) => self.on_cut_voice(m),
-            m @ (Message::TrimToEnd(_) | Message::JoinPieces(_) | Message::CutSpeed(..) | Message::CutTape(..)) => {
+            m @ (Message::TrimToEnd(_) | Message::JoinPieces(_) | Message::CutSpeed(..) | Message::CutTape(..) | Message::LaneScale(..)) => {
                 self.on_mending(m);
                 Task::none()
             }

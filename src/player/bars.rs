@@ -552,7 +552,7 @@ impl App {
                 tip(tint_button(Tint::Move, ZOOM_FIT, Some(Message::TimelineZoomTo(0.0))), text("Show the whole edit (Ctrl+0)"), tooltip::Position::Top),
                 tip(
                     tint_button(Tint::Move, if self.snapping { SNAP_ON } else { SNAP_OFF }, Some(Message::Snapping)),
-                    text(if self.snapping { "Snapping on: drags land on joins, markers, edges and the playhead (N turns it off; Shift held drags free)" } else { "Snapping off (N turns it on)" }),
+                    text(if self.snapping { "Snapping on: drags land on joins, markers, edges and the playhead (N turns it off; Alt held drags free)" } else { "Snapping off (N turns it on)" }),
                     tooltip::Position::Top,
                 ),
             ]

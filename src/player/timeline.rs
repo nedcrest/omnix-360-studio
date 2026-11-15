@@ -3302,7 +3302,7 @@ mod tests {
         // edit's 40 ms grid.
         t.blocks[0].cut.start = 0.013;
         let f = t.on_frame(1.007);
-        let clip_t = t.blocks[0].cut.start + f - t.blocks[0].from;
+        let clip_t = t.blocks[0].clip(f);
         assert!(((clip_t * 25.0) - (clip_t * 25.0).round()).abs() < 1e-9, "on one of the clip's frames: {clip_t}");
         assert!((f - 1.007).abs() <= 0.02 + 1e-9, "the nearest, at most half a frame away");
     }
@@ -3315,7 +3315,7 @@ mod tests {
         let (mut t, _) = timeline();
         t.fps = 25.0;
         let b = &mut t.blocks[0];
-        let clip = b.cut.end - b.cut.start;
+        let clip = b.cut.clip_len();
         b.cut.speed = crate::speed::Speed::constant(2.0);
         assert!((b.len() - clip / 2.0).abs() < 1e-12);
         let mid = b.cut.start + clip / 2.0;

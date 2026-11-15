@@ -189,3 +189,66 @@ fn the_cores_times_are_as_they_were() {
     golden("time-core", &core(&p));
     golden("time-ops", &ops(&p));
 }
+
+/// Each place in `src` that works a cut's clip span or turns its clip time
+/// into edit time by hand (`cut.end - cut.start`, `+ t - cut.start`): the
+/// seam's `clip_len`, `edit_len`, `edit_at` and `clip_at` say which clock,
+/// and at speed only they are right (guard 3, step 7). A cut is told by
+/// its name: a receiver ending in `cut` or `cuts[..]`.
+fn around_the_seam(file: &str, text: &str) -> Vec<String> {
+    let receiver = |s: &str| -> Option<String> {
+        let r: String = s.chars().rev().take_while(|c| c.is_alphanumeric() || "_.[]".contains(*c)).collect::<String>().chars().rev().collect();
+        let base = r.trim_end_matches(|c: char| c != ']').rsplit_once('[').map_or(r.as_str(), |(b, _)| b);
+        (r.ends_with("cut") || base.ends_with("cuts")).then_some(r)
+    };
+    let mut found = Vec::new();
+    for (n, line) in text.lines().enumerate() {
+        let code = line.split("//").next().unwrap_or("");
+        for (i, _) in code.match_indices(".end - ") {
+            if let Some(r) = receiver(&code[..i])
+                && code[i + 7..].starts_with(&format!("{r}.start"))
+            {
+                found.push(format!("{file}:{}: {}", n + 1, line.trim()));
+            }
+        }
+        for (i, _) in code.match_indices(".start") {
+            let before = &code[..i];
+            let words: Vec<&str> = before.trim_end_matches(|c: char| c.is_alphanumeric() || "_.[]".contains(c)).split_whitespace().rev().take(3).collect();
+            // `+ t - cut.start`: an edit offset added to clip time by hand.
+            if receiver(before).is_some() && words.len() == 3 && words[0] == "-" && words[2] == "+" {
+                found.push(format!("{file}:{}: {}", n + 1, line.trim()));
+            }
+        }
+    }
+    found
+}
+
+#[test]
+fn around_the_seam_finds_a_cut_s_time_by_hand() {
+    let hand = "let a = cut.end - cut.start;\nlet b = from + t - self.edit.cuts[i].start;\n";
+    assert_eq!(around_the_seam("x.rs", hand).len(), 2);
+    // A music clip or a title is always at 1×; a comment says what it likes.
+    let fine = "let a = c.end - c.start; // cut.end - cut.start\nlet b = it.at + t - it.start;\nlet c = cut.clip_len();\n";
+    assert!(around_the_seam("x.rs", fine).is_empty());
+}
+
+/// No code goes around the time seam (step 7): see `around_the_seam`.
+#[test]
+fn no_cut_time_is_worked_out_around_the_seam() {
+    fn rs(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
+        for e in std::fs::read_dir(dir).unwrap().flatten() {
+            let p = e.path();
+            if p.is_dir() {
+                rs(&p, out);
+            } else if p.extension().is_some_and(|x| x == "rs") {
+                out.push(p);
+            }
+        }
+    }
+    let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let mut files = Vec::new();
+    rs(&src, &mut files);
+    // This file's own test text is the one place that writes them.
+    let found: Vec<String> = files.iter().filter(|p| !p.ends_with("time_snapshot.rs")).flat_map(|p| around_the_seam(&p.strip_prefix(&src).unwrap().display().to_string(), &std::fs::read_to_string(p).unwrap())).collect();
+    assert!(found.is_empty(), "through the seam (Cut::clip_len, edit_len, edit_at, clip_at), not by hand:\n{}", found.join("\n"));
+}

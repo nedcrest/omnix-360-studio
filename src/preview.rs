@@ -73,7 +73,7 @@ pub(crate) fn preview_project(project: &project::Project, opts: &StitchOpts, eve
     let mut bands = Vec::new();
     for (n, (cut, &i)) in project.cuts.iter().zip(&of_cut).enumerate() {
         let p = &pipelines[i];
-        let len = cut.end - cut.start;
+        let len = cut.clip_len();
         let (times, step): (Vec<f64>, f64) = match every {
             Some(every) => {
                 let every = every.max(1.0 / p.fps);

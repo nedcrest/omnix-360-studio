@@ -117,7 +117,7 @@ pub fn measure_cut(cut: &crate::project::Cut) -> Result<Measure> {
     let hw = crate::ffmpeg::Hwaccel::pick(&cut.input, flat.track).unwrap_or(crate::ffmpeg::Hwaccel::Software);
     let mut pixels = Vec::new();
     for k in 0..FRAMES {
-        let t = cut.start + (cut.end - cut.start) * (k as f64 + 0.5) / FRAMES as f64;
+        let t = cut.start + cut.clip_len() * (k as f64 + 0.5) / FRAMES as f64;
         let frame = match crate::ffmpeg::still_out(&cut.input, flat.track, t, hw, (w, h), flat.out(Some((w as u32, h as u32)), None)) {
             Ok(f) => f,
             Err(_) => continue,

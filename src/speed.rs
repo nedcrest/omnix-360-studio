@@ -271,6 +271,70 @@ impl Speed {
     }
 }
 
+/// The speed window's ready-made curves (31c), over a cut's clip span.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Preset {
+    /// Down to half speed through its middle and back up.
+    SlowMiddle,
+    /// Gathering speed into the cut's end, up to 3×.
+    RampToCut,
+}
+
+/// Two keys closer than this (clip seconds) would be one.
+const KEY_GAP: f64 = 0.01;
+
+impl Speed {
+    /// A curve to edit over a cut whose clip span starts at `start`: its
+    /// keys, or one at `start` holding 1× when it has none.
+    pub fn for_editing(&self, start: f64) -> Speed {
+        let keys = if self.keys.is_empty() { vec![SpeedKey::held(start, 1.0)] } else { self.keys.clone() };
+        Speed { keys, tape: self.tape }
+    }
+
+    /// A key at clip time `t`, `rate` kept in `RANGE`, eased as `ease` to
+    /// the next; one already there (within `KEY_GAP`) takes its rate.
+    /// Where it is now.
+    pub fn put_key(&mut self, t: f64, rate: f64, ease: Ease) -> usize {
+        let rate = rate.clamp(RANGE.0, RANGE.1);
+        if let Some(i) = self.keys.iter().position(|k| (k.t - t).abs() < KEY_GAP) {
+            self.keys[i].rate = rate;
+            return i;
+        }
+        let i = self.keys.iter().position(|k| k.t > t).unwrap_or(self.keys.len());
+        self.keys.insert(i, SpeedKey { t, rate, ease });
+        i
+    }
+
+    /// Key `i` to clip time `t` (kept between its neighbours) and `rate`
+    /// (kept in `RANGE`).
+    pub fn move_key(&mut self, i: usize, t: f64, rate: f64) {
+        let lo = if i > 0 { self.keys[i - 1].t + KEY_GAP } else { f64::NEG_INFINITY };
+        let hi = self.keys.get(i + 1).map_or(f64::INFINITY, |k| k.t - KEY_GAP);
+        if let Some(k) = self.keys.get_mut(i) {
+            (k.t, k.rate) = (t.clamp(lo, hi.max(lo)), rate.clamp(RANGE.0, RANGE.1));
+        }
+    }
+
+    /// Key `i` taken away; the last one stays (a curve needs one).
+    pub fn remove_key(&mut self, i: usize) {
+        if self.keys.len() > 1 && i < self.keys.len() {
+            self.keys.remove(i);
+        }
+    }
+
+    /// `preset` over the clip span `start..end`, its pitch kept or not as
+    /// `tape`.
+    pub fn preset(preset: Preset, (start, end): (f64, f64), tape: bool) -> Speed {
+        let at = |share: f64| start + (end - start) * share;
+        let key = |t: f64, rate: f64, ease: Ease| SpeedKey { t, rate, ease };
+        let keys = match preset {
+            Preset::SlowMiddle => vec![key(start, 1.0, Ease::Smooth), key(at(0.35), 0.5, Ease::Hold), key(at(0.65), 0.5, Ease::Smooth), key(at(0.9), 1.0, Ease::Hold)],
+            Preset::RampToCut => vec![key(start, 1.0, Ease::Hold), key(at(0.5), 1.0, Ease::Smooth), key(end, 3.0, Ease::Hold)],
+        };
+        Speed { keys, tape }
+    }
+}
+
 /// What the export reads of a clip for a cut: `total` edit frames (or to
 /// the clip's end) from clip time `start`, at `speed`. The CPU and the
 /// GPU pick their frames through it alike.
@@ -395,5 +459,32 @@ mod tests {
         }
         let json = serde_json::to_string(&Speed { keys: vec![SpeedKey::held(0.0, 2.0), SpeedKey { t: 1.0, rate: 1.0, ease: Ease::Linear }], tape: false }).unwrap();
         assert_eq!(json, r#"{"keys":[{"t":0.0,"rate":2.0},{"t":1.0,"rate":1.0,"ease":"linear"}]}"#);
+    }
+
+    /// 31c's editing rules: a point put in order (one already there takes
+    /// the new rate), moved only between its neighbours and within the
+    /// range, the last one kept; the presets are valid curves that slow
+    /// the middle and speed up the end.
+    #[test]
+    fn the_speed_window_edits_a_curve_within_its_rules() {
+        let mut s = Speed::default().for_editing(10.0);
+        assert_eq!(s.keys, [SpeedKey::held(10.0, 1.0)]);
+        assert_eq!(s.put_key(12.0, 9.0, Ease::Smooth), 1);
+        assert_eq!(s.keys[1].rate, RANGE.1, "kept in range");
+        assert_eq!(s.put_key(11.0, 0.5, Ease::Hold), 1, "in order");
+        assert_eq!((s.put_key(11.005, 2.0, Ease::Hold), s.keys.len(), s.keys[1].rate), (1, 3, 2.0), "the one there");
+        s.move_key(1, 20.0, 0.1);
+        assert!((s.keys[1].t - (12.0 - KEY_GAP)).abs() < 1e-12 && s.keys[1].rate == RANGE.0, "between its neighbours");
+        assert!(s.check().is_ok());
+        for _ in 0..5 {
+            s.remove_key(0);
+        }
+        assert_eq!(s.keys.len(), 1, "one stays");
+        let span = (10.0, 20.0);
+        let slow = Speed::preset(Preset::SlowMiddle, span, false);
+        let ramp = Speed::preset(Preset::RampToCut, span, true);
+        assert!(slow.check().is_ok() && ramp.check().is_ok() && ramp.tape);
+        assert!(slow.edit_secs(10.0, 20.0) > 10.0 && slow.rate_at(15.0) == 0.5, "the middle slowed");
+        assert!(ramp.edit_secs(10.0, 20.0) < 10.0 && ramp.rate_at(19.9) > 2.5, "faster into the cut");
     }
 }

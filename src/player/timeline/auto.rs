@@ -41,9 +41,31 @@ pub(super) struct Owner<'a> {
     pub from: f64,
     pub start: f64,
     pub len: f64,
+    /// How it reads its own time (a cut's speed; text and pictures 1×).
+    pub speed: &'a crate::speed::Speed,
     pub clips: &'a [AutoClip],
     /// What's fixed on it: (row, what), `automation_ui::fixed_of_cut`.
     pub fixed: Vec<(&'static str, String)>,
+}
+
+/// Text and pictures read their own time as the edit runs.
+pub(super) static AS_IS: crate::speed::Speed = crate::speed::Speed { keys: Vec::new() };
+
+impl Owner<'_> {
+    /// Edit time of its own time `t` (the time seam).
+    fn edit(&self, t: f64) -> f64 {
+        self.from + self.speed.edit_secs(self.start, t)
+    }
+
+    /// Its own time at edit time `edit_t`.
+    fn own(&self, edit_t: f64) -> f64 {
+        self.speed.clip_after(self.start, edit_t - self.from)
+    }
+
+    /// Its own time at its end.
+    fn end(&self) -> f64 {
+        self.speed.clip_after(self.start, self.len)
+    }
 }
 
 /// What a press on a lane meets (an owner by its place in `owners`).
@@ -122,7 +144,7 @@ impl Lanes<'_> {
     }
 
     pub(super) fn x(&self, o: &Owner, t: f64, b: Rectangle) -> f32 {
-        self.t.x(o.from + t - o.start, b)
+        self.t.x(o.edit(t), b)
     }
 
     /// `t` (own time) on `o`'s start or end when within `SNAP` pixels of
@@ -134,18 +156,18 @@ impl Lanes<'_> {
         }
         let x = self.x(o, t, b);
         let near = |e: f64| (self.x(o, e, b) - x).abs();
-        [o.start, o.start + o.len].into_iter().filter(|&e| near(e) < super::SNAP).min_by(|&a, &c| near(a).total_cmp(&near(c))).unwrap_or(t)
+        [o.start, o.end()].into_iter().filter(|&e| near(e) < super::SNAP).min_by(|&a, &c| near(a).total_cmp(&near(c))).unwrap_or(t)
     }
 
     /// Owner `o`'s time at `x`.
     pub(super) fn own_time(&self, o: &Owner, x: f32, b: Rectangle) -> f64 {
-        o.start + self.t.t(x, b) - o.from
+        o.own(self.t.t(x, b))
     }
 
     /// `o`'s clips on lane `i`, with their edges in pixels cut to its stretch.
     fn clips<'b>(&'b self, i: usize, o: &'b Owner, b: Rectangle) -> impl Iterator<Item = (&'b AutoClip, f32, f32)> + 'b {
         let name = self.params[i].name();
-        let (start, end) = (o.start, o.start + o.len);
+        let (start, end) = (o.start, o.end());
         o.clips.iter().filter(move |a| a.param == name && a.to > start && a.from < end).map(move |a| (a, self.x(o, a.from.max(start), b), self.x(o, a.to.min(end), b)))
     }
 
@@ -276,7 +298,7 @@ impl Lanes<'_> {
                 let o = &self.owners[*owner];
                 let shortest = crate::model::ops::auto::SHORTEST;
                 let t = self.snapped(o, self.own_time(o, p.x, b), b, free);
-                if let Some(t) = crate::automation::trim_to(*start, (clip.from, clip.to), (o.start, o.start + o.len), shortest, t) {
+                if let Some(t) = crate::automation::trim_to(*start, (clip.from, clip.to), (o.start, o.end()), shortest, t) {
                     *to = t;
                 }
                 None
@@ -293,7 +315,7 @@ impl Lanes<'_> {
                 // Its start onto an edge, else its end.
                 let start = self.snapped(o, from, b, free);
                 let from = if start != from { start } else { self.snapped(o, from + len, b, free) - len };
-                let from = from.clamp(o.start, (o.start + o.len - len).max(o.start));
+                let from = from.clamp(o.start, (o.end() - len).max(o.start));
                 let message = AutoMsg::Move { on: o.on, param: self.params[*lane], at: *at, from };
                 *at += from - clip.from;
                 // Only by what it moved: held on an edge, the pointer's
@@ -354,7 +376,7 @@ impl Lanes<'_> {
             frame.fill(&Path::rectangle(Point::new(0.0, top + 1.0), Size::new(b.width, h - 2.0)), ground);
             for o in &self.owners {
                 if let Some((_, what)) = o.fixed.iter().find(|(r, _)| r == row) {
-                    self.fixed_bar(frame, i, (self.x(o, o.start, b), self.x(o, o.start + o.len, b)), what);
+                    self.fixed_bar(frame, i, (self.x(o, o.start, b), self.x(o, o.end(), b)), what);
                 }
             }
         }
@@ -414,7 +436,7 @@ impl Lanes<'_> {
         let mid = self.row_top + self.row_h / 2.0;
         for o in &self.owners {
             if !o.fixed.is_empty() {
-                frame.fill(&Path::rectangle(Point::new(self.x(o, o.start, b), mid - 1.0), Size::new((self.x(o, o.start + o.len, b) - self.x(o, o.start, b)).max(1.0), 2.0)), EFFECT_MARK.scale_alpha(0.3));
+                frame.fill(&Path::rectangle(Point::new(self.x(o, o.start, b), mid - 1.0), Size::new((self.x(o, o.end(), b) - self.x(o, o.start, b)).max(1.0), 2.0)), EFFECT_MARK.scale_alpha(0.3));
             }
             for i in 0..self.params.len() {
                 for (clip, l, r) in self.clips(i, o, b) {
@@ -461,14 +483,14 @@ impl Timeline {
     /// values, all four once it's open, each showing the cuts' clips for it.
     pub(super) fn frame_lanes(&self) -> Lanes<'_> {
         // Ordinary cuts only: a 360 cut's frame is its view (the audit).
-        let owners: Vec<Owner> = self.blocks.iter().enumerate().filter(|(_, c)| c.cut.flat).map(|(i, c)| Owner { on: AutoOn::Cut(i), from: c.from, start: c.cut.start, len: c.len(), clips: &c.cut.automation, fixed: Vec::new() }).collect();
+        let owners: Vec<Owner> = self.blocks.iter().enumerate().filter(|(_, c)| c.cut.flat).map(|(i, c)| Owner { on: AutoOn::Cut(i), from: c.from, start: c.cut.start, len: c.len(), speed: &c.cut.speed, clips: &c.cut.automation, fixed: Vec::new() }).collect();
         let params = (0..crate::frame::PARAMS.len()).map(Param::Frame).collect();
         Lanes { t: self, params, name: "Frame", row_top: self.rows.frame_top, row_h: EFFECTS, top: self.rows.frame_auto_top, folded: self.folds.frame, owners, fixed: Vec::new() }
     }
 
     /// The cuts' automation lanes, under their Effects row.
     pub(super) fn cut_lanes(&self) -> Lanes<'_> {
-        let owners: Vec<Owner> = self.blocks.iter().enumerate().map(|(i, c)| Owner { on: AutoOn::Cut(i), from: c.from, start: c.cut.start, len: c.len(), clips: &c.cut.automation, fixed: super::super::automation_ui::fixed_of_cut(&c.cut) }).collect();
+        let owners: Vec<Owner> = self.blocks.iter().enumerate().map(|(i, c)| Owner { on: AutoOn::Cut(i), from: c.from, start: c.cut.start, len: c.len(), speed: &c.cut.speed, clips: &c.cut.automation, fixed: super::super::automation_ui::fixed_of_cut(&c.cut) }).collect();
         let fixed = super::super::automation_ui::fixed_rows(owners.iter().map(|o| &o.fixed[..]));
         Lanes { t: self, params: self.auto_lanes.clone(), name: "Effects", row_top: self.rows.effects_top, row_h: EFFECTS, top: self.rows.auto_top, folded: self.folds.effects, owners, fixed }
     }

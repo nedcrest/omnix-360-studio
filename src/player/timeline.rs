@@ -292,9 +292,24 @@ pub struct Block {
 }
 
 impl Block {
-    /// How long it lasts on the edit.
+    /// How long it lasts on the edit (the time seam: `TIME-SEAM.md`).
     fn len(&self) -> f64 {
-        self.cut.end - self.cut.start
+        self.cut.edit_len()
+    }
+
+    /// Edit time of its clip time `t`.
+    fn at(&self, t: f64) -> f64 {
+        self.from + self.cut.edit_at(t)
+    }
+
+    /// Its clip time at edit time `edit_t`.
+    fn clip(&self, edit_t: f64) -> f64 {
+        self.cut.clip_at(edit_t - self.from)
+    }
+
+    /// Whether its clip time `t` is within what it shows.
+    fn shows(&self, t: f64) -> bool {
+        t >= self.cut.start && t <= self.cut.end
     }
 
     /// The thumbnail nearest clip time `t`.
@@ -584,7 +599,7 @@ impl Timeline {
         let mut best = None;
         for (ci, c) in self.blocks.iter().enumerate() {
             for &(ki, t, _, _) in &c.keys {
-                let d = (self.x(c.from + t - c.cut.start, b) - x).abs();
+                let d = (self.x(c.at(t), b) - x).abs();
                 if d <= PICK && best.is_none_or(|(bd, _)| d < bd) {
                     best = Some((d, (ci, ki)));
                 }
@@ -606,7 +621,7 @@ impl Timeline {
             return None;
         }
         self.blocks.iter().enumerate().rev().find_map(|(i, c)| {
-            marked(&c.cut.effects).iter().map(|k| k.t).enumerate().find(|&(_, t)| t >= c.cut.start && t <= c.cut.start + c.len() && (self.x(c.from + t - c.cut.start, b) - p.x).abs() <= PICK).map(|(k, t)| (i, k, t))
+            marked(&c.cut.effects).iter().map(|k| k.t).enumerate().find(|&(_, t)| c.shows(t) && (self.x(c.at(t), b) - p.x).abs() <= PICK).map(|(k, t)| (i, k, t))
         })
     }
 
@@ -629,9 +644,9 @@ impl Timeline {
     /// edit as it is, so a trim stopped by the file's end or a neighbour
     /// says where it stopped.
     fn readout(&self, drag: &Drag) -> Option<String> {
-        let edge = |start: f64, len: f64, at_in: bool| if at_in { start } else { start + len };
+        let edge = |start: f64, end: f64, at_in: bool| if at_in { start } else { end };
         match *drag {
-            Drag::Trim { cut, start, from, .. } => self.blocks.get(cut).map(|c| format!("{} · {}", signed(edge(c.cut.start, c.len(), start) - from), seconds(c.len()))),
+            Drag::Trim { cut, start, from, .. } => self.blocks.get(cut).map(|c| format!("{} · {}", signed(c.cut.speed.edit_secs(from, edge(c.cut.start, c.cut.end, start))), seconds(c.len()))),
             // How far the sound runs past its picture's edge (or short of it).
             Drag::SoundEdge { cut, start, .. } => self.blocks.get(cut).map(|c| {
                 let past = if start { c.cut.sound_before } else { c.cut.sound_after };
@@ -655,7 +670,7 @@ impl Timeline {
 
     /// The markers' row's height: none without markers, a strip folded.
     pub fn flags_height(&self) -> f32 {
-        if !self.blocks.iter().any(|c| c.cut.marks.iter().any(|m| m.t >= c.cut.start && m.t <= c.cut.start + c.len())) {
+        if !self.blocks.iter().any(|c| c.cut.marks.iter().any(|m| c.shows(m.t))) {
             0.0
         } else if self.folds.marks {
             FLAGS_FOLDED
@@ -670,7 +685,7 @@ impl Timeline {
             .blocks
             .iter()
             .enumerate()
-            .flat_map(|(i, c)| c.cut.marks.iter().filter(move |m| m.t >= c.cut.start && m.t <= c.cut.start + c.len()).map(move |m| (i, m.t, c.from + m.t - c.cut.start, m.note.as_str())))
+            .flat_map(|(i, c)| c.cut.marks.iter().filter(move |m| c.shows(m.t)).map(move |m| (i, m.t, c.at(m.t), m.note.as_str())))
             .map(|(i, t, at, note)| (i, t, self.x(at, b), note))
             .filter(|f| f.2 >= 0.0 && f.2 <= b.width)
             .collect();
@@ -854,7 +869,7 @@ impl Timeline {
         let mut keys = Vec::new();
         // An ordinary cut's, within its in and out (a trim leaves points past them).
         for (i, c) in self.blocks.iter().enumerate().filter(|(_, c)| c.cut.flat) {
-            let mut ts: Vec<f64> = c.cut.automation.iter().filter(|a| crate::frame::PARAMS.contains(&a.param.as_str())).flat_map(|a| a.points.iter().map(|q| q.t)).filter(|&t| t >= c.cut.start && t <= c.cut.end).collect();
+            let mut ts: Vec<f64> = c.cut.automation.iter().filter(|a| crate::frame::PARAMS.contains(&a.param.as_str())).flat_map(|a| a.points.iter().map(|q| q.t)).filter(|&t| c.shows(t)).collect();
             ts.sort_by(f64::total_cmp);
             ts.dedup_by(|a, b| (*a - *b).abs() < 1e-6);
             keys.extend(ts.into_iter().map(|t| (i, t)));
@@ -868,7 +883,7 @@ impl Timeline {
         if !self.folds.frame || !row.contains(&p.y) {
             return None;
         }
-        let x = |&(i, t): &(usize, f64)| self.x(self.blocks[i].from + t - self.blocks[i].cut.start, b);
+        let x = |&(i, t): &(usize, f64)| self.x(self.blocks[i].at(t), b);
         self.frame_keys().into_iter().filter(|k| (x(k) - p.x).abs() <= PICK).min_by(|a, b| (x(a) - p.x).abs().total_cmp(&(x(b) - p.x).abs()))
     }
 
@@ -898,7 +913,7 @@ impl Timeline {
         }
         let ink = theme.extended_palette().primary.strong.color;
         let mid = self.rows.frame_top + EFFECTS / 2.0;
-        let at = |i: usize, t: f64| self.blocks.get(i).map(|c| self.x(c.from + t - c.cut.start, b));
+        let at = |i: usize, t: f64| self.blocks.get(i).map(|c| self.x(c.at(t), b));
         let shown = match *drag {
             Drag::FrameKey { cut, to, moved: true, .. } => Some((cut, to)),
             _ => self.frame_key,
@@ -919,7 +934,7 @@ impl Timeline {
                 frame.fill(&Path::rectangle(Point::new(l + 2.0, self.rows.cuts - 3.0), Size::new((r - l - 4.0).max(1.0), 2.0)), colour);
             }
             if Some(i) == self.picked.cut() {
-                selected_block(frame, theme, (l, r), (0.0, self.rows.cuts), (c.cut.start > 1e-3, c.cut.start + c.len() < c.most - 1e-3));
+                selected_block(frame, theme, (l, r), (0.0, self.rows.cuts), (c.cut.start > 1e-3, c.cut.end < c.most - 1e-3));
             }
             // The longest label that fits (about 7 px a character).
             if let Some(label) = c.labels.iter().find(|s| r - l > s.chars().count() as f32 * 7.0 + 24.0) {
@@ -928,8 +943,8 @@ impl Timeline {
         }
         // Effect keyframes: small squares along the bottom of their cut.
         for c in &self.blocks {
-            for t in marked(&c.cut.effects).iter().map(|k| k.t).filter(|&t| t >= c.cut.start && t <= c.cut.start + c.len()) {
-                effect_mark(frame, self.x(c.from + t - c.cut.start, bounds), self.rows.effects_top + EFFECTS / 2.0);
+            for t in marked(&c.cut.effects).iter().map(|k| k.t).filter(|&t| c.shows(t)) {
+                effect_mark(frame, self.x(c.at(t), bounds), self.rows.effects_top + EFFECTS / 2.0);
             }
         }
         // Edge looks: an orange wedge, deepest at the cut's edge.
@@ -966,7 +981,8 @@ impl Timeline {
     pub(crate) fn on_frame(&self, t: f64) -> f64 {
         let fps = self.fps.max(1.0);
         match self.blocks.iter().find(|c| t >= c.from && t < c.from + c.len()) {
-            Some(c) => c.from + ((c.cut.start + t - c.from) * fps).round() / fps - c.cut.start,
+            // The clip's own frames, through the seam.
+            Some(c) => c.at((c.clip(t) * fps).round() / fps),
             None => (t * fps).round() / fps,
         }
     }
@@ -983,7 +999,7 @@ impl Timeline {
             if c.cut.sound_before != 0.0 || c.cut.sound_after != 0.0 {
                 at.extend([(c.from - c.cut.sound_before, Of::CutSound(i)), (c.from + c.len() + c.cut.sound_after, Of::CutSound(i))]);
             }
-            at.extend(c.cut.marks.iter().filter(|m| m.t >= c.cut.start && m.t <= c.cut.start + c.len()).map(|m| (c.from + m.t - c.cut.start, Of::Mark(i))));
+            at.extend(c.cut.marks.iter().filter(|m| c.shows(m.t)).map(|m| (c.at(m.t), Of::Mark(i))));
         }
         for (li, l) in self.sounds.iter().enumerate() {
             at.extend(l.blocks.iter().enumerate().flat_map(|(i, m)| [(m.clip.at, Of::Sound(li, i)), (m.clip.at + m.len(), Of::Sound(li, i))]));
@@ -1380,7 +1396,7 @@ impl Timeline {
         // The selected cut's sound edges, to drag apart from its picture:
         // yellow where its clip has more sound, red at the file's end.
         if let Some(c) = self.picked.cut().and_then(|i| self.blocks.get(i)) {
-            let more = (c.cut.start - c.cut.sound_before > 0.01, c.cut.start + c.len() + c.cut.sound_after < c.most - 0.01);
+            let more = (c.cut.start - c.cut.sound_before > 0.01, c.cut.end + c.cut.sound_after < c.most - 0.01);
             trim_handles(frame, self.sound_x(c, b), top, h, more);
         }
         // Each cut's level, where there's room: a tag at its left, so a
@@ -1511,6 +1527,11 @@ impl Timeline {
             for k in &c.cut.volume {
                 f(&mut h, k.t);
                 f(&mut h, k.volume);
+            }
+            // Its speed draws its sound at other edit times (the seam).
+            for k in &c.cut.speed.keys {
+                f(&mut h, k.t);
+                f(&mut h, k.rate);
             }
             (ptr(&c.wave), ptr(&c.even_wave)).hash(&mut h);
             c.level.hash(&mut h);
@@ -1879,7 +1900,7 @@ impl OverlayLane {
         let all = t.track_auto(self.1).get(self.2).map_or(&[][..], Vec::as_slice);
         let params = all.iter().copied().filter(|p| matches!(p, Param::Place(_)) == motion).collect();
         let fixed_of = |it: &crate::overlay::Item| if motion { Vec::new() } else { super::automation_ui::fixed_of_item(it) };
-        let owners: Vec<auto::Owner> = self.blocks().iter().map(|o| auto::Owner { on: AutoOn::Item(o.item.id), from: o.item.at, start: o.item.start, len: o.len(), clips: &o.item.automation, fixed: fixed_of(&o.item) }).collect();
+        let owners: Vec<auto::Owner> = self.blocks().iter().map(|o| auto::Owner { on: AutoOn::Item(o.item.id), from: o.item.at, start: o.item.start, len: o.len(), speed: &auto::AS_IS, clips: &o.item.automation, fixed: fixed_of(&o.item) }).collect();
         let fixed = super::automation_ui::fixed_rows(owners.iter().map(|o| &o.fixed[..]));
         let (name, row_top, row_h) = if motion { ("Motion", self.motion_top(), KEYS) } else { ("Effects", t.rows.overlay, EFFECTS) };
         auto::Lanes { t, params, name, row_top, row_h, top: row_top + row_h, folded, owners, fixed }
@@ -2273,7 +2294,7 @@ impl canvas::Program<Message> for Pictures {
                 // far wider than the widget.
                 let mut x = l + inset + ((-(l + inset)) / tw).floor().max(0.0) * tw;
                 while x < clip.x + clip.width {
-                    let t = c.cut.start + (x + tw / 2.0 - l) as f64 * per_px;
+                    let t = c.clip(c.from + (x + tw / 2.0 - l) as f64 * per_px);
                     if let Some(h) = c.thumb_at(t) {
                         f.draw_image(Rectangle::new(Point::new(x, inset), Size::new(tw, th)), canvas::Image::new(h.clone()));
                     }
@@ -2725,7 +2746,7 @@ impl Timeline {
             }
             Hit::CutEdge { cut, start, .. } => {
                 let c = &self.blocks[cut];
-                *drag = Drag::Trim { cut, start, x0: p.x, from: if start { c.cut.start } else { c.cut.start + c.len() }, per_px };
+                *drag = Drag::Trim { cut, start, x0: p.x, from: if start { c.cut.start } else { c.cut.end }, per_px };
                 Message::Select(cut)
             }
             Hit::Cut(cut) => {
@@ -2779,7 +2800,7 @@ impl Timeline {
                 // Its sound alone runs on past the picture or stops
                 // short (a J- or L-cut).
                 let c = &self.blocks[cut];
-                let from = if start { c.cut.start - c.cut.sound_before } else { c.cut.start + c.len() + c.cut.sound_after };
+                let from = if start { c.cut.start - c.cut.sound_before } else { c.cut.end + c.cut.sound_after };
                 *drag = Drag::SoundEdge { cut, start, x0: x, from, per_px };
                 Message::Select(cut)
             }
@@ -2833,30 +2854,32 @@ impl Timeline {
             Drag::Key { cut, key } => {
                 let c = &self.blocks[*cut];
                 let edit_t = self.t(x, bounds).clamp(c.from, c.from + c.len());
-                Message::KeyMove(*cut, *key, c.cut.start + edit_t - c.from)
+                Message::KeyMove(*cut, *key, c.clip(edit_t))
             }
             Drag::Effect { cut, key } => {
                 let c = &self.blocks[*cut];
                 let edit_t = self.t(x, bounds).clamp(c.from, c.from + c.len());
-                Message::Effect(super::effects::EffectMsg::KeyMove(*cut, *key, c.cut.start + edit_t - c.from))
+                Message::Effect(super::effects::EffectMsg::KeyMove(*cut, *key, c.clip(edit_t)))
             }
             Drag::Trim { cut, start, x0, from, per_px } => {
-                let t = *from + (x - *x0) as f64 * *per_px;
+                // The pointer moves edit seconds; the edge's clip time moves
+                // at the cut's speed (at 4× it moved four times too slowly).
+                let c = &self.blocks[*cut];
+                let t = c.cut.speed.clip_after(*from, (x - *x0) as f64 * *per_px);
                 // Its out edge snaps; what comes after it moves with
                 // it. Its in edge stays put on screen as it trims.
-                let c = &self.blocks[*cut];
-                let at = (!*start).then(|| self.snap(&[c.from + t - c.cut.start], *per_px, |of| matches!(of, Of::Cut(j) | Of::CutSound(j) | Of::Mark(j) if j >= *cut))).flatten();
-                let (cut, start) = (*cut, *start);
-                snapped(at, |by| Message::Trim(cut, start, t + by))
+                let at = (!*start).then(|| self.snap(&[c.at(t)], *per_px, |of| matches!(of, Of::Cut(j) | Of::CutSound(j) | Of::Mark(j) if j >= *cut))).flatten();
+                let (cut, start, speed) = (*cut, *start, c.cut.speed.clone());
+                snapped(at, |by| Message::Trim(cut, start, speed.clip_after(t, by)))
             }
             Drag::SoundEdge { cut, start, x0, from, per_px } => {
                 // Onto a join (its own picture's too, back home) or a
                 // neighbour's sound edge.
-                let t = *from + (x - *x0) as f64 * *per_px;
                 let c = &self.blocks[*cut];
-                let at = self.snap(&[c.from + t - c.cut.start], *per_px, |of| of == Of::CutSound(*cut));
-                let (cut, start) = (*cut, *start);
-                snapped(at, |by| Message::SoundEdge(cut, start, t + by))
+                let t = c.cut.speed.clip_after(*from, (x - *x0) as f64 * *per_px);
+                let at = self.snap(&[c.at(t)], *per_px, |of| of == Of::CutSound(*cut));
+                let (cut, start, speed) = (*cut, *start, c.cut.speed.clone());
+                snapped(at, |by| Message::SoundEdge(cut, start, speed.clip_after(t, by)))
             }
             Drag::Move { .. } => return self.drag_cut(drag, x, bounds),
             Drag::FrameKey { .. } => return self.drag_frame_key(drag, x),
@@ -2993,7 +3016,7 @@ impl canvas::Program<Message> for Marks {
         // The view's keyframes, while framing (their row is gone otherwise).
         for (ci, c) in self.blocks.iter().enumerate().filter(|_| self.rows.keys > 0.0) {
             for &(ki, t, ease, follows) in &c.keys {
-                let (x, mid) = (self.x(c.from + t - c.cut.start, bounds), keys_mid);
+                let (x, mid) = (self.x(c.at(t), bounds), keys_mid);
                 // Smooth is a diamond, linear a circle, hold a square.
                 let mark = key_mark(x, mid, ease);
                 let fill = if Some((ci, ki)) == self.current { palette.primary.strong.color } else { palette.background.base.text };
@@ -3282,6 +3305,24 @@ mod tests {
         let clip_t = t.blocks[0].cut.start + f - t.blocks[0].from;
         assert!(((clip_t * 25.0) - (clip_t * 25.0).round()).abs() < 1e-9, "on one of the clip's frames: {clip_t}");
         assert!((f - 1.007).abs() <= 0.02 + 1e-9, "the nearest, at most half a frame away");
+    }
+
+    /// The time seam on the timeline: a cut at 2× is drawn half as long,
+    /// its clip times placed through its speed, and the playhead's frames
+    /// are its clip's frames there too.
+    #[test]
+    fn a_fast_cut_is_drawn_and_framed_through_its_speed() {
+        let (mut t, _) = timeline();
+        t.fps = 25.0;
+        let b = &mut t.blocks[0];
+        let clip = b.cut.end - b.cut.start;
+        b.cut.speed = crate::speed::Speed::constant(2.0);
+        assert!((b.len() - clip / 2.0).abs() < 1e-12);
+        let mid = b.cut.start + clip / 2.0;
+        assert!((b.at(mid) - (b.from + clip / 4.0)).abs() < 1e-12 && (b.clip(b.at(mid)) - mid).abs() < 1e-12);
+        let f = t.on_frame(t.blocks[0].from + 0.31);
+        let clip_t = t.blocks[0].clip(f);
+        assert!(((clip_t * 25.0) - (clip_t * 25.0).round()).abs() < 1e-9, "on one of the clip's frames: {clip_t}");
     }
 
     #[test]
@@ -3984,7 +4025,7 @@ impl canvas::Program<Message> for Flags {
                 let c = t.blocks.get(cut)?;
                 let at = t.t(position.x - bounds.x, bounds);
                 let snap = t.snap(&[at], t.span / Timeline::width(bounds) as f64, |of| of == Of::Mark(cut));
-                let to = (c.cut.start + at + snap.map_or(0.0, |(by, _)| by) - c.from).clamp(c.cut.start, c.cut.start + c.len());
+                let to = c.clip(at + snap.map_or(0.0, |(by, _)| by)).clamp(c.cut.start, c.cut.end);
                 state.mark = Some((cut, to));
                 Some(canvas::Action::publish(snapped(snap, |_| Message::MarkMove(cut, from, to))).and_capture())
             }
@@ -4046,10 +4087,10 @@ impl canvas::Program<Message> for Ruler {
         if frame_px >= 6.0 {
             for c in &t.blocks {
                 let (from, to) = (c.from.max(t.start), (c.from + c.len()).min(t.start + t.span));
-                let first = ((c.cut.start + from - c.from) * t.fps).ceil() as i64;
-                let last = ((c.cut.start + to - c.from) * t.fps).floor() as i64;
+                let first = (c.clip(from) * t.fps).ceil() as i64;
+                let last = (c.clip(to) * t.fps).floor() as i64;
                 for k in first..=last {
-                    let x = t.x(c.from + k as f64 / t.fps - c.cut.start, bounds);
+                    let x = t.x(c.at(k as f64 / t.fps), bounds);
                     frame.fill(&Path::rectangle(Point::new(x, h * 0.85), Size::new(1.0, h * 0.15)), ink.scale_alpha(0.3));
                 }
             }

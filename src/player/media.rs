@@ -197,7 +197,7 @@ mod tests {
     fn a_cut_at_speed_plays_through_its_tempo() {
         use crate::speed::{Speed, SpeedKey};
         let mut cut = Cut::new("a.mp4".into(), 0.0, 10.0);
-        cut.speed = Speed { keys: vec![SpeedKey { t: 0.0, rate: 1.0 }, SpeedKey { t: 4.0, rate: 2.0 }], tape: false };
+        cut.speed = Speed { keys: vec![SpeedKey::held(0.0, 1.0), SpeedKey::held(4.0, 2.0)], tape: false };
         let library = Media { input: "a.mp4".into(), ..test_media() };
         let m = library.for_cut(&cut);
         assert_eq!(m.filter_at(5.0).as_deref(), Some("atempo=2"));

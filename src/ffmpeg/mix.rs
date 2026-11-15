@@ -383,9 +383,9 @@ mod tests {
         let tape = Speed { tape: true, ..Speed::constant(2.0) };
         assert_eq!(Sound { speed: &tape, ..stretch(a, 0.0, &[]) }.tempo(1), ",aresample=48000,asetrate=96000,aresample=48000");
         // The player's, from where it starts playing, on to the end.
-        assert_eq!(tempo(&Speed { keys: vec![SpeedKey { t: 0.0, rate: 1.0 }, SpeedKey { t: 3.0, rate: 2.0 }], tape: false }, 4.0, None, "p"), "atempo=2");
+        assert_eq!(tempo(&Speed { keys: vec![SpeedKey::held(0.0, 1.0), SpeedKey::held(3.0, 2.0)], tape: false }, 4.0, None, "p"), "atempo=2");
         // A curve: 1× to clip second 3, then 2×: two stretches joined.
-        let curve = Speed { keys: vec![SpeedKey { t: 0.0, rate: 1.0 }, SpeedKey { t: 3.0, rate: 2.0 }], tape: false };
+        let curve = Speed { keys: vec![SpeedKey::held(0.0, 1.0), SpeedKey::held(3.0, 2.0)], tape: false };
         let ramp = Sound { speed: &curve, ..stretch(a, 0.0, &[]) };
         // 1 s at 1×, then 3 edit s at 2×: clip 2..9.
         assert_eq!(ramp.reads(), Some(7.0));

@@ -1,13 +1,15 @@
 //! How fast a cut reads its clip (gap 31): its rate over its clip time,
 //! stored as a curve from the start so the speed window (31c) changes no
-//! format. A key sets the rate from its clip time on, held to the next;
-//! before the first, the first's rate. No keys is normal speed, one key a
-//! constant. Rates from 0.25× to 4×.
+//! format. A key sets the rate from its clip time on, held to the next or
+//! eased there (a ramp, 31c: in log scale, its edit length the integral of
+//! 1 / rate); before the first, the first's rate. No keys is normal speed,
+//! one key a constant. Rates from 0.25× to 4×.
 //!
 //! The time seam (`docs/omnix/TIME-SEAM.md`) turns clip time into edit
 //! time and back through here; the player's clock, the decoders' frame
 //! picks and the sound's tempo (`ffmpeg::tempo`) read it too.
 
+use crate::view::Ease;
 use serde::{Deserialize, Serialize};
 
 /// The slowest and the fastest rate.
@@ -35,12 +37,44 @@ pub struct SpeedKey {
     pub t: f64,
     /// Clip seconds read per edit second: 2 is twice as fast.
     pub rate: f64,
+    /// How it goes on to the next key's rate (31c): held, then a step
+    /// (as speeds were stored before ramps; absent in the file), or eased
+    /// there, smoothly or evenly, in log scale (½× to 2× passes 1× half
+    /// way).
+    #[serde(default = "held", skip_serializing_if = "is_held")]
+    pub ease: Ease,
 }
+
+fn held() -> Ease {
+    Ease::Hold
+}
+
+fn is_held(e: &Ease) -> bool {
+    *e == Ease::Hold
+}
+
+impl SpeedKey {
+    /// A key at clip time `t` holding `rate` to the next.
+    pub fn held(t: f64, rate: f64) -> SpeedKey {
+        SpeedKey { t, rate, ease: Ease::Hold }
+    }
+}
+
+/// A ramp is read in even steps (Simpson's rule) for its edit length: at
+/// least this many, and one per `STEP` clip seconds, far finer than a
+/// frame, so a stretch and its pieces agree to well under a microsecond.
+const STEPS: usize = 32;
+const STEP: f64 = 0.005;
+
+/// A ramp's sound plays in constant-tempo pieces about this long, clip
+/// seconds (at most `MAX_PIECES` a ramp).
+const PIECE: f64 = 0.25;
+const MAX_PIECES: usize = 64;
 
 impl Speed {
     /// One rate throughout.
     pub fn constant(rate: f64) -> Speed {
-        Speed { keys: vec![SpeedKey { t: 0.0, rate }], tape: false }
+        Speed { keys: vec![SpeedKey::held(0.0, rate)], tape: false }
     }
 
     /// What a cut's label says of it: «2×», «0.5×», «speed curve»; none at
@@ -72,15 +106,24 @@ impl Speed {
     }
 
     /// The stretches of constant rate reading the clip from `a` to `b`:
-    /// each one's clip span and rate.
+    /// each one's clip span and rate. A ramp is cut into pieces of about
+    /// `PIECE`, each at the rate that gives it its edit length exactly, so
+    /// the sound's pieces add up to the picture's.
     pub fn pieces(&self, a: f64, b: f64) -> Vec<(f64, f64, f64)> {
         let mut out = Vec::new();
         let mut t = a;
-        for c in self.changes().filter(|&c| c > a && c < b) {
-            out.push((t, c, self.after(t)));
+        for c in self.changes().filter(|&c| c > a && c < b).chain(std::iter::once(b)) {
+            if self.ramp_at(t).is_some() && c.is_finite() {
+                let n = (((c - t) / PIECE).ceil() as usize).clamp(1, MAX_PIECES);
+                for k in 0..n {
+                    let (x, y) = (t + (c - t) * k as f64 / n as f64, t + (c - t) * (k + 1) as f64 / n as f64);
+                    out.push((x, y, (y - x) / self.segment_secs(x, y)));
+                }
+            } else {
+                out.push((t, c, self.after(t)));
+            }
             t = c;
         }
-        out.push((t, b, self.after(t)));
         out
     }
 
@@ -105,19 +148,68 @@ impl Speed {
         Ok(())
     }
 
-    /// The rate just after clip time `t`.
+    /// The rate at clip time `t`, a ramp's eased one inside it.
+    pub fn rate_at(&self, t: f64) -> f64 {
+        match self.ramp_at(t) {
+            Some((a, b)) => {
+                let x = ((t - a.t) / (b.t - a.t)).clamp(0.0, 1.0);
+                let e = a.ease.shape(x).unwrap_or(0.0);
+                a.rate * (b.rate / a.rate).powf(e)
+            }
+            None => self.after(t),
+        }
+    }
+
+    /// The ramp clip time `t` is in, if it's in one: its key and the next,
+    /// the first not held.
+    fn ramp_at(&self, t: f64) -> Option<(SpeedKey, SpeedKey)> {
+        self.keys.windows(2).find(|w| w[0].t <= t && t < w[1].t).filter(|w| w[0].ease != Ease::Hold).map(|w| (w[0], w[1]))
+    }
+
+    /// The rate just after clip time `t`, held keys only (a ramp's is
+    /// `rate_at`).
     fn after(&self, t: f64) -> f64 {
         self.keys.iter().rev().find(|k| k.t <= t).or(self.keys.first()).map_or(1.0, |k| k.rate)
     }
 
-    /// The rate just before clip time `t`.
+    /// The rate just before clip time `t`, held keys only.
     fn before(&self, t: f64) -> f64 {
         self.keys.iter().rev().find(|k| k.t < t).or(self.keys.first()).map_or(1.0, |k| k.rate)
     }
 
-    /// Where the rate changes: every key's time but the first's.
+    /// Where the rate's form changes: every key's time but the first's,
+    /// and the first's too where a ramp starts there.
     fn changes(&self) -> impl DoubleEndedIterator<Item = f64> + '_ {
-        self.keys.iter().skip(1).map(|k| k.t)
+        let first = self.keys.first().filter(|k| k.ease != Ease::Hold).map(|k| k.t);
+        first.into_iter().chain(self.keys.iter().skip(1).map(|k| k.t))
+    }
+
+    /// The edit seconds from clip time `a` to `b` within one stretch of
+    /// one form (`changes`): held, by its rate; in a ramp, the integral
+    /// of 1 / rate.
+    fn segment_secs(&self, a: f64, b: f64) -> f64 {
+        if self.ramp_at((a + b) / 2.0).is_none() {
+            return (b - a) / self.after(a);
+        }
+        let n = (((b - a) / STEP).ceil() as usize).max(STEPS).div_ceil(2) * 2;
+        let h = (b - a) / n as f64;
+        let f = |k: usize| 1.0 / self.rate_at(a + h * k as f64);
+        let inner: f64 = (1..n).map(|k| f(k) * if k % 2 == 1 { 4.0 } else { 2.0 }).sum();
+        h / 3.0 * (f(0) + inner + f(n))
+    }
+
+    /// The clip time `x` in `[a, b]` (one stretch, as `segment_secs`) where
+    /// `secs(x)` reaches `left`: by its rate where held, else by halving.
+    fn solve(&self, (a, b): (f64, f64), left: f64, secs: impl Fn(f64) -> f64, held: f64) -> f64 {
+        if self.ramp_at((a + b) / 2.0).is_none() {
+            return held;
+        }
+        let (mut lo, mut hi) = (a, b);
+        for _ in 0..60 {
+            let mid = (lo + hi) / 2.0;
+            if secs(mid) < left { lo = mid } else { hi = mid }
+        }
+        (lo + hi) / 2.0
     }
 
     /// The edit seconds reading the clip from `a` to `b` takes; less than
@@ -132,10 +224,10 @@ impl Speed {
         let mut t = a;
         let mut secs = 0.0;
         for c in self.changes().filter(|&c| c > a && c < b) {
-            secs += (c - t) / self.after(t);
+            secs += self.segment_secs(t, c);
             t = c;
         }
-        secs + (b - t) / self.after(t)
+        secs + self.segment_secs(t, b)
     }
 
     /// The clip time reached from clip time `a` after `dt` edit seconds
@@ -147,18 +239,20 @@ impl Speed {
         let (mut t, mut left) = (a, dt.abs());
         if dt >= 0.0 {
             for c in self.changes().filter(|&c| c > a) {
-                let piece = (c - t) / self.after(t);
+                let piece = self.segment_secs(t, c);
                 if piece >= left {
-                    break;
+                    return self.solve((t, c), left, |x| self.segment_secs(t, x), t + left * self.after(t));
                 }
                 (left, t) = (left - piece, c);
             }
             t + left * self.after(t)
         } else {
             for c in self.changes().rev().filter(|&c| c < a) {
-                let piece = (t - c) / self.before(t);
+                let piece = self.segment_secs(c, t);
                 if piece >= left {
-                    break;
+                    // Walking back: the further from `t`, the more seconds.
+                    let to = t;
+                    return self.solve((c, t), -left, |x| -self.segment_secs(x, to), t - left * self.before(t));
                 }
                 (left, t) = (left - piece, c);
             }
@@ -209,7 +303,7 @@ mod tests {
 
     /// 1× until clip second 2, 2× to 4, 0.5× after.
     fn curve() -> Speed {
-        Speed { keys: vec![SpeedKey { t: 0.0, rate: 1.0 }, SpeedKey { t: 2.0, rate: 2.0 }, SpeedKey { t: 4.0, rate: 0.5 }], tape: false }
+        Speed { keys: vec![SpeedKey::held(0.0, 1.0), SpeedKey::held(2.0, 2.0), SpeedKey::held(4.0, 0.5)], tape: false }
     }
 
     #[test]
@@ -220,7 +314,7 @@ mod tests {
             assert_eq!((s.edit_secs(10.3, 14.7), s.clip_after(10.3, 4.4), s.clip_after(14.7, -4.4)), (14.7 - 10.3, 10.3 + 4.4, 14.7 - 4.4));
         }
         // Several keys all at 1×: as exact, not a sum of pieces.
-        let ones = Speed { keys: vec![SpeedKey { t: 0.0, rate: 1.0 }, SpeedKey { t: 11.1, rate: 1.0 }, SpeedKey { t: 12.9, rate: 1.0 }], tape: false };
+        let ones = Speed { keys: vec![SpeedKey::held(0.0, 1.0), SpeedKey::held(11.1, 1.0), SpeedKey::held(12.9, 1.0)], tape: false };
         assert_eq!((ones.edit_secs(10.3, 14.7), ones.clip_after(10.3, 4.4)), (14.7 - 10.3, 10.3 + 4.4));
         assert!(!Speed::constant(2.0).is_normal());
     }
@@ -255,8 +349,8 @@ mod tests {
     #[test]
     fn a_speed_out_of_range_or_order_is_refused() {
         assert!(Speed::constant(5.0).check().is_err() && Speed::constant(0.2).check().is_err());
-        assert!(Speed { keys: vec![SpeedKey { t: 2.0, rate: 1.0 }, SpeedKey { t: 1.0, rate: 2.0 }], tape: false }.check().is_err());
-        assert!(Speed { keys: vec![SpeedKey { t: f64::NAN, rate: 1.0 }], tape: false }.check().is_err());
+        assert!(Speed { keys: vec![SpeedKey::held(2.0, 1.0), SpeedKey::held(1.0, 2.0)], tape: false }.check().is_err());
+        assert!(Speed { keys: vec![SpeedKey::held(f64::NAN, 1.0)], tape: false }.check().is_err());
         assert!(curve().check().is_ok() && Speed::default().check().is_ok());
     }
 
@@ -273,5 +367,33 @@ mod tests {
         assert!(along.windows(2).all(|w| w[1] >= w[0]));
         let r = Reading { start: 10.0, total: Some(8), speed: &Speed::constant(2.0) };
         assert_eq!((r.frame(3, 30.0), r.clip_time(3, 30.0), r.frame_time(6, 30.0)), (6, 10.2, 10.2));
+    }
+
+    /// 31c: a ramp from 1× at clip 0 s to 2× at 2 s, even in log scale:
+    /// its edit length is the integral of 1 / rate (1 / ln 2), half way it
+    /// runs at √2×, every time comes back, and its sound's pieces add up
+    /// to its length. A held key is written as before, without an ease.
+    #[test]
+    fn a_ramp_eases_its_rate_and_its_times_add_up() {
+        let ramp = |ease| Speed { keys: vec![SpeedKey { t: 0.0, rate: 1.0, ease }, SpeedKey::held(2.0, 2.0)], tape: false };
+        let s = ramp(Ease::Linear);
+        assert!((s.edit_secs(0.0, 2.0) - 1.0 / 2f64.ln()).abs() < 1e-8, "{}", s.edit_secs(0.0, 2.0));
+        assert!((s.edit_secs(0.0, 4.0) - (1.0 / 2f64.ln() + 1.0)).abs() < 1e-8);
+        assert!((s.rate_at(1.0) - 2f64.sqrt()).abs() < 1e-12 && (ramp(Ease::Smooth).rate_at(1.0) - 2f64.sqrt()).abs() < 1e-12);
+        assert_eq!((s.rate_at(-1.0), s.rate_at(3.0)), (1.0, 2.0));
+        for sp in [ramp(Ease::Linear), ramp(Ease::Smooth)] {
+            for a in [-0.5, 0.0, 0.7, 1.9, 2.5] {
+                for b in [-0.2, 0.3, 1.0, 2.0, 3.1] {
+                    let back = sp.clip_after(a, sp.edit_secs(a, b));
+                    assert!((back - b).abs() < 1e-9, "{a} to {b}: {back}");
+                }
+            }
+            let pieces = sp.pieces(0.0, 3.0);
+            assert_eq!(pieces.len(), 8 + 1, "the ramp in quarter seconds, then the held 2×");
+            let secs: f64 = pieces.iter().map(|&(x, y, r)| (y - x) / r).sum();
+            assert!((secs - sp.edit_secs(0.0, 3.0)).abs() < 1e-8 && pieces.windows(2).all(|w| w[0].1 == w[1].0));
+        }
+        let json = serde_json::to_string(&Speed { keys: vec![SpeedKey::held(0.0, 2.0), SpeedKey { t: 1.0, rate: 1.0, ease: Ease::Linear }], tape: false }).unwrap();
+        assert_eq!(json, r#"{"keys":[{"t":0.0,"rate":2.0},{"t":1.0,"rate":1.0,"ease":"linear"}]}"#);
     }
 }

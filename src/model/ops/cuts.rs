@@ -861,7 +861,7 @@ mod tests {
         let short = e.apply(&add("c.mp4", 0.2, Place::End)).unwrap().made.unwrap();
         assert!(e.apply(&Op::Cut(CutOp::Speed { cut: short, rate: 4.0 })).is_err());
         // A curve, out of order: refused; in order, kept.
-        let key = |t, rate| crate::speed::SpeedKey { t, rate };
+        let key = crate::speed::SpeedKey::held;
         assert!(e.apply(&Op::Cut(CutOp::SpeedCurve { cut: a, keys: vec![key(2.0, 1.0), key(1.0, 2.0)] })).is_err());
         e.apply(&Op::Cut(CutOp::SpeedCurve { cut: a, keys: vec![key(0.0, 1.0), key(2.0, 2.0)] })).unwrap();
         assert_eq!(e.cuts[0].edit_len(), 3.0);

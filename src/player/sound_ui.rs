@@ -872,7 +872,7 @@ mod tests {
         let _ = app.update(Message::CutTape(cut, true));
         assert!(app.edit.cuts[0].speed.tape);
         // A curve is none of the steps.
-        let key = |t, rate| crate::speed::SpeedKey { t, rate };
+        let key = crate::speed::SpeedKey::held;
         app.op(Op::Cut(crate::model::ops::cuts::CutOp::SpeedCurve { cut, keys: vec![key(0.0, 1.0), key(0.5, 2.0)] }));
         assert!(marked(&app).is_empty());
         let _ = app.update(Message::CutSpeed(cut, 9.0));

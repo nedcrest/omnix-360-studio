@@ -434,6 +434,11 @@ fn exports_cuts_at_speed() {
     std::fs::write(d.join("slow.json"), r#"{"cuts": [{"input": "a.mp4", "in": 1, "out": 2, "speed": {"keys": [{"t": 0, "rate": 0.5}]}}, {"input": "a.mp4", "in": 3, "out": 4}]}"#).unwrap();
     omnix(&d, &["export", "fast.json", "--cpu", "-o", "fast.mp4", "--size", "320x180"]);
     omnix(&d, &["export", "slow.json", "--cpu", "-o", "slow.mp4", "--size", "320x180"]);
+    // A ramp from 1× to 2× over clip seconds 0..2, then 2× to 4 s: 1 / ln 2
+    // + 1 edit seconds, 73 frames, its sound in pieces as long.
+    std::fs::write(d.join("ramp.json"), r#"{"cuts": [{"input": "a.mp4", "in": 0, "out": 4, "speed": {"keys": [{"t": 0, "rate": 1, "ease": "linear"}, {"t": 2, "rate": 2}]}}]}"#).unwrap();
+    omnix(&d, &["export", "ramp.json", "--cpu", "-o", "ramp.mp4", "--size", "320x180"]);
+    let ramp: (u32, f64) = (probe(&d, "ramp.mp4", "v", "nb_read_frames").parse().unwrap(), probe(&d, "ramp.mp4", "a", "duration").parse().unwrap());
     let fast: (u32, f64) = (probe(&d, "fast.mp4", "v", "nb_read_frames").parse().unwrap(), probe(&d, "fast.mp4", "a", "duration").parse().unwrap());
     let slow: (u32, f64) = (probe(&d, "slow.mp4", "v", "nb_read_frames").parse().unwrap(), probe(&d, "slow.mp4", "a", "duration").parse().unwrap());
     // At 1 s into the fast export, its clip's second 2, not 1.
@@ -444,6 +449,8 @@ fn exports_cuts_at_speed() {
     assert_eq!(fast.0, 60);
     assert!((fast.1 - 2.0).abs() < 1.0 / 30.0, "fast sound {}", fast.1);
     assert!(same > 30.0 && other < same - 6.0, "fast picture: {same} dB at clip 2 s, {other} dB at 1 s");
+    assert_eq!(ramp.0, 73);
+    assert!((ramp.1 - 73.0 / 30.0).abs() < 1.0 / 30.0, "ramp sound {}", ramp.1);
     assert_eq!(slow.0, 90);
     assert!((slow.1 - 3.0).abs() < 1.0 / 30.0, "slow sound {}", slow.1);
     assert!(slow_same > 30.0 && after > 30.0, "slow picture {slow_same} dB, the cut after {after} dB");

@@ -98,11 +98,10 @@ impl App {
         follows.into_iter().map(|f| (f.clone(), self.aim(&f, t))).collect()
     }
 
-    /// Whether the viewer's drag and wheel set the playing cut's frame
-    /// (gap 107): an ordinary cut while editing; in Framing they key a 360
-    /// view.
+    /// Whether the viewer's drag, click and wheel set the playing cut's
+    /// frame (gap 107; `hand_frames`).
     pub(super) fn frames_by_hand(&self) -> bool {
-        !self.framing && self.edit.cuts.get(self.current).is_some_and(|c| c.flat) && self.playing_cut().is_some()
+        hand_frames(self.framing, self.edit.cuts.get(self.current).is_some_and(|c| c.flat)) && self.playing_cut().is_some()
     }
 
     /// The viewer dragged (the picture follows the hand at any zoom),
@@ -384,6 +383,7 @@ impl App {
             rig_from_view: c.playback.rig_from_view(self.rolling_shutter),
             fov_deg: self.shown_view().fov,
             picking: self.picking.is_some(),
+            moves: self.framing,
             incoming: self.partner_layer(),
             edge: self.clip_now().and_then(|(cut, t)| cut.edge_at(t)),
             style: self.clip_now().and_then(|(cut, t)| Some((cut.style.as_ref()?.spec(), t as f32))),
@@ -498,5 +498,20 @@ impl App {
             _ => {}
         }
         Task::none()
+    }
+}
+
+/// Whether the mouse on the picture frames an ordinary cut: in Framing
+/// only (the user, 2026-11-15: a stray click while editing moved the
+/// frame and showed black). A 360 cut's view is keyed there instead.
+pub(super) fn hand_frames(framing: bool, flat: bool) -> bool {
+    framing && flat
+}
+
+#[cfg(test)]
+mod hand_tests {
+    #[test]
+    fn the_mouse_frames_an_ordinary_cut_in_framing_only() {
+        assert_eq!([(false, true), (true, true), (true, false), (false, false)].map(|(f, flat)| super::hand_frames(f, flat)), [false, true, false, false]);
     }
 }

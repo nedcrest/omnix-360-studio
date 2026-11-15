@@ -72,7 +72,8 @@ pub const GROUPS: &[(&str, &[(&str, &str)])] = &[
     (
         "Framing (the Framing switch on)",
         &[
-            ("drag the picture", "look around"),
+            ("drag the picture", "look around; an ordinary video's frame moves with the hand"),
+            ("click the picture", "an ordinary video's frame centred there"),
             ("Shift+← / →, ↑ / ↓", "turn, tilt"),
             ("Q / E or right-drag", "roll"),
             ("scroll, + / −", "zoom"),

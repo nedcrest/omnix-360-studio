@@ -529,7 +529,7 @@ impl App {
             tip(body, text(format!("{name}: {about}")), tooltip::Position::Top)
         };
         group("Mode", open, row![
-            switch(self.framing, "Framing", FRAMING, "the view's keyframes, field of view and angles; for a 360 clip also stabilisation, projection and tracking. Off: editing only, and the view can't be turned by accident.", Box::new(Message::Framing)),
+            switch(self.framing, "Framing", FRAMING, "the view's keyframes, field of view and angles; for a 360 clip also stabilisation, projection and tracking; an ordinary video's frame by the mouse on the picture. Off: editing only, and the picture can't be moved by accident.", Box::new(Message::Framing)),
             switch(self.check.on, "Mix check", MIX_CHECK, "the sound against the export's loudness target and the mixing rules, in the picture's place: each clip as loud as it is, what to fix outlined; a click takes you to it", Box::new(|on| Message::Check(super::mixcheck_ui::CheckMsg::Toggle(on)))),
             switch(self.bin.view, "Bin", BIN_VIEW, "the project's media in tiles, in the picture's place (Shift+B)", Box::new(|_| Message::BinView(super::bin_view::BinMsg::Toggle))),
         ].spacing(12).align_y(Alignment::Center))

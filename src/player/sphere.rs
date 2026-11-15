@@ -15,6 +15,9 @@ pub(super) struct Sphere {
     pub(super) fov_deg: f64,
     /// Drags draw a box to pick a colour instead of looking around.
     pub(super) picking: bool,
+    /// The mouse turns, frames and zooms it: in Framing only; editing,
+    /// the picture is left alone.
+    pub(super) moves: bool,
     /// Through a crossfade, the next cut drawn over: its rig, frame,
     /// framing, readout views and how far in it is (0..1).
     pub(super) incoming: Option<gpu::Incoming>,
@@ -71,6 +74,9 @@ impl Sphere {
     pub(super) fn input(&self, drag: &mut Drag, event: &iced::Event, bounds: Rectangle, cursor: mouse::Cursor) -> Option<shader::Action<Message>> {
         if self.picking {
             return self.pick(drag, event, bounds, cursor);
+        }
+        if !self.moves {
+            return None;
         }
         match event {
             iced::Event::Mouse(mouse::Event::ButtonPressed(b @ (mouse::Button::Left | mouse::Button::Right))) => {
@@ -143,7 +149,7 @@ impl shader::Program<Message> for Sphere {
             mouse::Interaction::Crosshair
         } else if drag.button.is_some() {
             mouse::Interaction::Grabbing
-        } else if cursor.is_over(bounds) {
+        } else if self.moves && cursor.is_over(bounds) {
             mouse::Interaction::Grab
         } else {
             mouse::Interaction::default()

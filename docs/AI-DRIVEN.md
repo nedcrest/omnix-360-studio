@@ -1,8 +1,12 @@
 # How Omnix and Dailix were built with AI
 
-Omnix (a home-video editor for 360 and ordinary footage) and Dailix (its
-contact sheet: looking through a trip's footage and choosing it) were
-built by one person, Dmytro Halushko, working with Claude in Claude Code.
+Dailix (the contact sheet: looking through a trip's footage and
+choosing it), and everything Omnix (a home-video editor for ordinary and
+360 footage) added to [rOsmo360](https://github.com/ravelund/rOsmo360)
+since forking it, were built by one person, Dmytro Halushko, working
+with Claude in Claude Code. Omnix's 360 playback and the editor it grew
+from are rOsmo360's, by Vibing with Ravelund (Ole Morten Aaslund),
+itself built with Claude.
 He decided what to build and in what order, judged the design, and
 tested every change on his own footage. Claude planned, wrote the code,
 the tests and the docs, and audited its own work. Almost every commit
@@ -15,7 +19,7 @@ sound as it grew fast, and what each side did.
 
 | | |
 |---|---|
-| Starting point | [rOsmo360](https://github.com/ravelund/rOsmo360) by Ole Morten Aaslund, 2026-10-22: a 360 player and simple editor, 19,000 lines of Rust, 48 tests |
+| Starting point | [rOsmo360](https://github.com/ravelund/rOsmo360) by Vibing with Ravelund (Ole Morten Aaslund), 0.7.1 of 2026-10-22: a 360 player and timeline editor (music, effects, LUTs, titles, GPU export), 19,000 lines of Rust, 48 tests |
 | Omnix three weeks later (2026-11-12) | 50,000 lines of Rust, 400 tests (with 13 that export real files through ffmpeg), 940 commits over 18 days |
 | Dailix (from 2026-11-04) | its app, 3,800 lines and its tests; its core, the contact sheet's (`crates/sheet`), now in Omnix's workspace |
 | Roadmap | 113 cards done, 65 numbered gaps closed, each tested by the user before it was called done |
@@ -61,8 +65,9 @@ were written down as rules the agent reads before touching the code:
   share it.
 - **Functions stay short.** Clippy's `too_many_lines` at 80 lines; a
   function that is touched and too long is split first.
-- **The CPU and the GPU agree.** The player draws on the GPU, the export
-  can use either. Tests render both ways and compare.
+- **The CPU and the GPU agree** (rOsmo360's rule, kept). The player draws
+  on the GPU, the export can use either. Tests render both ways and
+  compare.
 - **Done means done**: a checklist before any card waits for the user (an
   op with a test, `describe` says the new value, no new warning, no long
   function).

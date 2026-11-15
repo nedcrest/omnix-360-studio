@@ -3,7 +3,8 @@
 ## 0.8.0 — Omnix's first release (2026-11)
 
 Omnix grew from [rOsmo360](https://github.com/ravelund/rOsmo360) 0.7.1
-(a DJI Osmo 360 player and simple editor) into a home-video editor, in
+(a DJI Osmo 360 player and timeline editor, by Vibing with Ravelund) into
+a home-video editor, its 360 playback kept as it was, in
 three weeks, built with Claude ([`docs/AI-DRIVEN.md`](docs/AI-DRIVEN.md)).
 Every item below has its section in
 [`docs/omnix/EDITOR-GAPS-DONE.md`](docs/omnix/EDITOR-GAPS-DONE.md).

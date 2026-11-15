@@ -194,7 +194,7 @@ omnix export clip.OSV --reframe moves.json -o reel.mp4                         #
 omnix export clip.OSV --reframe moves.json --draft -o draft.mp4                # quick, soft draft from the proxy
 ```
 
-Export stitches on the GPU with the player's shader (any vendor, through wgpu): about 21 frames a second at 1080p on an RTX 3090, four times the CPU stitcher. `--cpu` uses the CPU stitcher instead, as happens anyway without a usable GPU.
+Export stitches on the GPU with the player's shader (any vendor, through wgpu): four times the CPU stitcher (about 21 frames a second at 1080p on an RTX 3090, rOsmo360's measurement). `--cpu` uses the CPU stitcher instead, as happens anyway without a usable GPU.
 
 Angles are in degrees: yaw turns right, pitch looks up. With stabilisation on (horizon, the default), yaw 0 is straight ahead. A reframe file lists keyframes; each may leave out what stays the same:
 
@@ -267,7 +267,7 @@ Titles go in `text` and pictures in `overlays`, each a list of lanes (the first 
      "motion": [{"t": 0, "x": 0.92, "y": 0.1, "size": 0.12}], "effects": [{"t": 0, "opacity": 0.85}]}
   ]}],
   "text": [{"items": [
-    {"text": {"content": "Kyrkja\nJuly 2026", "font": "Bebas Neue", "size": 0.13, "colour": "#ffffff",
+    {"text": {"content": "Summer trip\nJuly 2026", "font": "Bebas Neue", "size": 0.13, "colour": "#ffffff",
               "align": "centre", "shadow": true, "outline": {"colour": "#000000", "width": 0.05}},
      "at": 0.5, "in": 0, "out": 6,
      "motion": [{"t": 0, "x": 0.5, "y": 0.3}, {"t": 6, "x": 0.5, "y": 0.28, "size": 1.08}],
@@ -319,7 +319,7 @@ omnix check edit.json                    # likely mistakes in an edit, a line ea
 
 A project's sheet heads each row with the cut's edit time, number, clip and in–out points (`2:16.4 #23 0036 18.0-25.0`), labels each tile with its edit and clip time, draws the titles and overlays, and runs the music's waveform under each row. `check` lists cuts out of the order they were filmed in, a cut repeating footage the cut before shows, crossfades between cuts of one clip seconds apart, pans over 30°/s (`--fast-pan`; it says whether the keyframes or the camera's own turning make them), cuts under a second, and music ending before the edit or running far past it.
 
-Clips' telemetry and thumbnails, and songs' waveforms, are cached in `~/.cache/omnix`, so a clip opens in a fraction of a second after the first time (0047 from a network share: 46 s, then 0.4 s). `omnix cache add FOLDER` caches a folder's clips ahead of time, `omnix cache move FOLDER` keeps the cache elsewhere (or set `ROSMO360_CACHE` for one run), `omnix cache` shows where it is and its size, `omnix cache clear [--older-than DAYS]` empties it, and `--no-cache` on any command bypasses it.
+Clips' telemetry and thumbnails, and songs' waveforms, are cached in `~/.cache/omnix`, so a clip opens in a fraction of a second after the first time (rOsmo360 measured a clip on a network share: 46 s, then 0.4 s). `omnix cache add FOLDER` caches a folder's clips ahead of time, `omnix cache move FOLDER` keeps the cache elsewhere (or set `ROSMO360_CACHE` for one run), `omnix cache` shows where it is and its size, `omnix cache clear [--older-than DAYS]` empties it, and `--no-cache` on any command bypasses it.
 
 `omnix --help` lists everything, including `rig` (calibration as JSON), `imu` (motion data as CSV) and `seam` (seam quality report).
 
@@ -354,7 +354,7 @@ The guide's pictures ([`docs/guide/img/`](docs/guide/img/)) show the author's ow
 
 Omnix is made by **Dmytro Halushko** with Claude, 2026.
 
-It grew from **[rOsmo360](https://github.com/ravelund/rOsmo360)** by **Vibing with Ravelund** (MIT OR Apache-2.0), whose stitching, stabilisation, player and timeline it builds on, itself built with Claude.
+It is a fork of **[rOsmo360](https://github.com/ravelund/rOsmo360)** 0.7.1 by **Vibing with Ravelund** (Ole Morten Aaslund), MIT OR Apache-2.0, itself built with Claude: its 360 playback (stitching, stabilisation, the GPU player) and the editor it grew from, timeline, music, effects, titles, exports and builds, are rOsmo360's ([Where it comes from](#where-it-comes-from)). Omnix keeps rOsmo360's licence, and its copyright notice in [LICENSE-MIT](LICENSE-MIT).
 
 It stands on the shoulders of:
 

@@ -18,29 +18,29 @@ Already through a core function after guard 2 (`84ae21c`): transport's
 
 | | Site | Kind |
 |---|---|---|
-| [ ] | `project.rs` `Cut::len` (the definition) | A |
+| [x] b3db0a8 | `project.rs` `Cut::len` (the definition) | A |
 | [x] step 1 | `project.rs` `offsets` | A D |
 | [x] step 1 | `project.rs` `edit_length` | A |
-| [ ] | `project.rs` `max_crossfade`, `settle_crossfades` | A D |
-| [ ] | `project.rs` `Cut::sound_fade`, `sound_fades` (fade vs edge seconds) | D |
-| [ ] | `project.rs` `Cut::edge_at` (`Edge.seconds` in clip time) | D |
-| [ ] | `project.rs` `Cut::sound_span` | D |
-| [ ] | `project.rs` `Cut::sound_beyond` (J at `at − sound_before`, L at `at + len`) | A B D |
-| [ ] | `project.rs` `Cut::settle_sound` (`MIN_CUT`) | F |
-| [ ] | `project.rs` `kept_picture` (edit length added to clip time) | A B C |
-| [ ] | `project.rs` `Project::sound_beyond` | B |
-| [ ] | `project.rs` `Project::black_at` | B |
-| [ ] | `project.rs` `OwnSound::set_fade` (clamped to the clip span) | D |
-| [ ] | `project.rs` `duration`, `film_end`, `follow_groups`, `follow_locked`, `follow_from` (through helpers) | A |
+| [x] b3db0a8 | `project.rs` `max_crossfade`, `settle_crossfades` | A D |
+| [x] ba7b2f0 | `project.rs` `Cut::sound_fade`, `sound_fades` (fade vs edge seconds) | D |
+| [x] ba7b2f0 | `project.rs` `Cut::edge_at` (`Edge.seconds` in clip time) | D |
+| stays | `project.rs` `Cut::sound_span` (clip seconds of the file, by the table) | D |
+| [x] b3db0a8 / 31 | `project.rs` `Cut::sound_beyond` (L placed at `at + edit_len`; the J/L stretch played at speed: card 31) | A B D |
+| [x] ba7b2f0 | `project.rs` `Cut::settle_sound` (`MIN_CUT`) | F |
+| [x] ba7b2f0 | `project.rs` `kept_picture` (edit length added to clip time) | A B C |
+| 31 | `project.rs` `Project::sound_beyond` (places what `Cut::sound_beyond` gives) | B |
+| [x] ba7b2f0 | `project.rs` `Project::black_at` | B |
+| [x] ba7b2f0 | `project.rs` `OwnSound::set_fade` (clamped to the clip span) | D |
+| [x] through offsets/edit_length | `project.rs` `duration`, `film_end`, `follow_groups`, `follow_locked`, `follow_from` (through helpers) | A |
 | [x] step 1 | `model/edit.rs` `offset`, `locate`, `edit_time`, `clip_time`, `on_cut` | A B C |
 | [x] step 1 | `model/edit.rs` `crossfade_from`, `crossfade_partner`, `crossfade_share` (each side at its own speed) | D |
-| [ ] | `model/edit.rs` `split`, `trim` (`MIN_CUT` on clip spans) | F |
-| [ ] | `model/edit.rs` `set_crossfade` | D |
-| [ ] | `model/edit.rs` `drawn_zone` (edit span → crossfade or edge seconds) | A D |
-| [ ] | `model/ops/cuts.rs` `edge` (`seconds.min(end − start)`) | A D |
-| [ ] | `model/ops/cuts.rs` add, split, `sound_edge` (`MIN_CUT`) | F |
-| [ ] | `model/ops/mod.rs` `check` (sound span ≥ `MIN_CUT`) | F |
-| [ ] | `model/ops/auto.rs` `follow` (track samples to edit time) | B |
+| [x] 5e0e4b5 | `model/edit.rs` `split`, `trim` (`MIN_CUT` on clip spans) | F |
+| [x] b3db0a8 | `model/edit.rs` `set_crossfade` (through `max_crossfade`) | D |
+| [x] b3db0a8 | `model/edit.rs` `drawn_zone` (edit span → crossfade or edge seconds) | A D |
+| [x] 5e0e4b5 | `model/ops/cuts.rs` `edge` (`seconds.min(end − start)`) | A D |
+| [x] 5e0e4b5 | `model/ops/cuts.rs` add (a new cut is 1×), split, `sound_edge` (`MIN_CUT`) | F |
+| [x] 5e0e4b5 | `model/ops/mod.rs` `check` (sound span ≥ `MIN_CUT`) | F |
+| [x] 5e0e4b5 | `model/ops/auto.rs` `follow` (track samples to edit time) | B |
 
 ## Timeline — step 3
 

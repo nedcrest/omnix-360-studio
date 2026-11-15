@@ -218,7 +218,11 @@ must be as before.
 2. Core: `offsets`, `edit_length`, `locate`, `edit_time`, `crossfade_from`,
    `max_crossfade`, `black_at`, `edge_at`, `sound_fades`, `sound_beyond`
    placement, `kept_picture` / `follow_picture`, `drawn_zone`, `MIN_CUT`
-   checks in ops. Sync-lock tests at 2×.
+   checks in ops. Sync-lock tests at 2×. — **done 2026-11-15** (`b3db0a8`,
+   `ba7b2f0`, `5e0e4b5`): `Cut::len` gone, each caller chose its clock;
+   fades, edge looks, sync lock, black, `MIN_CUT` through the seam; tests
+   at 2× (a fast cut fades and edges like a slow one half as long; sync
+   lock after a fast cut's trim; the shortest piece at 2×).
 3. Timeline: `Block` / `Owner` over the seam, drags through edit seconds,
    snap targets, zones, thumbnails, the sound cache key.
 4. Player: transport (scrub, crossfade shares, `follow_crossfade`), keys,

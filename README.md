@@ -20,7 +20,31 @@ Omnix is a fork of [rOsmo360](https://github.com/ravelund/rOsmo360) 0.7.1 by Vib
 
 ## Features
 
-### Playing
+First what Omnix added since the fork, then what it took over from rOsmo360 0.7.1.
+
+### Added in Omnix
+
+- **Operations core**: every change to a project is a checked, undoable operation, open to the command line and to an AI agent (`omnix apply`, `omnix describe`, `omnix ops-schema`, `omnix looks`).
+- **Selections and groups**: several cuts at once; groups that move together; **sync lock**, so sound, titles and pictures follow the picture they lie under.
+- **Copy and paste** cuts: at the playhead, splitting the cut there, or at the nearest join.
+- **Speed**: a cut slowed down or sped up from ¼× to 4×, its sound with it, keeping its pitch or like tape.
+- **Cuts on the beat**: a song's beats found and snapped to.
+- **Markers**, a blank stretch, inserting between cuts, a stretch played from the ruler, the playhead moved by keys in sensible steps.
+- **Transitions**: a transitions lane and templates, edge looks (fade, blur, zoom, glitch, flash), each look's own settings.
+- **Automation lanes**: effects, view, frame and overlay values as curves with keys, each clip on its own scale.
+- **Framing an ordinary video**: a base frame and Frame lanes with keys and curves.
+- **Sound lanes**: music, two for effects, voice; each clip with its own volume line, fades and level; waveforms drawn as heard.
+- **Voice**: a cleaned voice in place of a clip's sound; a voice-over recorded inside Omnix.
+- **Loudness**: speech brought to −16 LUFS, normalize and even out, ducking under talk, a true-peak limit on export, a mix check against a platform's levels.
+- **More picture**: black and white levels, vignette shapes, glow and blur, cinematic bars, auto colour, styles (old film, VHS, cyberpunk), scopes; text and picture lanes in groups, animations in and out, picture kinds (sticker, polaroid, picture-in-picture).
+- **The bin** as a view of its own, quick copies of ordinary videos for smooth playback, and **Dailix**, the contact sheet before the edit.
+- **Project cards**: the start screen's edits as mosaics of their own frames.
+
+### From rOsmo360
+
+As rOsmo360 0.7.1 had them at the fork; the 360 side is unchanged since. Its numbers are rOsmo360's own, measured on its author's machine.
+
+#### Playing
 
 - **Stitching** with DJI's own calibration, read from each clip, keeping each lens's colours as the camera recorded them. Per frame it also:
   - shifts the lenses to line up close subjects, such as the hand on a selfie stick, so they don't ghost;
@@ -43,7 +67,7 @@ Omnix is a fork of [rOsmo360](https://github.com/ravelund/rOsmo360) 0.7.1 by Vib
 - **Panels** that open beside the view as you need them: effects, export, audio, settings, a title's text, and file information (right-click anything on the timeline).
 - **Themes**: the dark Kanagawa Dragon by default, or any of iced's light and dark themes. Your settings are remembered between runs.
 
-### Editing
+#### Editing
 
 - **Timeline** of cuts from one or more clips: split, trim, move and delete them, with undo and redo. Each cut shows thumbnails of its footage, its keyframes sit in rows under it, and the timeline zooms in for fine work. Drag the bar above it to give it, or the picture, more room.
 - **Ordinary videos and photos** as cuts beside the Osmo clips: MP4, MOV and the like from a phone, a drone or an action camera (any frame rate, portrait too, and a phone's HDR, brought to normal colours by itself), and JPG, PNG, WebP and other pictures. They work like any cut, framed by pan and zoom keyframes, so a slow push-in over a photo comes free.
@@ -60,7 +84,7 @@ Omnix is a fork of [rOsmo360](https://github.com/ravelund/rOsmo360) 0.7.1 by Vib
 - **Export** the edit to MP4 with its sound, from 720p to 4K, in the aspect lock's shape, dithered so skies don't band. It renders on the GPU, about four times faster than the CPU (21 frames a second at 1080p on an RTX 3090).
 - **Export for another editor**: a file per cut (`My hike - 001.mp4`, `- 002` …) with the music beside them as WAVs, graded or as shot (D-Log M left in log), and a DaVinci Resolve format (10-bit DNxHR HQX with PCM sound in `.mov`) that Resolve's free Linux version can read.
 
-### Command line
+#### Command line
 
 - **Export** a clip with a fixed view or keyframed camera moves, or a whole project, in any shape such as 9:16.
 - **Skim clips**: contact sheets of stitched frames (of a clip, or of a project: a row per cut headed with its edit time, the titles drawn in, the music's waveform underneath), and a per-second summary of the camera's motion and the sound level, for one clip or a whole folder.

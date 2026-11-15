@@ -122,7 +122,7 @@ pub fn check(path: &Path, opts: &StitchOpts, fast_pan: f64) -> Result<()> {
                 } else {
                     "the camera turns".to_owned()
                 };
-                say(offsets[n] + from - c.start, Some(n), "fast pan", format!("{top:.0}°/s at {from:.1}–{to:.1} s in the clip, {why}"));
+                say(offsets[n] + c.edit_at(from), Some(n), "fast pan", format!("{top:.0}°/s at {from:.1}–{to:.1} s in the clip, {why}"));
             }
         };
         for w in samples.windows(per + 1) {

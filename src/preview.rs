@@ -81,7 +81,7 @@ pub(crate) fn preview_project(project: &project::Project, opts: &StitchOpts, eve
             }
             None => ((0..columns).map(|k| cut.start + (k as f64 + 0.5) * len / columns as f64).collect(), len / columns as f64),
         };
-        let edit = |t: f64| offsets[n] + t - cut.start;
+        let edit = |t: f64| offsets[n] + cut.edit_at(t);
         for (r, row) in times.chunks(columns).enumerate() {
             let heading = if r == 0 {
                 format!("{} #{} {} {:.1}-{:.1}", dailix_sheet::clock(offsets[n], 1), n + 1, clip_number(&cut.input), cut.start, cut.end)
@@ -119,7 +119,7 @@ pub(crate) fn preview_project(project: &project::Project, opts: &StitchOpts, eve
             let p = &pipelines[i];
             let mut f = p.render(&p.stills(t)?, t, &mut Carry::default(), &Shot::View { camera: Box::new(project::camera_at(&project.cuts, n, t, &|f, t| p.aim(f, t))), size });
             let cut = &project.cuts[n];
-            let edit = offsets[n] + t - cut.start;
+            let edit = offsets[n] + cut.edit_at(t);
             overlays.draw(&mut f, edit);
             sheet::label(&mut f, 4, 4, &format!("{} {t:.1}s", dailix_sheet::clock(edit, 1)));
             Ok(f)

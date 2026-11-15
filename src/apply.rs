@@ -138,7 +138,7 @@ fn describe_lines(p: &Project) -> Vec<String> {
             println(format!("    {line}"));
         }
         for m in c.marks.iter().filter(|m| m.t >= c.start && m.t <= c.end) {
-            println(format!("    marker {:.2} s (clip) at {:.2} s{}", m.t, at + m.t - c.start, if m.note.is_empty() { String::new() } else { format!("  «{}»", m.note) }));
+            println(format!("    marker {:.2} s (clip) at {:.2} s{}", m.t, at + c.edit_at(m.t), if m.note.is_empty() { String::new() } else { format!("  «{}»", m.note) }));
         }
     }
     for w in SoundTrack::ALL {

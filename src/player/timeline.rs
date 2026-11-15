@@ -688,7 +688,10 @@ impl Timeline {
             Drag::Trim { cut, start, from, .. } => self.blocks.get(cut).map(|c| format!("{} · {}", signed(c.cut.speed.edit_secs(from, edge(c.cut.start, c.cut.end, start))), seconds(c.len()))),
             // How far the sound runs past its picture's edge (or short of it).
             Drag::SoundEdge { cut, start, .. } => self.blocks.get(cut).map(|c| {
-                let past = if start { c.cut.sound_before } else { c.cut.sound_after };
+                // Edit seconds, as the drag shows them (at speed, clip
+                // seconds read through it).
+                let (a, b) = c.cut.sound_span();
+                let past = if start { c.cut.speed.edit_secs(a, c.cut.start) } else { c.cut.speed.edit_secs(c.cut.end, b) };
                 if past >= 0.0 { format!("sound {} past the picture", seconds(past)) } else { format!("sound {} short", seconds(-past)) }
             }),
             Drag::MusicTrim { lane, clip, start, from, .. } => self.sounds.get(lane)?.blocks.get(clip).map(|m| format!("{} · {}", signed(edge(m.clip.start, m.len(), start) - from), seconds(m.len()))),
@@ -1036,7 +1039,9 @@ impl Timeline {
         for (i, c) in self.blocks.iter().enumerate() {
             at.extend([(c.from, Of::Cut(i)), (c.from + c.len(), Of::Cut(i))]);
             if c.cut.sound_before != 0.0 || c.cut.sound_after != 0.0 {
-                at.extend([(c.from - c.cut.sound_before, Of::CutSound(i)), (c.from + c.len() + c.cut.sound_after, Of::CutSound(i))]);
+                // Where its sound's edges are drawn (through its speed).
+                let (from, _, len) = c.sound_span();
+                at.extend([(from, Of::CutSound(i)), (from + len, Of::CutSound(i))]);
             }
             at.extend(c.cut.marks.iter().filter(|m| c.shows(m.t)).map(|m| (c.at(m.t), Of::Mark(i))));
         }
@@ -3370,6 +3375,11 @@ mod tests {
         assert_eq!((o.from, o.len), (from, t.blocks[0].len()));
         assert!((o.edit(start + 1.0) - (from + 0.5)).abs() < 1e-12 && (o.own(from + 0.5) - (start + 1.0)).abs() < 1e-12);
         assert!((o.end() - t.blocks[0].cut.end).abs() < 1e-12);
+        // Its sound stopping a clip second short snaps where it's drawn:
+        // half a second in on the edit (the audit, 2026-11-15).
+        t.blocks[0].cut.sound_after = -1.0;
+        let end = t.blocks[0].from + t.blocks[0].len() - 0.5;
+        assert!(t.snap_targets().iter().any(|&(at, of)| of == Of::CutSound(0) && (at - end).abs() < 1e-9), "{:?}", t.snap_targets());
     }
 
     /// The time seam on the timeline: a cut at 2× is drawn half as long,

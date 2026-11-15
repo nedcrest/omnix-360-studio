@@ -1,6 +1,6 @@
 # Omnix
 
-A home-video editor with first-class **DJI Osmo 360** footage, written in Rust. It grew from [rOsmo360](https://github.com/ravelund/rOsmo360) by Vibing with Ravelund (see [Credits](#credits)). It plays the camera's `.OSV` files directly: it stitches the two fisheye lenses, stabilises with the camera's gyro data and lets you look around freely, without going through DJI Studio. Then you can cut clips together on a timeline, with ordinary videos and photos beside them, keyframe the camera's view, add crossfades, music, colour effects, titles and logos, and export a framed video.
+**Omnix** is a home-video editor for Linux, written in Rust. It exists because its author wanted to edit his trips on Linux from start to finish: footage from a phone, an action camera, a drone and a 360 camera, with the sound treated as carefully as the picture. No editor did that, and the makers of 360 cameras don't make their software for Linux either. It began as editing for 360 footage, forked from [rOsmo360](https://github.com/ravelund/rOsmo360) by Vibing with Ravelund, which plays DJI Osmo 360 `.OSV` files directly: it stitches the two lenses, stabilises with the camera's gyro and lets you look around freely. Since the fork the work has gone into the editing itself: the timeline, sound lanes and loudness, the bin, cutting to the beat, transitions, speed, and an operations core that a script or an AI can drive. The 360 side is still rOsmo360's, as it was at the fork. One rule sets the order: an idea is carried to at least 95 % before the next big one starts.
 
 ![Omnix with a short trip's edit open, the playhead drawn through it: a title over a sunset, a scooter ride, flowers, a beach; under the picture the lanes with the clips, a transition and a song with its beats.](docs/guide/img/omnix-hero.gif)
 
@@ -8,15 +8,15 @@ A home-video editor with first-class **DJI Osmo 360** footage, written in Rust. 
 
 Its sibling, **[Dailix](https://github.com/nedcrest/dailix)**, is the contact sheet before the edit: it looks through a trip's footage, marks what's worth keeping and hands the chosen material to Omnix. The contact sheet's core, which both programs read and write, lives here (`crates/sheet`).
 
-**Built with AI.** Omnix and Dailix were built by one person working with Claude: he decided, designed and tested on his own footage; Claude planned, wrote the code, tests and docs, and audited its own work. How that worked, and the rules that kept the code sound as it grew from 19,000 to 50,000 lines in three weeks: **[docs/AI-DRIVEN.md](docs/AI-DRIVEN.md)**.
+**Built with AI.** Dailix, and everything Omnix added to rOsmo360 since the fork, were built by one person working with Claude: he decided, designed and tested on his own footage; Claude planned, wrote the code, tests and docs, and audited its own work. How that worked, and the rules that kept the code sound as it grew from 19,000 to 50,000 lines in three weeks: **[docs/AI-DRIVEN.md](docs/AI-DRIVEN.md)**.
 
 Licensed under [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE), at your option.
 
 Omnix has no published releases yet: build it from source; see [Building](#building). The packaging scripts (`packaging/`) make the same archives, AppImage, Flatpak and Windows zip as upstream's, under Omnix's name.
 
-## Why
+## Where it comes from
 
-To edit home video on Linux end to end: footage from a phone, an action camera, a drone and a 360 camera, with sound treated as carefully as the picture. rOsmo360 brought DJI Studio's 360 playback and editing to Linux; Omnix builds a home-video editor around it (sound lanes, a bin, a contact sheet in its sibling Dailix, an operations core a script or an AI can drive).
+Omnix is a fork of [rOsmo360](https://github.com/ravelund/rOsmo360) 0.7.1 by Vibing with Ravelund (Ole Morten Aaslund), MIT OR Apache-2.0, itself built with Claude. rOsmo360 wrote the 360 heart of it and a full editor around it: stitching with DJI's calibration and seam alignment, gyro stabilisation and rolling-shutter correction, the GPU player and exporter, keyframed views, a timeline with music, crossfades, colour effects, LUTs and D-Log M, titles and overlays, ordinary videos and photos, and the Mac and Windows builds: about 19,000 lines. From 2026-10-22 its author, working with Claude, turned it into a home-video editor: an operations core that scripts and AI agents can drive, groups and sync lock, cutting on the beat, transition and automation lanes, speed, sound lanes with cleaned voices and loudness control, the bin and project cards, and Dailix, the contact sheet before the edit. [Features](#features) says which side each comes from; [CHANGELOG.md](CHANGELOG.md) lists everything Omnix added.
 
 ## Features
 

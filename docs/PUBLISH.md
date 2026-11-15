@@ -77,6 +77,16 @@ read-only token as a secret, or Omnix made public first.
 
 ## At publishing (needs the GitHub account)
 
+- **Pushed to private repos 2026-11-15** (`nedcrest/omnix-360-studio`,
+  `nedcrest/dailix`; `main` only: not rOsmo360's `vision` branch or its
+  13 tags). Dailix's `OMNIX_TOKEN` set (fine-grained, read-only, until
+  2026-12-15: renew it, or make Omnix public, before then). The
+  history checked first: no personal paths in any version of any file.
+  Early versions of the guide's GIFs show the studio's temporary path
+  (`/tmp/claude-1000/-home-dh-…`, the user name only): kept, the user's
+  call (2026-11-15) — his name is on the profile anyway, and they're
+  traces of the work as it went.
+
 - **Push Omnix first, then Dailix**, every time Dailix's keys or
   commands change: Dailix's tests check its guide pages
   (`docs/guide/keys-dailix.md`, `commands-dailix.md`), which live here,

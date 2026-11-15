@@ -1,130 +1,136 @@
-# Стик лінз: що ми можемо запропонувати автору rOsmo360
+# The lens seam: what we could offer rOsmo360's author
 
-Записано 2026-10-23 на прохання Дмитра: просто пояснити, що з ідей OpenOSV
-нове для rOsmo360. Подробиці й джерела — `OPENOSV.md`. Факти про те, що
-вже зроблено в rOsmo360, — з його `CLAUDE.md`, розділ «Seam». **Нічого ще не
-відправлено.** Пропонувати чи ні — вирішує Дмитро.
+Written 2026-10-23 at the user's request: a plain account of which of
+OpenOSV's ideas are new to rOsmo360. Details and sources: `OPENOSV.md`.
+What rOsmo360 already does: its `CLAUDE.md`, the «Seam» section.
+**Nothing has been sent.** Whether to offer it is the user's call.
+(Written in Ukrainian at first, the user's language; in English since
+2026-11-15.)
 
-## Що таке стик
+## What the seam is
 
-Osmo 360 знімає двома лінзами-«риб'ячими очима», кожна бачить трохи більше
-за половину світу. Програма зшиває їх у кулю. Місце, де одна картинка
-переходить в іншу, — це **стик** (seam). Там видно всі розбіжності між
-лінзами:
-- **Двоїться близьке.** Рука на палиці, кепка: кожна лінза бачить їх під
-  своїм кутом (паралакс, parallax).
-- **Видно смугу.** Одна лінза темніша чи інакшого кольору, бо сонце
-  засвічує її, а не другу.
-- **Їде земля.** Лінзи трохи перекошені одна відносно одної.
+The Osmo 360 films through two fisheye lenses, each seeing a little more
+than half the world. The program stitches them into a sphere. Where one
+picture turns into the other is the **seam**, and every disagreement
+between the lenses shows there:
+- **Near things double.** A hand on the stick, a cap: each lens sees them
+  from its own angle (parallax).
+- **A band shows.** One lens is darker or another colour, because the sun
+  flares into it and not the other.
+- **The ground slides.** The lenses are slightly tilted against each other.
 
-## Що вже вміє rOsmo360
+## What rOsmo360 already does
 
-- Бере заводське калібрування DJI, те саме, що DJI Studio.
-- Кожен кадр зсуває лінзи назустріч, щоб збіглися деталі на стику
-  (alignment).
-- Там, де лінзи все одно не згодні (рука, кепка), не змішує їх, а різко
-  бере одну. Тому рука суцільна, а не прозора.
-- М'яко гасить край кожної лінзи на 2°, щоб не було сходинки біля маски.
+- It takes DJI's factory calibration, as DJI Studio does.
+- Every frame, it shifts the lenses towards each other so the details on
+  the seam meet (alignment).
+- Where the lenses still disagree (a hand, a cap) it doesn't blend them
+  but takes one, cleanly: the hand stays solid, not see-through.
+- It fades each lens's edge over 2°, so there's no step by the mask.
 
-**Пробував і відкинув** (тут ми нічого нового не пропонуємо):
-- найкращу лінію стику;
-- вирівнювання яскравості лінз (стало гірше, тож вимкнене);
-- підгонку засвітки;
-- змішування у дві смуги;
-- ширший пошук.
+**Tried and dropped** (we offer nothing new here):
+- the best seam line;
+- evening out the lenses' brightness (it made things worse, so it's off);
+- fitting the flare;
+- blending in two bands;
+- a wider search.
 
-OpenOSV пробував те саме й дійшов тих самих висновків.
+OpenOSV tried the same and came to the same conclusions.
 
-**Що в нього лишилось невирішеним:**
-1. **Козирок кепки біля палиці зрізається** (кліп 0025, 19.5 с). Причина:
-   маски DJI, що ховають кріплення, вирізають там занадто багато. Від
-   перекриття лінз лишається 4–6° замість звичних 17–19°, а козирок
-   «стрибає» між лінзами на ~6°. Його кінчик потрапляє туди, де картинку
-   має лише одна лінза, і та бачить там каміння. Сам автор записав ідею
-   «маски тісніші за DJI там, де горб ширший за палицю» як **недосліджену**.
-2. **Смуга засвітки** (кліп 0032): там, де сонце засвічує одну лінзу,
-   видно межу. Чотири спроби не допомогли.
+**What's left unsolved for him:**
+1. **A cap's brim by the stick is cut off** (clip 0025, 19.5 s). The cause:
+   DJI's masks, which hide the mount, cut away too much there. Of the
+   lenses' overlap 4–6° is left instead of the usual 17–19°, and the brim
+   «jumps» between the lenses by about 6°. Its tip falls where only one
+   lens has the picture, and that one sees rocks there. The author noted
+   «masks tighter than DJI's where the hump is wider than the stick» as
+   **unexplored**.
+2. **A flare band** (clip 0032): where the sun flares one lens, the edge
+   shows. Four attempts didn't help.
 
-## Що ми пропонуємо (чого в нього немає)
+## What we offer (that he doesn't have)
 
-### 1. Відпустити маску там, де обидві лінзи бачать однаково — головне
+### 1. Release the mask where both lenses see the same — the main one
 
-**Що робить.** Раз на кліп беремо 9 кадрів і дивимось на смугу вздовж
-маски кріплення без самої маски. Де обидві лінзи бачать одне й те саме
-(збіг ≥ 0.8), маску знімаємо, бо кріплення там насправді немає. Де бачать
-різне, маску лишаємо, з запасом.
+**What it does.** Once a clip, take 9 frames and look at the band along
+the mount's mask, without the mask. Where both lenses see the same thing
+(a match of 0.8 or more) the mask comes off: the mount isn't really
+there. Where they see different things the mask stays, with a margin.
 
-**Чому це нове.** Це саме та ідея, яку автор записав як недосліджену, але
-з готовим способом: OpenOSV це вже зробив («Hide Mount: Auto»).
+**Why it's new.** It's the very idea the author noted as unexplored, with
+a way to do it already worked out: OpenOSV does it («Hide Mount: Auto»).
 
-**Що дасть.** Біля палиці стає ширшим перекриття, де видно обидві лінзи. Тоді
-козирок кепки може потрапити туди, де його бачать обидві, і вирізання
-«де не згодні» зробить його суцільним.
+**What it gives.** By the stick, the overlap where both lenses see grows.
+The cap's brim can then fall where both see it, and taking one lens
+«where they disagree» keeps it solid.
 
-**Обережно.** OpenOSV налаштовував це на кріпленнях до машини, не на
-палиці в руці. Чи вистачить на кепку — треба міряти.
+**Careful.** OpenOSV tuned it on mounts on a car, not a stick in a hand.
+Whether it's enough for the cap has to be measured.
 
-### 2. Читати з файлу, що знято через захисне скло
+### 2. Read from the file that it was filmed through a lens guard
 
-**Що робить.** Камера пише у файл режим лінз: голі, із захисним склом (так
-само позначають і фільтри ND), під водою (`StreamMeta.7 extri_lens_mode`).
-Скло трохи змінює кут, під яким лінза бачить світ: +0.5° на 30°, +1.3° на
-90°. DJI Studio це враховує, OpenOSV теж, у rOsmo360 цього немає.
+**What it does.** The camera writes the lens mode into the file: bare,
+with protective glass (ND filters are marked the same), underwater
+(`StreamMeta.7 extri_lens_mode`). The glass changes slightly the angle
+at which the lens sees the world: +0.5° at 30°, +1.3° at 90°. DJI Studio
+takes it into account, so does OpenOSV; rOsmo360 doesn't.
 
-**Що дасть.** Кліпи, зняті через захисне скло чи ND, зшиваються без
-зсуву на стику. Інших змін для решти кліпів немає.
+**What it gives.** Clips filmed through a guard or an ND filter stitch
+without a shift on the seam. Nothing changes for other clips.
 
-### 3. Перевірити, чи лінзи не перекошені
+### 3. Check whether the lenses are tilted
 
-**Що робить.** Лінзи можуть бути трохи повернуті одна до одної: від удару,
-тепла, фільтра. OpenOSV на своєму кліпі знайшов 0.36°. Автор rOsmo360
-перевірив лише поворот навколо осі лінзи (його немає), а нахили — ні.
+**What it does.** The lenses can be turned slightly against each other:
+by a knock, heat, a filter. OpenOSV found 0.36° on its clip. rOsmo360's
+author checked only the turn about the lens's axis (there's none), not
+the tilts.
 
-**Що пропонуємо.** Спершу лише **перевірку**: rOsmo360 і так щокадру міряє,
-наскільки зсуває лінзи на стику. Якщо в середньому за багато кадрів цей
-зсув іде хвилею по колу, лінзи перекошені. Тоді один поворот на весь кліп
-прибере це раз і назавжди, а покадрове вирівнювання менше тремтітиме.
-Якщо хвилі немає, нічого не робимо.
+**What we offer.** First only a **check**: rOsmo360 already measures,
+every frame, how far it shifts the lenses on the seam. If, averaged over
+many frames, that shift runs round the circle like a wave, the lenses are
+tilted. Then one rotation for the whole clip takes it away for good, and
+the frame-by-frame alignment shakes less. No wave: nothing to do.
 
-### 4. Небо на стику: вирівнювати лише за надійними пікселями
+### 4. Sky on the seam: even it out from trusted pixels only
 
-**Що робить.** Будує плавну поправку яскравості й кольору не однією
-лінією на стик, а **двовимірну** — уздовж і впоперек смуги стику. Бере
-лише ті пікселі, де обидві лінзи точно чесні: не на самому краю й не на
-різких деталях. Ще міряє для кожного напрямку, де край лінзи вже «псується».
+**What it does.** It builds a smooth correction of brightness and colour
+not as one line along the seam but in **two dimensions**: along and
+across the seam's band. It takes only pixels where both lenses are
+surely honest: not on the very edge, not on sharp detail. It also
+measures, for each direction, where the lens's edge starts to go bad.
 
-**Чим відрізняється від того, що автор відкинув.** Його спроба була однією
-лінією на стовпчик і тому правильна лише посередині смуги. Цю різницю він
-сам і бачив.
+**How it differs from what the author dropped.** His attempt was one line
+per column, so right only in the middle of the band. He saw that
+difference himself.
 
-**Обережно — патенти.** OpenOSV пише, що GoPro має патенти на оцінку
-засвітки з різниці між лінзами (US11330208B2 та ін., чинний до 2038), і
-тому свою частину вимкнув. Це їхнє прочитання, не юридична порада. Перш
-ніж братися, треба розібратися.
+**Careful — patents.** OpenOSV says GoPro holds patents on estimating
+flare from the difference between lenses (US11330208B2 and others, in
+force until 2038), and turned its own part off for it. That's their
+reading, not legal advice; it needs looking into before starting.
 
-### Дрібні знахідки, корисні йому теж
+### Small findings, useful to him too
 
-- **Нічні кліпи й проксі.** Коли камера пропускає кадри, легка копія
-  `.LRF` записує їх неправильно: у OpenOSV набігло 3 с на 5 хвилин. Тоді
-  перегляд з проксі з'їжджає від експорту.
-- **Режим 6K.** Лінза 3000 px — це центр калібрування 3840 з множником
-  0.794492, а не просто 3000/3840. Простий масштаб розводить стик на ~4°.
-  Для режиму 100 fps (1920 px), який автор додав з чужого PR, масштаб теж
-  не перевірений.
+- **Night clips and proxies.** When the camera drops frames, the light
+  `.LRF` copy records them wrongly: OpenOSV saw 3 s drift over 5 minutes.
+  Playing from the proxy then drifts from the export.
+- **6K mode.** A 3000 px lens is the centre of the 3840 calibration scaled
+  by 0.794492, not simply 3000/3840. The plain scale pulls the seam apart
+  by about 4°. The 100 fps mode (1920 px), which the author took from
+  someone's pull request, hasn't had its scale checked either.
 
-## Чесно про межі
+## Honestly, the limits
 
-- Цифри OpenOSV — переважно з **одного** кліпу на 65 кадрів (камера на
-  крилі літака, з фільтрами ND). Це ідеї, які варто виміряти, а не
-  доведені результати.
-- Ми самі нічого з цього ще не міряли. Своєї 360-камери поки немає
-  (~2027-02), є один публічний кліп. В автора є весь похід Kyrkja, тож
-  йому перевірити легше, ніж нам.
-- Код OpenOSV — Apache-2.0. Якщо переносити код дослівно, треба їхня
-  подяка в NOTICE. Якщо реалізувати ідею своїми словами — ні, але
-  згадати їх чесно.
+- OpenOSV's numbers come mostly from **one** clip of 65 frames (the camera
+  on an aircraft's wing, with ND filters). They're ideas worth measuring,
+  not proven results.
+- We haven't measured any of this ourselves. There's no 360 camera of our
+  own yet (about 2027-02), one public clip. The author has his whole
+  Kyrkja hike, so it's easier for him to check than for us.
+- OpenOSV's code is Apache-2.0. Code carried over word for word needs
+  their credit in a NOTICE; an idea done in our own code doesn't, but
+  mention them honestly.
 
-## Чернетка для автора (англійською, не відправлено)
+## A draft for the author (not sent)
 
 > **Seam ideas from OpenOSV that rOsmo360 hasn't tried**
 >

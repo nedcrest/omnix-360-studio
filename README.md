@@ -301,7 +301,7 @@ Clips' telemetry and thumbnails, and songs' waveforms, are cached in `~/.cache/o
 
 ## Roadmap
 
-The full roadmap, card by card, is [`docs/omnix/ROADMAP.md`](docs/omnix/ROADMAP.md) (in Ukrainian; every idea's details in English in [`EDITOR-GAPS.md`](docs/omnix/EDITOR-GAPS.md)). Next:
+The working board, card by card, is [`docs/omnix/ROADMAP.md`](docs/omnix/ROADMAP.md), in Ukrainian: the author's own language, kept as the project is run (see [how it was built](docs/AI-DRIVEN.md)). Every idea's details are in English in [`EDITOR-GAPS.md`](docs/omnix/EDITOR-GAPS.md) and, done, [`EDITOR-GAPS-DONE.md`](docs/omnix/EDITOR-GAPS-DONE.md). Next:
 
 - Playback speed, constant or as a curve (the time seam it needs is under way: [`TIME-SEAM.md`](docs/omnix/TIME-SEAM.md)).
 - Copy and paste of clips; transitions from video files (stingers) with their own sound; video on the overlay lane.
@@ -310,6 +310,8 @@ The full roadmap, card by card, is [`docs/omnix/ROADMAP.md`](docs/omnix/ROADMAP.
 - Smooth full-resolution playback on modest hardware, and faster 10-bit exports (zero-copy decoding).
 - Windows out of beta, once it's been tested on real PCs with a GPU; a signed Windows exe and a signed macOS download.
 - LUTs chosen by camera for ordinary videos (a DJI Action's or a phone's log).
+- In Dailix: bringing footage in from cards and phones (checked, filed by day, the originals kept apart), and material from outside a trip (a link, a file dragged in).
+- The guide's how-to pages, a task each, and its 360 pages once the author has his own camera.
 
 ## License
 

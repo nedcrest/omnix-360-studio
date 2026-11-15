@@ -13,7 +13,7 @@ use crate::model::ops::{End, Op};
 /// first that fits: its clip, length, stabilisation when that isn't horizon
 /// (the usual), and note.
 pub(super) fn cut_labels(c: &Cut, default: Mode) -> Vec<String> {
-    let mut label = format!("{} · {:.1} s", clip_name(&c.input), c.end - c.start);
+    let mut label = format!("{} · {:.1} s", clip_name(&c.input), c.edit_len());
     // Its sound from a file of its own: say which, by its name.
     if let Some(audio) = &c.audio {
         label += &format!(" · ♪ {}", audio.file_stem().map_or_else(String::new, |n| n.to_string_lossy().into_owned()));

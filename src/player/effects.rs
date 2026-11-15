@@ -191,12 +191,14 @@ impl Pin {
 
 /// A selected cut or item: where it starts on the edit, how long, and its
 /// own clock's start.
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 struct Selected {
     target: Target,
     at: f64,
     len: f64,
     start: f64,
+    /// How it reads its own time (a cut's speed; an item's 1×).
+    speed: crate::speed::Speed,
 }
 
 /// The panel's focus at edit time `t` (`Focus`): on `selected` while `t`
@@ -204,7 +206,7 @@ struct Selected {
 /// `playing` cut (its index and clip time).
 fn focus(t: f64, selected: Option<Selected>, playing: Option<(usize, f64)>) -> Focus {
     match selected {
-        Some(s) if (s.at..=s.at + s.len).contains(&t) => Focus::On(s.target, s.start + t - s.at),
+        Some(s) if (s.at..=s.at + s.len).contains(&t) => Focus::On(s.target, s.speed.clip_after(s.start, t - s.at)),
         Some(s) => Focus::Apart(s.target),
         None => playing.map_or(Focus::Nothing, |(i, t)| Focus::On(Target::Cut(i), t)),
     }
@@ -234,10 +236,10 @@ impl App {
     /// What the panel works on (`Focus`).
     pub(super) fn effect_focus(&self) -> Focus {
         let selected = match (self.selection.item(&self.edit), self.selection.cut(&self.edit)) {
-            (Some(i), _) => self.edit.item(i).map(|it| Selected { target: Target::Overlay(i), at: it.at, len: it.end - it.start, start: it.start }),
+            (Some(i), _) => self.edit.item(i).map(|it| Selected { target: Target::Overlay(i), at: it.at, len: it.end - it.start, start: it.start, speed: Default::default() }),
             (None, Some(i)) => {
                 let c = &self.edit.cuts[i];
-                Some(Selected { target: Target::Cut(i), at: self.edit.edit_time(i, c.start), len: c.edit_len(), start: c.start })
+                Some(Selected { target: Target::Cut(i), at: self.edit.edit_time(i, c.start), len: c.edit_len(), start: c.start, speed: c.speed.clone() })
             }
             (None, None) => None,
         };
@@ -930,11 +932,15 @@ mod tests {
 
     #[test]
     fn the_panel_edits_the_selection_only_with_the_playhead_on_it() {
-        let item = Selected { target: Target::Overlay((crate::overlay::Track::Text, 0, 0)), at: 10.0, len: 4.0, start: 1.0 };
-        assert!(focus(12.0, Some(item), Some((3, 5.0))) == Focus::On(item.target, 3.0), "on it, its own clock");
-        assert!(focus(14.0, Some(item), None) == Focus::On(item.target, 5.0), "its end counts");
-        assert!(focus(15.0, Some(item), Some((3, 5.0))) == Focus::Apart(item.target), "off it: not the cut under the playhead");
+        let item = Selected { target: Target::Overlay((crate::overlay::Track::Text, 0, 0)), at: 10.0, len: 4.0, start: 1.0, speed: Default::default() };
+        let target = item.target;
+        assert!(focus(12.0, Some(item.clone()), Some((3, 5.0))) == Focus::On(target, 3.0), "on it, its own clock");
+        assert!(focus(14.0, Some(item.clone()), None) == Focus::On(target, 5.0), "its end counts");
+        assert!(focus(15.0, Some(item.clone()), Some((3, 5.0))) == Focus::Apart(target), "off it: not the cut under the playhead");
         assert!(focus(15.0, None, Some((3, 5.0))) == Focus::On(Target::Cut(3), 5.0), "nothing selected: the playing cut");
+        // A cut at 2×: two edit seconds into it are four of its clip.
+        let fast = Selected { target: Target::Cut(1), at: 10.0, len: 4.0, start: 1.0, speed: crate::speed::Speed::constant(2.0) };
+        assert!(focus(12.0, Some(fast), None) == Focus::On(Target::Cut(1), 5.0), "its clock at its speed");
     }
 
     #[test]

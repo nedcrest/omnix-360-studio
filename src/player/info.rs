@@ -244,7 +244,7 @@ impl App {
                 let Some(cut) = self.edit.cuts.get(i).filter(|c| c.input == info.path) else { return rows };
                 let at = crate::project::offsets(&self.edit.cuts)[i];
                 rows.push(("Cut", format!("{} of {}", i + 1, self.edit.cuts.len())));
-                rows.push(("On the edit", span(at, at + cut.end - cut.start)));
+                rows.push(("On the edit", span(at, at + cut.edit_len())));
                 rows.push(("From the file", span(cut.start, cut.end)));
                 if let Some(audio) = &cut.audio {
                     let name = audio.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());

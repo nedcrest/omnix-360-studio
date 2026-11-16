@@ -145,9 +145,13 @@ versions from scratch, the user, 2026-11-15; rOsmo360 released its own
 6. **A version and a tag.** `Cargo.toml` says 0.7.1, rOsmo360's last;
    Omnix's first is its own, from scratch: 0.1.0 (the user, 2026-11-15), a
    short changelog of what Omnix added, a GitHub release.
-7. **Release builds checked**: `packaging/build-release.sh` (AppImage,
-   Flatpak, Windows zip) last ran before the sheet moved in; it should
-   build now (no sibling path any more), but untried.
+7. **Release builds checked**: tried 2026-11-16 up to the Flatpak: the
+   archive (16.6 MB) and the AppImage (16 MB) build in the jammy image,
+   say «Omnix 0.1.0», install.sh installs into a home of its own, the
+   AppImage exports a test edit, the binary needs no library it lacks.
+   Left: the Flatpak (needs `org.flatpak.Builder`, his call), the Windows
+   zip, and `REPO` in `packaging/install.sh` set to
+   `nedcrest/omnix-360-studio` with the first release.
 8. **A stranger's first run**: Dailix needs its three places set
    (`dailix places …`); with none it should say so on Home, not just in
    the command line. Omnix starts empty fine.

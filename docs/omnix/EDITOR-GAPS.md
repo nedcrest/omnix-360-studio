@@ -1446,6 +1446,40 @@ was filmed (its name's date, else the file's), with a sidecar; the
 originals only read. The rest of ingest (cards, phones, analysis,
 proxies) stays gap 74.
 
+### 117. Dailix: sorting what landed in TMP into trips and their parts — medium (user, 2026-11-16)
+
+The user: there's no path worked out for what happens after the raw
+files land in TMP, so that they gather into a trip of their own, a day,
+and so on. He sees it as a simple sorter with playback of the videos
+picked: under each one a trip is chosen, and each can get a part of the
+trip of its own — a day, or a name («rides on Kos»: only the scooter
+videos, from all the days).
+
+What there is: `dailix/docs/INGEST.md` (gap 74) copies cards and phones
+into TMP verified, files days away into the sources, and assumes the
+trip is known when choosing; `dailix add` (gap 115's part) copies files
+into a trip's days. Missing: the step between, and a part of a trip
+that isn't a day.
+
+To work out with him before building:
+- **The sorter**: TMP's clips as a list or tiles, a player for the one
+  picked (Dailix's), several picked at once; under each, the trip
+  (an existing one or a new one) and the part. Keys to go through them
+  quickly (next, same trip as the last).
+- **Parts of a trip**: days, as now (from the filming date), plus named
+  parts across days (a «collection»: «rides on Kos»). A clip in a
+  collection still belongs to its day; a collection is a list, not a
+  folder, so nothing is copied twice. Where it lives (the trip's
+  project file) and how Dailix and Omnix show it (a filter in the
+  contact sheet, a bin section, «→ Omnix» from a collection).
+- **What sorting does on disk**: moves (or copies, verified) the file
+  into the trip's `01_footage/<day>/` with its sidecar, as `dailix add`
+  does; TMP freed as INGEST.md says.
+- With gap 74's ingest: the sorter is the step after «copied to TMP».
+
+Milestone «Матеріал і бін». The user put it in «Далі», after the speed
+window (2026-11-16).
+
 ### 116. A trip that moves keeps its edits — medium (found shooting the guide, 2026-11-14)
 
 An edit stores its clips and songs by their whole path

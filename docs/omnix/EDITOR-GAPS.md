@@ -1514,6 +1514,24 @@ To work out with him before building:
 Milestone «Матеріал і бін». The user put it in «Далі», after the speed
 window (2026-11-16).
 
+**Built 2026-11-16, waits for the user's check** (the sketch approved
+the same day, with the recommended answers: copy, parts as lists,
+the sorter first). Omnix `8a6afc8` (parts in the sheet core, `PartOp`),
+`ce17825` (`from_sheet::build_part`, `omnix from-sheet --part`),
+`682e9c1` (one list of video endings); Dailix `4bb651c` (`tmp.rs`,
+`dailix tmp list | file`), `26892f6` (the sorter), `5ef0173` (parts on
+the trip's page, the sheet's «Part» filter, the pane's ticks).
+- **On disk**: filing copies (`add::add`); TMP keeps the original till
+  the archive (INGEST.md), its ledger `.dailix-filed.json` says where
+  each went; a file whose name a day has already (two cameras'
+  DJI_0001) is refused, not taken for the same.
+- **Parts**: the marking's top-level `parts` (name, clip keys), named in
+  any capitals; a part's edit takes its clips from any day, the
+  unrated too, junk out.
+- **Left for later**: the parts in Omnix's bin (a section or a
+  filter); moving from TMP into the archive (gap 74); a part renamed
+  or removed from the window (the ops and `dailix sheet apply` can).
+
 ### 116. A trip that moves keeps its edits — medium (found shooting the guide, 2026-11-14)
 
 An edit stores its clips and songs by their whole path

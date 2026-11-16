@@ -33,6 +33,25 @@ Videos added to a trip, each under the day it was filmed (its name's date, else 
 | `<FILES>` |  |
 | `--day <DAY>` | The day to put them under instead (YYYY-MM-DD) |
 
+## `dailix tmp`
+
+The TMP place (gap 117): its videos by day and where each went; filing them into a trip
+
+## `dailix tmp list`
+
+TMP's videos, a day at a time: each one's length, and the trip, day and name it was filed under (or «new»)
+
+## `dailix tmp file`
+
+Videos of TMP filed into a trip: copied in under the day each was filmed (or --day), put into the parts named (made if the trip hasn't them). TMP keeps them, and its ledger says where they went
+
+| Argument | What it is |
+|---|---|
+| `<TRIP>` |  |
+| `<FILES>` | TMP's videos: their places from TMP's top, or paths |
+| `--day <DAY>` | The day to put them under instead (YYYY-MM-DD) |
+| `--part <PART>` | A part of the trip to put them into; again for more |
+
 ## `dailix sheet`
 
 The contact sheet's marking (a project's `dailix/sheet.json`)

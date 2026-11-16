@@ -95,6 +95,11 @@ impl Sheet {
         }
     }
 
+    /// The marking as it stands (ratings, notes, parts), if it reads.
+    pub fn marking(&self) -> Option<dailix_sheet::Sheet> {
+        self.store.read().ok()?.sheet().ok()
+    }
+
     /// The marks on `file`, in the sheet's order. Reading gives the
     /// sheet's marks their ids, written into it first if any had none.
     pub fn segments(&self, file: &Path) -> Result<Vec<Segment>> {

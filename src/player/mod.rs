@@ -1543,16 +1543,17 @@ pub(super) mod tests {
         let named = |n| Key::Named(n);
         // Seeking, playing, cutting and the file keys stay.
         for key in [named(Named::ArrowLeft), named(Named::ArrowRight), named(Named::Space), ch("c"), ch("m"), ch("g"), ch("b"), ch("f")] {
-            assert!(!framing_key(&key, none, false), "{key:?}");
+            assert!(!framing_key(&key, none, false, false), "{key:?}");
         }
-        assert!(!framing_key(&ch("0"), keyboard::Modifiers::CTRL, false), "Ctrl+0 fits the timeline");
-        assert!(!framing_key(&ch("s"), keyboard::Modifiers::CTRL, false), "Ctrl+S saves");
+        assert!(!framing_key(&ch("0"), keyboard::Modifiers::CTRL, false, false), "Ctrl+0 fits the timeline");
+        assert!(!framing_key(&ch("s"), keyboard::Modifiers::CTRL, false, false), "Ctrl+S saves");
         // Turning, framing and keying the view go.
         for key in [named(Named::ArrowUp), named(Named::Home), ch("q"), ch("e"), ch("0"), ch("k"), ch("j"), ch("["), ch("s"), ch("p"), ch("r")] {
-            assert!(framing_key(&key, none, false), "{key:?}");
+            assert!(framing_key(&key, none, false, false), "{key:?}");
         }
-        assert!(framing_key(&named(Named::ArrowLeft), keyboard::Modifiers::SHIFT, false), "Shift+← turns the view");
+        assert!(framing_key(&named(Named::ArrowLeft), keyboard::Modifiers::SHIFT, false, false), "Shift+← turns the view");
         // K on a selected sound adds a volume point, which editing keeps.
-        assert!(!framing_key(&ch("k"), none, true));
+        assert!(!framing_key(&ch("k"), none, true, false));
+        assert!(framing_key(&ch("e"), none, false, false) && !framing_key(&ch("e"), none, false, true), "E adds the bin player's clip");
     }
 }

@@ -64,8 +64,9 @@ pub(super) fn latin(key: Key, physical: iced::keyboard::key::Physical, shift: bo
 /// Keys that only framing uses: looking around (Shift+←/→, ↑/↓, Q/E,
 /// Home, 0, + and −), keyframes (K, J, [ and ]), stabilisation (S),
 /// projection (P), rolling shutter (R). K with a sound selected (`sound`)
-/// adds a volume point, which editing keeps.
-pub(super) fn framing_key(key: &Key, mods: keyboard::Modifiers, sound: bool) -> bool {
+/// adds a volume point, which editing keeps; E with the bin's player
+/// open (`bin`) adds its clip (W isn't framing's).
+pub(super) fn framing_key(key: &Key, mods: keyboard::Modifiers, sound: bool, bin: bool) -> bool {
     match key.as_ref() {
         // Alt+← / Alt+→ move the selected cut, an edit.
         Key::Named(Named::ArrowLeft | Named::ArrowRight) => mods.shift() && !mods.alt(),
@@ -74,7 +75,8 @@ pub(super) fn framing_key(key: &Key, mods: keyboard::Modifiers, sound: bool) -> 
         Key::Character("[" | "]") if mods.alt() => false,
         Key::Character(c) if !mods.command() => match c {
             "k" | "K" => !sound,
-            "q" | "Q" | "e" | "E" | "0" | "+" | "=" | "-" | "j" | "J" | "[" | "]" | "s" | "S" | "p" | "P" | "r" | "R" => true,
+            "e" | "E" => !bin,
+            "q" | "Q" | "0" | "+" | "=" | "-" | "j" | "J" | "[" | "]" | "s" | "S" | "p" | "P" | "r" | "R" => true,
             _ => false,
         },
         _ => false,
@@ -178,7 +180,8 @@ impl App {
             return Some(Task::none());
         }
         // Editing: the framing keys do nothing.
-        (!self.framing && framing_key(key, mods, sound)).then(Task::none)
+        let bin = self.bin.view && self.bin.source.is_some();
+        (!self.framing && framing_key(key, mods, sound, bin)).then(Task::none)
     }
 
     /// The named keys: Esc, Space, the arrows, Home, Delete.
@@ -264,6 +267,12 @@ impl App {
             // In and out points in the bin's player (Alt clears them).
             "i" | "I" if self.bin.view && self.bin.source.is_some() && !mods.command() => return self.update(Message::BinPlayer(super::bin_player::SourceMsg::In(!mods.alt()))),
             "o" | "O" if self.bin.view && self.bin.source.is_some() && !mods.command() => return self.update(Message::BinPlayer(super::bin_player::SourceMsg::Out(!mods.alt()))),
+            // The bin player's clip into the edit, as Final Cut's E and W:
+            // at the end, at the playhead (its picked segment, if one is).
+            "e" | "E" | "w" | "W" if self.bin.view && !mods.command() && !mods.alt() && let Some(s) = &self.bin.source => {
+                let place = if c.eq_ignore_ascii_case("e") { super::bin::Place::End } else { super::bin::Place::Playhead };
+                return self.update(Message::BinAdd(s.path.clone(), super::bin::Kind::Clip, place));
+            }
             "o" | "O" if mods.command() && mods.shift() => return self.update(Message::OpenProject),
             "n" | "N" if mods.command() => return self.update(Message::NewMenu),
             "o" if mods.command() => return self.update(Message::Open),

@@ -183,6 +183,10 @@ pub struct Bin {
     /// the roles a segment can have (its own list, or the default one).
     pub sheet: Option<crate::notes::Sheet>,
     pub roles: Vec<crate::notes::Role>,
+    /// The sheet's marking as last read (a clip's rating and note on its
+    /// tile, the trip's parts), and the part the view shows (gap 117).
+    pub marking: Option<dailix_sheet::Sheet>,
+    pub part: Option<String>,
     /// The tile the pointer rests on, since when, and whether its frames
     /// show; the frames read for hovering, by clip.
     pub hover: Option<(PathBuf, std::time::Instant, bool)>,
@@ -197,6 +201,25 @@ pub struct Bin {
     /// Loaded clips from outside the folder taken out of the bin's list
     /// (the clips stay loaded: an undo may bring back a cut of one).
     pub hidden: std::collections::HashSet<PathBuf>,
+}
+
+/// A clip's marking on its tile, in a line: its rating (✓ ? ✕), how
+/// many segments, its note's first line; empty when it has none of them.
+pub fn marking_line(clip: &dailix_sheet::Clip) -> String {
+    let rating = match clip.rating {
+        Some(dailix_sheet::Rating::Take) => "✓",
+        Some(dailix_sheet::Rating::Think) => "?",
+        Some(dailix_sheet::Rating::Junk) => "✕",
+        None => "",
+    };
+    let segments = clip.marks.iter().filter(|m| m.kind != dailix_sheet::MarkKind::Flag).count();
+    let segments = match segments {
+        0 => String::new(),
+        1 => "1 segment".to_owned(),
+        n => format!("{n} segments"),
+    };
+    let note = clip.note.lines().next().unwrap_or_default();
+    [rating, segments.as_str(), note].into_iter().filter(|s| !s.is_empty()).collect::<Vec<_>>().join(" · ")
 }
 
 /// The project's folder for a project file at `project`: a Dailix trip's
@@ -333,6 +356,10 @@ impl App {
         self.bin.read = self.project_root().map(|r| (scan(&r), r));
         self.bin.sheet = self.bin.read.as_ref().and_then(|(_, r)| crate::notes::Sheet::of(r));
         self.bin.roles = self.bin.sheet.as_ref().map_or_else(crate::notes::Sheet::default_roles, crate::notes::Sheet::roles);
+        self.bin.marking = self.bin.sheet.as_ref().and_then(crate::notes::Sheet::marking);
+        if self.bin.part.as_ref().is_some_and(|p| self.bin.marking.as_ref().is_none_or(|m| m.part(p).is_none())) {
+            self.bin.part = None;
+        }
         self.read_bin_meta()
     }
 
@@ -441,6 +468,21 @@ impl App {
             (Some(day), Some(days)) => days.contains(day),
             _ => true,
         }
+    }
+
+    /// The marking of the clip at `path`, if the sheet has one for it.
+    pub(super) fn marking_of(&self, path: &Path) -> Option<&dailix_sheet::Clip> {
+        let key = self.bin.sheet.as_ref()?.key(path)?;
+        self.bin.marking.as_ref()?.clips.get(&key)
+    }
+
+    /// Whether the bin view's part (if one is chosen) holds the clip at
+    /// `path`; with none, every clip.
+    pub(super) fn in_part(&self, path: &Path) -> bool {
+        let Some(name) = &self.bin.part else { return true };
+        let (Some(sheet), Some(marking)) = (&self.bin.sheet, &self.bin.marking) else { return true };
+        let Some(part) = marking.part(name) else { return true };
+        sheet.key(path).is_some_and(|k| part.clips.contains(&k))
     }
 
     /// A heading that folds its files away and back when clicked, with how
@@ -650,6 +692,15 @@ mod tests {
         assert_eq!(app.project_root(), Some(PathBuf::from("/p")));
         assert!(app.inside_project(Path::new("/p/08_pictures/a.png")) && !app.inside_project(Path::new("/q/a.png")));
         assert_eq!(super::super::bin_view::folder_for(Path::new("/p"), Kind::Picture, None), Some(PathBuf::from("/p").join(dailix_sheet::layout::PICTURES)));
+    }
+
+    #[test]
+    fn a_clips_marking_reads_on_its_tile_in_a_line() {
+        let clip: dailix_sheet::Clip = serde_json::from_str(r#"{"rating": 2, "note": "the tree\nmore", "marks": [{"t": 1, "end": 3}, {"t": 4, "kind": "flag"}, {"t": 5, "end": 9}]}"#).unwrap();
+        assert_eq!(marking_line(&clip), "✓ · 2 segments · the tree");
+        assert_eq!(marking_line(&dailix_sheet::Clip::default()), "");
+        let junk: dailix_sheet::Clip = serde_json::from_str(r#"{"rating": 0, "marks": [{"t": 1, "end": 3}]}"#).unwrap();
+        assert_eq!(marking_line(&junk), "✕ · 1 segment");
     }
 
     #[test]

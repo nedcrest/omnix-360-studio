@@ -37,6 +37,8 @@ pub enum BinMsg {
     Tile(f32),
     /// Every day's clips shown, or only the edit's days'.
     AllDays,
+    /// The trip's part shown alone (gap 117), or every clip.
+    Part(Option<String>),
     /// A heading's files folded away, or shown again.
     Fold(String),
     /// The pointer over the view, where a menu opens.
@@ -168,12 +170,48 @@ impl App {
                 }
             }
             BinMsg::AllDays => self.bin.all_days = !self.bin.all_days,
+            BinMsg::Part(part) => self.bin.part = part,
             BinMsg::Fold(heading) => {
                 if !self.bin.folded.remove(&heading) {
                     self.bin.folded.insert(heading);
                 }
             }
             BinMsg::Tile(w) => self.bin.tile = w.clamp(*TILE.start(), *TILE.end()),
+            BinMsg::Show(path, kind) => {
+                let shown = self.bin_preview(path.clone(), kind, false);
+                // A clip plays at the side, in the bin's own player.
+                if kind != Kind::Clip {
+                    self.bin.source = None;
+                    return shown;
+                }
+                return Task::batch([shown, self.source_open(path)]);
+            }
+            BinMsg::About(path, file) => {
+                if let Some((p, f)) = &mut self.bin.about
+                    && *p == path
+                {
+                    *f = Some(file);
+                }
+            }
+            BinMsg::Menu(m) => self.bin.menu = m.map(|(path, kind)| (path, kind, self.bin.pointer)),
+            BinMsg::Pick(m) => {
+                self.bin.menu = None;
+                return self.update(*m);
+            }
+            m @ (BinMsg::Pointer(_) | BinMsg::Grip(_) | BinMsg::Leave | BinMsg::HoverIn(_) | BinMsg::HoverOut(_) | BinMsg::HoverTick | BinMsg::HoverFrames(..)) => return self.on_bin_hover(m),
+            m @ (BinMsg::Dropped(_) | BinMsg::AddTo(_) | BinMsg::CopyIn(..) | BinMsg::Copied(_) | BinMsg::Trash(_) | BinMsg::TrashAnswered(..) | BinMsg::Trashed(..) | BinMsg::Hide(_)) => return self.on_bin_files(m),
+            BinMsg::Info(path, kind) => {
+                self.bin.menu = None;
+                return self.open_info(super::info::Of::File(matches!(kind, Kind::Sound(_))), path);
+            }
+        }
+        Task::none()
+    }
+
+    /// The pointer over the bin view: a tile hovered (its frames after a
+    /// rest), the side's edge dragged.
+    fn on_bin_hover(&mut self, msg: BinMsg) -> Task<Message> {
+        match msg {
             BinMsg::Pointer(p) => {
                 self.bin.pointer = p;
                 // A move closes the frames and starts the wait again.
@@ -215,27 +253,15 @@ impl App {
             BinMsg::HoverFrames(path, frames) => {
                 self.bin.hover_frames.insert(path, frames);
             }
-            BinMsg::Show(path, kind) => {
-                let shown = self.bin_preview(path.clone(), kind, false);
-                // A clip plays at the side, in the bin's own player.
-                if kind != Kind::Clip {
-                    self.bin.source = None;
-                    return shown;
-                }
-                return Task::batch([shown, self.source_open(path)]);
-            }
-            BinMsg::About(path, file) => {
-                if let Some((p, f)) = &mut self.bin.about
-                    && *p == path
-                {
-                    *f = Some(file);
-                }
-            }
-            BinMsg::Menu(m) => self.bin.menu = m.map(|(path, kind)| (path, kind, self.bin.pointer)),
-            BinMsg::Pick(m) => {
-                self.bin.menu = None;
-                return self.update(*m);
-            }
+            _ => {}
+        }
+        Task::none()
+    }
+
+    /// Files into the project's folder (dropped, picked, copied) and out
+    /// of it (to the trash, or off the list).
+    fn on_bin_files(&mut self, msg: BinMsg) -> Task<Message> {
+        match msg {
             BinMsg::Dropped(path) => return self.copy_files(vec![path], None),
             BinMsg::AddTo(title) => {
                 let Some(&(_, kind, _)) = super::bin::SECTIONS.iter().find(|(t, _, _)| *t == title) else { return Task::none() };
@@ -297,10 +323,7 @@ impl App {
             BinMsg::Hide(path) => {
                 self.bin.hidden.insert(path);
             }
-            BinMsg::Info(path, kind) => {
-                self.bin.menu = None;
-                return self.open_info(super::info::Of::File(matches!(kind, Kind::Sound(_))), path);
-            }
+            _ => {}
         }
         Task::none()
     }
@@ -374,7 +397,7 @@ impl App {
         } else if let Some(note) = &self.bin.copied {
             head = head.push(text(note.clone()).size(13).style(text::success));
         }
-        let head = head.push(space().width(Length::Fill)).push(self.days_toggle()).push(size).push(refresh).push(close);
+        let head = head.push(space().width(Length::Fill)).push(self.part_picker()).push(self.days_toggle()).push(size).push(refresh).push(close);
         let mut body = column![].spacing(10);
         match &self.bin.read {
             None => body = body.push(text("Save the project to see its folder here.").size(13).style(text::secondary)),
@@ -383,12 +406,20 @@ impl App {
                 for &(title, kind, _) in &super::bin::SECTIONS {
                     // Its own files and each subfolder's (a day's), the «+» on
                     // the first; an empty section still shows, for its «+».
-                    let mine: Vec<&super::bin::Section> = sections.iter().filter(|s| s.title == title && self.day_shown(s)).collect();
+                    // A part shown: its clips from every day, the days
+                    // without one left out.
+                    let part = self.bin.part.is_some() && kind == Kind::Clip;
+                    let mine: Vec<(&super::bin::Section, Vec<PathBuf>)> = sections
+                        .iter()
+                        .filter(|s| s.title == title && (part || self.day_shown(s)))
+                        .map(|s| (s, s.files.iter().filter(|f| !part || self.in_part(f)).cloned().collect::<Vec<_>>()))
+                        .filter(|(s, files)| !part || !files.is_empty() || s.sub.is_none())
+                        .collect();
                     if mine.is_empty() {
                         body = body.push(rule::horizontal(1)).push(self.section_tiles(title, title.to_owned(), kind, &[], true));
                     }
-                    for (i, s) in mine.into_iter().enumerate() {
-                        body = body.push(rule::horizontal(1)).push(self.section_tiles(title, s.heading(), kind, &s.files, i == 0));
+                    for (i, (s, files)) in mine.into_iter().enumerate() {
+                        body = body.push(rule::horizontal(1)).push(self.section_tiles(title, s.heading(), kind, &files, i == 0));
                     }
                 }
             }
@@ -557,6 +588,19 @@ impl App {
         column![head, tiles].spacing(8).into()
     }
 
+    /// The trip's parts to show one alone, when it has any.
+    fn part_picker(&self) -> Option<Element<'_, Message>> {
+        let parts = &self.bin.marking.as_ref()?.parts;
+        if parts.is_empty() {
+            return None;
+        }
+        let every = "Every clip".to_owned();
+        let choices: Vec<String> = std::iter::once(every.clone()).chain(parts.iter().map(|p| p.name.clone())).collect();
+        let now = self.bin.part.clone().unwrap_or_else(|| every.clone());
+        let list = iced::widget::pick_list(choices, Some(now), move |c: String| Message::BinView(BinMsg::Part((c != every).then_some(c)))).text_size(13);
+        Some(tip(list, text("A part of the trip: its clips from every day (Dailix makes them)"), tooltip::Position::Left))
+    }
+
     /// A file as a tile: its picture, name and length, and where the edit
     /// uses it. A click previews it, a right-click opens its menu.
     fn tile<'a>(&'a self, path: &Path, kind: Kind) -> Element<'a, Message> {
@@ -576,6 +620,10 @@ impl App {
         let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
         let length = meta.and_then(|m| m.duration).map(|d| dailix_sheet::clock(d, 0)).unwrap_or_default();
         let mut info = column![text(name).size(13).wrapping(text::Wrapping::None), text(length).size(11).style(text::secondary)].spacing(1).width(w).clip(true);
+        // The contact sheet's say on it: rating, segments, note (gap 2).
+        if let Some(line) = self.marking_of(path).map(super::bin::marking_line).filter(|l| !l.is_empty()) {
+            info = info.push(text(line).size(11).wrapping(text::Wrapping::None));
+        }
         if let Some(used) = uses(&self.edit, path) {
             info = info.push(text(format!("In the edit: {used}")).size(11).style(text::success));
         }

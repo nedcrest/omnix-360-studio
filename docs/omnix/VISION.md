@@ -77,7 +77,7 @@ Added in the fork (to 2026-11-09):
   library; the start window, «New…» and the projects place in both;
 - the live roadmap page.
 
-Detail: `CONTEXT.md`.
+Detail: `EDITOR-GAPS.md`.
 
 ## Where it goes
 

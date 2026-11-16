@@ -14,7 +14,8 @@ Omnix and its sibling Dailix are built with Claude Code
   language), every idea by number (`EDITOR-GAPS.md`, done ones in
   `EDITOR-GAPS-DONE.md`), the design pages written before the code
   (`OPS-API.md`, `CORE-API.md`, `TIME-SEAM.md`, `PROJECT-CARDS.md`), the
-  latest audits (`AUDIT.md`), and `CONTEXT.md`, where long work picks up
+  latest audits (`AUDIT.md`), and `.analysis/CONTEXT.md` (local, not in
+  git; backed up in the private notes repo), where long work picks up
   after a pause.
 
 The essentials, in short: a change to a project is an operation

@@ -83,8 +83,9 @@ were written down as rules the agent reads before touching the code:
   One or two review agents read what changed; findings are sorted (bugs
   now, the rest where it belongs) into `docs/omnix/AUDIT.md`.
 - **Memory across sessions.** Long work outlives one conversation.
-  `docs/omnix/CONTEXT.md` holds a return point, rewritten (not appended)
-  at every pause, so a new session starts where the last one stopped.
+  A context file holds a return point, rewritten (not appended) at every
+  pause, so a new session starts where the last one stopped. It's a
+  working diary, kept out of the public repos (since 2026-11-16).
 - **Safety nets before a refactor.** Before the time seam (putting every
   clip-time ↔ edit-time conversion behind a few functions, for playback
   speed), the agent wrote snapshots of every time the code derives

@@ -129,7 +129,7 @@ done in part stays here until its last card is done.
 
 User: wants a bin, maybe with better UI, with "our extra sound tracks" in it.
 
-**Now (`src/player/bin.rs`, v1 `3e2b038`, v2 `68f4fe2`):**
+**Now (`src/player/bin.rs`, v1 `05b18df`, v2 `52a665e`):**
 - A panel of its own at the far left, beside whichever left panel (Info,
   Settings, Text) is open; folds to a narrow strip (B toggles).
 - Pin (🔒) keeps it open, and open at the next start (`Settings.bin_pinned`).
@@ -234,8 +234,8 @@ User: would split into video tracks and sound tracks.
   fades already do, «Sound to picture» in the sound menu to reset, the
   edge stopping (red) at the clip's end. Later maybe a rolling split
   (one drag lengthens one sound and shortens the next).
-- **Done 2026-11-03** (`198da5b` model and ops, `3c62411` export,
-  `6da0d2f` player), confirmed by the user with the snapping:
+- **Done 2026-11-03** (`e7c6e42` model and ops, `2afec1a` export,
+  `ca51017` player), confirmed by the user with the snapping:
   - `Cut::sound_before` / `sound_after` (seconds past the picture's edge,
     negative = short of it), `CutOp::SoundEdge { cut, end, t, most }` and
     `CutOp::SoundToPicture`. Trims carry them with the picture's edges
@@ -302,8 +302,8 @@ its pack 1, and the bin's skimmer is shared with the timeline's. Keys that
 clash with the 360 view (J/K/L, ↑/↓, E/Q, S) wait for the user's choice.
 
 
-**Pack 1 built 2026-11-02** (`9c66adf`, `ad950a1`, `d9d0bb9`, and
-`476645e` after the user's check: fade knobs kept 8 px inside so two at
+**Pack 1 built 2026-11-02** (`5fc9d46`, `1529683`, `5ee53d6`, and
+`40e6eb7` after the user's check: fade knobs kept 8 px inside so two at
 a join don't stack), confirmed by the user the same day (the yellow /
 red handles: «геніально»): edges a 24 px target (`EDGE` 12 px inside, a
 cut's as far outside; one `edge_of` for cuts, sound clips and items; a
@@ -314,7 +314,7 @@ readout by the pointer while trimming, moving, crossfading or fading.
 Defaults: a press on another clip's edge selects and moves it; pictures
 and text show yellow at their out edge (they have no end).
 
-**Pack 2 built 2026-11-02** (`774d7ca`, `f67b710`, `6e37dba`, and the
+**Pack 2 built 2026-11-02** (`68485ac`, `bdc0668`, `065610d`, and the
 toast's commit), confirmed by the user the same day: the crossfade
 readout says «← onto the cut before» while it's 0 (the user dragged it
 inwards, as a sound's fade in); Alt+[ / Alt+] trim the selected (else
@@ -323,7 +323,7 @@ place; Esc cancels a drag on the timeline (`Edit::cancel`,
 `drag_epoch`; not the effects sliders, iced's own); «… deleted · Undo»
 in the top bar for 6 s after a delete. From the check: gap 55.
 
-**Pack 3 done 2026-11-03** (`f6bc29c`), confirmed by the user 2026-11-04:
+**Pack 3 done 2026-11-03** (`9830d27`), confirmed by the user 2026-11-04:
 snapping across the timeline, one rule for every drag
 (`Timeline::snap`): within 12 px (raised from 8 at the user's word) of
 the edit's ends, the playhead, the pictures' joins, cuts' sounds split
@@ -756,7 +756,7 @@ effects per track».)
 
 **Decided 2026-11-09 (user).** An edit in the Effects panel no longer
 keys: a slider sets its effect for the whole cut or item
-(`KeyOp::EffectValue`, `2eae3ad`); no writing values on the fly.
+(`KeyOp::EffectValue`, `a604da1`); no writing values on the fly.
 Automation moves onto the Effects row, folding open into lanes, with
 **automation clips as in FL Studio**: a block on a parameter's lane over
 a stretch, holding a curve; outside it the slider's value holds. A clip
@@ -766,9 +766,9 @@ effect rows of their own: the same there. Old keys are read into clips.
 In the milestone «Ефекти, колір і розумний звук», after the Effects
 panel's layout is sorted (the user's next ask).
 
-**Built and checked 2026-11-10** (`cc1f84f` core, `62dc25e`
-cut lanes, `11e289a` values on points and in the sliders, marks on the
-folded row, `46a13ae` text and overlay lanes, `92ab325` an item's place
+**Built and checked 2026-11-10** (`3887bf8` core, `7a50066`
+cut lanes, `b9cd6c9` values on points and in the sliders, marks on the
+folded row, `b29b9e5` text and overlay lanes, `15cd453` an item's place
 under its own Motion row, folding): `automation.rs`
 (`AutoClip`: the value's name, from..to in clip or own time, eased
 points, `follows` if made from a track); `graded`/`placed` over the set
@@ -875,7 +875,7 @@ make further building simpler for us and divide the architecture
 nicely." The second pass after gap 35's refactor, now that sound clips,
 recording and the shared sound model (`project::Own`) are in. The result
 goes to `CORE-API.md`; the steps it proposes become commits here. Analysis
-done 2026-11-01 (`6dc04ea`): ten steps, tests first; it also found the
+done 2026-11-01 (`d351f51`): ten steps, tests first; it also found the
 contact sheet leaving a sound clip's own level out.
 
 ### 43. Editing-software best practices, colours, a switchable UI palette — research (user, 2026-11-01)
@@ -1194,12 +1194,12 @@ fresh GPU decoder starts in ~0.45 s, so the scrub copy in software (0.05
 s) stays. Order: measure the main thread's canvases, cache the timeline's
 still layers, scale on the GPU, then the Settings choice.
 
-**Measured and the first fix done 2026-11-04** (`6170ba2`), confirmed
+**Measured and the first fix done 2026-11-04** (`98b77c0`), confirmed
 by the user ("fire, mega smooth"; a short stutter, ~20 fps, only while a
 sound lane's level changes and its waveform is drawn anew): the lanes' canvas took 40 ms a frame (79 fullscreen),
 nearly all the waveforms; the sound lanes are now drawn once and kept
 (`canvas::Cache`, keyed by a hash of what they show). The main thread
-went from 100 % to 10-30 % while playing and dragging. Then (`648eda5`, `3b1958d`,
+went from 100 % to 10-30 % while playing and dragging. Then (`0141f98`, `8ff32b3`,
 confirmed by the user on the Kos clips): with CUDA the frame is
 scaled on the GPU before it comes down (`scale_cuda`), 63-73 % of a core
 -> 14-15 % for 4K and 2.7K in the bench. Left: the Settings choice. Not now (user, 2026-11-04,
@@ -1328,13 +1328,13 @@ published some day), separate from Omnix because their needs differ:
 media from cards and phones into a staging place (TMP), chosen in the
 contact sheet, then moved into a categorised archive (disks, buckets;
 one copy now, two later) and an Omnix project. Repo
-`../dailix`, context `docs/CONTEXT.md` there (what moves
+`../dailix`, its context notes there (what moves
 over from Python and how, the open decisions). Shares data with Omnix
 (`notes.json`, sidecars, the folder tree), later a small common crate.
 Takes in gap 34 (import from devices) and 61 (the sheet standalone).
 Milestone «Матеріал і бін». Built so far: the contact sheet's core
 (2026-11-04, `docs/SHEET-CORE.md`; Omnix's bin runs on it,
-`587229d`), its window (culling, marking keys, Omnix's player beside),
+`6f7817f`), its window (culling, marking keys, Omnix's player beside),
 Home of trips with their videos and days (gap 82), Settings, a new
 trip; Kos is its first project. Still to do, by its own context: the
 parity steps (voice clean-up 77 among them) before the web sheet
@@ -1399,9 +1399,9 @@ Milestone «Ритм і переходи».
 The card «Osmo 360 II» (milestone «Якість 360») had no number. The user's
 360 camera will be an Osmo 360 or Osmo 360 II, not before ~2027-02. With
 it: its lens calibration read as the Osmo 360's is, and decoding 8K50
-fast enough (about twice the Osmo 360's frames; `CONTEXT.md` «Machine»
+fast enough (about twice the Osmo 360's frames; the context notes' «Machine»
 measured ~2× headroom on the 3060, unverified). A raw Osmo 360 II sample
-exists (found 2026-11-09, `CONTEXT.md` «Samples»): its calibration and
+exists (found 2026-11-09, the context notes' «Samples»): its calibration and
 decoding can be tried on it before the camera comes.
 
 ### 95. Text: its own colour, letter spacing, a box behind it — idea (Claude's UI review, 2026-11-10)
@@ -1527,7 +1527,7 @@ outside it), read either way so old edits keep opening; or, on a
 missing clip, look for it at the same place inside the edit's trip.
 Before publishing, since a user's first move of a trip would hit it.
 
-**Built 2026-11-14, waits for the user's check** (Omnix `5f06f59`): the first way.
+**Built 2026-11-14, waits for the user's check** (Omnix `a0d12f4`): the first way.
 `project::stored` keeps what's inside the trip relative through it,
 `resolved` makes it whole again without `..`; old edits open as before
 and are written the new way on their next save.
@@ -1537,11 +1537,11 @@ and are written the new way on their next save.
 - The bin shows its trip's whole path (`/home/<user>/…`), long and
   personal in a screenshot: as Dailix does, `~` for the home folder,
   cut in the middle when long.
-- Done (`20a88ce`): «No speech to lower the music under…» didn't say how to get it: a
+- Done (`40bc3e8`): «No speech to lower the music under…» didn't say how to get it: a
   clip's own sound counts as speech only once its menu's «Its own sound
   is speech» is ticked (`duck.rs`, `tracks.rs:361`); the message
   should name it.
-- Done (Dailix `43fb6dc`): the Trips place's default folder was
+- Done (Dailix `20d73b4`): the Trips place's default folder was
   `~/Dailix/projects`, now `~/Dailix/trips`; Dailix's README named the
   places «TMP, dailix, sources».
 
@@ -1554,7 +1554,7 @@ shots are taken at 1440×900 meanwhile. To fit: the switches as icons
 with their names in tooltips when the room is short, or a second
 row, or the less used into a ⋯; the user's choice when it's built.
 
-**Built 2026-11-15, waits for the user's check** (`7be162e`): the user
+**Built 2026-11-15, waits for the user's check** (`242e49e`): the user
 chose icons. Measured, the row needs ~1700 px in full, ~1520 compact;
 `bar_fit` picks: in full, compact (the switches as icons, the zoom
 without its slider), or the zoom and the sound on a second line at its
@@ -1568,8 +1568,8 @@ The built-in roles of a segment read «фон / B-roll», «розмова / syn
 English, and so in the guide's pictures (seen on the tutorial's first
 part). English names (B-roll, Sync, Establishing, Insert, Cutaway,
 Action, Reveal, Reaction; «No role»); the keys stay, so every sheet
-and edit reads as before. Built 2026-11-14 (Omnix `689fff1`, Dailix
-`4e0748f`), with the last Ukrainian a user could see, found by a search
+and edit reads as before. Built 2026-11-14 (Omnix `17968cf`, Dailix
+`56a23ea`), with the last Ukrainian a user could see, found by a search
 of both repos: the app menu's description of Dailix. The guide's
 segment GIF shot again. Whether Ukrainian comes back (a language
 setting later) is the user's call.

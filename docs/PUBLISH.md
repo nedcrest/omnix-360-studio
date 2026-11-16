@@ -131,9 +131,10 @@ versions from scratch, the user, 2026-11-15; rOsmo360 released its own
    guide's 22 pictures were «all rights reserved» by their author.
    Done: the guide and the README show Omnix's own pictures now.
 3. **The working docs**: the AI page points at the roadmap, gaps and
-   audits; `CONTEXT.md` (both) and the code rules hold personal paths
-   and private notes (a passwords file's place in Dailix's). Cleaned and
-   published, or kept out — his decision, before the first push.
+   audits. Decided 2026-11-16: everything else is shown, the roadmap
+   too; the two `CONTEXT.md` (a working diary) moved out of both repos
+   and their histories, into each repo's `.analysis/`, backed up in a
+   private notes repo.
 4. **`CLAUDE.md` at Omnix's root is rOsmo360's** 125 KB maintainer notes
    («paths and footage you won't have»): replaced by Omnix's own short
    one (it points at `AGENTS.md` and the skills), rOsmo360's kept in

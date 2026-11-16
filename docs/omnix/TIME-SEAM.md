@@ -207,39 +207,39 @@ must be as before.
    ops, the timeline (every pixel's hit, lanes folded and open),
    `describe`, the speech sources, the measured sound and the export's
    plan and mix graph (`tests/golden/time-*.txt`, `src/time_snapshot.rs`;
-   commits `e34de18`, `d6c0383`, `fa9373e`); the player's crossfade,
-   scrub and trim maths in the core (`84ae21c`); the site checklist
+   commits `c861687`, `6967f4b`, `ccd3da1`); the player's crossfade,
+   scrub and trim maths in the core (`ea97943`); the site checklist
    (`TIME-SEAM-SITES.md`). `check` and `preview` read media and are
    tested before they move (step 5).
 1. `Speed` + the `Cut` functions, tested at 0.5×/2× — **done 2026-11-12**
-   (`6787c34`): `len()` stays until step 2 moves its callers one by
+   (`5e36a84`): `len()` stays until step 2 moves its callers one by
    one onto `edit_len` or `clip_len`, then goes; the core's offsets,
    locate, edit time and crossfade partner already use the seam.
 2. Core: `offsets`, `edit_length`, `locate`, `edit_time`, `crossfade_from`,
    `max_crossfade`, `black_at`, `edge_at`, `sound_fades`, `sound_beyond`
    placement, `kept_picture` / `follow_picture`, `drawn_zone`, `MIN_CUT`
-   checks in ops. Sync-lock tests at 2×. — **done 2026-11-15** (`b3db0a8`,
-   `ba7b2f0`, `5e0e4b5`): `Cut::len` gone, each caller chose its clock;
+   checks in ops. Sync-lock tests at 2×. — **done 2026-11-15** (`af1f743`,
+   `23f3905`, `8f64bc1`): `Cut::len` gone, each caller chose its clock;
    fades, edge looks, sync lock, black, `MIN_CUT` through the seam; tests
    at 2× (a fast cut fades and edges like a slow one half as long; sync
    lock after a fast cut's trim; the shortest piece at 2×).
 3. Timeline: `Block` / `Owner` over the seam, drags through edit seconds,
    snap targets, zones, thumbnails, the sound cache key. — **done
-   2026-11-15** (`c0dd9ad`); the cut's own sound drawn in its span
+   2026-11-15** (`6cbda6b`); the cut's own sound drawn in its span
    (volume line, waveform, fades) waits for 31, which plays it at speed.
 4. Player: transport (scrub, crossfade shares, `follow_crossfade`), keys,
    effects `focus`, cuts `trim_to`, info, labels. — **done 2026-11-15**
-   (`35ceb45`): labels, Info, Effects focus; the rest already went
+   (`2a4d453`): labels, Info, Effects focus; the rest already went
    through the core; frame steps, preroll and the clock are media (31).
 5. Agents and CLI: `describe`, `check`, `preview`, `duck`, `ops/auto`
-   follow, `mixmeasure` windows. — **done 2026-11-15** (`d81e496`;
+   follow, `mixmeasure` windows. — **done 2026-11-15** (`cf9f68e`;
    `ops/auto` in step 2); `duck`'s speech is sound, 31.
 6. Export: the frame plan and the per-frame clip time through the seam
    (the decode itself stays 1:1 until 31). — **done 2026-11-15**
-   (`13adabc`).
+   (`3116c26`).
 7. A guard test: no `end - start` / `+ t - start` on a cut outside the
    seam (a source scan), so new code can't go around it. — **done
-   2026-11-15** (`385b9f3`, `time_snapshot::no_cut_time_is_worked_out_around_the_seam`).
+   2026-11-15** (`1425f88`, `time_snapshot::no_cut_time_is_worked_out_around_the_seam`).
    The seam is in; card 31 (media at speed) is what's left.
 
 Every step: all 336 tests pass unchanged at 1×; the user's check is that

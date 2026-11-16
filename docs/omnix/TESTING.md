@@ -2,7 +2,7 @@
 
 Gap 42 (user, 2026-11-01): "an analysis for unit and integration
 testing; where we don't have such tests, add them, so refactoring and
-improving happen more calmly". Analysis at `9381768`. The «Added» table
+improving happen more calmly". Analysis at `2b43760`. The «Added» table
 at the end follows the work; rewrite it, don't append below it.
 
 ## How tests run here
@@ -166,30 +166,30 @@ them the live microphone and ignored; 3 end to end). `cargo test
 
 | Plan | Test | Commit |
 |---|---|---|
-| 1 | `a_project_saved_elsewhere_still_finds_its_clips`, with the fix | `8ac74fa` |
-| 2, 3 | `old_project_files_still_load` (`tests/fixtures/`), `save_names_paths_from_the_project_and_reads_back_the_same` | `8c47aee` |
-| 4 | `the_exports_volume_line_sounds_as_the_player_draws_it` [ff] | `ac1f9e8` |
-| 5 | `the_export_fades_sound_clips_as_the_player_does`, `the_export_cuts_a_clip_off_at_the_edits_end_as_the_player_does` [ff], with the fix | `562f65c` |
-| 6 | `crossfades_share_frames_within_what_each_cut_has` (the frame plan taken out of `export()`) | `f63a2e1` |
-| 7 | `the_outgoing_tail_blends_into_the_incoming_head`, `sixteen_bit_frames_blend_at_their_own_depth` | `ae825b7` |
-| 8–10 | `tests/cli.rs`: export with crossfade and music, a file per cut with handles, `check` [ff] | `e6add7a` |
-| 11, 12, 16, 17, 24 | sound clip placement, `reach`, volume points, `continue_level`, fades at their edges | `2988c09` |
-| 13–15 | crossfades after remove and insert, edit time round trip, `moved_index` | `8491a7a` |
-| 18, 19 | timeline rows at every scale; what a press finds (cuts, edges, fades, points, lines), with the fix | `03f85dc` |
-| 20 | a cache entry cut short anywhere is a miss | `8a8f0a3` |
-| 21 | `replace_file`: permissions, links, no temp file left | `227cb0d` |
-| 22 | the Normalize dialog run whole without a window: one undo step, cancel, a track's clips | `e920fb3` |
-| 23 | the cuts' sound graph: pad, crossfade, join, silence | `464b925` |
-| — | auto-duck's speech finding and line (`duck.rs`), the level rules (`mixdown.rs`) | `4cdec41`, `7105eef` |
+| 1 | `a_project_saved_elsewhere_still_finds_its_clips`, with the fix | `8e142d1` |
+| 2, 3 | `old_project_files_still_load` (`tests/fixtures/`), `save_names_paths_from_the_project_and_reads_back_the_same` | `d9fc589` |
+| 4 | `the_exports_volume_line_sounds_as_the_player_draws_it` [ff] | `5d58b04` |
+| 5 | `the_export_fades_sound_clips_as_the_player_does`, `the_export_cuts_a_clip_off_at_the_edits_end_as_the_player_does` [ff], with the fix | `4d37b3b` |
+| 6 | `crossfades_share_frames_within_what_each_cut_has` (the frame plan taken out of `export()`) | `e6dee71` |
+| 7 | `the_outgoing_tail_blends_into_the_incoming_head`, `sixteen_bit_frames_blend_at_their_own_depth` | `3570135` |
+| 8–10 | `tests/cli.rs`: export with crossfade and music, a file per cut with handles, `check` [ff] | `f6ca4e6` |
+| 11, 12, 16, 17, 24 | sound clip placement, `reach`, volume points, `continue_level`, fades at their edges | `d20a46f` |
+| 13–15 | crossfades after remove and insert, edit time round trip, `moved_index` | `530695a` |
+| 18, 19 | timeline rows at every scale; what a press finds (cuts, edges, fades, points, lines), with the fix | `521df5d` |
+| 20 | a cache entry cut short anywhere is a miss | `e22d2ba` |
+| 21 | `replace_file`: permissions, links, no temp file left | `d957b69` |
+| 22 | the Normalize dialog run whole without a window: one undo step, cancel, a track's clips | `e1c6dcf` |
+| 23 | the cuts' sound graph: pad, crossfade, join, silence | `59867b5` |
+| — | auto-duck's speech finding and line (`duck.rs`), the level rules (`mixdown.rs`) | `ef79369`, `73cb3e8` |
 
 **Bugs the tests found, all fixed:**
 - A project opened by a relative path, saved elsewhere, lost its clips
-  (`8ac74fa`).
+  (`8e142d1`).
 - Sound clips cut off by the edit's end sounded different in the export
-  than in the player, up to 6 dB (`562f65c`).
+  than in the player, up to 6 dB (`4d37b3b`).
 - A level dragged near 0 dB snapped to 0 within 3 px: ±5.7 dB on the clip
   sound lane, so −3 dB couldn't be set there; now ±1 dB on any lane
-  (`03f85dc`).
+  (`521df5d`).
 
 **Not covered, and why:** drawing (iced's canvas needs a window), the GPU
 paths beyond `render::tests`' CPU comparisons, decoding and playback

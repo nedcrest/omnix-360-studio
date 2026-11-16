@@ -157,7 +157,7 @@ when the two were made to build each from one clone for publishing
 
 ## The plan, a local commit per step
 
-1. **Workspace and model** — done 2026-11-04 (`0e540b5`). `crates/sheet` with the typed model, the
+1. **Workspace and model** — done 2026-11-04 (`7be89fd`). `crates/sheet` with the typed model, the
    unknown kept, `Time`'s integers, load and save. Tests: a synthetic
    sheet read and written byte for byte; every shape of mark; unknown
    fields at each level kept. A one-off check on a scratch copy of Kos's
@@ -197,13 +197,13 @@ when the two were made to build each from one clone for publishing
    mark: Kos's day reads at a glance), `schema [ops|sheet]`. Tests: the
    text view, the schemas, and the binary end to end (ops applied,
    described, a refused run writing nothing).
-7. **Omnix on the core** — done 2026-11-04 (Omnix `587229d`). Its
+7. **Omnix on the core** — done 2026-11-04 (Omnix `6f7817f`). Its
    `notes.rs` keeps only Omnix's side (where a project's sheet is, a clip
    file's key) and goes through `Store` and ops by id; 176 + 10 tests
    pass. Omnix depends on `../dailix/crates/sheet` by path.
 8. **Docs** — done: this page, both contexts, the roadmap.
 
-The studio's window came next, on this core, and is built (`docs/CONTEXT.md`).
+The studio's window came next, on this core, and is built (Dailix).
 
 ## Decided (user, 2026-11-04)
 

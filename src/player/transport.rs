@@ -581,6 +581,7 @@ impl App {
             Message::Tick => {
                 self.tick();
                 self.tick_source();
+                self.speed_tick();
                 if self.playing() {
                     self.reveal_playhead();
                 }
@@ -600,6 +601,8 @@ impl App {
             Message::TimelinePan(start) => self.timeline_start = start,
             // Space while the bin shows a clip plays that clip.
             Message::Toggle if self.bin.view && self.bin.source.is_some() => return self.on_source(bin_player::SourceMsg::Toggle),
+            // The speed window open: Play plays its curve (as Space there).
+            Message::Toggle if self.speed_edit.is_some() => return self.update(Message::Speed(super::speed_window::SpeedMsg::Toggle)),
             Message::Toggle => {
                 self.pause_source();
                 self.follow = true;

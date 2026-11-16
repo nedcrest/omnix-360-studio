@@ -108,12 +108,13 @@ impl App {
             return Some(if escape { self.update(Message::Sound(sound_ui::SoundMsg::Cancel)) } else { Task::none() });
         }
         // The speed window open: Esc lets it go, Delete takes its point
-        // away, Home, End and the arrows move its playhead; the rest wait
-        // (the cut plays at its old speed till Done).
+        // away, Space plays the curve, Home, End and the arrows move its
+        // playhead; the rest wait.
         if self.speed_edit.is_some() {
             return Some(match key.as_ref() {
                 Key::Named(Named::Escape) => self.update(Message::Speed(speed_window::SpeedMsg::Close(false))),
                 Key::Named(Named::Delete | Named::Backspace) => self.update(Message::Speed(speed_window::SpeedMsg::Remove)),
+                Key::Named(Named::Space) => self.update(Message::Speed(speed_window::SpeedMsg::Toggle)),
                 // The window's playhead: to the start, the end, a frame on or back.
                 Key::Named(Named::Home) => self.update(Message::Speed(speed_window::SpeedMsg::Head(0.0))),
                 Key::Named(Named::End) => self.update(Message::Speed(speed_window::SpeedMsg::Head(f64::INFINITY))),

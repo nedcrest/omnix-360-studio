@@ -45,6 +45,9 @@ pub struct SpeedEdit {
     /// The window's own playhead, joined footage time: the picture above
     /// shows its frame (the user, 2026-11-16).
     pub head: f64,
+    /// The cuts' length on the edit when it opened (Space applies the
+    /// curve as it plays, so the cuts can't say it).
+    pub was: f64,
 }
 
 #[derive(Debug, Clone)]
@@ -62,6 +65,8 @@ pub enum SpeedMsg {
     /// pressed or dragged, Home, End), or on by `.0` edit seconds (← →).
     Head(f64),
     Step(f64),
+    /// Space: the cuts played at the curve as it is, or paused.
+    Toggle,
     /// The key picked taken away; or key `.0` (a right-click on it).
     Remove,
     RemoveAt(usize),
@@ -382,14 +387,15 @@ impl App {
         let edit = self.speed_edit.as_ref()?;
         let cuts: Vec<&Cut> = edit.cuts.iter().filter_map(|id| self.edit.cuts.iter().find(|c| c.id == *id)).collect();
         let length = offsets(&edit.spans).last().copied().unwrap_or(0.0);
-        let curve = canvas_widget(Curve { draft: &edit.draft, spans: &edit.spans, picked: edit.picked, head: edit.head }).width(Length::Fill).height(HEIGHT);
-        let was: f64 = cuts.iter().map(|c| c.edit_len()).sum();
+        let head = self.live_head().unwrap_or(edit.head);
+        let curve = canvas_widget(Curve { draft: &edit.draft, spans: &edit.spans, picked: edit.picked, head }).width(Length::Fill).height(HEIGHT);
+        let was = edit.was;
         let m = |s: SpeedMsg| Message::Speed(s);
         let side = column![
             text(format!("Footage  {length:.2} s")).size(13),
             text(format!("Edit  {:.2} s", edit.draft.edit_secs(0.0, length))).size(13),
             text(format!("(was  {was:.2} s)")).size(12).style(text::secondary),
-            tip(text(format!("Playhead  {:.2} s · {:.2} s", edit.head, edit.draft.edit_secs(0.0, edit.head))).size(12), text("The window's playhead: footage seconds · edit seconds. Drag it on a ruler"), tooltip::Position::Left),
+            tip(text(format!("Playhead  {:.2} s · {:.2} s", head, edit.draft.edit_secs(0.0, head))).size(12), text("The window's playhead: footage seconds · edit seconds. Drag it on its strip; Space plays the curve"), tooltip::Position::Left),
             space().height(8),
             button(text("Slow in the middle").size(13)).style(button::secondary).width(Length::Fill).on_press(m(SpeedMsg::Preset(Preset::SlowMiddle))),
             button(text("Ramp to the cut").size(13)).style(button::secondary).width(Length::Fill).on_press(m(SpeedMsg::Preset(Preset::RampToCut))),
@@ -448,10 +454,27 @@ impl App {
         if let SpeedMsg::Open(id) = message {
             return self.open_speed(id);
         }
+        if matches!(message, SpeedMsg::Toggle) {
+            return self.play_speed();
+        }
+        // The curve changed while playing: paused where it is (what plays
+        // is the curve as it was), the window's playhead there. The
+        // playhead moved while playing: it plays on from there.
+        let playing = self.live_head();
+        let moves_head = matches!(message, SpeedMsg::Head(_) | SpeedMsg::Step(_));
+        if let Some(t) = playing {
+            if !moves_head {
+                self.with_playback(super::playback::Playback::pause);
+            }
+            if let Some(edit) = self.speed_edit.as_mut() {
+                edit.head = t;
+            }
+        }
         let Some(edit) = self.speed_edit.as_mut() else { return };
         let length = offsets(&edit.spans).last().copied().unwrap_or(0.0);
         let mut look = None;
         match message {
+            SpeedMsg::Toggle => {}
             SpeedMsg::Open(_) => {}
             SpeedMsg::Close(apply) => return self.close_speed(apply),
             SpeedMsg::Head(t) => look = Some(t.clamp(0.0, length)),
@@ -490,8 +513,71 @@ impl App {
         }
         if let Some(t) = look {
             edit.head = t;
-            self.show_footage(t);
+            self.show_footage(t, playing.is_some() && moves_head);
         }
+    }
+
+    /// Each tick while the window plays: past its cuts (into the next
+    /// cut on the edit), paused at their end, the window's playhead there.
+    pub(super) fn speed_tick(&mut self) {
+        let Some(edit) = &self.speed_edit else { return };
+        let playing = self.clip.as_ref().is_some_and(|c| c.playback.playing);
+        if !playing || self.live_head().is_some() {
+            return;
+        }
+        let end = offsets(&edit.spans).last().copied().unwrap_or(0.0);
+        self.with_playback(super::playback::Playback::pause);
+        if let Some(edit) = self.speed_edit.as_mut() {
+            edit.head = end;
+        }
+        self.show_footage(end, false);
+    }
+
+    /// Where the playback is in the cuts edited, joined footage time, while
+    /// it plays one of them: the window's playhead follows it.
+    fn live_head(&self) -> Option<f64> {
+        let edit = self.speed_edit.as_ref()?;
+        let playing = self.clip.as_ref().is_some_and(|c| c.playback.playing);
+        let (cut, t) = self.playing_cut().filter(|_| playing)?;
+        let k = edit.cuts.iter().position(|&id| id == cut.id)?;
+        let (start, end) = edit.spans[k];
+        Some(offsets(&edit.spans)[k] + t.clamp(start, end) - start)
+    }
+
+    /// Space: paused where it plays; else the curve applied to the cuts as
+    /// it is (inside the window's open undo step, so Cancel still takes it
+    /// back) and played from the window's playhead, picture and sound at
+    /// its speed.
+    fn play_speed(&mut self) {
+        if let Some(t) = self.live_head() {
+            self.with_playback(super::playback::Playback::pause);
+            if let Some(edit) = self.speed_edit.as_mut() {
+                edit.head = t;
+            }
+            return;
+        }
+        if self.apply_speed() {
+            // From the end, from the start again (as the edit's Play does).
+            let Some(edit) = self.speed_edit.as_mut() else { return };
+            let end = offsets(&edit.spans).last().copied().unwrap_or(0.0);
+            if edit.head >= end - 0.05 {
+                edit.head = 0.0;
+            }
+            let head = edit.head;
+            self.show_footage(head, true);
+        }
+    }
+
+    /// The curve as it is applied to each cut, its share and the pitch
+    /// (the window's undo step stays open); false if a cut refused it
+    /// (said).
+    fn apply_speed(&mut self) -> bool {
+        let Some(edit) = &self.speed_edit else { return false };
+        let (cuts, shares, tape) = (edit.cuts.clone(), split(&edit.draft, &edit.spans), edit.draft.tape);
+        cuts.into_iter().zip(shares).all(|(cut, speed)| {
+            let keys = if speed.is_normal() { Vec::new() } else { speed.keys };
+            self.op(Op::Cut(CutOp::SpeedCurve { cut, keys })).is_some() && self.op(Op::Cut(CutOp::TapePitch { cut, on: tape })).is_some()
+        })
     }
 
     /// Opens the window on cut `id` and the cuts selected side by side
@@ -505,44 +591,39 @@ impl App {
         }
         let spans: Vec<(f64, f64)> = cuts.iter().map(|c| (c.start, c.end)).collect();
         let draft = joined(&cuts.iter().map(|c| &c.speed).collect::<Vec<_>>(), &spans);
-        self.speed_edit = Some(SpeedEdit { cuts: cuts.iter().map(|c| c.id).collect(), spans, draft, picked: None, head: 0.0 });
+        let was = cuts.iter().map(|c| c.edit_len()).sum();
+        self.speed_edit = Some(SpeedEdit { cuts: cuts.iter().map(|c| c.id).collect(), spans, draft, picked: None, head: 0.0, was });
+        // One undo step for all the window does, played or applied.
+        self.edit.commit();
+        self.edit.begin();
         // The picture on the cuts edited, from their start (it stayed where
         // the playhead was, on another cut; the user, 2026-11-16).
-        self.show_footage(0.0);
+        self.show_footage(0.0, false);
     }
 
-    /// The picture above at joined footage time `t`: its cut, its clip time.
-    fn show_footage(&mut self, t: f64) {
+    /// The picture above at joined footage time `t`: its cut, its clip
+    /// time; played from there if `play`.
+    fn show_footage(&mut self, t: f64, play: bool) {
         let Some(edit) = &self.speed_edit else { return };
         let at = offsets(&edit.spans);
         let k = at.windows(2).position(|w| t < w[1]).unwrap_or(edit.spans.len().saturating_sub(1));
         let (Some(&id), Some(&(start, end))) = (edit.cuts.get(k), edit.spans.get(k)) else { return };
         if let Some(i) = self.edit.cuts.iter().position(|c| c.id == id) {
-            self.goto(i, (start + t - at[k]).clamp(start, end), false);
+            self.goto(i, (start + t - at[k]).clamp(start, end), play);
         }
     }
 
-    /// Closes the window, each cut's share of the curve and the pitch
-    /// applied as one undo step (refused: said, and the window stays), or
-    /// let go.
+    /// Closes the window: the curve applied to each cut and the window's
+    /// undo step closed (refused: said, and the window stays), or the step
+    /// dropped, what was played applied taken back too.
     fn close_speed(&mut self, apply: bool) {
-        let Some(edit) = self.speed_edit.take() else { return };
-        if !apply {
+        self.with_playback(super::playback::Playback::pause);
+        if apply && !self.apply_speed() {
             return;
         }
-        self.edit.begin();
-        let mut done = true;
-        for (&cut, speed) in edit.cuts.iter().zip(split(&edit.draft, &edit.spans)) {
-            let keys = if speed.is_normal() { Vec::new() } else { speed.keys };
-            done = done && self.op(Op::Cut(CutOp::SpeedCurve { cut, keys })).is_some() && self.op(Op::Cut(CutOp::TapePitch { cut, on: edit.draft.tape })).is_some();
-        }
-        if done {
-            self.edit.commit();
-            self.reload_cut_sound();
-        } else {
-            self.edit.cancel();
-            self.speed_edit = Some(edit);
-        }
+        self.speed_edit = None;
+        if apply { self.edit.commit() } else { self.edit.cancel() }
+        self.reload_cut_sound();
     }
 }
 
@@ -654,6 +735,28 @@ mod tests {
         let _ = app.update(speed(SpeedMsg::Head(1.0)));
         let _ = app.update(speed(SpeedMsg::Step(0.1)));
         assert!((head(&app) - 1.2).abs() < 1e-9, "{}", head(&app));
+    }
+
+    /// Space applies the curve to the cut as it plays, inside the window's
+    /// open undo step: Cancel takes it back, Done after playing is one
+    /// step; the length it opened with stays said as «was».
+    #[test]
+    fn playing_applies_the_curve_and_cancel_takes_it_back() {
+        let mut app = app();
+        let id = app.edit.cuts[0].id;
+        let speed = |m| Message::Speed(m);
+        let _ = app.update(speed(SpeedMsg::Open(id)));
+        let _ = app.update(speed(SpeedMsg::Preset(Preset::RampToCut)));
+        let _ = app.update(speed(SpeedMsg::Toggle));
+        assert!(!app.edit.cuts[0].speed.is_default() && app.edit.changing(), "applied, the step open");
+        assert_eq!(app.speed_edit.as_ref().unwrap().was, 2.0);
+        let _ = app.update(speed(SpeedMsg::Close(false)));
+        assert!(app.edit.cuts[0].speed.is_default() && !app.edit.changing() && !app.edit.undo(), "Cancel: as it was, no step");
+        let _ = app.update(speed(SpeedMsg::Open(id)));
+        let _ = app.update(speed(SpeedMsg::Preset(Preset::RampToCut)));
+        let _ = app.update(speed(SpeedMsg::Toggle));
+        let _ = app.update(speed(SpeedMsg::Close(true)));
+        assert!(!app.edit.cuts[0].speed.is_default() && app.edit.undo() && app.edit.cuts[0].speed.is_default() && !app.edit.undo(), "one step");
     }
 
     /// Two cuts selected side by side take one curve; Done gives each its

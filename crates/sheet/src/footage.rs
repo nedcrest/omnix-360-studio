@@ -92,6 +92,15 @@ pub fn sidecar_source(path: &Path) -> Option<String> {
     doc["source"].as_str().map(str::to_owned)
 }
 
+/// A video's file endings, lower case: what Omnix's bin, Dailix's TMP and
+/// its «Add videos…» take as videos (one list, not three).
+pub const VIDEO_EXT: &[&str] = &["mp4", "mov", "mkv", "m4v", "avi", "mts", "webm", "osv", "insv"];
+
+/// Whether `path` ends as a video does (in any capitals).
+pub fn is_video(path: &Path) -> bool {
+    path.extension().and_then(|e| e.to_str()).is_some_and(|e| VIDEO_EXT.contains(&e.to_lowercase().as_str()))
+}
+
 /// Whether `s` is a day as the footage's folders name them: `YYYY-MM-DD`.
 pub fn is_day(s: &str) -> bool {
     let b = s.as_bytes();
@@ -164,6 +173,12 @@ mod tests {
         assert_eq!(day_of("clip.mp4", None), None);
         // Odd dates said in the file: none, not a panic or a folder of junk.
         assert_eq!((day_of("clip.mp4", Some("2026-08-1é")), day_of("clip.mp4", Some("2026-ab-cdT0")), day_of("clip.mp4", Some("2026"))), (None, None, None));
+    }
+
+    #[test]
+    fn a_video_is_known_by_its_ending_in_any_capitals() {
+        assert!(is_video(Path::new("/t/DJI_0001.MP4")) && is_video(Path::new("a.insv")) && is_video(Path::new("x.Mov")));
+        assert!(!is_video(Path::new("DJI_0001.LRF")) && !is_video(Path::new("song.mp3")) && !is_video(Path::new("mp4")));
     }
 
     #[test]

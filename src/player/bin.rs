@@ -76,7 +76,7 @@ pub(super) const SECTIONS: [(&str, Kind, &[&str]); 6] = [
     ("Pictures", Kind::Picture, &[dailix_sheet::layout::PICTURES, dailix_sheet::layout::OLD_PICTURES]),
 ];
 
-pub(super) const CLIP_EXT: &[&str] = &["mp4", "mov", "mkv", "m4v", "avi", "mts", "webm", "osv", "insv"];
+pub(super) const CLIP_EXT: &[&str] = dailix_sheet::footage::VIDEO_EXT;
 pub(super) const SOUND_EXT: &[&str] = &["mp3", "flac", "wav", "m4a", "aac", "ogg", "opus", "wma"];
 pub(super) const PICTURE_EXT: &[&str] = &["png", "jpg", "jpeg", "webp", "bmp", "tif", "tiff"];
 

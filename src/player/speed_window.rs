@@ -38,6 +38,9 @@ pub struct SpeedEdit {
     pub spans: Vec<(f64, f64)>,
     pub draft: Speed,
     pub picked: Option<usize>,
+    /// The window's own playhead, joined footage time: the picture above
+    /// shows its frame (the user, 2026-11-16).
+    pub head: f64,
 }
 
 #[derive(Debug, Clone)]
@@ -51,6 +54,9 @@ pub enum SpeedMsg {
     Pick(usize),
     /// Key `.0` dragged to footage time `.1`, rate `.2`.
     Move(usize, f64, f64),
+    /// The window's playhead to footage time `.0` (a ruler pressed or
+    /// dragged).
+    Head(f64),
     /// The key picked taken away; or key `.0` (a right-click on it).
     Remove,
     RemoveAt(usize),
@@ -186,11 +192,21 @@ fn rate(y: f32) -> f64 {
     2f64.powf(lo + (1.0 - ((y - RULER) / CURVE).clamp(0.0, 1.0)) as f64 * (hi - lo))
 }
 
-/// The curve, its rulers, the joins and the points.
+/// The curve, its rulers, the joins, the points and the playhead.
 struct Curve<'a> {
     draft: &'a Speed,
     spans: &'a [(f64, f64)],
     picked: Option<usize>,
+    head: f64,
+}
+
+/// What a press holds: a key, or the playhead (a ruler pressed).
+#[derive(Default, Clone, Copy, PartialEq)]
+enum Hold {
+    #[default]
+    Nothing,
+    Key(usize),
+    Head,
 }
 
 impl Curve<'_> {
@@ -205,44 +221,53 @@ impl Curve<'_> {
 }
 
 impl canvas::Program<Message> for Curve<'_> {
-    /// The key being dragged.
-    type State = Option<usize>;
+    type State = Hold;
 
-    fn update(&self, drag: &mut Option<usize>, event: &iced::Event, bounds: Rectangle, cursor: mouse::Cursor) -> Option<canvas::Action<Message>> {
+    fn update(&self, hold: &mut Hold, event: &iced::Event, bounds: Rectangle, cursor: mouse::Cursor) -> Option<canvas::Action<Message>> {
         use iced::Event::Mouse;
         let send = |m: SpeedMsg| Some(canvas::Action::publish(Message::Speed(m)).and_capture());
         let map = self.map(bounds.width);
         match event {
             Mouse(mouse::Event::ButtonPressed(button)) => {
-                let p = cursor.position_in(bounds).filter(|p| p.y >= RULER && p.y <= RULER + CURVE)?;
+                let p = cursor.position_in(bounds)?;
+                // On a ruler: the playhead, dragged from there.
+                if !(RULER..=RULER + CURVE).contains(&p.y) {
+                    (*button == mouse::Button::Left).then_some(())?;
+                    *hold = Hold::Head;
+                    return send(SpeedMsg::Head(map.t(p.x)));
+                }
                 match (button, self.key_at(&map, p)) {
                     (mouse::Button::Right, Some(k)) => send(SpeedMsg::RemoveAt(k)),
                     (mouse::Button::Left, Some(k)) => {
-                        *drag = Some(k);
+                        *hold = Hold::Key(k);
                         send(SpeedMsg::Pick(k))
                     }
                     // A new point, held by the pointer till let go.
                     (mouse::Button::Left, None) => {
                         let t = map.t(p.x);
-                        *drag = Some(self.draft.keys.iter().position(|k| k.t > t).unwrap_or(self.draft.keys.len()));
+                        *hold = Hold::Key(self.draft.keys.iter().position(|k| k.t > t).unwrap_or(self.draft.keys.len()));
                         send(SpeedMsg::Put(t, rate(p.y)))
                     }
                     _ => None,
                 }
             }
             Mouse(mouse::Event::CursorMoved { position }) => {
-                let k = (*drag)?;
-                send(SpeedMsg::Move(k, map.t(position.x - bounds.x), rate(position.y - bounds.y)))
+                let (x, y) = (position.x - bounds.x, position.y - bounds.y);
+                match *hold {
+                    Hold::Key(k) => send(SpeedMsg::Move(k, map.t(x), rate(y))),
+                    Hold::Head => send(SpeedMsg::Head(map.t(x))),
+                    Hold::Nothing => None,
+                }
             }
-            Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) if drag.is_some() => {
-                *drag = None;
+            Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) if *hold != Hold::Nothing => {
+                *hold = Hold::Nothing;
                 Some(canvas::Action::request_redraw().and_capture())
             }
             _ => None,
         }
     }
 
-    fn draw(&self, _drag: &Option<usize>, renderer: &Renderer, theme: &Theme, bounds: Rectangle, _cursor: mouse::Cursor) -> Vec<Geometry> {
+    fn draw(&self, _hold: &Hold, renderer: &Renderer, theme: &Theme, bounds: Rectangle, _cursor: mouse::Cursor) -> Vec<Geometry> {
         let mut frame = Frame::new(renderer, bounds.size());
         let ink = theme.extended_palette().background.base.text;
         let map = self.map(bounds.width);
@@ -262,13 +287,21 @@ impl canvas::Program<Message> for Curve<'_> {
             let colour = if Some(i) == self.picked { iced::Color::WHITE } else { mark };
             frame.fill(&Path::rectangle(Point::new(map.x(k.t) - DOT, y(k.rate) - DOT), Size::new(2.0 * DOT, 2.0 * DOT)), colour);
         }
+        // The window's playhead: a line through it all, a handle on each ruler.
+        let (x, accent) = (map.x(self.head), theme.extended_palette().primary.strong.color);
+        frame.fill(&Path::rectangle(Point::new(x - 1.0, 0.0), Size::new(2.0, 2.0 * RULER + CURVE)), accent);
+        for top in [0.0, RULER + CURVE + RULER - 8.0] {
+            frame.fill(&Path::rounded_rectangle(Point::new(x - 6.0, top), Size::new(12.0, 8.0), 2.0.into()), accent);
+        }
         vec![frame.into_geometry()]
     }
 
-    fn mouse_interaction(&self, drag: &Option<usize>, bounds: Rectangle, cursor: mouse::Cursor) -> mouse::Interaction {
+    fn mouse_interaction(&self, hold: &Hold, bounds: Rectangle, cursor: mouse::Cursor) -> mouse::Interaction {
         let p = cursor.position_in(bounds);
-        if drag.is_some() {
+        if *hold != Hold::Nothing {
             mouse::Interaction::Grabbing
+        } else if p.is_some_and(|p| !(RULER..=RULER + CURVE).contains(&p.y)) {
+            mouse::Interaction::ResizingHorizontally
         } else if p.is_some_and(|p| self.key_at(&self.map(bounds.width), p).is_some()) {
             mouse::Interaction::Grab
         } else if p.is_some_and(|p| p.y >= RULER && p.y <= RULER + CURVE) {
@@ -324,13 +357,14 @@ impl App {
         let edit = self.speed_edit.as_ref()?;
         let cuts: Vec<&Cut> = edit.cuts.iter().filter_map(|id| self.edit.cuts.iter().find(|c| c.id == *id)).collect();
         let length = offsets(&edit.spans).last().copied().unwrap_or(0.0);
-        let curve = canvas_widget(Curve { draft: &edit.draft, spans: &edit.spans, picked: edit.picked }).width(Length::Fill).height(2.0 * RULER + CURVE);
+        let curve = canvas_widget(Curve { draft: &edit.draft, spans: &edit.spans, picked: edit.picked, head: edit.head }).width(Length::Fill).height(2.0 * RULER + CURVE);
         let was: f64 = cuts.iter().map(|c| c.edit_len()).sum();
         let m = |s: SpeedMsg| Message::Speed(s);
         let side = column![
             text(format!("Footage  {length:.2} s")).size(13),
             text(format!("Edit  {:.2} s", edit.draft.edit_secs(0.0, length))).size(13),
             text(format!("(was  {was:.2} s)")).size(12).style(text::secondary),
+            tip(text(format!("Playhead  {:.2} s · {:.2} s", edit.head, edit.draft.edit_secs(0.0, edit.head))).size(12), text("The window's playhead: footage seconds · edit seconds. Drag it on a ruler"), tooltip::Position::Left),
             space().height(8),
             button(text("Slow in the middle").size(13)).style(button::secondary).width(Length::Fill).on_press(m(SpeedMsg::Preset(Preset::SlowMiddle))),
             button(text("Ramp to the cut").size(13)).style(button::secondary).width(Length::Fill).on_press(m(SpeedMsg::Preset(Preset::RampToCut))),
@@ -395,6 +429,7 @@ impl App {
         match message {
             SpeedMsg::Open(_) => {}
             SpeedMsg::Close(apply) => return self.close_speed(apply),
+            SpeedMsg::Head(t) => look = Some(t.clamp(0.0, length)),
             SpeedMsg::Put(t, r) => {
                 let ease = edit.picked.and_then(|k| edit.draft.keys.get(k)).map_or(Ease::Smooth, |k| k.ease);
                 edit.picked = Some(edit.draft.put_key(t, r, ease));
@@ -427,6 +462,7 @@ impl App {
             SpeedMsg::Pitch(tape) => edit.draft.tape = tape,
         }
         if let Some(t) = look {
+            edit.head = t;
             self.show_footage(t);
         }
     }
@@ -442,7 +478,7 @@ impl App {
         }
         let spans: Vec<(f64, f64)> = cuts.iter().map(|c| (c.start, c.end)).collect();
         let draft = joined(&cuts.iter().map(|c| &c.speed).collect::<Vec<_>>(), &spans);
-        self.speed_edit = Some(SpeedEdit { cuts: cuts.iter().map(|c| c.id).collect(), spans, draft, picked: None });
+        self.speed_edit = Some(SpeedEdit { cuts: cuts.iter().map(|c| c.id).collect(), spans, draft, picked: None, head: 0.0 });
         // The picture on the cuts edited, from their start (it stayed where
         // the playhead was, on another cut; the user, 2026-11-16).
         self.show_footage(0.0);
@@ -566,6 +602,24 @@ mod tests {
         let c = &app.edit.cuts[0];
         assert!(app.speed_edit.is_none() && c.speed.keys.len() >= 4 && c.speed.tape && c.edit_len() > 2.0);
         assert!(app.edit.undo() && app.edit.cuts[0].speed.is_default(), "one step");
+    }
+
+    /// The window's playhead: set from a ruler, kept in the footage, and
+    /// on a point when one is picked or put.
+    #[test]
+    fn the_window_has_a_playhead_of_its_own() {
+        let mut app = app();
+        let id = app.edit.cuts[0].id;
+        let speed = |m| Message::Speed(m);
+        let _ = app.update(speed(SpeedMsg::Open(id)));
+        let head = |app: &super::super::App| app.speed_edit.as_ref().unwrap().head;
+        assert_eq!(head(&app), 0.0);
+        let _ = app.update(speed(SpeedMsg::Head(1.25)));
+        assert_eq!(head(&app), 1.25);
+        let _ = app.update(speed(SpeedMsg::Head(9.0)));
+        assert_eq!(head(&app), 2.0, "kept in the footage");
+        let _ = app.update(speed(SpeedMsg::Put(0.5, 2.0)));
+        assert_eq!(head(&app), 0.5, "on the point put");
     }
 
     /// Two cuts selected side by side take one curve; Done gives each its

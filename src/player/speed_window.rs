@@ -1,20 +1,23 @@
-//! The speed window (gap 31c): one cut's speed as a curve, over the
-//! timeline's part of the window while the picture above shows the frame
-//! at the point picked. Across is the cut's time on the edit, as it will
-//! be; up, the rate on a log scale (½× and 2× as far from 1×). Above the
-//! curve a ruler in the footage's own seconds, its ticks spreading where
-//! the footage is slowed; under it the edit's seconds. The rules for a
-//! curve are `speed::Speed`'s (`put_key`, `move_key`, presets); OK applies
-//! it as one undo step, Cancel leaves the cut as it was.
+//! The speed window (gap 31c): the speed of a cut, or of several cuts
+//! selected side by side, as one curve, over the timeline's part of the
+//! window while the picture above shows the frame at the point picked.
+//! Across is the footage's own time, the cuts one after another (a point
+//! stays where it's put: across in edit time, the curve moved under the
+//! pointer as it shortened the edit; the user, 2026-11-16); up, the rate
+//! on a log scale (½× and 2× as far from 1×). Above, each cut's footage
+//! seconds; below, the edit's, their ticks spreading where it's slowed.
+//! The rules for a curve are `speed::Speed`'s (`put_key`, `move_key`,
+//! presets); «Done» applies it to every cut as one undo step, Cancel
+//! leaves them as they were.
 
 use super::{App, Message, tip};
 use crate::model::ops::Op;
 use crate::model::ops::cuts::CutOp;
-use crate::project::Id;
-use crate::speed::{Preset, RANGE, Speed};
+use crate::project::{Cut, Id};
+use crate::speed::{Preset, RANGE, Speed, SpeedKey};
 use crate::view::Ease;
 use iced::mouse;
-use iced::widget::canvas::{self, Frame, Geometry, Path, Stroke, Text};
+use iced::widget::canvas::{self, Frame, Geometry, Path, Text};
 use iced::widget::{button, canvas as canvas_widget, checkbox, column, container, pick_list, row, space, text, tooltip};
 use iced::{Alignment, Element, Length, Point, Rectangle, Renderer, Size, Theme};
 
@@ -24,26 +27,29 @@ const CURVE: f32 = 170.0;
 /// A point's half side, and how near a press picks it.
 const DOT: f32 = 4.5;
 const PICK: f32 = 8.0;
-/// Room at either side, so a point at the cut's ends is whole.
+/// Room at either side, so a point at the ends is whole.
 const PAD: f32 = 12.0;
 
-/// The window while it's open: the cut, its curve as edited so far, the
-/// key picked.
+/// The window while it's open: the cuts (side by side), their clip spans
+/// when it opened, their curve as one over their footage laid end to end
+/// (`joined`), the key picked.
 pub struct SpeedEdit {
-    pub cut: Id,
+    pub cuts: Vec<Id>,
+    pub spans: Vec<(f64, f64)>,
     pub draft: Speed,
     pub picked: Option<usize>,
 }
 
 #[derive(Debug, Clone)]
 pub enum SpeedMsg {
+    /// Opened from cut `.0`'s menu: with the cuts selected beside it.
     Open(Id),
     /// Closed: applied (true) or let go.
     Close(bool),
-    /// A key put at clip time `.0` with rate `.1`, and picked.
+    /// A key put at footage time `.0` with rate `.1`, and picked.
     Put(f64, f64),
     Pick(usize),
-    /// Key `.0` dragged to clip time `.1`, rate `.2`.
+    /// Key `.0` dragged to footage time `.1`, rate `.2`.
     Move(usize, f64, f64),
     /// The key picked taken away; or key `.0` (a right-click on it).
     Remove,
@@ -72,33 +78,100 @@ impl std::fmt::Display for EaseChoice {
     }
 }
 
-/// Where the curve maps: the cut's clip span, read at `speed` (the draft,
-/// or the one a drag froze), across `width` pixels from `PAD`.
-struct Map<'a> {
-    speed: &'a Speed,
-    span: (f64, f64),
+/// The cuts one curve edits, opened from cut `clicked`: the run of cuts
+/// selected side by side it's in, else itself (indices in `cuts`).
+pub(super) fn cuts_for_curve(cuts: &[Cut], picked: &[Id], clicked: Id) -> Vec<usize> {
+    let Some(at) = cuts.iter().position(|c| c.id == clicked) else { return Vec::new() };
+    let mut run: Vec<usize> = cuts.iter().enumerate().filter(|(_, c)| picked.contains(&c.id)).map(|(i, _)| i).collect();
+    if !run.contains(&at) || run.windows(2).any(|w| w[1] != w[0] + 1) {
+        run = vec![at];
+    }
+    run
+}
+
+/// Where each cut's footage starts in the joined time, and the end.
+fn offsets(spans: &[(f64, f64)]) -> Vec<f64> {
+    let mut at = vec![0.0];
+    for (a, b) in spans {
+        at.push(at.last().copied().unwrap_or(0.0) + (b - a));
+    }
+    at
+}
+
+/// The cuts' curves as one over their footage laid end to end: each
+/// one's keys in its span; where it starts, the key that carries the
+/// curve into it when the cut before has it too (`split` gives both cuts
+/// a ramp over their join), else a key there at the rate it starts at; the
+/// first and the last keep a ramp running in or out past them. `split`
+/// undoes it exactly, so Done with nothing changed changes nothing.
+pub(super) fn joined(speeds: &[&Speed], spans: &[(f64, f64)]) -> Speed {
+    let at = offsets(spans);
+    let last = spans.len().saturating_sub(1);
+    let same = |a: &SpeedKey, b: &SpeedKey| (a.t - b.t).abs() < 1e-9 && a.rate == b.rate && a.ease == b.ease;
+    let mut keys: Vec<SpeedKey> = Vec::new();
+    for (k, (s, &(start, end))) in speeds.iter().zip(spans).enumerate() {
+        let o = at[k];
+        let v = |x: &SpeedKey| SpeedKey { t: o + x.t - start, ..*x };
+        let inside: Vec<SpeedKey> = s.keys.iter().filter(|x| x.t >= start && (x.t < end || (k == last && x.t <= end))).map(v).collect();
+        let entering = s.keys.iter().rposition(|x| x.t < start).map(|i| v(&s.keys[i]));
+        let at_start = inside.first().is_some_and(|x| (x.t - o).abs() < 1e-9);
+        match entering {
+            Some(e) if keys.iter().any(|x| same(x, &e)) => {}
+            Some(e) if k == 0 && e.ease != Ease::Hold => keys.push(e),
+            Some(e) if !at_start => keys.push(SpeedKey { t: o, rate: s.rate_at(start), ease: e.ease }),
+            None if !at_start => keys.push(SpeedKey::held(o, s.rate_at(start))),
+            _ => {}
+        }
+        keys.extend(inside);
+        // The last cut's ramp running on past its end keeps its far key.
+        if k == last && let Some(i) = s.keys.iter().position(|x| x.t > end) && i > 0 && s.keys[i - 1].ease != Ease::Hold {
+            keys.push(v(&s.keys[i]));
+        }
+    }
+    keys.sort_by(|a, b| a.t.total_cmp(&b.t));
+    keys.dedup_by(|a, b| (a.t - b.t).abs() < 1e-9);
+    Speed { keys, tape: speeds.iter().any(|s| s.tape) }
+}
+
+/// The joined curve `draft` back into each cut's (`joined` undone): the
+/// keys from the last at or before where it starts to the first at or
+/// after where it ends, in its clip time (a key may lie outside its span),
+/// so its stretch of the curve is the same curve, a ramp over a join
+/// included (cut in two ramps, their shapes changed and the edit came out
+/// 0.16 s longer than the window said). Normal where its stretch is all
+/// 1×.
+pub(super) fn split(draft: &Speed, spans: &[(f64, f64)]) -> Vec<Speed> {
+    let at = offsets(spans);
+    spans
+        .iter()
+        .zip(at.windows(2))
+        .map(|(&(start, _), w)| {
+            let (o, end) = (w[0], w[1]);
+            let first = draft.keys.iter().rposition(|k| k.t <= o).unwrap_or(0);
+            let last = draft.keys.iter().position(|k| k.t >= end).unwrap_or(draft.keys.len().saturating_sub(1));
+            let keys: Vec<SpeedKey> = draft.keys.get(first..=last).unwrap_or(&[]).iter().map(|k| SpeedKey { t: start + k.t - o, ..*k }).collect();
+            let s = Speed { keys, tape: draft.tape };
+            let all_one = (s.edit_secs(start, start + end - o) - (end - o)).abs() < 1e-12 && draft.rate_at(o) == 1.0 && draft.keys.iter().filter(|k| k.t >= o && k.t <= end).all(|k| k.rate == 1.0);
+            if all_one { Speed { tape: draft.tape, ..Speed::default() } } else { s }
+        })
+        .collect()
+}
+
+/// Where the curve maps: the joined footage `0..length` across `width`
+/// pixels from `PAD`.
+struct Map {
+    length: f64,
     width: f32,
 }
 
-impl Map<'_> {
-    fn length(&self) -> f64 {
-        self.speed.edit_secs(self.span.0, self.span.1).max(1e-6)
-    }
-
-    /// The x of clip time `t`.
+impl Map {
     fn x(&self, t: f64) -> f32 {
-        PAD + (self.speed.edit_secs(self.span.0, t) / self.length()) as f32 * self.width
+        PAD + (t / self.length.max(1e-6)) as f32 * self.width
     }
 
-    /// The x of edit second `e` (from the cut's start).
-    fn x_edit(&self, e: f64) -> f32 {
-        PAD + (e / self.length()) as f32 * self.width
-    }
-
-    /// The clip time at `x`, kept in the span.
+    /// The footage time at `x`, kept in it.
     fn t(&self, x: f32) -> f64 {
-        let e = ((x - PAD) / self.width).clamp(0.0, 1.0) as f64 * self.length();
-        self.speed.clip_after(self.span.0, e).clamp(self.span.0, self.span.1)
+        ((x - PAD) / self.width).clamp(0.0, 1.0) as f64 * self.length
     }
 }
 
@@ -113,103 +186,92 @@ fn rate(y: f32) -> f64 {
     2f64.powf(lo + (1.0 - ((y - RULER) / CURVE).clamp(0.0, 1.0)) as f64 * (hi - lo))
 }
 
-/// The curve, its rulers and its points.
+/// The curve, its rulers, the joins and the points.
 struct Curve<'a> {
     draft: &'a Speed,
-    span: (f64, f64),
+    spans: &'a [(f64, f64)],
     picked: Option<usize>,
 }
 
-/// A drag under way: the key and the curve as it was when pressed, which
-/// the mapping keeps till let go (else the key ran from the pointer as the
-/// edit's length changed under it).
-#[derive(Default)]
-struct Drag {
-    key: Option<usize>,
-    frozen: Option<Speed>,
-}
-
 impl Curve<'_> {
-    fn map<'b>(&'b self, drag: &'b Drag, width: f32) -> Map<'b> {
-        Map { speed: drag.frozen.as_ref().unwrap_or(self.draft), span: self.span, width: (width - 2.0 * PAD).max(1.0) }
+    fn map(&self, width: f32) -> Map {
+        Map { length: offsets(self.spans).last().copied().unwrap_or(0.0), width: (width - 2.0 * PAD).max(1.0) }
     }
 
     /// The key under `p`, if any.
     fn key_at(&self, map: &Map, p: Point) -> Option<usize> {
-        self.draft.keys.iter().position(|k| k.t >= self.span.0 - 1e-9 && k.t <= self.span.1 + 1e-9 && (map.x(k.t) - p.x).abs() <= PICK && (y(k.rate) - p.y).abs() <= PICK)
+        self.draft.keys.iter().position(|k| (map.x(k.t) - p.x).abs() <= PICK && (y(k.rate) - p.y).abs() <= PICK)
     }
 }
 
 impl canvas::Program<Message> for Curve<'_> {
-    type State = Drag;
+    /// The key being dragged.
+    type State = Option<usize>;
 
-    fn update(&self, drag: &mut Drag, event: &iced::Event, bounds: Rectangle, cursor: mouse::Cursor) -> Option<canvas::Action<Message>> {
+    fn update(&self, drag: &mut Option<usize>, event: &iced::Event, bounds: Rectangle, cursor: mouse::Cursor) -> Option<canvas::Action<Message>> {
         use iced::Event::Mouse;
         let send = |m: SpeedMsg| Some(canvas::Action::publish(Message::Speed(m)).and_capture());
+        let map = self.map(bounds.width);
         match event {
             Mouse(mouse::Event::ButtonPressed(button)) => {
                 let p = cursor.position_in(bounds).filter(|p| p.y >= RULER && p.y <= RULER + CURVE)?;
-                let map = self.map(drag, bounds.width);
-                let key = self.key_at(&map, p);
-                match (button, key) {
-                    (mouse::Button::Right, Some(k)) => {
-                        *drag = Drag::default();
-                        send(SpeedMsg::RemoveAt(k))
-                    }
+                match (button, self.key_at(&map, p)) {
+                    (mouse::Button::Right, Some(k)) => send(SpeedMsg::RemoveAt(k)),
                     (mouse::Button::Left, Some(k)) => {
-                        *drag = Drag { key: Some(k), frozen: Some(self.draft.clone()) };
+                        *drag = Some(k);
                         send(SpeedMsg::Pick(k))
                     }
-                    (mouse::Button::Left, None) => send(SpeedMsg::Put(map.t(p.x), rate(p.y))),
+                    // A new point, held by the pointer till let go.
+                    (mouse::Button::Left, None) => {
+                        let t = map.t(p.x);
+                        *drag = Some(self.draft.keys.iter().position(|k| k.t > t).unwrap_or(self.draft.keys.len()));
+                        send(SpeedMsg::Put(t, rate(p.y)))
+                    }
                     _ => None,
                 }
             }
-            Mouse(mouse::Event::CursorMoved { .. }) => {
-                let k = drag.key?;
-                let p = cursor.position_in(bounds).or_else(|| cursor.position().map(|q| Point::new(q.x - bounds.x, q.y - bounds.y)))?;
-                let map = self.map(drag, bounds.width);
-                send(SpeedMsg::Move(k, map.t(p.x), rate(p.y)))
+            Mouse(mouse::Event::CursorMoved { position }) => {
+                let k = (*drag)?;
+                send(SpeedMsg::Move(k, map.t(position.x - bounds.x), rate(position.y - bounds.y)))
             }
-            Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) if drag.key.is_some() => {
-                *drag = Drag::default();
+            Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) if drag.is_some() => {
+                *drag = None;
                 Some(canvas::Action::request_redraw().and_capture())
             }
             _ => None,
         }
     }
 
-    fn draw(&self, drag: &Drag, renderer: &Renderer, theme: &Theme, bounds: Rectangle, _cursor: mouse::Cursor) -> Vec<Geometry> {
+    fn draw(&self, _drag: &Option<usize>, renderer: &Renderer, theme: &Theme, bounds: Rectangle, _cursor: mouse::Cursor) -> Vec<Geometry> {
         let mut frame = Frame::new(renderer, bounds.size());
-        let palette = theme.extended_palette();
-        let ink = palette.background.base.text;
-        let map = self.map(drag, bounds.width);
+        let ink = theme.extended_palette().background.base.text;
+        let map = self.map(bounds.width);
         self.draw_grid(&mut frame, ink, bounds.width);
         self.draw_rulers(&mut frame, &map, ink);
-        // The curve: the rate at each 2 px of the edit.
+        let mark = super::timeline::EFFECT_MARK;
         let line = Path::new(|p| {
             let mut x = PAD;
             while x <= PAD + map.width {
-                let at = Point::new(x, y(map.speed.rate_at(map.t(x))));
+                let at = Point::new(x, y(self.draft.rate_at(map.t(x))));
                 if x == PAD { p.move_to(at) } else { p.line_to(at) }
                 x += 2.0;
             }
         });
-        frame.stroke(&line, Stroke::default().with_width(2.0).with_color(super::timeline::EFFECT_MARK));
-        for (i, k) in self.draft.keys.iter().enumerate().filter(|(_, k)| k.t >= self.span.0 - 1e-9 && k.t <= self.span.1 + 1e-9) {
-            let (x, yy) = (map.x(k.t), y(k.rate));
-            let colour = if Some(i) == self.picked { iced::Color::WHITE } else { super::timeline::EFFECT_MARK };
-            frame.fill(&Path::rectangle(Point::new(x - DOT, yy - DOT), Size::new(2.0 * DOT, 2.0 * DOT)), colour);
+        frame.stroke(&line, canvas::Stroke::default().with_width(2.0).with_color(mark));
+        for (i, k) in self.draft.keys.iter().enumerate() {
+            let colour = if Some(i) == self.picked { iced::Color::WHITE } else { mark };
+            frame.fill(&Path::rectangle(Point::new(map.x(k.t) - DOT, y(k.rate) - DOT), Size::new(2.0 * DOT, 2.0 * DOT)), colour);
         }
         vec![frame.into_geometry()]
     }
 
-    fn mouse_interaction(&self, drag: &Drag, bounds: Rectangle, cursor: mouse::Cursor) -> mouse::Interaction {
-        let over_key = cursor.position_in(bounds).and_then(|p| self.key_at(&self.map(drag, bounds.width), p)).is_some();
-        if drag.key.is_some() {
+    fn mouse_interaction(&self, drag: &Option<usize>, bounds: Rectangle, cursor: mouse::Cursor) -> mouse::Interaction {
+        let p = cursor.position_in(bounds);
+        if drag.is_some() {
             mouse::Interaction::Grabbing
-        } else if over_key {
+        } else if p.is_some_and(|p| self.key_at(&self.map(bounds.width), p).is_some()) {
             mouse::Interaction::Grab
-        } else if cursor.position_in(bounds).is_some_and(|p| p.y >= RULER && p.y <= RULER + CURVE) {
+        } else if p.is_some_and(|p| p.y >= RULER && p.y <= RULER + CURVE) {
             mouse::Interaction::Crosshair
         } else {
             mouse::Interaction::default()
@@ -227,8 +289,9 @@ impl Curve<'_> {
         }
     }
 
-    /// The footage's seconds above (spread where it's slowed) and the
-    /// edit's below, a tick each second, named where there's room.
+    /// Each cut's footage seconds above, a line at each join; the edit's
+    /// seconds below, their ticks spreading where it's slowed. A tick a
+    /// second, named where there's room.
     fn draw_rulers(&self, frame: &mut Frame, map: &Map, ink: iced::Color) {
         let ticks = |frame: &mut Frame, xs: Vec<(f32, f64)>, top: f32| {
             let mut named = f32::NEG_INFINITY;
@@ -240,11 +303,17 @@ impl Curve<'_> {
                 }
             }
         };
-        let (start, end) = self.span;
-        let footage: Vec<(f32, f64)> = (0..).map(|k| start.ceil() + k as f64).take_while(|&t| t <= end).map(|t| (map.x(t), t - start)).collect();
+        let at = offsets(self.spans);
+        let mut footage = Vec::new();
+        for (&(start, end), &o) in self.spans.iter().zip(&at) {
+            footage.extend((0..).map(|k| start.ceil() + k as f64).take_while(|&t| t <= end).map(|t| (map.x(o + t - start), t)));
+            if o > 0.0 {
+                frame.fill(&Path::rectangle(Point::new(map.x(o), 0.0), Size::new(1.5, 2.0 * RULER + CURVE)), ink.scale_alpha(0.45));
+            }
+        }
         ticks(frame, footage, 0.0);
-        let length = map.length();
-        let edit: Vec<(f32, f64)> = (0..).map(|k| k as f64).take_while(|&e| e <= length).map(|e| (map.x_edit(e), e)).collect();
+        let length = self.draft.edit_secs(0.0, map.length);
+        let edit: Vec<(f32, f64)> = (0..).map(|k| k as f64).take_while(|&e| e <= length).map(|e| (map.x(self.draft.clip_after(0.0, e)), e)).collect();
         ticks(frame, edit, RULER + CURVE);
     }
 }
@@ -253,28 +322,36 @@ impl App {
     /// The window in the timeline's place, while it's open.
     pub(super) fn speed_window(&self) -> Option<Element<'_, Message>> {
         let edit = self.speed_edit.as_ref()?;
-        let cut = self.edit.cuts.iter().find(|c| c.id == edit.cut)?;
-        let span = (cut.start, cut.end);
-        let curve = canvas_widget(Curve { draft: &edit.draft, span, picked: edit.picked }).width(Length::Fill).height(2.0 * RULER + CURVE);
-        let len = |s: &Speed| format!("{:.2} s", s.edit_secs(span.0, span.1));
+        let cuts: Vec<&Cut> = edit.cuts.iter().filter_map(|id| self.edit.cuts.iter().find(|c| c.id == *id)).collect();
+        let length = offsets(&edit.spans).last().copied().unwrap_or(0.0);
+        let curve = canvas_widget(Curve { draft: &edit.draft, spans: &edit.spans, picked: edit.picked }).width(Length::Fill).height(2.0 * RULER + CURVE);
+        let was: f64 = cuts.iter().map(|c| c.edit_len()).sum();
         let m = |s: SpeedMsg| Message::Speed(s);
         let side = column![
-            text(format!("Clip  {:.2} s", span.1 - span.0)).size(13),
-            text(format!("Edit  {}", len(&edit.draft))).size(13),
-            text(format!("(was  {})", len(&cut.speed))).size(12).style(text::secondary),
+            text(format!("Footage  {length:.2} s")).size(13),
+            text(format!("Edit  {:.2} s", edit.draft.edit_secs(0.0, length))).size(13),
+            text(format!("(was  {was:.2} s)")).size(12).style(text::secondary),
             space().height(8),
             button(text("Slow in the middle").size(13)).style(button::secondary).width(Length::Fill).on_press(m(SpeedMsg::Preset(Preset::SlowMiddle))),
             button(text("Ramp to the cut").size(13)).style(button::secondary).width(Length::Fill).on_press(m(SpeedMsg::Preset(Preset::RampToCut))),
         ]
         .spacing(4)
         .width(170);
-        let head = row![text(format!("Speed · {}", super::clip_name(&cut.input))).size(14), space().width(Length::Fill), button(text("✕").size(14)).style(button::text).on_press(m(SpeedMsg::Close(false)))].align_y(Alignment::Center);
+        let names: Vec<String> = cuts.iter().map(|c| super::clip_name(&c.input)).collect();
+        let what = if names.len() == 1 { format!("Speed · {}", names[0]) } else { format!("Speed · {} cuts: {}", names.len(), names.join(", ")) };
+        // Out of the window, plainly: the user, 2026-11-16.
+        let done = tip(
+            button(text("✓  Done: back to the timeline").size(15)).padding([8, 16]).style(button::success).on_press(m(SpeedMsg::Close(true))),
+            text("Applies the curve (Ctrl+Z takes it back); Cancel or Esc leaves the cuts as they were"),
+            tooltip::Position::Left,
+        );
+        let head = row![text(what).size(15), space().width(Length::Fill), done].align_y(Alignment::Center);
         let body = row![curve, side].spacing(12);
         Some(container(column![head, body, self.speed_bar(edit)].spacing(6)).padding(10).style(container::rounded_box).into())
     }
 
     /// The window's bottom row: the key picked (its rate, its time, how it
-    /// goes on), the pitch, and Reset, Cancel and OK.
+    /// goes on), the pitch, Reset and Cancel.
     fn speed_bar(&self, edit: &SpeedEdit) -> Element<'_, Message> {
         let m = |s: SpeedMsg| Message::Speed(s);
         let key = edit.picked.and_then(|i| edit.draft.keys.get(i));
@@ -287,7 +364,7 @@ impl App {
             .spacing(10)
             .align_y(Alignment::Center)
             .into(),
-            None => text("Click the curve to put a point; drag it; right-click takes it away").size(12).style(text::secondary).into(),
+            None => text("Click the curve to put a point, and drag it; right-click takes it away").size(12).style(text::secondary).into(),
         };
         row![
             picked,
@@ -295,34 +372,25 @@ impl App {
             checkbox(!edit.draft.tape).label("Keep the sound's pitch").text_size(13).on_toggle(move |keep| m(SpeedMsg::Pitch(!keep))),
             button(text("Reset to 1×").size(13)).style(button::secondary).on_press(m(SpeedMsg::Reset)),
             button(text("Cancel").size(13)).style(button::secondary).on_press(m(SpeedMsg::Close(false))),
-            button(text("OK").size(13)).style(button::primary).on_press(m(SpeedMsg::Close(true))),
         ]
         .spacing(10)
         .align_y(Alignment::Center)
         .into()
     }
 
-    /// The window's messages: the curve changed by its rules, the picture
-    /// shown at the key picked; OK applies curve and pitch as one step.
     pub(super) fn on_speed(&mut self, message: SpeedMsg) -> iced::Task<Message> {
         self.speed_message(message);
         iced::Task::none()
     }
 
+    /// The window's messages: the curve changed by its rules, the picture
+    /// shown at the key picked; Done applies the curve to the cuts.
     fn speed_message(&mut self, message: SpeedMsg) {
         if let SpeedMsg::Open(id) = message {
-            self.sound_menu = None;
-            if let Some(c) = self.edit.cuts.iter().find(|c| c.id == id) {
-                self.speed_edit = Some(SpeedEdit { cut: id, draft: c.speed.for_editing(c.start), picked: None });
-            }
-            return;
+            return self.open_speed(id);
         }
         let Some(edit) = self.speed_edit.as_mut() else { return };
-        let Some(i) = self.edit.cuts.iter().position(|c| c.id == edit.cut) else {
-            self.speed_edit = None;
-            return;
-        };
-        let span = (self.edit.cuts[i].start, self.edit.cuts[i].end);
+        let length = offsets(&edit.spans).last().copied().unwrap_or(0.0);
         let mut look = None;
         match message {
             SpeedMsg::Open(_) => {}
@@ -337,7 +405,7 @@ impl App {
                 look = edit.draft.keys.get(k).map(|k| k.t);
             }
             SpeedMsg::Move(k, t, r) => {
-                edit.draft.move_key(k, t, r);
+                edit.draft.move_key(k, t.clamp(0.0, length), r);
                 look = edit.draft.keys.get(k).map(|k| k.t);
             }
             SpeedMsg::Remove => {
@@ -354,26 +422,54 @@ impl App {
                     k.ease = e.0;
                 }
             }
-            SpeedMsg::Preset(p) => (edit.draft, edit.picked) = (Speed::preset(p, span, edit.draft.tape), None),
-            SpeedMsg::Reset => (edit.draft, edit.picked) = (Speed { tape: edit.draft.tape, ..Speed::default() }.for_editing(span.0), None),
+            SpeedMsg::Preset(p) => (edit.draft, edit.picked) = (Speed::preset(p, (0.0, length), edit.draft.tape), None),
+            SpeedMsg::Reset => (edit.draft, edit.picked) = (Speed { tape: edit.draft.tape, ..Speed::default() }.for_editing(0.0), None),
             SpeedMsg::Pitch(tape) => edit.draft.tape = tape,
         }
-        // The picture above: the cut's frame at the key's footage time.
         if let Some(t) = look {
-            self.goto(i, t.clamp(span.0, span.1), false);
+            self.show_footage(t);
         }
     }
 
-    /// Closes the window, the curve and the pitch applied as one undo step
-    /// (refused: said, and the window stays) or let go.
+    /// Opens the window on cut `id` and the cuts selected side by side
+    /// with it (`cuts_for_curve`).
+    fn open_speed(&mut self, id: Id) {
+        self.sound_menu = None;
+        let run = cuts_for_curve(&self.edit.cuts, &self.picked_ids(), id);
+        let cuts: Vec<&Cut> = run.iter().map(|&i| &self.edit.cuts[i]).collect();
+        if cuts.is_empty() {
+            return;
+        }
+        let spans: Vec<(f64, f64)> = cuts.iter().map(|c| (c.start, c.end)).collect();
+        let draft = joined(&cuts.iter().map(|c| &c.speed).collect::<Vec<_>>(), &spans);
+        self.speed_edit = Some(SpeedEdit { cuts: cuts.iter().map(|c| c.id).collect(), spans, draft, picked: None });
+    }
+
+    /// The picture above at joined footage time `t`: its cut, its clip time.
+    fn show_footage(&mut self, t: f64) {
+        let Some(edit) = &self.speed_edit else { return };
+        let at = offsets(&edit.spans);
+        let k = at.windows(2).position(|w| t < w[1]).unwrap_or(edit.spans.len().saturating_sub(1));
+        let (Some(&id), Some(&(start, end))) = (edit.cuts.get(k), edit.spans.get(k)) else { return };
+        if let Some(i) = self.edit.cuts.iter().position(|c| c.id == id) {
+            self.goto(i, (start + t - at[k]).clamp(start, end), false);
+        }
+    }
+
+    /// Closes the window, each cut's share of the curve and the pitch
+    /// applied as one undo step (refused: said, and the window stays), or
+    /// let go.
     fn close_speed(&mut self, apply: bool) {
         let Some(edit) = self.speed_edit.take() else { return };
         if !apply {
             return;
         }
-        let keys = if edit.draft.is_normal() { Vec::new() } else { edit.draft.keys.clone() };
         self.edit.begin();
-        let done = self.op(Op::Cut(CutOp::SpeedCurve { cut: edit.cut, keys })).is_some() && self.op(Op::Cut(CutOp::TapePitch { cut: edit.cut, on: edit.draft.tape })).is_some();
+        let mut done = true;
+        for (&cut, speed) in edit.cuts.iter().zip(split(&edit.draft, &edit.spans)) {
+            let keys = if speed.is_normal() { Vec::new() } else { speed.keys };
+            done = done && self.op(Op::Cut(CutOp::SpeedCurve { cut, keys })).is_some() && self.op(Op::Cut(CutOp::TapePitch { cut, on: edit.draft.tape })).is_some();
+        }
         if done {
             self.edit.commit();
             self.reload_cut_sound();
@@ -390,21 +486,66 @@ mod tests {
     use super::super::tests::app;
 
     /// The rate's height and back, ¼× at the bottom, 4× at the top, 1×
-    /// half way; a curve's key found where it's drawn.
+    /// half way; footage time across, both ways.
     #[test]
     fn the_curve_maps_rates_and_times_both_ways() {
         assert!((y(1.0) - (RULER + CURVE / 2.0)).abs() < 1e-4 && (y(RANGE.1) - RULER).abs() < 1e-4);
         for r in [0.25, 0.5, 1.0, 1.7, 4.0] {
             assert!((rate(y(r)) - r).abs() < 1e-4, "{r}");
         }
-        let slow = Speed::constant(0.5);
-        let map = Map { speed: &slow, span: (10.0, 14.0), width: 800.0 };
-        assert!((map.x(12.0) - (PAD + 400.0)).abs() < 1e-3 && (map.t(PAD + 400.0) - 12.0).abs() < 1e-9);
-        assert!((map.x_edit(4.0) - (PAD + 400.0)).abs() < 1e-3, "8 edit seconds across");
+        let map = Map { length: 8.0, width: 800.0 };
+        assert!((map.x(4.0) - (PAD + 400.0)).abs() < 1e-3 && (map.t(PAD + 400.0) - 4.0).abs() < 1e-9);
     }
 
-    /// Opened on a cut, a point put and dragged, a preset, Cancel leaves
-    /// the cut; OK applies curve and pitch as one undo step.
+    /// The cuts one curve takes: a run selected side by side holding the
+    /// one clicked, else that one alone.
+    #[test]
+    fn a_curve_takes_the_cuts_selected_side_by_side() {
+        let cuts: Vec<Cut> = (1..=4).map(|id| Cut { id, ..Cut::new("a.mp4".into(), 0.0, 2.0) }).collect();
+        assert_eq!(cuts_for_curve(&cuts, &[2, 3], 3), [1, 2]);
+        assert_eq!(cuts_for_curve(&cuts, &[1, 3], 3), [2], "not side by side");
+        assert_eq!(cuts_for_curve(&cuts, &[2, 3], 4), [3], "clicked outside the selection");
+        assert_eq!(cuts_for_curve(&cuts, &[], 1), [0]);
+    }
+
+    /// Two cuts' curves joined and split back: held keys exactly; a ramp
+    /// over the join comes back as each cut's share, the rates where it
+    /// crosses kept.
+    #[test]
+    fn cuts_curves_join_and_split_back() {
+        let spans = [(10.0, 14.0), (2.0, 4.0)];
+        let (a, b) = (Speed::constant(2.0), Speed { keys: vec![SpeedKey::held(2.0, 1.0), SpeedKey::held(3.0, 0.5)], tape: false });
+        let one = joined(&[&a, &b], &spans);
+        assert_eq!(one.keys.iter().map(|k| (k.t, k.rate)).collect::<Vec<_>>(), [(0.0, 2.0), (4.0, 1.0), (5.0, 0.5)]);
+        let back = split(&one, &spans);
+        assert_eq!((back[0].rate_at(12.0), back[1].rate_at(2.5), back[1].rate_at(3.5)), (2.0, 1.0, 0.5));
+        let len = |s: &[Speed]| s[0].edit_secs(10.0, 14.0) + s[1].edit_secs(2.0, 4.0);
+        assert!((len(&back) - one.edit_secs(0.0, 6.0)).abs() < 1e-9, "as long apart as joined");
+        // A ramp from 1× at 2 s to 3× at 5 s, over the join at 4 s.
+        let mut ramp = Speed::default().for_editing(0.0);
+        ramp.put_key(2.0, 1.0, Ease::Linear);
+        ramp.put_key(5.0, 3.0, Ease::Hold);
+        for ease in [Ease::Linear, Ease::Smooth] {
+            ramp.keys[1].ease = ease;
+            let parts = split(&ramp, &spans);
+            assert!((len(&parts) - ramp.edit_secs(0.0, 6.0)).abs() < 1e-9, "{ease:?}: as long as the window says");
+            assert!((parts[0].rate_at(13.5) - ramp.rate_at(3.5)).abs() < 1e-12 && (parts[1].rate_at(2.5) - ramp.rate_at(4.5)).abs() < 1e-12);
+            assert!(parts.iter().all(|p| p.check().is_ok()));
+        }
+        // Split and joined again: the same curve, as long.
+        let parts = split(&ramp, &spans);
+        let again = joined(&parts.iter().collect::<Vec<_>>(), &spans);
+        assert!((again.edit_secs(0.0, 6.0) - ramp.edit_secs(0.0, 6.0)).abs() < 1e-12, "{:?}", again.keys);
+        assert!(split(&again, &spans).iter().zip(&parts).all(|(a, b)| a == b), "Done with nothing changed changes nothing");
+        // A cut all at 1× before the ramp starts stays normal.
+        let mut later = Speed::default().for_editing(0.0);
+        later.put_key(4.5, 1.0, Ease::Smooth);
+        later.put_key(6.0, 3.0, Ease::Hold);
+        assert!(split(&later, &spans)[0].is_default());
+    }
+
+    /// Opened on a cut, a point put, Cancel leaves the cut; a preset and
+    /// the pitch, Done applies them as one undo step.
     #[test]
     fn the_window_applies_its_curve_as_one_step() {
         let mut app = app();
@@ -420,7 +561,23 @@ mod tests {
         let _ = app.update(speed(SpeedMsg::Pitch(true)));
         let _ = app.update(speed(SpeedMsg::Close(true)));
         let c = &app.edit.cuts[0];
-        assert!(app.speed_edit.is_none() && c.speed.keys.len() == 4 && c.speed.tape && c.edit_len() > 2.0);
+        assert!(app.speed_edit.is_none() && c.speed.keys.len() >= 4 && c.speed.tape && c.edit_len() > 2.0);
         assert!(app.edit.undo() && app.edit.cuts[0].speed.is_default(), "one step");
+    }
+
+    /// Two cuts selected side by side take one curve; Done gives each its
+    /// share, one undo step for both.
+    #[test]
+    fn two_cuts_selected_share_one_curve() {
+        let mut app = app();
+        let (a, b) = (app.edit.cuts[0].id, app.edit.cuts[1].id);
+        (app.selection, app.also) = (crate::model::selection::Selection::Cut(a), vec![b]);
+        let _ = app.update(Message::Speed(SpeedMsg::Open(b)));
+        assert_eq!(app.speed_edit.as_ref().unwrap().cuts, [a, b]);
+        let _ = app.update(Message::Speed(SpeedMsg::Preset(Preset::RampToCut)));
+        let _ = app.update(Message::Speed(SpeedMsg::Close(true)));
+        let (ca, cb) = (&app.edit.cuts[0], &app.edit.cuts[1]);
+        assert!(ca.speed.is_default() && cb.edit_len() < 2.0, "the ramp into the end falls in the second");
+        assert!(app.edit.undo() && app.edit.cuts[1].speed.is_default());
     }
 }

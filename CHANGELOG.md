@@ -6,6 +6,10 @@
   menu), its sound with it, keeping its pitch or like tape; in the
   player and both exports (`CutOp::Speed`, `SpeedCurve`, `TapePitch`).
   Under it the time seam: every clip ↔ edit time through one place.
+- **The speed curve**: a window over the timeline where a cut's speed
+  (or several side by side) is drawn as a curve with ramps between its
+  points, played at that speed before it's applied, with a playhead of
+  its own; one undo step ([the guide](docs/guide/speed.md)).
 - **Copy and paste** cuts: Ctrl+C, Ctrl+V at the playhead (the cut there
   split), Ctrl+Shift+V at the nearest join (`CutOp::Paste`).
 - **Automation lanes fitted**: each clip on its own scale, Absolute per

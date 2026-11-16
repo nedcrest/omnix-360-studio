@@ -9,6 +9,10 @@
 - [Choose in Dailix](tutorial-1-dailix.md)
 - [Edit in Omnix](tutorial-2-omnix.md)
 
+# How-to guides
+
+- [Change a clip's speed](speed.md)
+
 # Explanation
 
 - [How it fits together](explanation.md)

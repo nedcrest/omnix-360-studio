@@ -64,6 +64,17 @@
 | K | a volume point at the playhead on the selected sound |
 | S / M on a lane | solo / mute it |
 
+## The speed curve (Speed curve… on a clip's menu)
+
+| Key | Does |
+|---|---|
+| click the curve | a point there; drag it where you want it |
+| right-click a point, Delete | take it away |
+| Space | play the clips at the curve's speed / pause |
+| Home / End | the window's playhead to the start / the end |
+| ← / → | a frame back / on |
+| Esc | close it, the clips left as they were |
+
 ## Framing (the Framing switch on)
 
 | Key | Does |

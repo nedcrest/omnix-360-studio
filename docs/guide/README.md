@@ -12,6 +12,8 @@ Ravelund, which Omnix was forked from.
 - **Then the tutorial**: one short trip, from its clips to a
   finished film, in two parts: [choosing in Dailix](tutorial-1-dailix.md),
   then [editing in Omnix](tutorial-2-omnix.md).
+- **How-to guides**, one task each: [change a clip's
+  speed](speed.md).
 - **[How it fits together](explanation.md)**: trips and edits, a
   clip's voice, sync lock, groups, the cache: why they are as they are.
 - **The reference**: every key, every command, the settings and the

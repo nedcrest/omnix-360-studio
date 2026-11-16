@@ -27,7 +27,7 @@ First what Omnix added since the fork, then what it took over from rOsmo360 0.7.
 - **Operations core**: every change to a project is a checked, undoable operation, open to the command line and to an AI agent (`omnix apply`, `omnix describe`, `omnix ops-schema`, `omnix looks`).
 - **Selections and groups**: several cuts at once; groups that move together; **sync lock**, so sound, titles and pictures follow the picture they lie under.
 - **Copy and paste** cuts: at the playhead, splitting the cut there, or at the nearest join.
-- **Speed**: a cut slowed down or sped up from ¼× to 4×, its sound with it, keeping its pitch or like tape.
+- **Speed**: a cut slowed down or sped up from ¼× to 4×, its sound with it, keeping its pitch or like tape; or a **speed curve** in a window of its own, easing from one speed to another, over one cut or several side by side ([how](docs/guide/speed.md)).
 - **Cuts on the beat**: a song's beats found and snapped to.
 - **Markers**, a blank stretch, inserting between cuts, a stretch played from the ruler, the playhead moved by keys in sensible steps.
 - **Transitions**: a transitions lane and templates, edge looks (fade, blur, zoom, glitch, flash), each look's own settings.

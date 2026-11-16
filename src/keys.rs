@@ -72,6 +72,17 @@ pub const GROUPS: &[(&str, &[(&str, &str)])] = &[
         ],
     ),
     (
+        "The speed curve (Speed curve… on a clip's menu)",
+        &[
+            ("click the curve", "a point there; drag it where you want it"),
+            ("right-click a point, Delete", "take it away"),
+            ("Space", "play the clips at the curve's speed / pause"),
+            ("Home / End", "the window's playhead to the start / the end"),
+            ("← / →", "a frame back / on"),
+            ("Esc", "close it, the clips left as they were"),
+        ],
+    ),
+    (
         "Framing (the Framing switch on)",
         &[
             ("drag the picture", "look around; an ordinary video's frame moves with the hand"),

@@ -535,7 +535,15 @@ drift: a big, careful layer of work."
 - UI: a cut's right-click menu, «Speed» ¼…4× and «Keep the sound's
   pitch»; the label says «2×».
 
+**31c built and approved 2026-11-16**: the speed curve window
+(`src/player/speed_window.rs`; ramps in the seam, several cuts side by
+side as one curve, a playhead of its own, Space plays the curve inside
+one open undo step); the guide's «Change a clip's speed». Gap 118 is
+taking it apart for other automation.
+
 Still open:
+- **31e, 31d**: speed points right on the clip in the timeline; keys by
+  right-click on a clip's own timeline.
 - **31f. Real slow motion from 100 fps clips.** The export decodes a
   clip at the edit's rate before picking frames, so a 100 fps clip at
   0.25× repeats frames like a 30 fps one. Decode a slowed cut at its

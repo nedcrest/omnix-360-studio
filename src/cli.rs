@@ -290,13 +290,17 @@ pub(crate) enum Cmd {
     Blank { dir: PathBuf },
     /// Makes an edit from a Dailix project's marking (its folder): clips
     /// rated ✓ or ?, their segments as cuts (a clip with none whole), the
-    /// voice chosen, flags inside a cut as its markers; written into the
-    /// project's 04_project under a new name, printed.
+    /// voice chosen, flags inside a cut as its markers; written as a new
+    /// video of the trip (`videos/<day>/edit.json`), its path printed.
     FromSheet {
         project: PathBuf,
         /// One day only (YYYY-MM-DD).
         #[arg(long)]
         day: Option<String>,
+        /// One part of the trip only (its name): its clips from any day,
+        /// those not rated yet too, junk left out.
+        #[arg(long, conflicts_with_all = ["day", "empty"])]
+        part: Option<String>,
         /// An empty edit, to build from the bin: of the day (--day), or of every day.
         #[arg(long)]
         empty: bool,
@@ -739,8 +743,9 @@ pub(crate) fn run() -> Result<()> {
         Cmd::Looks { template, .. } => print!("{}", crate::apply::looks(template.as_deref())?),
         Cmd::Install => install()?,
         Cmd::Blank { dir } => println!("{}", crate::blank::ensure(&dir)?.display()),
-        Cmd::FromSheet { project, day, empty: true } => println!("{}", crate::from_sheet::write_empty(&project, day.as_deref())?.display()),
-        Cmd::FromSheet { project, day, empty: false } => println!("{}", crate::from_sheet::write(&project, day.as_deref())?.display()),
+        Cmd::FromSheet { project, part: Some(part), .. } => println!("{}", crate::from_sheet::write_part(&project, &part)?.display()),
+        Cmd::FromSheet { project, day, empty: true, .. } => println!("{}", crate::from_sheet::write_empty(&project, day.as_deref())?.display()),
+        Cmd::FromSheet { project, day, empty: false, .. } => println!("{}", crate::from_sheet::write(&project, day.as_deref())?.display()),
         Cmd::Mixcheck { project, target, every } => crate::mixmeasure::run_cli(&project, target, every)?,
         Cmd::Play { input, osv_size, hwaccel, stabilize, imu_axes, world_z_down } => {
             player::run(input, player::Launch { osv_size, hw: hwaccel, stabilize, imu_axes, world_z_down })?;

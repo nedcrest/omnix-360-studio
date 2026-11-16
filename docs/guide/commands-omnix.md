@@ -191,12 +191,13 @@ Makes the black picture a blank cut uses (`Blank.png` in DIR, kept if there) and
 
 ## `omnix from-sheet`
 
-Makes an edit from a Dailix project's marking (its folder): clips rated ✓ or ?, their segments as cuts (a clip with none whole), the voice chosen, flags inside a cut as its markers; written into the project's 04_project under a new name, printed
+Makes an edit from a Dailix project's marking (its folder): clips rated ✓ or ?, their segments as cuts (a clip with none whole), the voice chosen, flags inside a cut as its markers; written as a new video of the trip (`videos/<day>/edit.json`), its path printed
 
 | Argument | What it is |
 |---|---|
 | `<PROJECT>` |  |
 | `--day <DAY>` | One day only (YYYY-MM-DD) |
+| `--part <PART>` | One part of the trip only (its name): its clips from any day, those not rated yet too, junk left out |
 | `--empty` | An empty edit, to build from the bin: of the day (--day), or of every day |
 
 ## `omnix stitch`

@@ -35,6 +35,21 @@ fn label(role: Option<&str>, note: &str) -> String {
 /// The edit the marking of the Dailix project at `root` makes, of one day
 /// or of all.
 pub fn build(root: &Path, day: Option<&str>) -> Result<Project> {
+    build_from(root, |key, _| day.is_none_or(|only| key.split_once('/').is_some_and(|(d, _)| d == only)), false)
+}
+
+/// The edit of the trip's part `part` (gap 117): its clips only, from any
+/// day. A part is the user's own choice of clips, so one not rated yet
+/// goes in too (whole, or its segments); only junk stays out.
+pub fn build_part(root: &Path, part: &str) -> Result<Project> {
+    let sheet = read_sheet(&Layout::new(root)).with_context(|| format!("reading the marking of {}", root.display()))?;
+    let clips = sheet.part(part).with_context(|| format!("no part «{part}» in {}", root.display()))?.clips.clone();
+    build_from(root, |key, _| clips.iter().any(|c| c == key), true)
+}
+
+/// The edit of the clips `wanted` keeps (by key and marking), by day, by
+/// file, by time; `unrated` takes those not rated yet as well.
+fn build_from(root: &Path, wanted: impl Fn(&str, Option<&dailix_sheet::Clip>) -> bool, unrated: bool) -> Result<Project> {
     let layout = Layout::new(root);
     let text = std::fs::read_to_string(layout.sheet()).with_context(|| format!("reading {}", layout.sheet().display()))?;
     let sheet = Doc::parse(&text)?.sheet()?;
@@ -42,51 +57,62 @@ pub fn build(root: &Path, day: Option<&str>) -> Result<Project> {
     // A sidecar that can't be read leaves its clip out, as Dailix's sheet
     // does (and says).
     let (footage, _) = dailix_sheet::footage::read(&layout).with_context(|| format!("reading {}", layout.analysis().display()))?;
-    for clip in footage.days.into_iter().filter(|d| day.is_none_or(|only| d.day == only)).flat_map(|d| d.clips) {
-        let Some(mark) = sheet.clips.get(&clip.key) else { continue };
-        if !matches!(mark.rating, Some(Rating::Take | Rating::Think)) {
+    let none = dailix_sheet::Clip::default();
+    for clip in footage.days.into_iter().flat_map(|d| d.clips) {
+        let mark = sheet.clips.get(&clip.key);
+        if !wanted(&clip.key, mark) {
             continue;
         }
-        use dailix_sheet::voice;
-        let chosen = mark.audio.as_ref().zip(voice::dir(&layout, &clip.key)).filter(|(r, dir)| voice::track(dir, r).is_file());
-        let voice = chosen.as_ref().map(|(r, dir)| voice::track(dir, r));
-        // The whole file's loudness as Dailix measured it: what's used for a
-        // voice that can't be read here.
-        let whole = chosen.as_ref().and_then(|(r, dir)| voice::made(dir).get(*r)?.lufs);
-        let mut spans: Vec<(f64, f64, String)> = mark
-            .marks
-            .iter()
-            .filter(|m| m.kind != MarkKind::Flag)
-            .map(|m| (m.t, m.end.unwrap_or(m.t + POINT).min(clip.duration), label(m.role.as_deref(), &m.note)))
-            .collect();
-        if spans.is_empty() {
-            spans.push((0.0, clip.duration, mark.note.chars().take(80).collect()));
-        }
-        spans.sort_by(|a, b| a.0.total_cmp(&b.0));
-        for (start, end, note) in spans {
-            if end - start < MIN_CUT {
-                continue;
-            }
-            let mut cut = Cut::new(clip.path.clone(), start, end);
-            cut.note = (!note.is_empty()).then_some(note);
-            cut.audio = voice.clone();
-            cut.sheet_voice = chosen.as_ref().map(|(r, _)| (*r).clone());
-            if let Some(v) = &voice {
-                cut.loudness = stretch_loudness(v, (start, end), whole);
-                cut.gain = crate::model::ops::sound::normal_gain(cut.loudness);
-            }
-            cut.marks = mark
-                .marks
-                .iter()
-                .filter(|m| m.kind == MarkKind::Flag && m.t >= start && m.t <= end)
-                .map(|m| Mark { t: m.t, note: label(m.role.as_deref(), &m.note) })
-                .collect();
-            cuts.push(cut);
+        let taken = match mark.and_then(|m| m.rating) {
+            Some(Rating::Take | Rating::Think) => true,
+            Some(Rating::Junk) => false,
+            None => unrated,
+        };
+        if taken {
+            cuts.extend(clip_cuts(&layout, &clip, mark.unwrap_or(&none)));
         }
     }
     let mut project = Project { aspect: Some(Aspect(16, 9)), cuts, ..Default::default() };
     project.settle_ids();
     Ok(project)
+}
+
+/// A clip's cuts by its marking: a cut per segment (a point's from it),
+/// the whole clip with none; its chosen voice and its flags along.
+fn clip_cuts(layout: &Layout, clip: &dailix_sheet::footage::Clip, mark: &dailix_sheet::Clip) -> Vec<Cut> {
+    use dailix_sheet::voice;
+    let chosen = mark.audio.as_ref().zip(voice::dir(layout, &clip.key)).filter(|(r, dir)| voice::track(dir, r).is_file());
+    let voice = chosen.as_ref().map(|(r, dir)| voice::track(dir, r));
+    // The whole file's loudness as Dailix measured it: what's used for a
+    // voice that can't be read here.
+    let whole = chosen.as_ref().and_then(|(r, dir)| voice::made(dir).get(*r)?.lufs);
+    let mut spans: Vec<(f64, f64, String)> = mark
+        .marks
+        .iter()
+        .filter(|m| m.kind != MarkKind::Flag)
+        .map(|m| (m.t, m.end.unwrap_or(m.t + POINT).min(clip.duration), label(m.role.as_deref(), &m.note)))
+        .collect();
+    if spans.is_empty() {
+        spans.push((0.0, clip.duration, mark.note.chars().take(80).collect()));
+    }
+    spans.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let mut cuts = Vec::new();
+    for (start, end, note) in spans {
+        if end - start < MIN_CUT {
+            continue;
+        }
+        let mut cut = Cut::new(clip.path.clone(), start, end);
+        cut.note = (!note.is_empty()).then_some(note);
+        cut.audio = voice.clone();
+        cut.sheet_voice = chosen.as_ref().map(|(r, _)| (*r).clone());
+        if let Some(v) = &voice {
+            cut.loudness = stretch_loudness(v, (start, end), whole);
+            cut.gain = crate::model::ops::sound::normal_gain(cut.loudness);
+        }
+        cut.marks = mark.marks.iter().filter(|m| m.kind == MarkKind::Flag && m.t >= start && m.t <= end).map(|m| Mark { t: m.t, note: label(m.role.as_deref(), &m.note) }).collect();
+        cuts.push(cut);
+    }
+    cuts
 }
 
 /// The cleaned voices Dailix made for clip `clip` of the trip at `root`,
@@ -170,6 +196,13 @@ pub fn write(root: &Path, day: Option<&str>) -> Result<PathBuf> {
     save(root, day, &build(root, day)?)
 }
 
+/// The edit of the part `part` as a new video named for it
+/// (`videos/<the part's name in Latin>`). Where it went.
+pub fn write_part(root: &Path, part: &str) -> Result<PathBuf> {
+    let slug = dailix_sheet::project::slug(part);
+    save(root, Some(if slug.is_empty() { "part" } else { &slug }), &build_part(root, part)?)
+}
+
 /// An empty edit as a new video, to build from the bin (user, 2026-11-05:
 /// an idea made afresh). Of one day, the bin shows that day's clips (the
 /// video is named for it); of none, every day's (`all-days`: the whole
@@ -237,6 +270,7 @@ mod tests {
         clip("2030-05-01", "B.MP4", 10.0);
         clip("2030-05-01", "C.MP4", 10.0);
         clip("2030-05-02", "D.MP4", 8.0);
+        clip("2030-05-02", "E.MP4", 5.0);
         std::fs::create_dir_all(layout.voice().join("2030-05-01/A")).unwrap();
         std::fs::write(layout.voice().join("2030-05-01/A/dnn6.flac"), b"v").unwrap();
         let made = r#"{"dnn6": {"recipe": "dnn6", "kind": "dnn", "args": ["-D", "-a", "6"], "note": "", "source": "", "source_size": 1, "source_mtime": 0, "lufs": -26.0}}"#;
@@ -251,7 +285,8 @@ mod tests {
                     {"t": 2, "note": "a point"}]},
                 "2030-05-01/B.MP4": {"rating": 1, "note": "the whole of it", "marks": [{"t": 3, "kind": "flag", "note": "only a flag"}]},
                 "2030-05-01/C.MP4": {"rating": 0},
-                "2030-05-02/D.MP4": {"rating": 2}}}"#,
+                "2030-05-02/D.MP4": {"rating": 2}},
+              "parts": [{"name": "Rides", "clips": ["2030-05-02/E.MP4", "2030-05-01/C.MP4", "2030-05-01/A.MP4"]}]}"#,
         )
         .unwrap();
         let p = build(&root, Some("2030-05-01")).unwrap();
@@ -270,6 +305,12 @@ mod tests {
         assert_eq!(p.cuts[1].marks.iter().map(|m| (m.t, m.note.as_str())).collect::<Vec<_>>(), [(15.0, "cut · a meme here")]);
         assert_eq!(p.cuts[2].marks.len(), 1, "a whole clip keeps its flags as markers too");
         assert_eq!(build(&root, None).unwrap().cuts.len(), 4, "all days: D whole too");
+        // A part (gap 117): its clips by day and file, E not rated yet but
+        // in, C junk and out, D not in it.
+        let part: Vec<(String, f64, f64)> = build_part(&root, "rides").unwrap().cuts.iter().map(|c| (c.input.file_name().unwrap().to_string_lossy().into_owned(), c.start, c.end)).collect();
+        assert_eq!(part, [("A.MP4".to_owned(), 2.0, 8.0), ("A.MP4".to_owned(), 12.0, 20.0), ("E.MP4".to_owned(), 0.0, 5.0)]);
+        assert!(build_part(&root, "Sea").is_err());
+        assert_eq!(write_part(&root, "Rides").unwrap(), layout.video_edit("rides"));
         // What a cut's «Voice» offers: the voices made and the marking's choice.
         let v = voices(&root, &layout.clip("2030-05-01/A.MP4"));
         assert_eq!((v.made, v.chosen.as_deref()), (vec![("dnn6".to_owned(), layout.voice().join("2030-05-01/A/dnn6.flac"))], Some("dnn6")));

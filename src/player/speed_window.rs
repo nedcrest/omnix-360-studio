@@ -21,9 +21,13 @@ use iced::widget::canvas::{self, Frame, Geometry, Path, Text};
 use iced::widget::{button, canvas as canvas_widget, checkbox, column, container, pick_list, row, space, text, tooltip};
 use iced::{Alignment, Element, Length, Point, Rectangle, Renderer, Size, Theme};
 
-/// The rulers' height, and the curve's.
+/// The rulers' height, the curve's, and the playhead's strip under them.
 const RULER: f32 = 22.0;
 const CURVE: f32 = 170.0;
+const STRIP: f32 = 26.0;
+/// Where the strip starts, and the whole height.
+const STRIP_TOP: f32 = 2.0 * RULER + CURVE + 6.0;
+const HEIGHT: f32 = STRIP_TOP + STRIP;
 /// A point's half side, and how near a press picks it.
 const DOT: f32 = 4.5;
 const PICK: f32 = 8.0;
@@ -54,9 +58,10 @@ pub enum SpeedMsg {
     Pick(usize),
     /// Key `.0` dragged to footage time `.1`, rate `.2`.
     Move(usize, f64, f64),
-    /// The window's playhead to footage time `.0` (a ruler pressed or
-    /// dragged).
+    /// The window's playhead to footage time `.0` (its strip or a ruler
+    /// pressed or dragged, Home, End), or on by `.0` edit seconds (← →).
     Head(f64),
+    Step(f64),
     /// The key picked taken away; or key `.0` (a right-click on it).
     Remove,
     RemoveAt(usize),
@@ -230,7 +235,8 @@ impl canvas::Program<Message> for Curve<'_> {
         match event {
             Mouse(mouse::Event::ButtonPressed(button)) => {
                 let p = cursor.position_in(bounds)?;
-                // On a ruler: the playhead, dragged from there.
+                // On a ruler or the playhead's strip: the playhead, dragged
+                // from there.
                 if !(RULER..=RULER + CURVE).contains(&p.y) {
                     (*button == mouse::Button::Left).then_some(())?;
                     *hold = Hold::Head;
@@ -289,10 +295,12 @@ impl canvas::Program<Message> for Curve<'_> {
         }
         // The window's playhead: a line through it all, a handle on each ruler.
         let (x, accent) = (map.x(self.head), theme.extended_palette().primary.strong.color);
-        frame.fill(&Path::rectangle(Point::new(x - 1.0, 0.0), Size::new(2.0, 2.0 * RULER + CURVE)), accent);
+        self.draw_strip(&mut frame, &map, ink, accent);
+        frame.fill(&Path::rectangle(Point::new(x - 1.0, 0.0), Size::new(2.0, HEIGHT)), accent);
         for top in [0.0, RULER + CURVE + RULER - 8.0] {
             frame.fill(&Path::rounded_rectangle(Point::new(x - 6.0, top), Size::new(12.0, 8.0), 2.0.into()), accent);
         }
+        frame.fill(&Path::rounded_rectangle(Point::new(x - 7.0, STRIP_TOP + 2.0), Size::new(14.0, STRIP - 4.0), 3.0.into()), accent);
         vec![frame.into_geometry()]
     }
 
@@ -313,6 +321,23 @@ impl canvas::Program<Message> for Curve<'_> {
 }
 
 impl Curve<'_> {
+    /// The playhead's strip (the user, 2026-11-16: the rulers were too
+    /// thin to take hold of): each cut a shade, what's before the playhead
+    /// filled, its edit time written at its right.
+    fn draw_strip(&self, frame: &mut Frame, map: &Map, ink: iced::Color, accent: iced::Color) {
+        let at = offsets(self.spans);
+        for (k, w) in at.windows(2).enumerate() {
+            let (l, r) = (map.x(w[0]), map.x(w[1]));
+            frame.fill(&Path::rounded_rectangle(Point::new(l, STRIP_TOP), Size::new((r - l - 2.0).max(1.0), STRIP), 4.0.into()), ink.scale_alpha(if k % 2 == 0 { 0.12 } else { 0.2 }));
+        }
+        let x = map.x(self.head);
+        frame.fill(&Path::rounded_rectangle(Point::new(PAD, STRIP_TOP + STRIP / 2.0 - 2.0), Size::new((x - PAD).max(0.0), 4.0), 2.0.into()), accent.scale_alpha(0.6));
+        let label = format!("{:.2} s", self.draft.edit_secs(0.0, self.head));
+        let right = x + 12.0 + 60.0 < map.x(map.length);
+        let (lx, align) = if right { (x + 12.0, iced::advanced::text::Alignment::Left) } else { (x - 12.0, iced::advanced::text::Alignment::Right) };
+        frame.fill_text(Text { content: label, position: Point::new(lx, STRIP_TOP + STRIP / 2.0), color: ink, size: 11.0.into(), align_x: align, align_y: iced::alignment::Vertical::Center, ..Default::default() });
+    }
+
     /// The rates' lines, ¼× to 4×, 1× the strongest, named at the right.
     fn draw_grid(&self, frame: &mut Frame, ink: iced::Color, width: f32) {
         for (r, name) in [(0.25, "¼×"), (0.5, "½×"), (1.0, "1×"), (2.0, "2×"), (4.0, "4×")] {
@@ -357,7 +382,7 @@ impl App {
         let edit = self.speed_edit.as_ref()?;
         let cuts: Vec<&Cut> = edit.cuts.iter().filter_map(|id| self.edit.cuts.iter().find(|c| c.id == *id)).collect();
         let length = offsets(&edit.spans).last().copied().unwrap_or(0.0);
-        let curve = canvas_widget(Curve { draft: &edit.draft, spans: &edit.spans, picked: edit.picked, head: edit.head }).width(Length::Fill).height(2.0 * RULER + CURVE);
+        let curve = canvas_widget(Curve { draft: &edit.draft, spans: &edit.spans, picked: edit.picked, head: edit.head }).width(Length::Fill).height(HEIGHT);
         let was: f64 = cuts.iter().map(|c| c.edit_len()).sum();
         let m = |s: SpeedMsg| Message::Speed(s);
         let side = column![
@@ -430,6 +455,8 @@ impl App {
             SpeedMsg::Open(_) => {}
             SpeedMsg::Close(apply) => return self.close_speed(apply),
             SpeedMsg::Head(t) => look = Some(t.clamp(0.0, length)),
+            // On by edit seconds: a frame of the edit, at its speed there.
+            SpeedMsg::Step(secs) => look = Some(edit.draft.clip_after(edit.head, secs).clamp(0.0, length)),
             SpeedMsg::Put(t, r) => {
                 let ease = edit.picked.and_then(|k| edit.draft.keys.get(k)).map_or(Ease::Smooth, |k| k.ease);
                 edit.picked = Some(edit.draft.put_key(t, r, ease));
@@ -620,6 +647,13 @@ mod tests {
         assert_eq!(head(&app), 2.0, "kept in the footage");
         let _ = app.update(speed(SpeedMsg::Put(0.5, 2.0)));
         assert_eq!(head(&app), 0.5, "on the point put");
+        let _ = app.update(speed(SpeedMsg::Head(f64::INFINITY)));
+        assert_eq!(head(&app), 2.0, "End");
+        // A step is edit seconds: at 2× (from the point at 0.5 s on) a
+        // tenth of a second reads two tenths of footage.
+        let _ = app.update(speed(SpeedMsg::Head(1.0)));
+        let _ = app.update(speed(SpeedMsg::Step(0.1)));
+        assert!((head(&app) - 1.2).abs() < 1e-9, "{}", head(&app));
     }
 
     /// Two cuts selected side by side take one curve; Done gives each its

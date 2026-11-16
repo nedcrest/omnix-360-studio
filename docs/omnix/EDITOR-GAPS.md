@@ -1457,6 +1457,31 @@ was filmed (its name's date, else the file's), with a sidecar; the
 originals only read. The rest of ingest (cards, phones, analysis,
 proxies) stays gap 74.
 
+### 119. Dailix: after filing — the archive, freeing TMP, and saying the way — medium (user, 2026-11-17)
+
+The user, checking the sorter: «what next? Moved out of TMP, then what?
+Delete from TMP? Or back up into the archive and only then clear TMP —
+and is the archive set up? Is this said anywhere in the program's help?
+Are there hints in context?» Today: nothing after filing. TMP keeps the
+originals, the ledger says where each went, and that's all; INGEST.md's
+steps 9 and 11 (into the sources, TMP freed only once that's verified)
+aren't built; F1 lists keys only; the window's hints are tooltips.
+
+Proposed (to agree before building, it deletes files):
+- **In the sorter, per day** of TMP: «filed → into the archive → TMP
+  free» as three marks, and the next step as a button: «Into the archive»
+  copies the day's originals to `sources/<trip>/<day>/`, each checked
+  by its hash there (on the same disk a rename), the ledger noting it;
+  only then «Free TMP» offers to take them out of TMP (to the trash,
+  asked once, with what goes and how much space).
+- **The archive not set** (Sources place): the button says so and opens
+  Settings at Places; an offline disk said the same way.
+- **The way said in the program**: a «How Dailix works» card (F1's first
+  group, or a page of its own): cards → TMP → sorted into trips → archive
+  → TMP freed → the contact sheet → Omnix; and a one-line «Next:» under
+  the sorter's head saying the step the picked or the day is at.
+Milestone «Матеріал і бін», with gap 74 (whose step 9 this is).
+
 ### 118. One curve window for any automation — idea, medium (user, 2026-11-16)
 
 The user, after the speed window's playback was worked through: maybe

@@ -92,7 +92,7 @@ at the core's next load. Python readers use `.get`, so they don't mind.
 
 ```rust
 #[serde(tag = "area", rename_all = "snake_case", deny_unknown_fields)]
-pub enum SheetOp { Mark(MarkOp), Clip(ClipOp), Day(DayOp), Role(RoleOp) }
+pub enum SheetOp { Mark(MarkOp), Clip(ClipOp), Day(DayOp), Role(RoleOp), Part(PartOp) }
 
 pub enum MarkOp {
     Add    { clip: ClipKey, t: f64, end: Option<f64>, flag: bool, role: Option<String>, note: String },
@@ -105,6 +105,9 @@ pub enum ClipOp { Rate { clip: ClipKey, rating: Option<Rating> }, Note { clip: C
                   Voice { clip: ClipKey, audio: Option<String> } }
 pub enum DayOp  { Note { day: String, note: String } }
 pub enum RoleOp { Add { title: String, en: String, hint: String } }   // key made as the sheet makes it
+// A trip's parts (gap 117): named lists of clips from any day, no copies;
+// a part named by its name in any capitals. File: top-level `parts`.
+pub enum PartOp { Add { name }, Rename { part, name }, Put { part, clips }, Take { part, clips }, Remove { part } }
 ```
 
 - Absolute values (a role, a note, a span), never "change by": an op

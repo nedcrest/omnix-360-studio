@@ -34,6 +34,7 @@ pub enum Op {
     Clip(ClipOp),
     Day(DayOp),
     Role(RoleOp),
+    Part(crate::PartOp),
 }
 
 /// Marks on a clip: segments (material), points, flags (notes to self).
@@ -200,6 +201,7 @@ impl Doc {
                 }
             }
         }
+        problems.extend(crate::parts::check(&sheet.parts));
         problems
     }
 
@@ -210,6 +212,7 @@ impl Doc {
             Op::Clip(op) => self.change_clip(op),
             Op::Day(op) => self.change_day(op),
             Op::Role(op) => self.change_role(op),
+            Op::Part(op) => self.change_part(op),
         }
     }
 

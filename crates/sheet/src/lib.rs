@@ -13,6 +13,7 @@ pub mod footage;
 pub mod layout;
 pub mod marking;
 pub mod ops;
+pub mod parts;
 pub mod project;
 pub mod store;
 pub mod voice;
@@ -21,6 +22,7 @@ pub use layout::Layout;
 pub use store::{Store, StoreError};
 
 pub use ops::{ClipOp, DayOp, MarkOp, Op, OpError, Outcome, RoleOp};
+pub use parts::{Part, PartOp};
 
 use indexmap::IndexMap;
 use serde::Deserialize;
@@ -291,6 +293,9 @@ pub struct Sheet {
     pub clips: IndexMap<String, Clip>,
     #[serde(default)]
     pub roles: Vec<Role>,
+    /// The trip's parts (gap 117): named lists of its clips.
+    #[serde(default)]
+    pub parts: Vec<Part>,
 }
 
 /// The sheet's own roles: the function of a shot in the edit, not what's
@@ -375,7 +380,32 @@ impl Sheet {
                 }
             }
         }
+        out.push_str(&self.describe_parts(only));
         out
+    }
+
+    /// The parts, a line each with its clips (of day `only`, if given;
+    /// a part with none of that day's left out).
+    fn describe_parts(&self, only: Option<&str>) -> String {
+        let mut out = String::new();
+        for p in &self.parts {
+            let clips: Vec<&str> = p.clips.iter().map(String::as_str).filter(|c| only.is_none_or(|d| c.split_once('/').is_some_and(|(cd, _)| cd == d))).collect();
+            if only.is_some() && clips.is_empty() {
+                continue;
+            }
+            out.push_str(&format!("part «{}»  {} clips  {}\n", p.name, clips.len(), clips.join(", ")));
+        }
+        out
+    }
+
+    /// The part named `name` (in any capitals).
+    pub fn part(&self, name: &str) -> Option<&Part> {
+        self.parts.iter().find(|p| parts::same_name(&p.name, name))
+    }
+
+    /// The names of the parts clip `key` is in.
+    pub fn parts_of(&self, key: &str) -> Vec<&str> {
+        self.parts.iter().filter(|p| p.clips.iter().any(|c| c == key)).map(|p| p.name.as_str()).collect()
     }
 
     /// Every role a mark can have: the sheet's own, then the user's added

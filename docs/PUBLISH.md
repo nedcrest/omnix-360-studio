@@ -1,10 +1,21 @@
 # Publishing Omnix and Dailix (gap 109, 2026-11-14)
 
 The user is putting both programs on GitHub as his AI-driven / AI-assisted
-private project, to show what they do and how they were built. This comes
-before the time seam (`docs/omnix/TIME-SEAM.md`, paused after its step 1,
-everything green) and the features. **Nothing is pushed until the user
-says so.**
+private project, to show what they do and how they were built.
+
+**Public since 2026-11-16**, with Omnix's first release,
+[v0.1.0](https://github.com/nedcrest/omnix-360-studio/releases/tag/v0.1.0)
+(the archive with `install.sh`, the AppImage, `SHA256SUMS`; installing
+from it in an empty home checked). Both repos were made anew on GitHub
+that day, so no trace of the history before the working diary was taken
+out stays there. The rest of this page is how it got there.
+
+**The next release**: `packaging/build-release.sh` writes `SHA256SUMS`
+only at its end, after the Flatpak and Windows; a release of only some of
+the files needs it written by hand (`sha256sum` of the files uploaded),
+or `install.sh` refuses to install. Dailix's CI still has the
+`OMNIX_TOKEN` secret it needed while Omnix was private: not needed now,
+it can go (it expires 2026-12-15).
 
 ## Where things stand (scan of 2026-11-14)
 

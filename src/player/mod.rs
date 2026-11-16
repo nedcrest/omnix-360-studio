@@ -910,6 +910,8 @@ struct App {
     /// The library LUT new D-Log M cuts get, and the library's LUTs.
     dlog_m_lut: Option<String>,
     luts: Vec<String>,
+    /// The project's own LUTs (its `09_luts`, by path), read with its bin.
+    project_luts: Vec<String>,
     fullscreen: bool,
     volume: f32,
     muted: bool,
@@ -999,6 +1001,7 @@ impl App {
             ten_bit: saved.ten_bit,
             dlog_m_lut: saved.dlog_m_lut.clone(),
             luts: crate::lut::library_names(),
+            project_luts: Vec::new(),
             logo: svg::Handle::from_memory(LOGO),
             library: Vec::new(),
             thumbs: Default::default(),

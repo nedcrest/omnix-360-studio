@@ -50,6 +50,14 @@ pub fn library_names() -> Vec<String> {
     names
 }
 
+/// The `.cube` files in a project's `09_luts` (`dir`), by path, sorted
+/// by name: a cut names one by its path, as a LUT outside the library.
+pub fn in_folder(dir: &Path) -> Vec<String> {
+    let mut found: Vec<PathBuf> = std::fs::read_dir(dir).into_iter().flatten().flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|x| x.eq_ignore_ascii_case("cube"))).collect();
+    found.sort_by_key(|p| p.file_name().map(|n| n.to_string_lossy().to_lowercase()));
+    found.into_iter().map(|p| p.to_string_lossy().into_owned()).collect()
+}
+
 /// Copies the `.cube` at `path` into the library, after checking it reads,
 /// named by its file (with " 2" and on if another of that name differs).
 /// Gives its name.
@@ -188,6 +196,19 @@ impl Lut {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_projects_luts_are_its_cube_files_by_name() {
+        let dir = std::env::temp_dir().join(format!("omnix-luts-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        for f in ["b.CUBE", "a.cube", "notes.md"] {
+            std::fs::write(dir.join(f), b"x").unwrap();
+        }
+        let found: Vec<String> = in_folder(&dir).iter().map(|p| Path::new(p).file_name().unwrap().to_string_lossy().into_owned()).collect();
+        assert_eq!(found, ["a.cube", "b.CUBE"]);
+        assert!(in_folder(&dir.join("none")).is_empty());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
 
     fn cube(size: usize, f: impl Fn([f64; 3]) -> [f64; 3]) -> String {
         let mut s = format!("TITLE \"test\"\n# a comment\nLUT_3D_SIZE {size}\n");

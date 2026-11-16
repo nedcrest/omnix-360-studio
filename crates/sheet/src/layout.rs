@@ -43,8 +43,11 @@ pub const FOLDERS: [&str; 9] = [
     "06_external",        // outside video: memes, inserts, transitions
     "07_sfx",             // sound effects
     PICTURES,             // pictures and photos over the video: logos, captions, arrows
-    "09_luts",            // LUT files (.cube) for this project's colour
+    LUTS,                 // LUT files (.cube) for this project's colour
 ];
+
+/// The project's own LUTs (`.cube`), offered beside the library's.
+pub const LUTS: &str = "09_luts";
 
 /// A video's edit, in its folder.
 pub const EDIT: &str = "edit.json";
@@ -98,6 +101,9 @@ impl Layout {
     }
     pub fn footage(&self) -> PathBuf {
         self.root.join("01_footage")
+    }
+    pub fn luts(&self) -> PathBuf {
+        self.root.join(LUTS)
     }
     /// The trip's videos, a folder each.
     pub fn videos(&self) -> PathBuf {

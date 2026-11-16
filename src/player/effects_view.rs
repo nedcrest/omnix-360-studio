@@ -391,13 +391,15 @@ impl App {
         let cut = &self.edit.cuts[i];
         let mut choices = vec![LutChoice::None];
         choices.extend(self.luts.iter().map(|n| LutChoice::Named(n.clone())));
+        // The trip's own, from its 09_luts (gap 2), by path.
+        choices.extend(self.project_luts.iter().map(|n| LutChoice::Named(n.clone())));
         let current = LutChoice::of(cut.lut.as_ref());
         if !choices.contains(&current) {
             choices.push(current.clone());
         }
         let d_log_m = self.library.iter().find(|m| m.input == cut.input).is_some_and(|m| m.color_mode == crate::dji::ColorMode::DLogM);
-        let hint = if self.luts.is_empty() {
-            "Add LUTs (.cube) in Settings: DJI's D-Log M to Rec.709 for D-Log M footage, or any look"
+        let hint = if self.luts.is_empty() && self.project_luts.is_empty() {
+            "Add LUTs (.cube) in Settings, or into the trip's 09_luts folder: DJI's D-Log M to Rec.709 for D-Log M footage, or any look"
         } else {
             "A LUT turns the picture's colours into others before the effects: DJI's D-Log M to Rec.709 makes D-Log M footage look normal"
         };

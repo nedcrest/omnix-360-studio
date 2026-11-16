@@ -357,6 +357,7 @@ impl App {
         self.bin.sheet = self.bin.read.as_ref().and_then(|(_, r)| crate::notes::Sheet::of(r));
         self.bin.roles = self.bin.sheet.as_ref().map_or_else(crate::notes::Sheet::default_roles, crate::notes::Sheet::roles);
         self.bin.marking = self.bin.sheet.as_ref().and_then(crate::notes::Sheet::marking);
+        self.project_luts = self.project_root().map(|r| crate::lut::in_folder(&dailix_sheet::Layout::new(r).luts())).unwrap_or_default();
         if self.bin.part.as_ref().is_some_and(|p| self.bin.marking.as_ref().is_none_or(|m| m.part(p).is_none())) {
             self.bin.part = None;
         }

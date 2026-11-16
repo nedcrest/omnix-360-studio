@@ -162,10 +162,13 @@ CapCut (thumbnail grid, "+", drag to the timeline).
 **Next for the bin** (2026-11-07: the grid with its size slider, the
 player inside Omnix and I/O are done in gap 60's bin view; the hover
 skimmer in the bin gives way to the source viewer, 71a):
-- E / W from the bin: append / insert at the playhead (needs gap 1);
+- **Built 2026-11-16, waits for the user's check** (`dca2ee8`,
+  `c396aa6`): E / W add the bin player's clip (or its picked segment)
+  at the end / at the playhead; a tile says its rating, segments and
+  note from Dailix's marking; a «Part» list shows a trip's part alone
+  (gap 117); a cut's LUT list offers the trip's `09_luts` files.
 - drag-and-drop to the timeline (harder in iced);
-- sounds to their own lanes (gap 3); LUTs from `09_luts`;
-- ratings, notes and tags from Dailix's marking (once `notes.json`);
+- sounds to their own lanes (gap 3); tags from Dailix (when it has them);
 - the narrow bin panel still previews in an ffplay window: in Omnix, as
   the source viewer (71a). The first note on it — the
   user noticed the separate window (2026-10-22) and expects it in Omnix's

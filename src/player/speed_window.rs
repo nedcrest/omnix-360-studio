@@ -443,6 +443,9 @@ impl App {
         let spans: Vec<(f64, f64)> = cuts.iter().map(|c| (c.start, c.end)).collect();
         let draft = joined(&cuts.iter().map(|c| &c.speed).collect::<Vec<_>>(), &spans);
         self.speed_edit = Some(SpeedEdit { cuts: cuts.iter().map(|c| c.id).collect(), spans, draft, picked: None });
+        // The picture on the cuts edited, from their start (it stayed where
+        // the playhead was, on another cut; the user, 2026-11-16).
+        self.show_footage(0.0);
     }
 
     /// The picture above at joined footage time `t`: its cut, its clip time.
@@ -574,6 +577,7 @@ mod tests {
         (app.selection, app.also) = (crate::model::selection::Selection::Cut(a), vec![b]);
         let _ = app.update(Message::Speed(SpeedMsg::Open(b)));
         assert_eq!(app.speed_edit.as_ref().unwrap().cuts, [a, b]);
+
         let _ = app.update(Message::Speed(SpeedMsg::Preset(Preset::RampToCut)));
         let _ = app.update(Message::Speed(SpeedMsg::Close(true)));
         let (ca, cb) = (&app.edit.cuts[0], &app.edit.cuts[1]);

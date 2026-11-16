@@ -206,7 +206,16 @@ impl Doc {
     /// The op's change, unchecked.
     fn change(&mut self, op: &Op) -> Result<Outcome, OpError> {
         match op {
-            Op::Mark(MarkOp::Add { clip, t, end, flag, role, note }) => {
+            Op::Mark(op) => self.change_mark(op),
+            Op::Clip(op) => self.change_clip(op),
+            Op::Day(op) => self.change_day(op),
+            Op::Role(op) => self.change_role(op),
+        }
+    }
+
+    fn change_mark(&mut self, op: &MarkOp) -> Result<Outcome, OpError> {
+        match op {
+            MarkOp::Add { clip, t, end, flag, role, note } => {
                 finite(*t, "the start")?;
                 if let Some(end) = end {
                     finite(*end, "the end")?;
@@ -233,7 +242,7 @@ impl Doc {
                 self.clip_mut(clip)?.entry("marks").or_insert_with(|| json!([])).as_array_mut().ok_or_else(|| OpError::Invalid(format!("{clip}: its marks aren't a list")))?.push(Value::Object(m));
                 Ok(Outcome { made: Some(id) })
             }
-            Op::Mark(MarkOp::Move { mark, t, end }) => {
+            MarkOp::Move { mark, t, end } => {
                 finite(*t, "the start")?;
                 let m = self.mark_mut(mark)?;
                 if end.is_some() && m.get("kind").and_then(Value::as_str) == Some("flag") {
@@ -251,7 +260,7 @@ impl Doc {
                 }
                 Ok(Outcome::default())
             }
-            Op::Mark(MarkOp::Role { mark, role }) => {
+            MarkOp::Role { mark, role } => {
                 let m = self.mark_mut(mark)?;
                 match role.as_ref().filter(|r| !r.is_empty()) {
                     Some(r) => m.insert("role".into(), json!(r)),
@@ -259,29 +268,34 @@ impl Doc {
                 };
                 Ok(Outcome::default())
             }
-            Op::Mark(MarkOp::Note { mark, note }) => {
+            MarkOp::Note { mark, note } => {
                 self.mark_mut(mark)?.insert("note".into(), json!(note));
                 Ok(Outcome::default())
             }
-            Op::Mark(MarkOp::Remove { mark }) => {
+            MarkOp::Remove { mark } => {
                 let (clip, i) = self.find_mark(mark)?;
                 if let Some(marks) = self.value["clips"][clip.as_str()]["marks"].as_array_mut() {
                     marks.remove(i);
                 }
                 Ok(Outcome::default())
             }
-            Op::Clip(ClipOp::Rate { clip, rating }) => {
+        }
+    }
+
+    fn change_clip(&mut self, op: &ClipOp) -> Result<Outcome, OpError> {
+        match op {
+            ClipOp::Rate { clip, rating } => {
                 if rating.is_some_and(|r| r > 2) {
                     return Err(OpError::Invalid(format!("a rating is 0, 1 or 2, not {}", rating.unwrap_or_default())));
                 }
                 self.clip_mut(clip)?.insert("rating".into(), rating.map_or(Value::Null, |r| json!(r)));
                 Ok(Outcome::default())
             }
-            Op::Clip(ClipOp::Note { clip, note }) => {
+            ClipOp::Note { clip, note } => {
                 self.clip_mut(clip)?.insert("note".into(), json!(note));
                 Ok(Outcome::default())
             }
-            Op::Clip(ClipOp::Voice { clip, audio }) => {
+            ClipOp::Voice { clip, audio } => {
                 let c = self.clip_mut(clip)?;
                 match audio.as_ref().filter(|a| !a.is_empty()) {
                     Some(a) => c.insert("audio".into(), json!(a)),
@@ -289,13 +303,20 @@ impl Doc {
                 };
                 Ok(Outcome::default())
             }
-            Op::Day(DayOp::Note { day, note }) => {
-                let days = self.object_mut("days")?;
-                let d = days.entry(day.clone()).or_insert_with(|| json!({}));
-                d.as_object_mut().ok_or_else(|| OpError::Invalid(format!("day {day} isn't an object")))?.insert("note".into(), json!(note));
-                Ok(Outcome::default())
-            }
-            Op::Role(RoleOp::Add { title, en }) => {
+        }
+    }
+
+    fn change_day(&mut self, op: &DayOp) -> Result<Outcome, OpError> {
+        let DayOp::Note { day, note } = op;
+        let days = self.object_mut("days")?;
+        let d = days.entry(day.clone()).or_insert_with(|| json!({}));
+        d.as_object_mut().ok_or_else(|| OpError::Invalid(format!("day {day} isn't an object")))?.insert("note".into(), json!(note));
+        Ok(Outcome::default())
+    }
+
+    fn change_role(&mut self, op: &RoleOp) -> Result<Outcome, OpError> {
+        match op {
+            RoleOp::Add { title, en } => {
                 let title = title.trim();
                 if title.is_empty() {
                     return Err(OpError::Invalid("a role needs a title".into()));

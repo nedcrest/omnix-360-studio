@@ -9,9 +9,8 @@
 # Options: --prefix DIR (default ~/.local), --uninstall.
 set -eu
 
-# Where releases are published: none yet (gap 76). Until then this installs
-# only from an unpacked archive beside it, never a download.
-REPO=
+# Where releases are published: run on its own, it downloads the latest.
+REPO=nedcrest/omnix-360-studio
 ARCHIVE=omnix-x86_64-linux.tar.gz
 prefix="${HOME}/.local"
 uninstall=0

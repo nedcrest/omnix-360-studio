@@ -1,5 +1,7 @@
 # Omnix
 
+[![CI](https://github.com/nedcrest/omnix-360-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/nedcrest/omnix-360-studio/actions/workflows/ci.yml)
+
 **Omnix** is a home-video editor for Linux, written in Rust. It exists because its author wanted to edit his trips on Linux from start to finish: footage from a phone, an action camera, a drone and a 360 camera, with the sound treated as carefully as the picture. No editor did that, and the makers of 360 cameras don't make their software for Linux either. It began as editing for 360 footage, forked from [rOsmo360](https://github.com/ravelund/rOsmo360) by Vibing with Ravelund, which plays DJI Osmo 360 `.OSV` files directly: it stitches the two lenses, stabilises with the camera's gyro and lets you look around freely. Since the fork the work has gone into the editing itself: the timeline, sound lanes and loudness, the bin, cutting to the beat, transitions, speed, and an operations core that a script or an AI can drive. The 360 side is still rOsmo360's, as it was at the fork. One rule sets the order: an idea is carried to at least 95 % before the next big one starts.
 
 ![Omnix with a short trip's edit open, the playhead drawn through it: a title over a sunset, a scooter ride, flowers, a beach; under the picture the lanes with the clips, a transition and a song with its beats.](docs/guide/img/omnix-hero.gif)
@@ -12,7 +14,7 @@ Its sibling, **[Dailix](https://github.com/nedcrest/dailix)**, is the contact sh
 
 Licensed under [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE), at your option.
 
-Omnix has no published releases yet: build it from source; see [Building](#building). The packaging scripts (`packaging/`) make the same archives, AppImage, Flatpak and Windows zip as upstream's, under Omnix's name.
+**Download** the first release, 0.1.0, for Linux: [the archive with an install script, or an AppImage](https://github.com/nedcrest/omnix-360-studio/releases/latest); or build it from source, see [Building](#building).
 
 ## Where it comes from
 

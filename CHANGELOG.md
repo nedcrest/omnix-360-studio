@@ -1,6 +1,18 @@
 # Changelog
 
-## Unreleased
+## 0.1.0 — Omnix's first release (2026-11-16)
+
+Omnix numbers its own versions from 0.1.0: it is its own program, not a
+release of rOsmo360 (whose own 0.8.0 came out on 2026-11-15).
+
+Omnix grew from [rOsmo360](https://github.com/ravelund/rOsmo360) 0.7.1
+(a DJI Osmo 360 player and timeline editor, by Vibing with Ravelund) into
+a home-video editor, its 360 playback kept as it was, in
+three weeks, built with Claude ([`docs/AI-DRIVEN.md`](docs/AI-DRIVEN.md)).
+Every item below has its section in
+[`docs/omnix/EDITOR-GAPS-DONE.md`](docs/omnix/EDITOR-GAPS-DONE.md).
+
+### Speed, the speed curve, copy and paste
 
 - **Speed**: a cut slowed down or sped up from ¼× to 4× (its right-click
   menu), its sound with it, keeping its pitch or like tape; in the
@@ -16,18 +28,6 @@
   lane from its head's menu.
 - **The mouse frames an ordinary video in Framing only**: a stray click
   while editing moved it.
-
-## 0.1.0 — Omnix's first release (2026-11)
-
-Omnix numbers its own versions from 0.1.0: it is its own program, not a
-release of rOsmo360 (whose own 0.8.0 came out on 2026-11-15).
-
-Omnix grew from [rOsmo360](https://github.com/ravelund/rOsmo360) 0.7.1
-(a DJI Osmo 360 player and timeline editor, by Vibing with Ravelund) into
-a home-video editor, its 360 playback kept as it was, in
-three weeks, built with Claude ([`docs/AI-DRIVEN.md`](docs/AI-DRIVEN.md)).
-Every item below has its section in
-[`docs/omnix/EDITOR-GAPS-DONE.md`](docs/omnix/EDITOR-GAPS-DONE.md).
 
 ### The edit
 
@@ -85,5 +85,3 @@ Every item below has its section in
   renderer.
 - The contact sheet's core (`crates/sheet`), shared with Dailix, in this
   repo's workspace.
-- A project with a playback speed set is refused (speed came after
-  0.1.0: see Unreleased).

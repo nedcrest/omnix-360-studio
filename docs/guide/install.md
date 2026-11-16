@@ -16,8 +16,8 @@ source beside Omnix's.
 
 ## Install Omnix from a release
 
-*The first release is being prepared; until it's out, build it as
-below.*
+Download it from [the releases
+page](https://github.com/nedcrest/omnix-360-studio/releases/latest):
 
 - **The archive**: unpack it and run `./install.sh`. It puts `omnix` in
   `~/.local/bin`, with its icon and a menu entry (`--prefix /usr/local`

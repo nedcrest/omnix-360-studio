@@ -1446,6 +1446,32 @@ was filmed (its name's date, else the file's), with a sidecar; the
 originals only read. The rest of ingest (cards, phones, analysis,
 proxies) stays gap 74.
 
+### 118. One curve window for any automation — idea, medium (user, 2026-11-16)
+
+The user, after the speed window's playback was worked through: maybe
+a class of its own, a factory, so this kind of view serves automation
+of other things later (effects, colour…). What the speed window
+(`src/player/speed_window.rs`, 31c) is made of:
+1. **The session, wholly general**: the cuts (a run selected side by
+   side), one open undo step, its own playhead (Space / Play, following
+   the playback, paused past the cuts' end, Home / End / arrows, the
+   picture at its frame). The trickiest part, and the most worth
+   sharing.
+2. **The canvas, nearly general**: time across the cuts' footage with
+   their joins, points with an ease, dragging, the playhead strip, the
+   footage ruler. Speed's own: the height's scale (log; an effect's
+   would be linear or fitted, gap 108) and the second ruler in edit
+   seconds.
+3. **The model, per kind**: what's edited (`Speed`, or an `AutoClip`'s
+   points), how a curve over several cuts is split and joined, the op
+   that applies it, presets, the side panel's lines.
+Design: a «curve window» = session + canvas, and a small trait each
+kind implements (value at t, its points, the scale, a value's label,
+the editing rules, apply). When: by «the second copy is the moment to
+share» (code-rules), with the second window (an effect's curve), so the
+trait comes from two real cases; the session could go first, as it
+owes nothing to speed. Milestone «Ефекти, колір і розумний звук».
+
 ### 117. Dailix: sorting what landed in TMP into trips and their parts — medium (user, 2026-11-16)
 
 The user: there's no path worked out for what happens after the raw

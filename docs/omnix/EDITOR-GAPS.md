@@ -1590,22 +1590,6 @@ collected from the user's notes before the screenshots and GIFs are made
   `PROJECT-CARDS.md`.
 - (more as the user names them)
 
-### 109. Publishing Omnix and Dailix on GitHub — medium (user, 2026-11-14)
-
-The user is putting both programs on GitHub as his AI-driven / AI-assisted
-private project, to show visually and technically; this comes before the
-time seam and the features (user, 2026-11-14: «not only for my own edit,
-but for carrying it on»). Two repos (Omnix keeps rOsmo360's history and
-credits; Dailix gets Omnix as a git dependency so it builds on its own).
-The work: the commits' author email moved off the old work address to a
-personal one (history rewrite, local, with a backup); each README with
-what it is, his own screenshots and GIFs, building; CI (build, tests,
-clippy); an English page on how it was made with AI (the rules, skills,
-hooks, roadmap page, audits, snapshots, the user-tests loop, the
-numbers); later the user guide redone with GIFs he records, and which
-working docs go public (decided later). Nothing is pushed until he says
-so. Plan: `docs/PUBLISH.md`.
-
 ### 108. An automation clip's height fitted to its values («Snap to scale») — small (user, 2026-11-12)
 
 **Built 2026-11-15, waiting for a check**, as the user put it then: per

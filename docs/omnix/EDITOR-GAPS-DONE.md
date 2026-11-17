@@ -2274,3 +2274,23 @@ the trip's page, the sheet's «Part» filter, the pane's ticks).
 - **Left for later**: the parts in Omnix's bin (a section or a
   filter); moving from TMP into the archive (gap 74); a part renamed
   or removed from the window (the ops and `dailix sheet apply` can).
+
+### 109. Publishing Omnix and Dailix on GitHub — medium (user, 2026-11-14)
+
+The user is putting both programs on GitHub as his AI-driven / AI-assisted
+private project, to show visually and technically; this comes before the
+time seam and the features (user, 2026-11-14: «not only for my own edit,
+but for carrying it on»). Two repos (Omnix keeps rOsmo360's history and
+credits; Dailix gets Omnix as a git dependency so it builds on its own).
+The work: the commits' author email moved off the old work address to a
+personal one (history rewrite, local, with a backup); each README with
+what it is, his own screenshots and GIFs, building; CI (build, tests,
+clippy); an English page on how it was made with AI (the rules, skills,
+hooks, roadmap page, audits, snapshots, the user-tests loop, the
+numbers); later the user guide redone with GIFs he records, and which
+working docs go public (decided later). Nothing is pushed until he says
+so. Plan: `docs/PUBLISH.md`.
+
+**Done 2026-11-17, checked by the user**: both repos public (recreated
+2026-11-16 to drop the force-push traces), release v0.1.0, the READMEs,
+the working docs shown and the diary moved to a private notes repo.

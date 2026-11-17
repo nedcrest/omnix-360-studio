@@ -1,8 +1,8 @@
 //! A trip's parts (Omnix gap 117): named lists of its clips, from any of
-//! its days («Rides on Kos»: only the scooter's videos, every day). A
+//! its days («Island rides»: only the scooter's videos, every day). A
 //! part holds clips' keys, never copies; a clip can be in several. The
 //! file keeps them at its top, in the order they were made:
-//! `"parts": [{"name": "Rides on Kos", "clips": ["2026-08-22/DJI_0001.MP4"]}]`.
+//! `"parts": [{"name": "Island rides", "clips": ["2026-08-22/DJI_0001.MP4"]}]`.
 
 use crate::ops::{OpError, Outcome};
 use crate::Doc;
@@ -19,7 +19,7 @@ pub struct Part {
 }
 
 /// A change to the parts. A part is named by its name, the same however
-/// it's written in capitals («rides on kos» is «Rides on Kos»).
+/// it's written in capitals («island rides» is «Island rides»).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(tag = "op", rename_all = "snake_case", deny_unknown_fields)]
 pub enum PartOp {
@@ -146,14 +146,14 @@ mod tests {
     #[test]
     fn a_part_is_made_filled_and_emptied_by_its_name() {
         let mut d = doc();
-        assert_eq!(apply(&mut d, PartOp::Add { name: " Rides on Kos ".into() }).unwrap().made.as_deref(), Some("Rides on Kos"));
+        assert_eq!(apply(&mut d, PartOp::Add { name: " Island rides ".into() }).unwrap().made.as_deref(), Some("Island rides"));
         // Its name in any capitals; a clip put twice is there once.
-        apply(&mut d, PartOp::Put { part: "rides on kos".into(), clips: vec![B.into(), A.into(), B.into()] }).unwrap();
-        assert_eq!(d.sheet().unwrap().parts, [Part { name: "Rides on Kos".into(), clips: vec![B.into(), A.into()] }]);
-        apply(&mut d, PartOp::Take { part: "Rides on Kos".into(), clips: vec![B.into(), "2030-05-03/none.mp4".into()] }).unwrap();
+        apply(&mut d, PartOp::Put { part: "island rides".into(), clips: vec![B.into(), A.into(), B.into()] }).unwrap();
+        assert_eq!(d.sheet().unwrap().parts, [Part { name: "Island rides".into(), clips: vec![B.into(), A.into()] }]);
+        apply(&mut d, PartOp::Take { part: "Island rides".into(), clips: vec![B.into(), "2030-05-03/none.mp4".into()] }).unwrap();
         assert_eq!(d.sheet().unwrap().parts[0].clips, [A]);
-        assert!(d.text().contains("\"parts\": [\n    {\n      \"name\": \"Rides on Kos\",\n      \"clips\": [\n        \"2030-05-01/a.mp4\"\n      ]"), "{}", d.text());
-        apply(&mut d, PartOp::Rename { part: "Rides on Kos".into(), name: "Scooter".into() }).unwrap();
+        assert!(d.text().contains("\"parts\": [\n    {\n      \"name\": \"Island rides\",\n      \"clips\": [\n        \"2030-05-01/a.mp4\"\n      ]"), "{}", d.text());
+        apply(&mut d, PartOp::Rename { part: "Island rides".into(), name: "Scooter".into() }).unwrap();
         apply(&mut d, PartOp::Remove { part: "scooter".into() }).unwrap();
         assert!(d.sheet().unwrap().parts.is_empty());
     }

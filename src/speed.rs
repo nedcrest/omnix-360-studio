@@ -95,7 +95,24 @@ impl Speed {
             _ if self.is_normal() => "normal speed".to_owned(),
             [k] => format!("{} speed", rate(k.rate)),
             keys if keys.iter().all(|k| k.rate == keys[0].rate) => format!("{} speed", rate(keys[0].rate)),
-            keys => format!("a speed curve of {} keys, {}", keys.len(), keys.iter().map(|k| format!("{} from {:.2} s", rate(k.rate), k.t)).collect::<Vec<_>>().join(", ")),
+            // Each key's way on to the next: a step (held) or a ramp.
+            keys => format!(
+                "a speed curve of {} keys, {}",
+                keys.len(),
+                keys.iter()
+                    .enumerate()
+                    .map(|(i, k)| {
+                        let on = match k.ease {
+                            _ if i + 1 == keys.len() => "",
+                            crate::view::Ease::Hold => "",
+                            crate::view::Ease::Linear => ", an even ramp on",
+                            crate::view::Ease::Smooth => ", a smooth ramp on",
+                        };
+                        format!("{} from {:.2} s{on}", rate(k.rate), k.t)
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
         };
         if self.tape { format!("{what}, its sound like tape") } else { what }
     }
@@ -364,6 +381,13 @@ impl Reading<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_curve_is_described_with_its_ramps() {
+        assert_eq!(curve().describe(), "a speed curve of 3 keys, 1× from 0.00 s, 2× from 2.00 s, 0.5× from 4.00 s");
+        let ramp = Speed { keys: vec![SpeedKey { ease: Ease::Smooth, ..SpeedKey::held(0.0, 1.0) }, SpeedKey { ease: Ease::Linear, ..SpeedKey::held(2.0, 2.0) }, SpeedKey { ease: Ease::Smooth, ..SpeedKey::held(4.0, 1.0) }], tape: false };
+        assert_eq!(ramp.describe(), "a speed curve of 3 keys, 1× from 0.00 s, a smooth ramp on, 2× from 2.00 s, an even ramp on, 1× from 4.00 s");
+    }
 
     /// 1× until clip second 2, 2× to 4, 0.5× after.
     fn curve() -> Speed {

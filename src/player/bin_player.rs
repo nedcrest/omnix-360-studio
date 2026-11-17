@@ -114,7 +114,11 @@ impl App {
             _ => return Written::HereOnly,
         };
         match result {
-            Ok(t) => Written::Sheet(t, self.sheet_marks(path)),
+            Ok(t) => {
+                // The tiles' lines (rating, segments) read again with it.
+                self.bin.marking = self.bin.sheet.as_ref().and_then(crate::notes::Sheet::marking);
+                Written::Sheet(t, self.sheet_marks(path))
+            }
             Err(e) => {
                 self.error = Some(format!("Couldn't write the contact sheet: {e:#}"));
                 Written::Failed

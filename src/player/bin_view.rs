@@ -408,12 +408,10 @@ impl App {
                     // the first; an empty section still shows, for its «+».
                     // A part shown: its clips from every day, the days
                     // without one left out.
-                    let part = self.bin.part.is_some() && kind == Kind::Clip;
                     let mine: Vec<(&super::bin::Section, Vec<PathBuf>)> = sections
                         .iter()
-                        .filter(|s| s.title == title && (part || self.day_shown(s)))
-                        .map(|s| (s, s.files.iter().filter(|f| !part || self.in_part(f)).cloned().collect::<Vec<_>>()))
-                        .filter(|(s, files)| !part || !files.is_empty() || s.sub.is_none())
+                        .filter(|s| s.title == title)
+                        .filter_map(|s| super::bin::section_files(s, kind, self.bin.part.is_some(), self.day_shown(s), |f| self.in_part(f)).map(|files| (s, files)))
                         .collect();
                     if mine.is_empty() {
                         body = body.push(rule::horizontal(1)).push(self.section_tiles(title, title.to_owned(), kind, &[], true));
@@ -594,10 +592,14 @@ impl App {
         if parts.is_empty() {
             return None;
         }
-        let every = "Every clip".to_owned();
-        let choices: Vec<String> = std::iter::once(every.clone()).chain(parts.iter().map(|p| p.name.clone())).collect();
-        let now = self.bin.part.clone().unwrap_or_else(|| every.clone());
-        let list = iced::widget::pick_list(choices, Some(now), move |c: String| Message::BinView(BinMsg::Part((c != every).then_some(c)))).text_size(13);
+        use super::bin::PartChoice;
+        let choices: Vec<PartChoice> = std::iter::once(PartChoice::Every).chain(parts.iter().map(|p| PartChoice::Named(p.name.clone()))).collect();
+        let now = self.bin.part.clone().map_or(PartChoice::Every, PartChoice::Named);
+        let list = iced::widget::pick_list(choices, Some(now), |c: PartChoice| Message::BinView(BinMsg::Part(match c {
+            PartChoice::Every => None,
+            PartChoice::Named(n) => Some(n),
+        })))
+        .text_size(13);
         Some(tip(list, text("A part of the trip: its clips from every day (Dailix makes them)"), tooltip::Position::Left))
     }
 

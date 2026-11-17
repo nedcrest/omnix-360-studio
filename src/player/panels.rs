@@ -65,6 +65,7 @@ impl App {
                 self.ten_bit = on;
                 source::set_deep(on);
             }
+            Message::ProjectLuts => self.project_luts = self.project_root().map(|r| crate::lut::in_folder(&dailix_sheet::Layout::new(r).luts())).unwrap_or_default(),
             Message::AddLut => {
                 return Task::perform(
                     async { rfd::AsyncFileDialog::new().set_title("Add a LUT").add_filter("3D LUT", &["cube", "CUBE"]).pick_file().await.map(|f| f.path().to_owned()) },

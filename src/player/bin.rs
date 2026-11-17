@@ -222,6 +222,35 @@ pub fn marking_line(clip: &dailix_sheet::Clip) -> String {
     [rating, segments.as_str(), note].into_iter().filter(|s| !s.is_empty()).collect::<Vec<_>>().join(" · ")
 }
 
+/// The bin view's part list: every clip, or one part's.
+#[derive(Debug, Clone, PartialEq)]
+pub enum PartChoice {
+    Every,
+    Named(String),
+}
+
+impl std::fmt::Display for PartChoice {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PartChoice::Every => f.write_str("Every clip"),
+            PartChoice::Named(n) => f.write_str(n),
+        }
+    }
+}
+
+/// What the bin view shows of a section of `kind`: its files (only those
+/// `in_part` keeps, when a part is shown and they're clips), or none when
+/// a part is shown and a day of clips has none of it (the folder's own
+/// section stays, for its «+»). `day_shown`: the edit's days rule.
+pub fn section_files(s: &Section, kind: Kind, part: bool, day_shown: bool, in_part: impl Fn(&Path) -> bool) -> Option<Vec<PathBuf>> {
+    let part = part && kind == Kind::Clip;
+    if !part && !day_shown {
+        return None;
+    }
+    let files: Vec<PathBuf> = s.files.iter().filter(|f| !part || in_part(f)).cloned().collect();
+    (!part || !files.is_empty() || s.sub.is_none()).then_some(files)
+}
+
 /// The project's folder for a project file at `project`: a Dailix trip's
 /// for one of its videos; above an older project's `04_project`; else
 /// the file's own folder.
@@ -702,6 +731,20 @@ mod tests {
         assert_eq!(marking_line(&dailix_sheet::Clip::default()), "");
         let junk: dailix_sheet::Clip = serde_json::from_str(r#"{"rating": 0, "marks": [{"t": 1, "end": 3}]}"#).unwrap();
         assert_eq!(marking_line(&junk), "✕ · 1 segment");
+    }
+
+    #[test]
+    fn a_part_shows_its_clips_from_every_day_and_drops_days_without_one() {
+        let day = |d: &str, files: &[&str]| Section { title: "Footage", sub: Some(d.into()), kind: Kind::Clip, files: files.iter().map(PathBuf::from).collect() };
+        let a = day("2026-08-21", &["/f/a.MP4", "/f/b.MP4"]);
+        let b = day("2026-08-22", &["/f/c.MP4"]);
+        let keep = |p: &Path| p.ends_with("b.MP4");
+        assert_eq!(section_files(&a, Kind::Clip, true, false, keep), Some(vec![PathBuf::from("/f/b.MP4")]), "a part ignores the edit's days");
+        assert_eq!(section_files(&b, Kind::Clip, true, true, keep), None);
+        assert_eq!(section_files(&b, Kind::Clip, false, false, keep), None, "no part: the edit's days rule");
+        assert_eq!(section_files(&b, Kind::Clip, false, true, keep).map(|f| f.len()), Some(1));
+        let music = Section { title: "Music", sub: None, kind: Kind::Sound(SoundTrack::Music), files: vec![PathBuf::from("/m/s.mp3")] };
+        assert_eq!(section_files(&music, music.kind, true, true, keep).map(|f| f.len()), Some(1), "a part filters clips only");
     }
 
     #[test]

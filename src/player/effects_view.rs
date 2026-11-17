@@ -405,7 +405,7 @@ impl App {
         };
         let mut col = column![
             row![text("LUT").width(Length::Fill), text(if d_log_m { "filmed in D-Log M" } else { "" }).size(13)].align_y(Alignment::Center),
-            tip(pick_list(choices, Some(current), |c| Message::Effect(EffectMsg::Lut(c))).text_size(13).width(Length::Fill), text(hint), tooltip::Position::Left),
+            tip(pick_list(choices, Some(current), |c| Message::Effect(EffectMsg::Lut(c))).on_open(Message::ProjectLuts).text_size(13).width(Length::Fill), text(hint), tooltip::Position::Left),
         ]
         .spacing(4);
         if cut.lut.is_some() {

@@ -35,7 +35,7 @@ fn label(role: Option<&str>, note: &str) -> String {
 /// The edit the marking of the Dailix project at `root` makes, of one day
 /// or of all.
 pub fn build(root: &Path, day: Option<&str>) -> Result<Project> {
-    build_from(root, |key, _| day.is_none_or(|only| key.split_once('/').is_some_and(|(d, _)| d == only)), false)
+    build_from(root, |key| day.is_none_or(|only| key.split_once('/').is_some_and(|(d, _)| d == only)), false)
 }
 
 /// The edit of the trip's part `part` (gap 117): its clips only, from any
@@ -44,12 +44,12 @@ pub fn build(root: &Path, day: Option<&str>) -> Result<Project> {
 pub fn build_part(root: &Path, part: &str) -> Result<Project> {
     let sheet = read_sheet(&Layout::new(root)).with_context(|| format!("reading the marking of {}", root.display()))?;
     let clips = sheet.part(part).with_context(|| format!("no part «{part}» in {}", root.display()))?.clips.clone();
-    build_from(root, |key, _| clips.iter().any(|c| c == key), true)
+    build_from(root, |key| clips.iter().any(|c| c == key), true)
 }
 
 /// The edit of the clips `wanted` keeps (by key and marking), by day, by
 /// file, by time; `unrated` takes those not rated yet as well.
-fn build_from(root: &Path, wanted: impl Fn(&str, Option<&dailix_sheet::Clip>) -> bool, unrated: bool) -> Result<Project> {
+fn build_from(root: &Path, wanted: impl Fn(&str) -> bool, unrated: bool) -> Result<Project> {
     let layout = Layout::new(root);
     let text = std::fs::read_to_string(layout.sheet()).with_context(|| format!("reading {}", layout.sheet().display()))?;
     let sheet = Doc::parse(&text)?.sheet()?;
@@ -59,10 +59,10 @@ fn build_from(root: &Path, wanted: impl Fn(&str, Option<&dailix_sheet::Clip>) ->
     let (footage, _) = dailix_sheet::footage::read(&layout).with_context(|| format!("reading {}", layout.analysis().display()))?;
     let none = dailix_sheet::Clip::default();
     for clip in footage.days.into_iter().flat_map(|d| d.clips) {
-        let mark = sheet.clips.get(&clip.key);
-        if !wanted(&clip.key, mark) {
+        if !wanted(&clip.key) {
             continue;
         }
+        let mark = sheet.clips.get(&clip.key);
         let taken = match mark.and_then(|m| m.rating) {
             Some(Rating::Take | Rating::Think) => true,
             Some(Rating::Junk) => false,

@@ -24,6 +24,29 @@ The **originals** are never touched. A trip holds copies of the clips
 (or of the stretches of them you added); the originals stay in
 **Sources**, as they came off the camera.
 
+## The way footage goes
+
+Three places, and footage moves between them in one direction:
+
+1. **TMP**: what came off the cards and phones, waiting. Nothing there
+   is the only copy for long.
+2. **Trips**: the TMP sorter copies each video into a trip, under the
+   day it was filmed, and into the trip's **parts** if asked. A part is
+   a list, not a folder: a clip is in its day once, and in as many
+   parts as you like.
+3. **Sources**, the archive: the originals, copied in by trip and day
+   and checked by their content's hash (BLAKE3) read back from the copy.
+   Only then can TMP let them go, to the trash, after the archive copy
+   is read once more.
+
+TMP keeps a ledger of what went where (`.dailix-filed.json`); a video
+counts as filed only while its copy is in its trip, and as the same
+video only while the file at its place in TMP is the same size, so a
+new card's `DJI_0001` is never taken for an old one. Nothing in the
+archive is written over or changed; the one thing Dailix moves there is
+a copy it put under `_not-in-a-trip`, into its trip's day once the
+video is filed.
+
 ## From the marking to an edit
 
 Dailix's **→ Omnix** makes an edit from the marking, by fixed rules:

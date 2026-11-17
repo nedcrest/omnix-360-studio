@@ -9,8 +9,9 @@ Ravelund, which Omnix was forked from.
 
 - **New here?** [Install them and run them for the first
   time](install.md).
-- **Then the tutorial**: one short trip, from its clips to a
-  finished film, in two parts: [choosing in Dailix](tutorial-1-dailix.md),
+- **Then the tutorial**: one short trip, from the card to a
+  finished film, in three parts: [bringing the footage
+  in](tutorial-0-bring-in.md), [choosing in Dailix](tutorial-1-dailix.md),
   then [editing in Omnix](tutorial-2-omnix.md).
 - **How-to guides**, one task each: [change a clip's
   speed](speed.md).

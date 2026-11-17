@@ -65,9 +65,10 @@ Dailix asks where to keep your footage, in three folders:
    there yet.
 
 You can change them later, in **☰** > **Settings** (or **Ctrl+,**).
-Then select **+ New trip** to make your first trip, and **⋯** > **Add
-videos…** on its page to bring your clips in. The
-[tutorial](tutorial-1-dailix.md) goes on from there.
+Then copy your videos into the TMP folder and select **TMP** on
+**Trips**: the sorter makes your first trip from them (or **+ New trip**,
+then **⋯** > **Add videos…** on its page). The
+[tutorial](tutorial-0-bring-in.md) goes on from there.
 
 ## Omnix's first run
 

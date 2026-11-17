@@ -5,8 +5,9 @@ stretch of one clip you want, and send what you chose to Omnix as a
 first edit. It takes about ten minutes.
 
 You need Dailix with its three folders set (its welcome asks for them
-on the first run) and a trip with a few clips. The pictures show a trip
-called **Tutorial**: six short clips over four days.
+on the first run) and a trip with a few clips: the one made in
+[Bring the footage in](tutorial-0-bring-in.md), or any. The pictures
+show a trip called **Tutorial**: six short clips over four days.
 
 ## Open the trip
 

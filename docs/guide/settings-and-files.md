@@ -42,7 +42,7 @@ Dailix makes a trip with this layout; both programs read and write it. Make a tr
 
 | Folder or file | What it holds | Written by |
 |---|---|---|
-| `01_footage/<day>/` | The clips, copied in from the originals | Dailix (**Add videos…**, `dailix add`) |
+| `01_footage/<day>/` | The clips, copied in from the originals | Dailix (the TMP sorter, **Add videos…**, `dailix tmp file`, `dailix add`) |
 | `02_audio/music/` | Songs | you; Omnix's bin lists them |
 | `02_audio/voiceover/` | Voice-overs | Omnix's recorder, or you |
 | `06_external/` | Video from elsewhere (memes, inserts) | you; Omnix's bin lists it |
@@ -51,12 +51,22 @@ Dailix makes a trip with this layout; both programs read and write it. Make a tr
 | `09_luts/` | The trip's own colour looks (`.cube`) | you |
 | `LICENSES.md` in the four above | A line per file: where it came from, its licence, whether it needs credit | you |
 | `dailix/project.json` | The trip's name, description and tags | Dailix |
-| `dailix/sheet.json` | The marking: ratings, segments, flags, notes, the days' stories | Dailix and Omnix |
+| `dailix/sheet.json` | The marking: ratings, segments, flags, notes, the days' stories, the trip's parts | Dailix and Omnix |
 | `dailix/analysis/`, `dailix/thumbs/`, `dailix/voice/`, `dailix/cards/` | What Dailix knows of each clip, its poster, its cleaned voices; the edits' card frames | Dailix, Omnix |
 | `videos/<edit>/edit.json` | An edit | Omnix |
 | `videos/<edit>/export/` | Its exports | Omnix |
 
 The originals stay in **Sources**, never changed; a trip holds copies.
+
+## TMP and Sources
+
+| Where | What | Written by |
+|---|---|---|
+| TMP's own folders and files | What came off the cards and phones, as copied in | you |
+| `<TMP>/.dailix-filed.json` | The ledger: where each video was filed, which are in the archive (with their hash), each one's size | the TMP sorter, `dailix tmp` |
+| `<TMP>/.dailix/posters/` | The sorter's posters (copied to the trip when a video is filed) | the TMP sorter |
+| `<Sources>/<trip>/<day>/` | The originals of a trip's videos | **Into the archive**, `dailix tmp archive` |
+| `<Sources>/_not-in-a-trip/<day>/` | Originals archived before they were in a trip; one follows into its trip's day once filed | the same |
 
 ## An edit's file
 

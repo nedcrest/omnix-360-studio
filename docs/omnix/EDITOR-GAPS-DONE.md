@@ -2192,3 +2192,85 @@ moves the playhead, drag retimes, Del deletes the key). Waits for the
 user's check with steps a–d.
 
 **Checked by the user 2026-11-12:** playing, the frame follows the keys from the timeline; the mouse moves it, the sliders and the lanes' points change with it. What's left is gap 107b.
+
+### 119. Dailix: after filing — the archive, freeing TMP, and saying the way — medium (user, 2026-11-17)
+
+The user, checking the sorter: «what next? Moved out of TMP, then what?
+Delete from TMP? Or back up into the archive and only then clear TMP —
+and is the archive set up? Is this said anywhere in the program's help?
+Are there hints in context?» Today: nothing after filing. TMP keeps the
+originals, the ledger says where each went, and that's all; INGEST.md's
+steps 9 and 11 (into the sources, TMP freed only once that's verified)
+aren't built; F1 lists keys only; the window's hints are tooltips.
+
+Proposed (to agree before building, it deletes files):
+- **In the sorter, per day** of TMP: «filed → into the archive → TMP
+  free» as three marks, and the next step as a button: «Into the archive»
+  copies the day's originals to `sources/<trip>/<day>/`, each checked
+  by its hash there (on the same disk a rename), the ledger noting it;
+  only then «Free TMP» offers to take them out of TMP (to the trash,
+  asked once, with what goes and how much space).
+- **The archive not set** (Sources place): the button says so and opens
+  Settings at Places; an offline disk said the same way.
+- **The way said in the program**: a «How Dailix works» card (F1's first
+  group, or a page of its own): cards → TMP → sorted into trips → archive
+  → TMP freed → the contact sheet → Omnix; and a one-line «Next:» under
+  the sorter's head saying the step the picked or the day is at.
+Milestone «Матеріал і бін», with gap 74 (whose step 9 this is).
+
+**Done 2026-11-17, checked by the user** (Dailix
+`efad562`; before it `b708882`: TMP counts a video filed only while its
+copy is in its trip, and a part removed can take its untouched videos
+with it). `archive.rs`, `sorter_archive.rs`, `dailix tmp archive | free`.
+
+### 117. Dailix: sorting what landed in TMP into trips and their parts — medium (user, 2026-11-16)
+
+The user: there's no path worked out for what happens after the raw
+files land in TMP, so that they gather into a trip of their own, a day,
+and so on. He sees it as a simple sorter with playback of the videos
+picked: under each one a trip is chosen, and each can get a part of the
+trip of its own — a day, or a name («rides on Kos»: only the scooter
+videos, from all the days).
+
+What there is: `dailix/docs/INGEST.md` (gap 74) copies cards and phones
+into TMP verified, files days away into the sources, and assumes the
+trip is known when choosing; `dailix add` (gap 115's part) copies files
+into a trip's days. Missing: the step between, and a part of a trip
+that isn't a day.
+
+To work out with him before building:
+- **The sorter**: TMP's clips as a list or tiles, a player for the one
+  picked (Dailix's), several picked at once; under each, the trip
+  (an existing one or a new one) and the part. Keys to go through them
+  quickly (next, same trip as the last).
+- **Parts of a trip**: days, as now (from the filming date), plus named
+  parts across days (a «collection»: «rides on Kos»). A clip in a
+  collection still belongs to its day; a collection is a list, not a
+  folder, so nothing is copied twice. Where it lives (the trip's
+  project file) and how Dailix and Omnix show it (a filter in the
+  contact sheet, a bin section, «→ Omnix» from a collection).
+- **What sorting does on disk**: moves (or copies, verified) the file
+  into the trip's `01_footage/<day>/` with its sidecar, as `dailix add`
+  does; TMP freed as INGEST.md says.
+- With gap 74's ingest: the sorter is the step after «copied to TMP».
+
+Milestone «Матеріал і бін». The user put it in «Далі», after the speed
+window (2026-11-16).
+
+**Done 2026-11-17, checked by the user** (the sketch approved
+the same day, with the recommended answers: copy, parts as lists,
+the sorter first). Omnix `8a6afc8` (parts in the sheet core, `PartOp`),
+`ce17825` (`from_sheet::build_part`, `omnix from-sheet --part`),
+`682e9c1` (one list of video endings); Dailix `4bb651c` (`tmp.rs`,
+`dailix tmp list | file`), `26892f6` (the sorter), `5ef0173` (parts on
+the trip's page, the sheet's «Part» filter, the pane's ticks).
+- **On disk**: filing copies (`add::add`); TMP keeps the original till
+  the archive (INGEST.md), its ledger `.dailix-filed.json` says where
+  each went; a file whose name a day has already (two cameras'
+  DJI_0001) is refused, not taken for the same.
+- **Parts**: the marking's top-level `parts` (name, clip keys), named in
+  any capitals; a part's edit takes its clips from any day, the
+  unrated too, junk out.
+- **Left for later**: the parts in Omnix's bin (a section or a
+  filter); moving from TMP into the archive (gap 74); a part renamed
+  or removed from the window (the ops and `dailix sheet apply` can).

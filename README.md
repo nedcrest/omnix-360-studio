@@ -8,7 +8,7 @@
 
 **New here? Read [the guide](docs/guide/README.md)**: installing, a tutorial from a trip's clips to a finished film, how it fits together, and every key, command and setting. (`mdbook serve docs/guide` shows it as a book.)
 
-Its sibling, **[Dailix](https://github.com/nedcrest/dailix)**, is the contact sheet before the edit: it looks through a trip's footage, marks what's worth keeping and hands the chosen material to Omnix. The contact sheet's core, which both programs read and write, lives here (`crates/sheet`).
+Its sibling, **[Dailix](https://github.com/nedcrest/dailix)**, is the contact sheet before the edit: it sorts what came off the cards into trips (and the originals into an archive, checked), looks through a trip's footage, marks what's worth keeping and hands the chosen material to Omnix. The contact sheet's core, which both programs read and write, lives here (`crates/sheet`).
 
 **Built with AI.** Dailix, and everything Omnix added to rOsmo360 since the fork, were built by one person working with Claude: he decided, designed and tested on his own footage; Claude planned, wrote the code, tests and docs, and audited its own work. How that worked, and the rules that kept the code sound as it grew from 19,000 to 50,000 lines in three weeks: **[docs/AI-DRIVEN.md](docs/AI-DRIVEN.md)**.
 
@@ -336,7 +336,7 @@ The working board, card by card, is [`docs/omnix/ROADMAP.md`](docs/omnix/ROADMAP
 - Smooth full-resolution playback on modest hardware, and faster 10-bit exports (zero-copy decoding).
 - Windows out of beta, once it's been tested on real PCs with a GPU; a signed Windows exe and a signed macOS download.
 - LUTs chosen by camera for ordinary videos (a DJI Action's or a phone's log).
-- In Dailix: bringing footage in from cards and phones (checked, filed by day, the originals kept apart), and material from outside a trip (a link, a file dragged in).
+- In Dailix: reading cards and phones straight into TMP (sorting TMP into trips and archiving the originals is done), and material from outside a trip (a link, a file dragged in).
 - The guide's how-to pages, a task each, and its 360 pages once the author has his own camera.
 
 ## License

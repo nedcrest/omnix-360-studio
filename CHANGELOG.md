@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+- **Dailix: TMP sorted into trips** (gap 117): TMP's videos by the day
+  they were filmed, picked by click, Ctrl, Shift or arrows, filed into a
+  trip (or a new one) and its **parts**, a trip's own groups of clips
+  across days. A part's edit in Omnix (`omnix from-sheet --part`), a
+  part alone in Omnix's bin and in Dailix's sheet, a group of clips put
+  into a part from the sheet ([the guide](docs/guide/tutorial-0-bring-in.md)).
+- **Dailix: the originals into the archive, TMP freed** (gap 119): each
+  copy checked by its BLAKE3 hash, the original sent to the trash only
+  after that; «Archive all and free TMP», «Remove picked from TMP»,
+  «How Dailix works».
+- **The bin**: a clip's rating, segments and note from Dailix on its
+  tile; **E** and **W** add the bin player's clip at the end or the
+  playhead; a trip's `09_luts` in a cut's LUT list.
+- `omnix describe` says a speed curve's ramps.
+
 ## 0.1.0 — Omnix's first release (2026-11-16)
 
 Omnix numbers its own versions from 0.1.0: it is its own program, not a

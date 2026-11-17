@@ -6,6 +6,7 @@
 
 # Tutorial: your first film
 
+- [Bring the footage in](tutorial-0-bring-in.md)
 - [Choose in Dailix](tutorial-1-dailix.md)
 - [Edit in Omnix](tutorial-2-omnix.md)
 

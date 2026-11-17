@@ -1457,6 +1457,18 @@ was filmed (its name's date, else the file's), with a sidecar; the
 originals only read. The rest of ingest (cards, phones, analysis,
 proxies) stays gap 74.
 
+### 120. Release 0.2.0: Dailix's first release beside Omnix's — medium (user, 2026-11-17)
+
+Someone coming from the CV could download and run Omnix, but Dailix
+only from source: half of the project out of reach. The user chose,
+2026-11-17, to make the next release one of both: Dailix 0.1.0 (its
+first) with its own archive, install.sh and AppImage on its releases
+page, built in the same Ubuntu 22.04 container as Omnix's; Omnix 0.2.0
+(the bin, the audit's fixes, the parts). Each must find the other
+installed beside it: in `~/.local/bin` by install.sh, or as two
+AppImages in one folder (`omnix::sibling` looked only on PATH and in a
+repo beside). Checked as a stranger before publishing.
+
 ### 118. One curve window for any automation — idea, medium (user, 2026-11-16)
 
 The user, after the speed window's playback was worked through: maybe

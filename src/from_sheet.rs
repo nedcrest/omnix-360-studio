@@ -223,6 +223,12 @@ fn save(root: &Path, name: Option<&str>, project: &Project) -> Result<PathBuf> {
     Ok(path)
 }
 
+/// The clip files an edit's cuts play (Dailix keeps them when a part
+/// goes with its videos). None for an edit that can't be read.
+pub fn clips_of_edit(edit: &Path) -> Vec<PathBuf> {
+    Project::read(edit).map(|p| p.cuts.into_iter().map(|c| c.input).collect()).unwrap_or_default()
+}
+
 /// The day a video is named for (`videos/<day>…/edit.json`), if it is.
 pub fn day_of(edit: &Path) -> Option<String> {
     let (_, name) = dailix_sheet::project::video_of(edit)?;
@@ -310,7 +316,10 @@ mod tests {
         let part: Vec<(String, f64, f64)> = build_part(&root, "rides").unwrap().cuts.iter().map(|c| (c.input.file_name().unwrap().to_string_lossy().into_owned(), c.start, c.end)).collect();
         assert_eq!(part, [("A.MP4".to_owned(), 2.0, 8.0), ("A.MP4".to_owned(), 12.0, 20.0), ("E.MP4".to_owned(), 0.0, 5.0)]);
         assert!(build_part(&root, "Sea").is_err());
-        assert_eq!(write_part(&root, "Rides").unwrap(), layout.video_edit("rides"));
+        let rides = write_part(&root, "Rides").unwrap();
+        assert_eq!(rides, layout.video_edit("rides"));
+        assert_eq!(clips_of_edit(&rides).iter().filter_map(|p| p.file_name()).map(|n| n.to_string_lossy().into_owned()).collect::<Vec<_>>(), ["A.MP4", "A.MP4", "E.MP4"]);
+        assert!(clips_of_edit(Path::new("/none/edit.json")).is_empty());
         // What a cut's «Voice» offers: the voices made and the marking's choice.
         let v = voices(&root, &layout.clip("2030-05-01/A.MP4"));
         assert_eq!((v.made, v.chosen.as_deref()), (vec![("dnn6".to_owned(), layout.voice().join("2030-05-01/A/dnn6.flac"))], Some("dnn6")));

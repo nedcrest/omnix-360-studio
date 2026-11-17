@@ -13,36 +13,9 @@ impl App {
             Message::ExportGraded(on) => self.export_graded = on,
             Message::ExportFormat(f) => self.export_format = f,
             Message::ExportLoudness(l) => self.export_loudness = l.0,
-            Message::Info(of) => {
-                let path = match of {
-                    info::Of::Cut(i) => self.edit.cuts.get(i).map(|c| c.input.clone()),
-                    info::Of::Music(which, i) => self.edit.track(which).clips.get(i).map(|m| m.input.clone()),
-                    info::Of::Overlay(r) => self.edit.item(r).and_then(|it| it.file().map(Path::to_owned)),
-                    // The bin opens its files with their path (`open_info`).
-                    info::Of::File(_) => None,
-                };
-                let Some(path) = path else { return Task::none() };
-                return self.open_info(of, path);
-            }
-            Message::InfoRead(path, file) => {
-                if let Some(info) = &mut self.info
-                    && info.path == path
-                {
-                    info.file = Some(file);
-                }
-            }
-            Message::InfoClose => self.info = None,
-            Message::Reveal(path) => {
-                std::thread::spawn(move || {
-                    if let Err(e) = info::reveal(&path) {
-                        eprintln!("couldn't show {}: {e:#}", path.display());
-                    }
-                });
-            }
-            Message::CopyPath(path) => {
-                self.save_status = Some("Copied the file's path".to_owned());
-                return iced::clipboard::write(path.display().to_string());
-            }
+            m @ (Message::ProjectLuts | Message::AddLut | Message::LutPicked(_) | Message::RemoveLut(_) | Message::DlogMLut(_)) => return self.on_luts(m),
+            m @ (Message::Info(_) | Message::InfoRead(..) | Message::InfoClose | Message::Reveal(_) | Message::CopyPath(_)) => return self.on_info_msg(m),
+            m @ (Message::ProjectsChoose | Message::ProjectsPicked(_) | Message::ProjectsFromDailix) => return self.on_projects_place(m),
             Message::ExportPanel => self.toggle_side(Side::Export),
             Message::AudioPanel => self.toggle_side(Side::Audio),
             Message::Shortcuts => self.shortcuts = !self.shortcuts,
@@ -65,6 +38,52 @@ impl App {
                 self.ten_bit = on;
                 source::set_deep(on);
             }
+            Message::UiScale(steps) => {
+                self.ui_scale = if steps == 0 {
+                    settings::UI_DEFAULT
+                } else {
+                    // Rounded to the step, so repeated clicks land on whole percents.
+                    ((self.ui_scale + steps as f32 * settings::UI_STEP) / settings::UI_STEP).round() * settings::UI_STEP
+                }
+                .clamp(*settings::UI_SCALE.start(), *settings::UI_SCALE.end());
+            }
+            Message::ShowAngles(on) => self.angles_shown = on,
+            Message::RulerLarge(on) => self.ruler_large = on,
+            Message::Browse(on) => {
+                self.browse = on;
+                self.read_browsed();
+            }
+            Message::BarLabels => self.bar_labels = !self.bar_labels,
+            Message::Snapping => self.snapping = !self.snapping,
+            Message::Fold(lane, folded) => self.folds.set(lane, folded),
+            Message::Modifiers(m) => self.modifiers = m,
+            Message::ViewSize(size) => self.view_size = size,
+            Message::Aspect(a) => {
+                self.op(crate::model::ops::Op::Project(crate::model::ops::project::ProjectOp::Aspect { aspect: a.to_project() }));
+            }
+            Message::Theme(theme) => self.theme = theme,
+            Message::Mute => {
+                self.muted = !self.muted;
+                audio::set_listening(self.volume());
+            }
+            Message::Volume(v) => {
+                self.volume = v;
+                self.muted = false;
+                audio::set_listening(self.volume());
+            }
+            Message::Fullscreen => {
+                self.fullscreen = !self.fullscreen;
+                let mode = if self.fullscreen { window::Mode::Fullscreen } else { window::Mode::Windowed };
+                return window::latest().and_then(move |id| window::set_mode(id, mode));
+            }
+            _ => {}
+        }
+        Task::none()
+    }
+
+    /// The LUTs: the trip's read again, the library's added to or taken from, D-Log M's default.
+    fn on_luts(&mut self, message: Message) -> Task<Message> {
+        match message {
             Message::ProjectLuts => self.project_luts = self.project_root().map(|r| crate::lut::in_folder(&dailix_sheet::Layout::new(r).luts())).unwrap_or_default(),
             Message::AddLut => {
                 return Task::perform(
@@ -99,17 +118,52 @@ impl App {
                 self.mark_flat();
             }
             Message::DlogMLut(choice) => self.dlog_m_lut = choice.name(),
-            Message::UiScale(steps) => {
-                self.ui_scale = if steps == 0 {
-                    settings::UI_DEFAULT
-                } else {
-                    // Rounded to the step, so repeated clicks land on whole percents.
-                    ((self.ui_scale + steps as f32 * settings::UI_STEP) / settings::UI_STEP).round() * settings::UI_STEP
-                }
-                .clamp(*settings::UI_SCALE.start(), *settings::UI_SCALE.end());
+            _ => {}
+        }
+        Task::none()
+    }
+
+    /// Info on a file, and showing or copying its path.
+    fn on_info_msg(&mut self, message: Message) -> Task<Message> {
+        match message {
+            Message::Info(of) => {
+                let path = match of {
+                    info::Of::Cut(i) => self.edit.cuts.get(i).map(|c| c.input.clone()),
+                    info::Of::Music(which, i) => self.edit.track(which).clips.get(i).map(|m| m.input.clone()),
+                    info::Of::Overlay(r) => self.edit.item(r).and_then(|it| it.file().map(Path::to_owned)),
+                    // The bin opens its files with their path (`open_info`).
+                    info::Of::File(_) => None,
+                };
+                let Some(path) = path else { return Task::none() };
+                return self.open_info(of, path);
             }
-            Message::ShowAngles(on) => self.angles_shown = on,
-            Message::RulerLarge(on) => self.ruler_large = on,
+            Message::InfoRead(path, file) => {
+                if let Some(info) = &mut self.info
+                    && info.path == path
+                {
+                    info.file = Some(file);
+                }
+            }
+            Message::InfoClose => self.info = None,
+            Message::Reveal(path) => {
+                std::thread::spawn(move || {
+                    if let Err(e) = info::reveal(&path) {
+                        eprintln!("couldn't show {}: {e:#}", path.display());
+                    }
+                });
+            }
+            Message::CopyPath(path) => {
+                self.save_status = Some("Copied the file's path".to_owned());
+                return iced::clipboard::write(path.display().to_string());
+            }
+            _ => {}
+        }
+        Task::none()
+    }
+
+    /// The projects' place: chosen, or Dailix's.
+    fn on_projects_place(&mut self, message: Message) -> Task<Message> {
+        match message {
             Message::ProjectsChoose => {
                 let start = self.projects_place();
                 return Task::perform(
@@ -131,33 +185,6 @@ impl App {
             Message::ProjectsFromDailix => {
                 self.projects = None;
                 self.read_browsed();
-            }
-            Message::Browse(on) => {
-                self.browse = on;
-                self.read_browsed();
-            }
-            Message::BarLabels => self.bar_labels = !self.bar_labels,
-            Message::Snapping => self.snapping = !self.snapping,
-            Message::Fold(lane, folded) => self.folds.set(lane, folded),
-            Message::Modifiers(m) => self.modifiers = m,
-            Message::ViewSize(size) => self.view_size = size,
-            Message::Aspect(a) => {
-                self.op(crate::model::ops::Op::Project(crate::model::ops::project::ProjectOp::Aspect { aspect: a.to_project() }));
-            }
-            Message::Theme(theme) => self.theme = theme,
-            Message::Mute => {
-                self.muted = !self.muted;
-                audio::set_listening(self.volume());
-            }
-            Message::Volume(v) => {
-                self.volume = v;
-                self.muted = false;
-                audio::set_listening(self.volume());
-            }
-            Message::Fullscreen => {
-                self.fullscreen = !self.fullscreen;
-                let mode = if self.fullscreen { window::Mode::Fullscreen } else { window::Mode::Windowed };
-                return window::latest().and_then(move |id| window::set_mode(id, mode));
             }
             _ => {}
         }

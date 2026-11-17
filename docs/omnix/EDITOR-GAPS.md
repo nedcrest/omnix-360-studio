@@ -1482,6 +1482,11 @@ Proposed (to agree before building, it deletes files):
   the sorter's head saying the step the picked or the day is at.
 Milestone «Матеріал і бін», with gap 74 (whose step 9 this is).
 
+**Built 2026-11-17 as proposed, waits for the user's check** (Dailix
+`efad562`; before it `b708882`: TMP counts a video filed only while its
+copy is in its trip, and a part removed can take its untouched videos
+with it). `archive.rs`, `sorter_archive.rs`, `dailix tmp archive | free`.
+
 ### 118. One curve window for any automation — idea, medium (user, 2026-11-16)
 
 The user, after the speed window's playback was worked through: maybe

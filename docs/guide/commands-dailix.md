@@ -52,6 +52,18 @@ Videos of TMP filed into a trip: copied in under the day each was filmed (or --d
 | `--day <DAY>` | The day to put them under instead (YYYY-MM-DD) |
 | `--part <PART>` | A part of the trip to put them into; again for more |
 
+## `dailix tmp archive`
+
+TMP's filed videos not in the archive yet copied into the Sources folder (`<trip>/<day>/`), each checked there by its hash
+
+## `dailix tmp free`
+
+TMP's videos the archive holds, to the trash, each archive copy checked again first. Without --yes, only says what would go
+
+| Argument | What it is |
+|---|---|
+| `--yes` |  |
+
 ## `dailix sheet`
 
 The contact sheet's marking (a project's `dailix/sheet.json`)

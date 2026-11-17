@@ -99,7 +99,10 @@ if [ -n "$missing" ]; then
     echo "Missing:$missing. Omnix decodes and encodes video through them; install ffmpeg, e.g."
     echo "  sudo apt install ffmpeg   |   sudo dnf install ffmpeg   |   sudo pacman -S ffmpeg"
 fi
-if ! ldconfig -p 2>/dev/null | grep -q 'libasound\.so\.2'; then
+# ldconfig lives in /sbin, often off a user's PATH (Debian, Ubuntu): looked
+# for there too, or every install said ALSA was missing.
+ldconfig="$(command -v ldconfig || echo /sbin/ldconfig)"
+if [ -x "$ldconfig" ] && ! "$ldconfig" -p 2>/dev/null | grep -q 'libasound\.so\.2'; then
     echo
     echo "libasound (ALSA) was not found; it is needed for sound, e.g. sudo apt install libasound2."
 fi

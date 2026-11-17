@@ -308,7 +308,7 @@ impl App {
         let written = self.write_sheet(&path, |sheet| sheet.set(&path, was.as_ref(), start, end));
         let Some(s) = &mut self.bin.source else { return };
         match written {
-            Written::Failed => return,
+            Written::Failed => {}
             Written::Sheet(index, marks) => {
                 s.mark_in = None;
                 s.marks = marks;
@@ -348,7 +348,7 @@ impl App {
         let written = self.write_sheet(&path, |sheet| sheet.describe(&m, role.as_deref(), &note));
         let Some(s) = &mut self.bin.source else { return };
         match written {
-            Written::Failed => return,
+            Written::Failed => {}
             Written::Sheet((), marks) => {
                 s.draft = None;
                 s.marks = marks;

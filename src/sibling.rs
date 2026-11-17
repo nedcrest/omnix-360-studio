@@ -11,25 +11,43 @@ pub struct Program {
     pub bin: &'static str,
     pub var: &'static str,
     pub repo: &'static str,
+    /// Its AppImage's name, as the release names it.
+    pub appimage: &'static str,
 }
 
-pub const OMNIX: Program = Program { bin: "omnix", var: "OMNIX_BIN", repo: "omnix-360-studio" };
-pub const DAILIX: Program = Program { bin: "dailix", var: "DAILIX_BIN", repo: "dailix" };
+pub const OMNIX: Program = Program { bin: "omnix", var: "OMNIX_BIN", repo: "omnix-360-studio", appimage: "Omnix-x86_64.AppImage" };
+pub const DAILIX: Program = Program { bin: "dailix", var: "DAILIX_BIN", repo: "dailix", appimage: "Dailix-x86_64.AppImage" };
 
-/// `p`'s binary: its variable, else on PATH, else a release build in its
-/// repo beside this binary's (`<repos>/<repo>/target/release`).
+/// Where this program runs from: its variable for the other, PATH, its
+/// own binary, and the AppImage it was started from (`APPIMAGE`).
+struct Here {
+    env_bin: Option<PathBuf>,
+    path: Option<OsString>,
+    exe: Option<PathBuf>,
+    appimage: Option<PathBuf>,
+}
+
+/// `p`'s binary: its variable; else beside this binary (install.sh puts
+/// both in one folder, on PATH or not); else beside this AppImage (the
+/// two AppImages downloaded into one folder: gap 120); else on PATH;
+/// else a release build in its repo beside this one's
+/// (`<repos>/<repo>/target/release`, for working on both).
 pub fn locate(p: Program) -> Option<PathBuf> {
-    locate_from(p, std::env::var_os(p.var).map(PathBuf::from), std::env::var_os("PATH"), std::env::current_exe().ok())
+    let var = |k: &str| std::env::var_os(k).filter(|v| !v.is_empty());
+    locate_from(p, &Here { env_bin: var(p.var).map(PathBuf::from), path: var("PATH"), exe: std::env::current_exe().ok(), appimage: var("APPIMAGE").map(PathBuf::from) })
 }
 
-fn locate_from(p: Program, env_bin: Option<PathBuf>, path: Option<OsString>, exe: Option<PathBuf>) -> Option<PathBuf> {
+fn locate_from(p: Program, here: &Here) -> Option<PathBuf> {
     let name = format!("{}{}", p.bin, std::env::consts::EXE_SUFFIX);
-    let on_path = || path.as_ref().and_then(|ps| std::env::split_paths(ps).map(|d| d.join(&name)).find(|f| f.is_file()));
-    let beside = || {
-        let repo = exe.as_deref()?.parent()?.parent()?.parent()?;
+    let exe = here.exe.as_deref();
+    let own_dir = || Some(exe?.parent()?.join(&name)).filter(|f| f.is_file());
+    let by_appimage = || Some(here.appimage.as_deref()?.parent()?.join(p.appimage)).filter(|f| f.is_file());
+    let on_path = || here.path.as_ref().and_then(|ps| std::env::split_paths(ps).map(|d| d.join(&name)).find(|f| f.is_file()));
+    let repo = || {
+        let repo = exe?.parent()?.parent()?.parent()?;
         Some(repo.parent()?.join(p.repo).join("target/release").join(&name)).filter(|f| f.is_file())
     };
-    env_bin.filter(|f| f.is_file()).or_else(on_path).or_else(beside)
+    here.env_bin.clone().filter(|f| f.is_file()).or_else(own_dir).or_else(by_appimage).or_else(on_path).or_else(repo)
 }
 
 /// Starts `p` with `args`, in a session of its own so it stays open when
@@ -67,10 +85,17 @@ mod tests {
         let beside = file(base.join("omnix-360-studio/target/release").join(&name));
         let exe = Some(base.join("dailix/target/release/dailix"));
         let path = Some(std::env::join_paths([base.join("empty"), base.join("bin")]).unwrap());
-        assert_eq!(locate_from(OMNIX, Some(set.clone()), path.clone(), exe.clone()), Some(set));
-        assert_eq!(locate_from(OMNIX, Some(base.join("gone")), path, exe.clone()), Some(on_path), "a variable naming nothing is passed over");
-        assert_eq!(locate_from(OMNIX, None, None, exe), Some(beside));
-        assert_eq!(locate_from(OMNIX, None, None, None), None);
+        let here = |env_bin: Option<PathBuf>, path: Option<OsString>, exe: Option<PathBuf>, appimage: Option<PathBuf>| Here { env_bin, path, exe, appimage };
+        assert_eq!(locate_from(OMNIX, &here(Some(set.clone()), path.clone(), exe.clone(), None)), Some(set));
+        assert_eq!(locate_from(OMNIX, &here(Some(base.join("gone")), path, exe.clone(), None)), Some(on_path), "a variable naming nothing is passed over");
+        assert_eq!(locate_from(OMNIX, &here(None, None, exe, None)), Some(beside));
+        assert_eq!(locate_from(OMNIX, &here(None, None, None, None)), None);
+        // Installed side by side (install.sh: ~/.local/bin, maybe off PATH).
+        let installed = file(base.join("local/bin").join(&name));
+        assert_eq!(locate_from(OMNIX, &here(None, None, Some(base.join("local/bin/dailix")), None)), Some(installed));
+        // Two AppImages in one folder: Dailix's runs from its mount, APPIMAGE says where it is.
+        let image = file(base.join("Downloads/Omnix-x86_64.AppImage"));
+        assert_eq!(locate_from(OMNIX, &here(None, None, Some(base.join("mount/usr/bin/dailix")), Some(base.join("Downloads/Dailix-x86_64.AppImage")))), Some(image));
         std::fs::remove_dir_all(&base).unwrap();
     }
 }

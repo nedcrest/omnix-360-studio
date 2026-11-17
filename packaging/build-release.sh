@@ -3,7 +3,11 @@
 # AppImage, the Flatpak with its ffmpeg's sources, the Windows zip with its
 # ffmpeg's sources, install.sh on its own and SHA256SUMS. Needs docker, flatpak with org.flatpak.Builder (flatpak install
 # --user flathub org.flatpak.Builder) and network access.
+# --linux: the archive, the AppImage, install.sh and SHA256SUMS only (needs docker
+# alone; SHA256SUMS was missing when a release was built in part, 2026-11-16).
 set -eu
+linux_only=0
+[ "${1:-}" = --linux ] && linux_only=1
 cd "$(dirname "$0")/.."
 version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n 1)"
 dist=dist
@@ -46,6 +50,12 @@ if [ ! -x "$tool" ]; then
 fi
 ARCH=x86_64 VERSION="$version" "$tool" --appimage-extract-and-run -n "$app" "$dist/Omnix-x86_64.AppImage" >/dev/null
 rm -rf "$app" "$pkg"
+
+if [ "$linux_only" = 1 ]; then
+    (cd "$dist" && sha256sum omnix-x86_64-linux.tar.gz Omnix-x86_64.AppImage install.sh > SHA256SUMS)
+    ls -l "$dist"
+    exit 0
+fi
 
 # Flatpak: the same binary with an ffmpeg of its own (see the manifest), as a
 # single-file bundle that fetches its runtime from Flathub on install.

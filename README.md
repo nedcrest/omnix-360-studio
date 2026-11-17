@@ -14,7 +14,7 @@ Its sibling, **[Dailix](https://github.com/nedcrest/dailix)**, is the contact sh
 
 Licensed under [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE), at your option.
 
-**Download** the first release, 0.1.0, for Linux: [the archive with an install script, or an AppImage](https://github.com/nedcrest/omnix-360-studio/releases/latest); or build it from source, see [Building](#building).
+**Download** Omnix for Linux: [the archive with an install script, or an AppImage](https://github.com/nedcrest/omnix-360-studio/releases/latest), and its sibling Dailix [the same way](https://github.com/nedcrest/dailix/releases/latest); or build them from source, see [Building](#building).
 
 ## Where it comes from
 

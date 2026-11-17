@@ -10,12 +10,11 @@ from it in an empty home checked). Both repos were made anew on GitHub
 that day, so no trace of the history before the working diary was taken
 out stays there. The rest of this page is how it got there.
 
-**The next release**: `packaging/build-release.sh` writes `SHA256SUMS`
-only at its end, after the Flatpak and Windows; a release of only some of
-the files needs it written by hand (`sha256sum` of the files uploaded),
-or `install.sh` refuses to install. Dailix's CI still has the
-`OMNIX_TOKEN` secret it needed while Omnix was private: not needed now,
-it can go (it expires 2026-12-15).
+**Releases**: `packaging/build-release.sh --linux` builds the archive, the
+AppImage, install.sh and their `SHA256SUMS` (without it, the Flatpak and
+Windows too). Dailix's own: `dailix/packaging/build-release.sh`, in the
+same image, Omnix's repo beside it (gap 120). Dailix's CI reads the public
+Omnix with its own token (`OMNIX_TOKEN` removed 2026-11-17).
 
 ## Where things stand (scan of 2026-11-14)
 

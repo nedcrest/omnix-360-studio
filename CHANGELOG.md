@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 — with Dailix's first release (2026-11-17)
+
+Dailix, the contact sheet before the edit, is now released beside Omnix
+([its releases](https://github.com/nedcrest/dailix/releases)); each
+finds the other installed beside it, or as two AppImages in one folder.
 
 - **Dailix: TMP sorted into trips** (gap 117): TMP's videos by the day
   they were filmed, picked by click, Ctrl, Shift or arrows, filed into a

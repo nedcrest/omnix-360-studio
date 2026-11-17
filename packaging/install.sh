@@ -4,7 +4,7 @@
 #
 # Run it from the unpacked release archive, or on its own, in which case it downloads
 # the latest release first:
-#   curl -fsSL <the release page, once Omnix is published>/install.sh | sh
+#   curl -fsSL https://github.com/nedcrest/omnix-360-studio/releases/latest/download/install.sh | sh
 #
 # Options: --prefix DIR (default ~/.local), --uninstall.
 set -eu

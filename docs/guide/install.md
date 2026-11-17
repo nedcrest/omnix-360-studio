@@ -1,8 +1,8 @@
 # Install and first run
 
-Omnix and Dailix run on Linux. Omnix comes as a release (an archive with
-an install script, or an AppImage); Dailix, for now, is built from its
-source beside Omnix's.
+Omnix and Dailix run on Linux. Each comes as a release: an archive with
+an install script, or an AppImage. Install both: Dailix hands its edits
+to Omnix, and each finds the other beside it.
 
 ## What you need
 
@@ -14,15 +14,26 @@ source beside Omnix's.
 - To build: **Rust** 1.88 or newer ([rustup.rs](https://rustup.rs)), and
   on Debian or Ubuntu `sudo apt install pkg-config libasound2-dev`.
 
-## Install Omnix from a release
+## Install from the releases
 
-Download it from [the releases
-page](https://github.com/nedcrest/omnix-360-studio/releases/latest):
+Download Omnix from [its releases
+page](https://github.com/nedcrest/omnix-360-studio/releases/latest) and
+Dailix from [its](https://github.com/nedcrest/dailix/releases/latest):
 
-- **The archive**: unpack it and run `./install.sh`. It puts `omnix` in
-  `~/.local/bin`, with its icon and a menu entry (`--prefix /usr/local`
-  as root installs it for everyone; `--uninstall` takes it away).
-- **The AppImage**: make it executable (`chmod +x`) and run it.
+- **The archives**: unpack each and run its `./install.sh`. It puts
+  `omnix` (or `dailix`) in `~/.local/bin`, with its icon and a menu entry
+  (`--prefix /usr/local` as root installs it for everyone; `--uninstall`
+  takes it away). Run on its own, an `install.sh` downloads the latest
+  release first:
+
+  ```sh
+  curl -fsSL https://github.com/nedcrest/omnix-360-studio/releases/latest/download/install.sh | sh
+  curl -fsSL https://github.com/nedcrest/dailix/releases/latest/download/install.sh | sh
+  ```
+
+- **The AppImages**: put `Omnix-x86_64.AppImage` and
+  `Dailix-x86_64.AppImage` in one folder, make them executable
+  (`chmod +x`) and run them; Dailix's «→ Omnix» finds Omnix's beside it.
 
 ## Build both from source
 

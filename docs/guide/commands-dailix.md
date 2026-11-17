@@ -54,7 +54,7 @@ Videos of TMP filed into a trip: copied in under the day each was filmed (or --d
 
 ## `dailix tmp archive`
 
-TMP's filed videos not in the archive yet copied into the Sources folder (`<trip>/<day>/`), each checked there by its hash
+TMP's videos not in the archive yet copied into the Sources folder (`<trip>/<day>/`, or `_not-in-a-trip/<day>/` for those in no trip), each checked there by its hash
 
 ## `dailix tmp free`
 
